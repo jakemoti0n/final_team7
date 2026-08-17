@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AMR 프로젝트 로드맵</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A1929;
+    --panel:#0F2438;
+    --ink:#E8F1F8;
+    --ink-dim:#7FA0BD;
+    --cyan:#4FC3F7;
+    --cyan-dim:rgba(79,195,247,0.35);
+    --amber:#FFB020;
+    --green:#5CD6A0;
+    --violet:#B39DFF;
+    --line:rgba(143,168,191,0.22);
+    --grid:rgba(94,190,255,0.06);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      linear-gradient(var(--grid) 1px, transparent 1px) 0 0/40px 40px,
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/40px 40px,
+      var(--bg);
+    color:var(--ink);
+    font-family:'Noto Sans KR', sans-serif;
+    line-height:1.6;
+    padding:0 0 80px;
+  }
+  .mono{font-family:'JetBrains Mono', monospace;}
+
+  /* ===== HEADER ===== */
+  header{
+    padding:64px 24px 48px;
+    max-width:1100px;
+    margin:0 auto;
+    border-bottom:1px solid var(--line);
+    position:relative;
+  }
+  .tag{
+    display:inline-block;
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    letter-spacing:0.15em;
+    color:var(--cyan);
+    border:1px solid var(--cyan-dim);
+    padding:4px 10px;
+    border-radius:2px;
+    margin-bottom:20px;
+  }
+  h1{
+    font-size:clamp(32px,5vw,52px);
+    font-weight:900;
+    margin:0 0 12px;
+    letter-spacing:-0.02em;
+  }
+  h1 span{color:var(--cyan);}
+  header p.sub{
+    color:var(--ink-dim);
+    font-size:16px;
+    max-width:600px;
+    margin:0;
+  }
+  .corner{
+    position:absolute;
+    width:18px;height:18px;
+    border:2px solid var(--cyan-dim);
+  }
+  .corner.tl{top:24px;left:0;border-right:none;border-bottom:none;}
+  .corner.tr{top:24px;right:0;border-left:none;border-bottom:none;}
+
+  main{max-width:1100px;margin:0 auto;padding:0 24px;}
+
+  section{margin-top:56px;}
+  .section-head{
+    display:flex;
+    align-items:baseline;
+    gap:12px;
+    margin-bottom:24px;
+  }
+  .section-num{
+    font-family:'JetBrains Mono', monospace;
+    color:var(--amber);
+    font-size:13px;
+    letter-spacing:0.1em;
+  }
+  .section-head h2{
+    font-size:22px;
+    font-weight:700;
+    margin:0;
+  }
+  .section-head::after{
+    content:'';
+    flex:1;
+    height:1px;
+    background:var(--line);
+  }
+
+  /* ===== LEGEND (5인) ===== */
+  .legend{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:10px;
+  }
+  .legend .who{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:12px 14px;
+    border-left:3px solid var(--who-color, var(--cyan));
+  }
+  .legend .who .rid{font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--ink-dim);}
+  .legend .who .rname{font-weight:700; font-size:14.5px; margin-top:2px;}
+  .legend .who .rpos{font-size:12px; color:var(--ink-dim); margin-top:1px;}
+
+  /* person color coding */
+  .r1{--who-color:var(--cyan);}
+  .r2{--who-color:var(--green);}
+  .r3{--who-color:var(--amber);}
+  .r4{--who-color:var(--violet);}
+  .r5{--who-color:#FF8A8A;}
+
+  /* ===== TIMELINE ===== */
+  .timeline{
+    position:relative;
+    padding-left:32px;
+  }
+  .timeline::before{
+    content:'';
+    position:absolute;
+    left:7px;top:6px;bottom:6px;
+    width:1px;
+    background:repeating-linear-gradient(to bottom, var(--cyan-dim) 0 4px, transparent 4px 8px);
+  }
+  .phase{
+    position:relative;
+    padding-bottom:36px;
+  }
+  .phase:last-child{padding-bottom:0;}
+  .phase::before{
+    content:'';
+    position:absolute;
+    left:-32px; top:4px;
+    width:15px;height:15px;
+    border-radius:50%;
+    background:var(--bg);
+    border:2px solid var(--cyan);
+  }
+  .phase.buffer::before{border-color:var(--amber);}
+  .phase-card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:22px 26px;
+  }
+  .phase-top{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:10px 14px;
+    margin-bottom:6px;
+  }
+  .phase-date{
+    font-family:'JetBrains Mono', monospace;
+    color:var(--amber);
+    font-size:13px;
+    font-weight:500;
+  }
+  .phase-title{
+    font-size:17px;
+    font-weight:700;
+    margin:0;
+  }
+  .phase-goal{
+    font-size:13.5px;
+    color:var(--ink-dim);
+    margin:0 0 16px;
+  }
+
+  .assign{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(190px,1fr));
+    gap:10px;
+  }
+  .task{
+    background:rgba(255,255,255,0.02);
+    border:1px solid var(--line);
+    border-left:3px solid var(--who-color, var(--cyan));
+    border-radius:4px;
+    padding:10px 12px;
+  }
+  .task .who{
+    font-family:'JetBrains Mono', monospace;
+    font-size:10.5px;
+    letter-spacing:0.05em;
+    color:var(--who-color, var(--cyan));
+    margin-bottom:4px;
+  }
+  .task p{
+    margin:0;
+    font-size:13px;
+    color:var(--ink);
+  }
+  .task.idle{
+    border-left-style:dashed;
+    opacity:0.6;
+  }
+  .task.idle p{color:var(--ink-dim); font-style:italic;}
+
+  footer{
+    max-width:1100px;
+    margin:64px auto 0;
+    padding:24px;
+    border-top:1px solid var(--line);
+    color:var(--ink-dim);
+    font-size:13px;
+    font-family:'JetBrains Mono', monospace;
+  }
+
+  @media(max-width:760px){
+    .legend{grid-template-columns:repeat(2,1fr);}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="tag mono">PROJECT ROADMAP · 5인 팀</div>
+  <h1>자율주행 <span>AMR</span> 로봇 프로젝트</h1>
+  <p class="sub">ROS2 기반 자율주행 + OpenCV 쓰레기 분류 · 8월 18일 ~ 12월 10일 (약 16주)</p>
+</header>
+
+<main>
+
+  <section>
+    <div class="section-head">
+      <span class="section-num mono">01</span>
+      <h2>팀 구성</h2>
+    </div>
+    <div class="legend">
+      <div class="who r1"><div class="rid mono">R-01 · LEAD</div><div class="rname">팀장</div><div class="rpos">ROS2 / SLAM / Nav2</div></div>
+      <div class="who r2"><div class="rid mono">R-02 · SUB</div><div class="rname">부팀장</div><div class="rpos">OpenCV / Vision</div></div>
+      <div class="who r3"><div class="rid mono">R-03</div><div class="rname">하드웨어</div><div class="rpos">3D프린팅 / 조립</div></div>
+      <div class="who r4"><div class="rid mono">R-04</div><div class="rname">임베디드</div><div class="rpos">통신 / 센서 연동</div></div>
+      <div class="who r5"><div class="rid mono">R-05</div><div class="rname">데이터·QA</div><div class="rpos">데이터 / 검증 / 문서</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="section-num mono">02</span>
+      <h2>전체 일정 & 인원별 업무</h2>
+    </div>
+    <div class="timeline">
+
+      <div class="phase">
+        <div class="phase-card">
+          <div class="phase-top">
+            <span class="phase-date">~ 08.30</span>
+            <h3 class="phase-title">기획 & 팀빌딩</h3>
+          </div>
+          <p class="phase-goal">역할분담 확정, 요구사항 정의서 작성, 각자 개인학습</p>
+          <div class="assign">
+            <div class="task r1"><div class="who mono">R-01</div><p>요구사항정의서 초안 총괄 작성</p></div>
+            <div class="task r2"><div class="who mono">R-02</div><p>OpenCV / 쓰레기 분류 관련 개인학습</p></div>
+            <div class="task r3"><div class="who mono">R-03</div><p>3D프린터·프레임 재질 개인학습</p></div>
+            <div class="task r4"><div class="who mono">R-04</div><p>Serial/CAN 통신 개인학습</p></div>
+            <div class="task r5"><div class="who mono">R-05</div><p>문서 템플릿 정리, 회의록 포맷 준비</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-card">
+          <div class="phase-top">
+            <span class="phase-date">08.31 – 09.13</span>
+            <h3 class="phase-title">ROS2 기초 세팅</h3>
+          </div>
+          <p class="phase-goal">워크스페이스 구축, Gazebo 스폰 테스트, URDF/Xacro 모델링</p>
+          <div class="assign">
+            <div class="task r1"><div class="who mono">R-01</div><p>ROS2 워크스페이스·패키지 구조 설계 총괄</p></div>
+            <div class="task r2"><div class="who mono">R-02</div><p>Gazebo 스폰 테스트 지원, 요구사항정의서 문서화</p></div>
+            <div class="task r3"><div class="who mono">R-03</div><p>프레임 설계 스케치, 부품 리스트업</p></div>
+            <div class="task r4"><div class="who mono">R-04</div><p>URDF/Xacro 작성 지원, 센서 스펙 조사</p></div>
+            <div class="task r5"><div class="who mono">R-05</div><p>쓰레기 분류 모델·데이터셋 후보 리서치</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-card">
+          <div class="phase-top">
+            <span class="phase-date">09.13 – 09.27</span>
+            <h3 class="phase-title">SLAM & Nav2 시뮬레이션</h3>
+          </div>
+          <p class="phase-goal">SLAM 맵핑 테스트, Nav2 시뮬레이션 주행 완료</p>
+          <div class="assign">
+            <div class="task r1"><div class="who mono">R-01</div><p>SLAM/Nav2 파라미터 튜닝 총괄</p></div>
+            <div class="task r2"><div class="who mono">R-02</div><p>분류 모델 초기 프로토타입 제작 시작</p></div>
+            <div class="task r3"><div class="who mono">R-03</div><p>부품 발주 완료, 3D프린팅 출력 시작</p></div>
+            <div class="task r4"><div class="who mono">R-04</div><p>SLAM/Nav2 시뮬레이션 지원, 통신 프로토콜 사전 설계</p></div>
+            <div class="task r5"><div class="who mono">R-05</div><p>시뮬레이션 테스트 시나리오 작성, 진행상황 문서화</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-card">
+          <div class="phase-top">
+            <span class="phase-date">09.28 – 10.18</span>
+            <h3 class="phase-title">하드웨어 조립</h3>
+          </div>
+          <p class="phase-goal">프레임·모터 장착, 센서 고정, 배선 / OpenCV 데이터 수집 병행</p>
+          <div class="assign">
+            <div class="task r1"><div class="who mono">R-01</div><p>실물 이식용 ROS2 코드 정리, 조립 지원</p></div>
+            <div class="task r2"><div class="who mono">R-02</div><p>쓰레기 이미지 데이터 수집·라벨링 본격 시작</p></div>
+            <div class="task r3"><div class="who mono">R-03</div><p>프레임 조립, 모터·바퀴·드라이버 장착 총괄</p></div>
+            <div class="task r4"><div class="who mono">R-04</div><p>SBC·센서 물리 고정, 배선 작업 지원</p></div>
+            <div class="task r5"><div class="who mono">R-05</div><p>OpenCV 데이터 라벨링 보조, 조립 체크리스트 관리</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-card">
+          <div class="phase-top">
+            <span class="phase-date">10.19 – 11.10</span>
+            <h3 class="phase-title">실물 통합</h3>
+          </div>
+          <p class="phase-goal">통신/센서 연동 확인, 실물 SLAM 맵핑 + Nav2 이식, 실전 주행</p>
+          <div class="assign">
+            <div class="task r1"><div class="who mono">R-01</div><p>실물 SLAM 맵핑, Nav2 파라미터 이식·실전 주행 총괄</p></div>
+            <div class="task r2"><div class="who mono">R-02</div><p>분류 모델 학습·튜닝 마무리</p></div>
+            <div class="task r3"><div class="who mono">R-03</div><p>하드웨어 트러블슈팅, 배선 정비</p></div>
+            <div class="task r4"><div class="who mono">R-04</div><p>SBC↔모터드라이버 통신, 엔코더 오도메트리, LiDAR/IMU 토픽 점검</p></div>
+            <div class="task r5"><div class="who mono">R-05</div><p>통합 테스트 진행, 이슈 트래킹</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-card">
+          <div class="phase-top">
+            <span class="phase-date">11.11 – 11.22</span>
+            <h3 class="phase-title">통합 검증</h3>
+          </div>
+          <p class="phase-goal">실내외 주행 실험, OpenCV 분류 모델 로봇 부착 및 연동</p>
+          <div class="assign">
+            <div class="task r1"><div class="who mono">R-01</div><p>실내외 주행 검증 총괄</p></div>
+            <div class="task r2"><div class="who mono">R-02</div><p>분류모델 로봇 부착, 실시간 추론 테스트</p></div>
+            <div class="task r3"><div class="who mono">R-03</div><p>실험 중 하드웨어 유지보수</p></div>
+            <div class="task r4"><div class="who mono">R-04</div><p>센서 데이터 연동 안정성 점검</p></div>
+            <div class="task r5"><div class="who mono">R-05</div><p>실험 시나리오 진행, 결과 기록</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase buffer">
+        <div class="phase-card">
+          <div class="phase-top">
+            <span class="phase-date">11.23 – 11.29</span>
+            <h3 class="phase-title">버그 수정 & 기능 완성</h3>
+          </div>
+          <p class="phase-goal">발견된 이슈 정리 및 수정, 기능적 완성도 최종 점검 (버퍼)</p>
+          <div class="assign">
+            <div class="task r1"><div class="who mono">R-01</div><p>ROS2/주행 관련 이슈 수정</p></div>
+            <div class="task r2"><div class="who mono">R-02</div><p>분류 정확도 미세 조정</p></div>
+            <div class="task r3"><div class="who mono">R-03</div><p>하드웨어 보완 및 마감</p></div>
+            <div class="task r4"><div class="who mono">R-04</div><p>통신/센서 안정성 마무리</p></div>
+            <div class="task r5"><div class="who mono">R-05</div><p>전체 이슈 리스트 정리, 완료 여부 체크</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-card">
+          <div class="phase-top">
+            <span class="phase-date">11.30 – 12.10</span>
+            <h3 class="phase-title">발표 준비</h3>
+          </div>
+          <p class="phase-goal">발표자료 및 PPT 제작 (약 11일), 담당 파트별 슬라이드 분담</p>
+          <div class="assign">
+            <div class="task r1"><div class="who mono">R-01</div><p>ROS2/주행 파트 슬라이드, 전체 스토리라인 검토</p></div>
+            <div class="task r2"><div class="who mono">R-02</div><p>OpenCV 파트 슬라이드, 결과 시각화</p></div>
+            <div class="task r3"><div class="who mono">R-03</div><p>하드웨어 파트 슬라이드, 실물 사진/영상 촬영</p></div>
+            <div class="task r4"><div class="who mono">R-04</div><p>통신/센서 파트 슬라이드, 시연 영상 편집</p></div>
+            <div class="task r5"><div class="who mono">R-05</div><p>PPT 총괄 취합, 디자인 통일, 리허설 진행</p></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  last updated 2026-08-18
+</footer>
+
+</body>
+</html>

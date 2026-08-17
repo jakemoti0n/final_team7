@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+            --accent: #38bdf8;
+            --border: #334155;
+        }
+        body { font-family: 'Pretendard', sans-serif; background-color: var(--bg); color: var(--text); padding: 40px; }
+        .calendar-container { max-width: 900px; margin: auto; background: var(--card); border-radius: 16px; padding: 30px; border: 1px solid var(--border); }
+        h1 { text-align: center; color: var(--accent); margin-bottom: 30px; }
+        .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+        .day { background: #0f172a; padding: 15px; border-radius: 8px; min-height: 100px; border: 1px solid var(--border); position: relative; }
+        .day-num { font-weight: bold; margin-bottom: 5px; color: var(--accent); }
+        .task { font-size: 0.75rem; background: rgba(56, 189, 248, 0.2); padding: 4px; border-radius: 4px; margin-bottom: 4px; border-left: 3px solid var(--accent); }
+        .header-cell { text-align: center; font-weight: bold; padding: 10px; color: var(--text); }
+    </style>
+</head>
+<body>
+    <div class="calendar-container">
+        <h1>📅 11월 프로젝트 일정 (자율주행 로봇)</h1>
+        <div class="grid">
+            <div class="header-cell">월</div><div class="header-cell">화</div><div class="header-cell">수</div><div class="header-cell">목</div><div class="header-cell">금</div><div class="header-cell">토</div><div class="header-cell">일</div>
+            
+            <!-- 11월 1일~16일 빈칸 -->
+            <div class="day" style="background:transparent; border:none;"></div><div class="day" style="background:transparent; border:none;"></div><div class="day" style="background:transparent; border:none;"></div><div class="day" style="background:transparent; border:none;"></div><div class="day" style="background:transparent; border:none;"></div><div class="day" style="background:transparent; border:none;"></div>
+            <div class="day"><div class="day-num">16</div></div>
+
+            <!-- 17일~30일 -->
+            <div class="day"><div class="day-num">17</div><div class="task">기획/환경 구축</div></div>
+            <div class="day"><div class="day-num">18</div><div class="task">기획/환경 구축</div></div>
+            <div class="day"><div class="day-num">19</div><div class="task">모델링(URDF)</div></div>
+            <div class="day"><div class="day-num">20</div><div class="task">SLAM/OpenCV 시작</div></div>
+            <div class="day"><div class="day-num">21</div><div class="task">SLAM/OpenCV</div></div>
+            <div class="day"><div class="day-num">22</div><div class="task">Nav2 구현</div></div>
+            <div class="day"><div class="day-num">23</div><div class="task">Nav2 구현</div></div>
+            <div class="day"><div class="day-num">24</div><div class="task">Python 제어 노드</div></div>
+            <div class="day"><div class="day-num">25</div><div class="task">객체 분류 연동</div></div>
+            <div class="day"><div class="day-num">26</div><div class="task">시스템 통합</div></div>
+            <div class="day"><div class="day-num">27</div><div class="task">디버깅</div></div>
+            <div class="day"><div class="day-num">28</div><div class="task">시뮬 검증</div></div>
+            <div class="day"><div class="day-num">29</div><div class="task">발표 자료 작성</div></div>
+            <div class="day"><div class="day-num">30</div><div class="task">시연 및 완료 🎉</div></div>
+        </div>
+    </div>
+</body>
+</html>
