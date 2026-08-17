@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planner Server - Nav2 Plugins</title>
+  <style>
+    :root {
+      --border-color: #2b3a2e;       /* 차분한 딥 그린 테두리 */
+      --bg-color: #f4f7f4;           /* 부드러운 그린 톤 배경 */
+      --card-bg: #ffffff;
+      --primary-color: #2e7d32;     /* 차분한 딥 그린 */
+      --primary-hover: #1b5e20;
+      --accent-color: #81c784;      /* 스피아민트 그린 (포인트) */
+      --light-green: #e8f5e9;       /* 박스/호버용 연두색 */
+      --text-main: #1b4332;         /* 텍스트 메인 컬러 */
+      --text-sub: #384e3b;          /* 텍스트 서브 컬러 */
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .outer-container {
+      width: 100%;
+      max-width: 850px;
+      border: 3px solid var(--border-color);
+      padding: 28px;
+      background-color: var(--card-bg);
+      box-shadow: 0 4px 16px rgba(46, 125, 50, 0.08);
+    }
+
+    /* 상단 헤더 영역 */
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 2px solid var(--primary-color);
+      padding-bottom: 12px;
+    }
+
+    .btn-back {
+      display: inline-block;
+      padding: 8px 16px;
+      background-color: var(--primary-color);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: background-color 0.2s ease;
+    }
+
+    .btn-back:hover {
+      background-color: var(--primary-hover);
+    }
+
+    h1 {
+      font-size: 1.7rem;
+      color: var(--text-main);
+    }
+
+    .section-title {
+      font-size: 1.25rem;
+      color: var(--text-main);
+      margin: 24px 0 12px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 18px;
+      background-color: var(--primary-color);
+      border-radius: 2px;
+    }
+
+    p {
+      line-height: 1.65;
+      color: var(--text-sub);
+      margin-bottom: 14px;
+      font-size: 0.95rem;
+    }
+
+    /* 이미지 및 다이어그램 영역 */
+    .diagram-box {
+      background-color: var(--light-green);
+      border: 1px solid #c8e6c9;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      margin: 16px 0;
+    }
+
+    .diagram-img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    .img-caption {
+      font-size: 0.85rem;
+      color: var(--text-sub);
+      margin-top: 8px;
+    }
+
+    /* 기능 강조 박스 */
+    .summary-box {
+      background-color: #f1f8e9;
+      border-left: 4px solid var(--primary-color);
+      padding: 14px 18px;
+      margin: 16px 0;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .summary-box ul {
+      margin-left: 18px;
+      color: var(--text-main);
+      line-height: 1.8;
+    }
+
+    /* 플러그인 비교 테이블 */
+    .plugin-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 0.9rem;
+    }
+
+    .plugin-table th, .plugin-table td {
+      border: 1px solid #c8e6c9;
+      padding: 10px 14px;
+      text-align: left;
+    }
+
+    .plugin-table th {
+      background-color: var(--light-green);
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .plugin-table td {
+      color: var(--text-sub);
+    }
+
+    /* 코드 블록 디자인 */
+    .code-block-header {
+      background-color: #2b3a2e;
+      color: #a5d6a7;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      font-family: 'Consolas', monospace;
+      border-radius: 6px 6px 0 0;
+      margin-top: 16px;
+    }
+
+    pre {
+      background-color: #1e241e;
+      color: #e8f5e9;
+      padding: 16px;
+      border-radius: 0 0 6px 6px;
+      border-left: 4px solid var(--accent-color);
+      overflow-x: auto;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.85rem;
+      line-height: 1.45;
+      margin-bottom: 20px;
+    }
+
+    /* 코드 안의 주석 및 주요 키워드 강조용 */
+    .code-comment { color: #81c784; }
+    .code-keyword { color: #ffb74d; }
+  </style>
+</head>
+<body>
+
+  <div class="outer-container">
+    
+    <!-- Header Bar -->
+    <div class="header-bar">
+      <h1>1. Planner Server (Global Planner)</h1>
+      <a href="index.html" class="btn-back">← 메인 목록</a>
+    </div>
+
+    <!-- 개요 설명 -->
+    <p>
+      <b>Planner Server</b>는 Nav2 아키텍처에서 <b>글로벌 경로 계획(Global Path Planning)</b>을 전담하는 핵심 서비스입니다.
+      로봇의 현재 위치(Start)부터 사용자가 지정한 목표 위치(Goal)까지, <b>Global Costmap</b> 데이터를 기반으로 동적 장애물을 피하는 최적의 전체 경로를 계산합니다.
+    </p>
+
+    <!-- 시각 구조 다이어그램 -->
+    <!-- Planner Server 전용 직관적 다이어그램 -->
+    <div class="diagram-box">
+      <svg viewBox="0 0 700 240" style="width: 100%; height: auto; max-height: 250px; background: #ffffff; border-radius: 6px; border: 1px solid #c8e6c9;">
+        <!-- 격자 배경 (Global Map) -->
+        <defs>
+          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#f0f0f0" stroke-width="1"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid)"/>
+
+        <!-- 장애물 (Global Costmap) -->
+        <rect x="220" y="50" width="80" height="140" fill="#e57373" rx="4" opacity="0.8"/>
+        <text x="260" y="125" fill="#fff" font-size="12" text-anchor="middle" font-weight="bold">장애물</text>
+        
+        <rect x="420" y="20" width="70" height="110" fill="#e57373" rx="4" opacity="0.8"/>
+        <text x="455" y="80" fill="#fff" font-size="12" text-anchor="middle" font-weight="bold">장애물</text>
+
+        <!-- 글로벌 경로 (Global Path) -->
+        <path d="M 80 180 Q 180 180 180 110 T 360 80 T 580 180" fill="none" stroke="#2e7d32" stroke-width="5" stroke-dasharray="8 4"/>
+        
+        <!-- 시작점 (Start) -->
+        <circle cx="80" cy="180" r="14" fill="#1b5e20"/>
+        <text x="80" y="184" fill="#fff" font-size="11" text-anchor="middle" font-weight="bold">Start</text>
+
+        <!-- 목표점 (Goal) -->
+        <circle cx="580" cy="180" r="14" fill="#c62828"/>
+        <text x="580" y="184" fill="#fff" font-size="11" text-anchor="middle" font-weight="bold">Goal</text>
+
+        <!-- 경로 설명 텍스트 -->
+        <rect x="300" y="30" width="100" height="26" fill="#2e7d32" rx="13"/>
+        <text x="350" y="47" fill="#fff" font-size="11" text-anchor="middle" font-weight="bold">Global Path 생성</text>
+      </svg>
+      <div class="img-caption">▲ [Planner Server] 지도 전체 관점에서 출발지(Start)부터 목적지(Goal)까지의 최적 경로 탐색</div>
+    </div>
+
+    <!-- 핵심 기능 및 특징 -->
+    <div class="section-title">주요 역할 및 특징</div>
+    <div class="summary-box">
+      <ul>
+        <li><b>Action Interface:</b> <code>nav2_msgs/action/ComputePathToPose</code> 액션 인터페이스를 제공하여 경로 계산 요청 처리</li>
+        <li><b>Global Path 생성:</b> 지도 전역 관점에서 장애물과의 충돌 위험도를 고려한 점(Pose)들의 배열(Path) 생성</li>
+        <li><b>플러그인 구조:</b> 알고리즘 변경 시 코드 재작성 없이 YAML 파라미터 변경만으로 플러그인 교체 가능</li>
+      </ul>
+    </div>
+
+    <!-- 주요 플러그인 비교 -->
+    <div class="section-title">대표적인 Planner 플러그인</div>
+    <table class="plugin-table">
+      <thead>
+        <tr>
+          <th>플러그인 명</th>
+          <th>알고리즘</th>
+          <th>특징 및 추천 로봇 타입</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>NavFn Planner</b></td>
+          <td>Dijkstra / A*</td>
+          <td>가장 흔하게 사용되는 표준 Grid 기반 플래너 (차동 구동 로봇 추천)</td>
+        </tr>
+        <tr>
+          <td><b>Smac Planner 2D</b></td>
+          <td>2D A* (Cost-aware)</td>
+          <td>NavFn 대비 고성능/고속 경로 탐색 지원</td>
+        </tr>
+        <tr>
+          <td><b>Smac Planner Hybrid-A*</b></td>
+          <td>Hybrid A*</td>
+          <td>회전 반경이 존재하는 <b>아커만 조향(Ackermann) / 자동차형 로봇</b> 전용</td>
+        </tr>
+        <tr>
+          <td><b>Theta* Planner</b></td>
+          <td>Theta*</td>
+          <td>그리드 선에 얽매이지 않고 대각선/자유각 경로를 매끄럽게 탐색</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 코드 섹션 1: YAML 설정 예시 -->
+   <!-- 코드 섹션 1: YAML 설정 예시 -->
+   <div class="section-title">설정 및 코드 예시</div>
+
+   <div class="code-block-header">📄 nav2_params.yaml (Planner Server & NavFn 설정 예시)</div>
+   <pre><code>planner_server:
+ ros__parameters:
+   expected_planner_frequency: 20.0       <span class="code-comment"># 경로 계산 주기 (Hz 단위, 초당 20회 재계산 요구)</span>
+   use_sim_time: true                     <span class="code-comment"># 시뮬레이션 시간 사용 여부 (Gazebo 등 시뮬레이터 사용 시 true)</span>
+   planner_plugins: ["GridBased"]         <span class="code-comment"># 사용할 글로벌 플래너 플러그인의 별칭(Alias) 목록</span>
+   
+   <span class="code-comment"># --- NavFn Planner 상세 파라미터 설정 ---</span>
+   GridBased:
+     plugin: "nav2_navfn_planner/NavfnPlanner" <span class="code-comment"># NavFn 플래너 C++ 클래스 지정</span>
+     tolerance: 0.5            <span class="code-comment"># 목표점(Goal) 주변 탐색 허용 오차 범위 (m 단위)</span>
+     use_aster: true           <span class="code-comment"># true: A* 알고리즘 사용, false: Dijkstra 알고리즘 사용</span>
+     allow_unknown: true       <span class="code-comment"># 미탐색(Unknown) 영역을 통과 경로에 포함할지 여부</span></code></pre>
+
+<!-- 코드 섹션 2: Python Action Client 예시 -->
+<div class="code-block-header">💻 Python rclpy Action Client (ComputePathToPose 호출 예시)</div>
+<pre><code><span class="code-keyword">import</span> rclpy                                      <span class="code-comment"># ROS 2 Python 클라이언트 라이브러리 임포트</span>
+<span class="code-keyword">from</span> rclpy.node <span class="code-keyword">import</span> Node                       <span class="code-comment"># ROS 2 노드 클래스 임포트</span>
+<span class="code-keyword">from</span> rclpy.action <span class="code-keyword">import</span> ActionClient             <span class="code-comment"># ROS 2 Action Client 모듈 임포트</span>
+<span class="code-keyword">from</span> nav2_msgs.action <span class="code-keyword">import</span> ComputePathToPose    <span class="code-comment"># Planner Server 경로 계산용 Action 메시지 임포트</span>
+<span class="code-keyword">from</span> geometry_msgs.msg <span class="code-keyword">import</span> PoseStamped         <span class="code-comment"># 위치/방향 정보 생성을 위한 PoseStamped 메시지 임포트</span>
+
+<span class="code-keyword">class</span> <span class="code-string">PlannerClient</span>(Node):
+<span class="code-keyword">def</span> <span class="code-string">__init__</span>(self):
+    <span class="code-keyword">super</span>().__init__(<span class="code-string">'planner_action_client'</span>) <span class="code-comment"># 'planner_action_client' 이름의 노드 초기화</span>
+    <span class="code-comment"># Planner Server의 "compute_path_to_pose" 액션 서버와 통신할 ActionClient 생성</span>
+    self._action_client = ActionClient(self, ComputePathToPose, <span class="code-string">'compute_path_to_pose'</span>)
+
+<span class="code-keyword">def</span> <span class="code-string">send_goal</span>(self, goal_x=2.0, goal_y=1.5):
+    <span class="code-comment"># 1. Planner Server에 요청할 목표 메시지(Goal) 객체 생성</span>
+    goal_msg = ComputePathToPose.Goal()
+
+    <span class="code-comment"># 2. 목표 위치(PoseStamped) 객체 생성 및 좌표계/좌표 설정</span>
+    goal_msg.goal = PoseStamped()
+    goal_msg.goal.header.frame_id = <span class="code-string">'map'</span>     <span class="code-comment"># 글로벌 지도 좌표계 "map" 기준</span>
+    goal_msg.goal.header.stamp = self.get_clock().now().to_msg() <span class="code-comment"># 현재 타임스탬프 저장</span>
+    goal_msg.goal.pose.position.x = goal_x    <span class="code-comment"># 목표 X 좌표 (m)</span>
+    goal_msg.goal.pose.position.y = goal_y    <span class="code-comment"># 목표 Y 좌표 (m)</span>
+
+    <span class="code-comment"># 3. 액션 서버 준비 상태 확인 및 대기</span>
+    self._action_client.wait_for_server()
+
+    <span class="code-comment"># 4. Planner Server에 글로벌 경로 생성 비동기 요청 전송</span>
+    <span class="code-keyword">return</span> self._action_client.send_goal_async(goal_msg)
+
+<span class="code-keyword">def</span> <span class="code-string">main</span>(args=None):
+rclpy.init(args=args)                         <span class="code-comment"># ROS 2 Python 통신 시스템 초기화</span>
+planner_node = PlannerClient()                <span class="code-comment"># 경로 연산 요청 노드 인스턴스 생성</span>
+planner_node.send_goal(goal_x=2.0, goal_y=1.5) <span class="code-comment"># (2.0, 1.5) 위치로 경로 계산 요청</span>
+rclpy.spin(planner_node)                      <span class="code-comment"># 콜백 이벤트 대기 루프 실행</span>
+
+<span class="code-keyword">if</span> __name__ == <span class="code-string">'__main__'</span>:
+main()</code></pre>
+</body>
+</html>

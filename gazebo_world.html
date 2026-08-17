@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>1-1. 3D 가상 월드 구축 (Gazebo World)</title>
+  <style>
+    :root {
+      --border-color: #2b3a2e;       /* 차분한 딥 그린 테두리 */
+      --bg-color: #f4f7f4;           /* 부드러운 그린 톤 배경 */
+      --card-bg: #ffffff;
+      --primary-color: #2e7d32;     /* 차분한 딥 그린 */
+      --primary-hover: #1b5e20;
+      --accent-color: #81c784;      /* 스피아민트 그린 (포인트) */
+      --light-green: #e8f5e9;       /* 박스/호버용 연두색 */
+      --text-main: #1b4332;         /* 텍스트 메인 컬러 */
+      --text-sub: #384e3b;          /* 텍스트 서브 컬러 */
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .outer-container {
+      width: 100%;
+      max-width: 850px;
+      border: 3px solid var(--border-color);
+      padding: 28px;
+      background-color: var(--card-bg);
+      box-shadow: 0 4px 16px rgba(46, 125, 50, 0.08);
+    }
+
+    /* 상단 헤더 영역 */
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 2px solid var(--primary-color);
+      padding-bottom: 12px;
+    }
+
+    .btn-back {
+      display: inline-block;
+      padding: 8px 16px;
+      background-color: var(--primary-color);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: background-color 0.2s ease;
+    }
+
+    .btn-back:hover {
+      background-color: var(--primary-hover);
+    }
+
+    h1 {
+      font-size: 1.7rem;
+      color: var(--text-main);
+    }
+
+    .section-title {
+      font-size: 1.25rem;
+      color: var(--text-main);
+      margin: 24px 0 12px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 18px;
+      background-color: var(--primary-color);
+      border-radius: 2px;
+    }
+
+    p {
+      line-height: 1.65;
+      color: var(--text-sub);
+      margin-bottom: 14px;
+      font-size: 0.95rem;
+    }
+
+    /* 다이어그램 및 이미지 영역 */
+    .diagram-box {
+      background-color: #f9fbf9;
+      border: 1px solid #c8e6c9;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    .img-caption {
+      font-size: 0.85rem;
+      color: var(--text-sub);
+      margin-top: 10px;
+      font-weight: 500;
+    }
+
+    /* 요약 강조 박스 */
+    .summary-box {
+      background-color: #f1f8e9;
+      border-left: 4px solid var(--primary-color);
+      padding: 14px 18px;
+      margin: 16px 0;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .summary-box ul {
+      margin-left: 18px;
+      color: var(--text-main);
+      line-height: 1.8;
+    }
+
+    /* 테이블 디자인 */
+    .plugin-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 0.9rem;
+    }
+
+    .plugin-table th, .plugin-table td {
+      border: 1px solid #c8e6c9;
+      padding: 10px 14px;
+      text-align: left;
+    }
+
+    .plugin-table th {
+      background-color: var(--light-green);
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .plugin-table td {
+      color: var(--text-sub);
+    }
+
+    /* 코드 블록 디자인 */
+    .code-block-header {
+      background-color: #2b3a2e;
+      color: #a5d6a7;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      font-family: 'Consolas', monospace;
+      border-radius: 6px 6px 0 0;
+      margin-top: 16px;
+    }
+
+    pre {
+      background-color: #1e241e;
+      color: #e8f5e9;
+      padding: 16px;
+      border-radius: 0 0 6px 6px;
+      border-left: 4px solid var(--accent-color);
+      overflow-x: auto;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    .code-comment { color: #81c784; font-weight: bold; }
+    .code-keyword { color: #ffb74d; }
+    .code-string { color: #ce9178; }
+  </style>
+</head>
+<body>
+
+  <div class="outer-container">
+    
+    <!-- Header Bar -->
+    <div class="header-bar">
+      <h1>1-1. 3D 가상 월드 구축 (Gazebo World)</h1>
+      <a href="index.html" class="btn-back">← 메인 목록</a>
+    </div>
+
+    <!-- 개요 설명 (공식 문서 기반) -->
+    <p>
+      <b>Gazebo World</b>는 자율주행 시뮬레이션을 수행하기 위해 실세계의 물리적 법칙과 환경 요소를 컴퓨터 환경에 구현한 <b>SDF(Simulation Description Format)</b> 기반의 3D 가상 공간입니다.
+      Open Robotics 및 Gazebo 공식 docs 표준을 준수하여 중력, 조명, 마찰력 및 정적/동적 장애물 특성을 정밀하게 정의합니다.
+    </p>
+
+   <!-- 개선된 직관적 일러스트 SVG 다이어그램 -->
+   <div class="diagram-box">
+    <svg viewBox="0 0 760 250" style="width: 100%; height: auto; background: #ffffff; border-radius: 8px; border: 1px solid #c8e6c9;">
+      
+      <defs>
+        <!-- 화살표 머리 정의 -->
+        <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#2e7d32" />
+        </marker>
+        <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#0288d1" />
+        </marker>
+      </defs>
+
+      <!-- 1. [설계도] World XML/SDF 파일 -->
+      <g transform="translate(30, 35)">
+        <!-- 배경 카드 -->
+        <rect x="0" y="0" width="180" height="180" fill="#f4fbf4" stroke="#81c784" stroke-width="2" rx="10"/>
+        
+        <!-- 문서 아이콘 그림 -->
+        <path d="M 65 25 L 105 25 L 120 40 L 120 85 L 65 85 Z" fill="#ffffff" stroke="#2e7d32" stroke-width="2"/>
+        <path d="M 105 25 L 105 40 L 120 40" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+        <!-- 문서 안 그래픽 텍스트 표시 -->
+        <line x1="75" y1="45" x2="95" y2="45" stroke="#2e7d32" stroke-width="2"/>
+        <line x1="75" y1="55" x2="110" y2="55" stroke="#81c784" stroke-width="2"/>
+        <line x1="75" y1="65" x2="105" y2="65" stroke="#81c784" stroke-width="2"/>
+        
+        <!-- 타이틀 & 설명 -->
+        <text x="90" y="112" fill="#1b4332" font-size="13" font-weight="bold" text-anchor="middle">📄 3D 환경 설계도</text>
+        <text x="90" y="132" fill="#2e7d32" font-size="11" text-anchor="middle">(.world / SDF 파일)</text>
+        <text x="90" y="155" fill="#666666" font-size="9.5" text-anchor="middle">벽, 바닥, 조명, 장애물 배치</text>
+      </g>
+
+      <!-- 화살표 1: 설계도 -> 시뮬레이터 엔진 -->
+      <path d="M 215 125 L 255 125" stroke="#2e7d32" stroke-width="3" stroke-dasharray="4 2" marker-end="url(#arrow)"/>
+      <text x="235" y="115" fill="#2e7d32" font-size="9" font-weight="bold" text-anchor="middle">읽기 (Load)</text>
+
+      <!-- 2. [가상 세계 엔진] Gazebo Physics Engine -->
+      <g transform="translate(260, 35)">
+        <rect x="0" y="0" width="200" height="180" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2.5" rx="10"/>
+        
+        <!-- 가상 3D 월드 & 톱니바퀴 연산 일러스트 -->
+        <!-- 3D 바닥 지평선 -->
+        <polygon points="30,80 100,50 170,80 100,95" fill="#c8e6c9" stroke="#2e7d32" stroke-width="1.5"/>
+        <!-- 바닥 위 3D 장애물 박스 -->
+        <polygon points="90,55 110,55 110,70 90,70" fill="#81c784" stroke="#1b5e20"/>
+        <polygon points="110,55 120,48 120,63 110,70" fill="#a5d6a7" stroke="#1b5e20"/>
+        <polygon points="90,55 100,48 120,48 110,55" fill="#e8f5e9" stroke="#1b5e20"/>
+
+        <!-- 물리 연산 톱니바퀴 아이콘 -->
+        <circle cx="150" cy="35" r="10" fill="#ffb74d" stroke="#f57c00" stroke-width="1.5"/>
+        <path d="M 150 21 L 150 49 M 136 35 L 164 35 M 140 25 L 160 45 M 140 45 L 160 25" stroke="#f57c00" stroke-width="2"/>
+
+        <!-- 타이틀 & 설명 -->
+        <text x="100" y="122" fill="#1b4332" font-size="13" font-weight="bold" text-anchor="middle">⚙️ Gazebo 물리 엔진</text>
+        <text x="100" y="140" fill="#1b5e20" font-size="11" font-weight="bold" text-anchor="middle">(gzserver)</text>
+        <text x="100" y="160" fill="#384e3b" font-size="9.5" text-anchor="middle">중력/충돌 및 가상 센서 연산</text>
+      </g>
+
+      <!-- 화살표 2: 물리 엔진 -> 출력 (양갈래 분기) -->
+      <!-- 상단: 화면 출력 방향 -->
+      <path d="M 465 100 Q 485 70 505 70" fill="none" stroke="#2e7d32" stroke-width="2.5" marker-end="url(#arrow)"/>
+      <!-- 하단: ROS 2 전송 방향 -->
+      <path d="M 465 150 Q 485 180 505 180" fill="none" stroke="#0288d1" stroke-width="2.5" marker-end="url(#arrow-blue)"/>
+
+      <!-- 3-A. [화면 모니터] 3D 화면 출력 (gzclient) -->
+      <g transform="translate(515, 20)">
+        <rect x="0" y="0" width="210" height="95" fill="#ffffff" stroke="#2e7d32" stroke-width="2" rx="8"/>
+        <!-- 모터/모니터 아이콘 -->
+        <rect x="15" y="15" width="50" height="35" fill="#333333" rx="3"/>
+        <rect x="18" y="18" width="44" height="29" fill="#81c784"/>
+        <!-- 화면 안 사람/로봇 형상 -->
+        <circle cx="40" cy="30" r="5" fill="#ffffff"/>
+
+        <text x="75" y="32" fill="#1b4332" font-size="12" font-weight="bold">🖥️ 3D 화면 모니터</text>
+        <text x="75" y="48" fill="#2e7d32" font-size="10">(gzclient GUI)</text>
+        <text x="15" y="75" fill="#666666" font-size="9">사용자가 가상 월드를 눈으로 보는 화면</text>
+      </g>
+
+      <!-- 3-B. [ROS 2 통신] 자율주행 알고리즘 연동 -->
+      <g transform="translate(515, 130)">
+        <rect x="0" y="0" width="210" height="100" fill="#e1f5fe" stroke="#0288d1" stroke-width="2" rx="8"/>
+        
+        <!-- ROS 2 로고 느낌의 원형 통신 노드 일러스트 -->
+        <circle cx="35" cy="35" r="14" fill="#0288d1"/>
+        <circle cx="25" cy="35" r="3" fill="#ffffff"/>
+        <circle cx="35" cy="35" r="3" fill="#ffffff"/>
+        <circle cx="45" cy="35" r="3" fill="#ffffff"/>
+
+        <text x="60" y="32" fill="#01579b" font-size="12" font-weight="bold">📡 ROS 2 자율주행</text>
+        <text x="60" y="48" fill="#0288d1" font-size="10">(gazebo_ros_pkgs)</text>
+
+        <!-- 발행 데이터 레고 블록 -->
+        <rect x="15" y="65" width="180" height="22" fill="#ffffff" stroke="#81d4fa" rx="4"/>
+        <text x="105" y="80" fill="#01579b" font-size="9" font-weight="bold" text-anchor="middle">센서 데이터 전송 (/scan, /clock, /tf)</text>
+      </g>
+
+    </svg>
+    <div class="img-caption">▲ [그림 1-1] 3D 설계도(.world)가 시뮬레이터 엔진을 거쳐 3D 화면과 ROS 2 자율주행 데이터로 전달되는 전체 흐름</div>
+  </div>
+
+    <!-- 주요 역할 및 핵심 특징 -->
+    <div class="section-title">주요 역할 및 특징</div>
+    <div class="summary-box">
+      <ul>
+        <li><b>물리 엔진 기반 시뮬레이션:</b> ODE(Open Dynamics Engine)를 기본 엔진으로 사용하여 중력($9.8m/s^2$) 및 바닥 접촉 마찰력 연산</li>
+        <li><b>SDF (Simulation Description Format) 표준:</b> ISO XML 규격을 준수하여 조명(Sun), 바닥(Ground), 장애물(Model) 정밀 배치</li>
+        <li><b>Building Editor 지원:</b> Gazebo 내장 툴을 활용해 실제 도면 기반 벽체 구조물 및 멀티룸 시나리오 환경 생성</li>
+        <li><b>시뮬레이션 시간 동기화:</b> ROS 2 시스템에 <code>/clock</code> 토픽을 제공하여 실제 시간과 시뮬레이션 타임(Sim Time) 동기화</li>
+      </ul>
+    </div>
+
+    <!-- 구성 요소 사양 테이블 -->
+    <div class="section-title">Gazebo World 주요 태그 구성 요소</div>
+    <table class="plugin-table">
+      <thead>
+        <tr>
+          <th>태그 이름</th>
+          <th>SDF 설정 예시</th>
+          <th>기능 및 역할</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b><code>&lt;physics&gt;</code></b></td>
+          <td><code>type="ode"</code></td>
+          <td>시뮬레이션 연산 주기(Step Time, 예: 0.001s) 및 물리 연산 엔진 지정</td>
+        </tr>
+        <tr>
+          <td><b><code>&lt;light&gt;</code></b></td>
+          <td><code>type="directional"</code></td>
+          <td>가상 광원(태양광 등)의 위치, 조사 방향 및 그림자(Shadows) 연산 설정</td>
+        </tr>
+        <tr>
+          <td><b><code>&lt;include&gt;</code></b></td>
+          <td><code>&lt;uri&gt;model://...&lt;/uri&gt;</code></td>
+          <td>Gazebo Fuel 및 로컬 3D 장애물 모델(벽, 가구, 기둥 등)을 가상 월드로 로드</td>
+        </tr>
+        <tr>
+          <td><b><code>&lt;plugin&gt;</code></b></td>
+          <td><code>gazebo_ros_factory</code></td>
+          <td>ROS 2 서비스 및 토픽을 통해 로봇을 동적으로 스폰(Spawn)하고 월드 상태 제어</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 코드 섹션 1: SDF 기반 World 파일 코드 (100% 한글 줄별 주석 추가) -->
+    <div class="section-title">설정 및 코드 예시</div>
+
+    <div class="code-block-header">📄 my_custom_world.world (Gazebo 3D World SDF 설정 파라미터)</div>
+    <pre><code>&lt;sdf version="1.6"&gt;                                   <span class="code-comment">&lt;!-- SDF(Simulation Description Format) 버전을 1.6으로 지정 --&gt;</span>
+  &lt;world name="default"&gt;                              <span class="code-comment">&lt;!-- 기본 월드 노드 생성 및 이름을 'default'로 설정 --&gt;</span>
+
+    &lt;include&gt;                                         <span class="code-comment">&lt;!-- 태양 광원(Light) 모델 정의 시작 --&gt;</span>
+      &lt;uri&gt;model://sun&lt;/uri&gt;                         <span class="code-comment">&lt;!-- Gazebo 기본 저장소에서 'sun' 모델을 불러와 배치 --&gt;</span>
+    &lt;/include&gt;                                        <span class="code-comment">&lt;!-- 광원 모델 불러오기 종료 --&gt;</span>
+
+    &lt;include&gt;                                         <span class="code-comment">&lt;!-- 3D 가상 공간의 바닥(Ground) 모델 정의 시작 --&gt;</span>
+      &lt;uri&gt;model://ground_plane&lt;/uri&gt;                 <span class="code-comment">&lt;!-- 평면 바닥 모델인 'ground_plane'을 불러옴 --&gt;</span>
+    &lt;/include&gt;                                        <span class="code-comment">&lt;!-- 바닥 모델 불러오기 종료 --&gt;</span>
+
+    &lt;physics type="ode"&gt;                              <span class="code-comment">&lt;!-- 물리 엔진 타입을 Open Dynamics Engine(ODE)로 설정 --&gt;</span>
+      &lt;max_step_size&gt;0.001&lt;/max_step_size&gt;            <span class="code-comment">&lt;!-- 물리 연산 스텝 크기를 0.001초(1ms)로 설정하여 정밀도 확보 --&gt;</span>
+      &lt;real_time_factor&gt;1.0&lt;/real_time_factor&gt;          <span class="code-comment">&lt;!-- 실제 시간 대비 시뮬레이션 진행 배율을 1.0(동일 속도)으로 지정 --&gt;</span>
+      &lt;real_time_update_rate&gt;1000&lt;/real_time_update_rate&gt; <span class="code-comment">&lt;!-- 초당 물리 루프 업데이트 횟수를 1000Hz로 설정 --&gt;</span>
+    &lt;/physics&gt;                                        <span class="code-comment">&lt;!-- 물리 엔진 설정 종료 --&gt;</span>
+
+    &lt;include&gt;                                         <span class="code-comment">&lt;!-- 커스텀 장애물(책장 구조물) 로드 시작 --&gt;</span>
+      &lt;name&gt;office_bookshelf&lt;/name&gt;                   <span class="code-comment">&lt;!-- 가상 공간 내 개체 고유 이름을 'office_bookshelf'로 지정 --&gt;</span>
+      &lt;uri&gt;model://bookshelf&lt;/uri&gt;                    <span class="code-comment">&lt;!-- 3D 책장 mesh 모델 파일의 경로 지정 --&gt;</span>
+      &lt;pose&gt;2.0 1.5 0.0 0 0 0&lt;/pose&gt;                  <span class="code-comment">&lt;!-- 가상 공간 배치 좌표 지정 (x=2.0m, y=1.5m, z=0.0m, R/P/Y=0) --&gt;</span>
+    &lt;/include&gt;                                        <span class="code-comment">&lt;!-- 장애물 로드 종료 --&gt;</span>
+
+  &lt;/world&gt;                                            <span class="code-comment">&lt;!-- 월드 정의 종료 --&gt;</span>
+&lt;/sdf&gt;                                                <span class="code-comment">&lt;!-- SDF 문서 종료 --&gt;</span></code></pre>
+
+    <!-- 코드 섹션 2: Python Launch 연동 코드 (100% 한글 줄별 주석 추가) -->
+    <div class="code-block-header">💻 gazebo_world.launch.py (Gazebo World 실행 파이썬 런치 파일)</div>
+    <pre><code><span class="code-keyword">import</span> os                                            <span class="code-comment"># 운영체제 파일 및 디렉토리 경로 처리를 위한 os 모듈 임포트</span>
+<span class="code-keyword">from</span> ament_index_python.packages <span class="code-keyword">import</span> get_package_share_directory <span class="code-comment"># ROS 2 패키지의 설치 경로를 찾기 위한 함수 임포트</span>
+<span class="code-keyword">from</span> launch <span class="code-keyword">import</span> LaunchDescription                <span class="code-comment"># Launch 실행 목록을 구성하는 기본 LaunchDescription 클래스 임포트</span>
+<span class="code-keyword">from</span> launch.actions <span class="code-keyword">import</span> IncludeLaunchDescription <span class="code-comment"># 다른 외부 launch 파일을 포함시켜 함께 실행하는 액션 클래스 임포트</span>
+<span class="code-keyword">from</span> launch.launch_description_sources <span class="code-keyword">import</span> PythonLaunchDescriptionSource <span class="code-comment"># 파이썬 형태의 launch 소스를 지정하는 모듈 임포트</span>
+
+<span class="code-keyword">def</span> <span class="code-string">generate_launch_description</span>():                   <span class="code-comment"># ROS 2 Launch 시스템이 호출하는 필수 엔트리 포인트 함수 정의</span>
+
+    pkg_gazebo_ros = get_package_share_directory(<span class="code-string">'gazebo_ros'</span>) <span class="code-comment"># ROS 2-Gazebo 연동 공식 패키지의 share 디렉토리 경로 획득</span>
+    pkg_sim_world = get_package_share_directory(<span class="code-string">'my_sim_package'</span>) <span class="code-comment"># 프로젝트 커스텀 시뮬레이션 패키지의 share 경로 획득</span>
+    
+    world_path = os.path.join(pkg_sim_world, <span class="code-string">'worlds'</span>, <span class="code-string">'my_custom_world.world'</span>) <span class="code-comment"># 실행할 .world 파일의 절대 경로 조합</span>
+
+    gzserver_cmd = IncludeLaunchDescription(          <span class="code-comment"># Gazebo 백그라운드 서버(gzserver)를 실행할 액션 구문 작성</span>
+        PythonLaunchDescriptionSource(                <span class="code-comment"># gazebo_ros 패키지 내부의 gzserver.launch.py 파일 경로 지정</span>
+            os.path.join(pkg_gazebo_ros, <span class="code-string">'launch'</span>, <span class="code-string">'gzserver.launch.py'</span>)
+        ),
+        launch_arguments={<span class="code-string">'world'</span>: world_path}.items() <span class="code-comment"># 생성한 커스텀 .world 파일 경로를 gzserver 실행 인자로 전달</span>
+    )
+
+    gzclient_cmd = IncludeLaunchDescription(          <span class="code-comment"># Gazebo 3D 그래픽 화면(gzclient GUI)을 실행할 액션 구문 작성</span>
+        PythonLaunchDescriptionSource(                <span class="code-comment"># gazebo_ros 패키지 내부의 gzclient.launch.py 파일 경로 지정</span>
+            os.path.join(pkg_gazebo_ros, <span class="code-string">'launch'</span>, <span class="code-string">'gzclient.launch.py'</span>)
+        )
+    )
+
+    <span class="code-keyword">return</span> LaunchDescription([                        <span class="code-comment"># 구성된 Gazebo Server 및 Client 실행 액션 배열을 LaunchDescription 객체로 반환</span>
+        gzserver_cmd,                                 <span class="code-comment"># 1. 물리 연산 서버 실행</span>
+        gzclient_cmd                                  <span class="code-comment"># 2. 3D GUI 화면 실행</span>
+    ])</code></pre>
+
+  </div>
+
+</body>
+</html>

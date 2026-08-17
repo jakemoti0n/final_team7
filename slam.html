@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2-1. SLAM (Cartographer / Slam Toolbox)</title>
+  <style>
+    :root {
+      --border-color: #2b3a2e;       /* 차분한 딥 그린 테두리 */
+      --bg-color: #f4f7f4;            /* 부드러운 그린 톤 배경 */
+      --card-bg: #ffffff;
+      --primary-color: #2e7d32;       /* 차분한 딥 그린 */
+      --primary-hover: #1b5e20;
+      --accent-color: #81c784;        /* 스피아민트 그린 (포인트) */
+      --light-green: #e8f5e9;         /* 박스/호버용 연두색 */
+      --text-main: #1b4332;           /* 텍스트 메인 컬러 */
+      --text-sub: #384e3b;            /* 텍스트 서브 컬러 */
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .outer-container {
+      width: 100%;
+      max-width: 920px;
+      border: 3px solid var(--border-color);
+      padding: 28px;
+      background-color: var(--card-bg);
+      box-shadow: 0 4px 16px rgba(46, 125, 50, 0.08);
+    }
+
+    /* 상단 헤더 영역 */
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 2px solid var(--primary-color);
+      padding-bottom: 12px;
+    }
+
+    .btn-back {
+      display: inline-block;
+      padding: 8px 16px;
+      background-color: var(--primary-color);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: background-color 0.2s ease;
+    }
+
+    .btn-back:hover {
+      background-color: var(--primary-hover);
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      color: var(--text-main);
+    }
+
+    .section-title {
+      font-size: 1.25rem;
+      color: var(--text-main);
+      margin: 24px 0 12px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 18px;
+      background-color: var(--primary-color);
+      border-radius: 2px;
+    }
+
+    p {
+      line-height: 1.65;
+      color: var(--text-sub);
+      margin-bottom: 14px;
+      font-size: 0.95rem;
+    }
+
+    /* 다이어그램 영역 */
+    .diagram-box {
+      background-color: #f9fbf9;
+      border: 1px solid #c8e6c9;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    .img-caption {
+      font-size: 0.85rem;
+      color: var(--text-sub);
+      margin-top: 10px;
+      font-weight: 500;
+    }
+
+    /* 요약 강조 박스 */
+    .summary-box {
+      background-color: #f1f8e9;
+      border-left: 4px solid var(--primary-color);
+      padding: 14px 18px;
+      margin: 16px 0;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .summary-box ul {
+      margin-left: 18px;
+      color: var(--text-main);
+      line-height: 1.8;
+    }
+
+    /* 테이블 디자인 */
+    .plugin-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 0.9rem;
+    }
+
+    .plugin-table th, .plugin-table td {
+      border: 1px solid #c8e6c9;
+      padding: 10px 14px;
+      text-align: left;
+    }
+
+    .plugin-table th {
+      background-color: var(--light-green);
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .plugin-table td {
+      color: var(--text-sub);
+    }
+
+    /* 코드 블록 디자인 */
+    .code-block-header {
+      background-color: #2b3a2e;
+      color: #a5d6a7;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      font-family: 'Consolas', monospace;
+      border-radius: 6px 6px 0 0;
+      margin-top: 16px;
+    }
+
+    pre {
+      background-color: #1e241e;
+      color: #e8f5e9;
+      padding: 16px;
+      border-radius: 0 0 6px 6px;
+      border-left: 4px solid var(--accent-color);
+      overflow-x: auto;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    .code-comment { color: #81c784; font-weight: bold; }
+    .code-keyword { color: #ffb74d; }
+    .code-string { color: #ce9178; }
+  </style>
+</head>
+<body>
+
+  <div class="outer-container">
+    
+    <!-- Header Bar -->
+    <div class="header-bar">
+      <h1>2-1. SLAM (Cartographer / Slam Toolbox)</h1>
+      <a href="index.html" class="btn-back">← 메인 목록</a>
+    </div>
+
+    <!-- 개요 설명 -->
+    <p>
+      <b>SLAM (Simultaneous Localization and Mapping)</b>은 로봇이 미지의 공간에서 센서(LiDAR, 오도메트리 등)를 활용해 자신의 <b>위치 추정(Localization)</b>과 주변 환경의 <b>지도 작성(Mapping)</b>을 동시에 수행하는 기술입니다.
+      ROS 2 환경에서는 구글이 개발한 그래프 기반 최적화 방식의 <b>Cartographer</b>와 실시간 맵핑 및 루프 클로저 성능이 뛰어난 <b>Slam Toolbox</b>가 대표적으로 활용됩니다.
+    </p>
+
+    <!-- [2-1 SLAM 센서 데이터 처리 및 맵핑 시각적 아이콘/그래픽 다이어그램] -->
+    <div class="diagram-box">
+      <svg viewBox="0 0 820 290" style="width: 100%; height: auto; background: #ffffff; border-radius: 8px; border: 1px solid #c8e6c9;">
+        
+        <!-- STEP 1: 로봇 센서 데이터 입력 (아이콘 그래픽 포함) -->
+        <g transform="translate(15, 20)">
+          <rect x="0" y="0" width="230" height="250" fill="#f4fbf4" stroke="#a5d6a7" stroke-width="1.5" rx="8"/>
+          <text x="115" y="25" fill="#1b4332" font-size="11" font-weight="bold" text-anchor="middle">1. 센서 입력 스트림</text>
+          
+          <!-- 라이다 아이콘박스 -->
+          <rect x="20" y="45" width="190" height="85" fill="#ffffff" stroke="#c8e6c9" rx="6"/>
+          <!-- 라이다 미니 그래픽 (원과 레이저 확산선) -->
+          <circle cx="55" cy="87" r="14" fill="#e8f5e9" stroke="#2e7d32" stroke-width="1.5"/>
+          <circle cx="55" cy="87" r="4" fill="#2e7d32"/>
+          <path d="M 55 73 L 55 65 M 43 80 L 37 75 M 67 80 L 73 75 M 43 94 L 37 99 M 67 94 L 73 99" stroke="#81c784" stroke-width="1.5" stroke-linecap="round"/>
+          <text x="82" y="77" fill="#2e7d32" font-size="9.5" font-family="Consolas" font-weight="bold">LaserScan / LiDAR</text>
+          <text x="82" y="95" fill="#384e3b" font-size="8">주변 장애물 거리 스캔</text>
+
+          <!-- 오도메트리 아이콘박스 -->
+          <rect x="20" y="140" width="190" height="75" fill="#ffffff" stroke="#c8e6c9" rx="6"/>
+          <!-- 바퀴/엔코더 미니 그래픽 -->
+          <circle cx="55" cy="177" r="12" fill="none" stroke="#2e7d32" stroke-width="2"/>
+          <line x1="55" y1="165" x2="55" y2="189" stroke="#2e7d32" stroke-width="1.5"/>
+          <line x1="43" y1="177" x2="67" y2="177" stroke="#2e7d32" stroke-width="1.5"/>
+          <text x="82" y="167" fill="#2e7d32" font-size="9.5" font-family="Consolas" font-weight="bold">Odometry / TF</text>
+          <text x="82" y="185" fill="#384e3b" font-size="8">바퀴 엔코더 / IMU 추정</text>
+
+          <text x="115" y="235" fill="#e65100" font-size="8" font-weight="bold" text-anchor="middle">ROS 2 토픽 발행 데이터</text>
+        </g>
+
+        <!-- 화살표 1 -->
+        <g transform="translate(255, 145)">
+          <path d="M 0 0 L 16 0" stroke="#2e7d32" stroke-width="2.5"/>
+          <polygon points="16,-4 24,0 16,4" fill="#2e7d32"/>
+        </g>
+
+        <!-- STEP 2: SLAM 알고리즘 엔진 (그래픽 박스) -->
+        <g transform="translate(285, 20)">
+          <rect x="0" y="0" width="250" height="250" fill="#ffffff" stroke="#2e7d32" stroke-width="2" rx="8"/>
+          <text x="125" y="25" fill="#1b4332" font-size="11" font-weight="bold" text-anchor="middle">2. SLAM 알고리즘 (백엔드)</text>
+
+          <!-- Cartographer 박스 -->
+          <rect x="15" y="45" width="220" height="85" fill="#e8f5e9" stroke="#2e7d32" rx="6"/>
+          <text x="125" y="68" fill="#1b4332" font-size="10" font-weight="bold" text-anchor="middle">Google Cartographer</text>
+          <!-- 서브맵 누적 스케치 그래픽 라인 -->
+          <rect x="30" y="78" width="35" height="42" fill="#ffffff" stroke="#81c784" stroke-dasharray="2,2" rx="2"/>
+          <rect x="45" y="84" width="35" height="42" fill="#ffffff" stroke="#2e7d32" rx="2"/>
+          <text x="92" y="97" fill="#384e3b" font-size="8.5">• 서브맵(Submap) 누적</text>
+          <text x="92" y="112" fill="#384e3b" font-size="8.5">• 포즈 그래프(Pose Graph) 최적화</text>
+
+          <!-- Slam Toolbox 박스 -->
+          <rect x="15" y="140" width="220" height="75" fill="#e8f5e9" stroke="#2e7d32" rx="6"/>
+          <text x="125" y="162" fill="#1b4332" font-size="10" font-weight="bold" text-anchor="middle">Slam Toolbox</text>
+          <text x="30" y="180" fill="#384e3b" font-size="8.5">• 고성능 스캔 매칭 및 실시간 병합</text>
+          <text x="30" y="195" fill="#384e3b" font-size="8.5">• Lifelong 맵 관리 및 루프 클로저</text>
+
+          <rect x="15" y="223" width="220" height="20" fill="#efebe9" rx="3"/>
+          <text x="125" y="236" fill="#4e342e" font-size="8" font-weight="bold" text-anchor="middle">누적 오차 실시간 보정 연산</text>
+        </g>
+
+        <!-- 화살표 2 -->
+        <g transform="translate(545, 145)">
+          <path d="M 0 0 L 16 0" stroke="#2e7d32" stroke-width="2.5"/>
+          <polygon points="16,-4 24,0 16,4" fill="#2e7d32"/>
+        </g>
+
+        <!-- STEP 3: 결과물 출력 (아이콘 그래픽 포함) -->
+        <g transform="translate(575, 20)">
+          <rect x="0" y="0" width="230" height="250" fill="#f4fbf4" stroke="#a5d6a7" stroke-width="1.5" rx="8"/>
+          <text x="115" y="25" fill="#1b4332" font-size="11" font-weight="bold" text-anchor="middle">3. 지도 및 위치 출력</text>
+
+          <!-- 맵 그리드 아이콘박스 -->
+          <rect x="20" y="45" width="190" height="85" fill="#ffffff" stroke="#0288d1" rx="6"/>
+          <!-- 미니 격자 맵 그래픽 -->
+          <g transform="translate(28, 55)">
+            <rect x="0" y="0" width="30" height="30" fill="#e0f7fa" stroke="#0288d1" stroke-width="1"/>
+            <line x1="10" y1="0" x2="10" y2="30" stroke="#b2ebf2" stroke-width="0.7"/>
+            <line x1="20" y1="0" x2="20" y2="30" stroke="#b2ebf2" stroke-width="0.7"/>
+            <line x1="0" y1="10" x2="30" y2="10" stroke="#b2ebf2" stroke-width="0.7"/>
+            <line x1="0" y1="20" x2="30" y2="20" stroke="#b2ebf2" stroke-width="0.7"/>
+            <!-- 장애물 블록 표현 -->
+            <rect x="10" y="10" width="10" height="10" fill="#01579b"/>
+            <rect x="20" y="20" width="10" height="10" fill="#01579b"/>
+          </g>
+          <text x="68" y="70" fill="#01579b" font-size="9.5" font-weight="bold">Occupancy Grid Map</text>
+          <text x="68" y="87" fill="#384e3b" font-size="8">/map 토픽 (2D 점유 격자 지도)</text>
+          <text x="68" y="100" fill="#384e3b" font-size="7.5">내비게이션(Nav2) 활용</text>
+
+          <!-- TF 좌표계 변환 박스 -->
+          <rect x="20" y="140" width="190" height="75" fill="#ffffff" stroke="#2e7d32" rx="6"/>
+          <text x="115" y="162" fill="#2e7d32" font-size="9.5" font-weight="bold" text-anchor="middle">TF Transform (좌표계)</text>
+          <text x="115" y="180" fill="#384e3b" font-size="8.5" text-anchor="middle">map → odom → base_link</text>
+          <text x="115" y="195" fill="#384e3b" font-size="7.5" text-anchor="middle">로봇 전역 위치 실시간 추정</text>
+        </g>
+
+      </svg>
+
+      <div class="img-caption">▲ [그림 2-1] 센서 데이터 입력 ➔ Cartographer / Slam Toolbox 엔진 연산 ➔ Occupancy Grid Map 및 TF 발행 흐름도</div>
+    </div>
+
+    <!-- 주요 구성 요소 및 특징 -->
+    <div class="section-title">SLAM 주요 프레임워크 비교</div>
+    <div class="summary-box">
+      <ul>
+        <li><b>Cartographer:</b> 구글에서 개발한 실시간 동시 위치 추정 및 맵핑 알고리즘으로, 여러 센서 데이터를 받아 서브맵(Submap)을 만들고 백엔드 포즈 그래프 최적화로 정밀한 지도를 생성합니다.</li>
+        <li><b>Slam Toolbox:</b> ROS 2 환경에서 널리 쓰이는 슬램 솔루션으로, 특히 수명이 긴 맵 관리(Lifelong Mapping)와 대규모 환경에서의 빠른 루프 클로저 및 지도 병합 기능이 매우 강력합니다.</li>
+        <li><b>Occupancy Grid Map (/map):</b> 장애물이 있는 영역(검은색), 빈 공간(흰색), 미탐색 영역(회색)으로 구분된 2D 격자 지도를 생성하여 내비게이션 시스템의 기본 바탕이 됩니다.</li>
+        <li><b>TF 퍼블리셔:</b> 글로벌 좌표계인 <code>map</code>과 로봇 오도메트리 좌표계인 <code>odom</code> 사이의 오차를 보정하여 정확한 위치 변환 정보를 제공합니다.</li>
+      </ul>
+    </div>
+
+    <!-- 프레임워크 비교 사양 테이블 -->
+    <div class="section-title">Cartographer vs Slam Toolbox 비교 명세</div>
+    <table class="plugin-table">
+      <thead>
+        <tr>
+          <th>구분</th>
+          <th>Google Cartographer</th>
+          <th>Slam Toolbox</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>개발 주체</b></td>
+          <td>Google (오픈소스)</td>
+          <td>Steven Macenski (Open Navigation)</td>
+        </tr>
+        <tr>
+          <td><b>핵심 방식</b></td>
+          <td>서브맵 기반 스캔 매칭 & 포즈 그래프 최적화</td>
+          <td>고성능 스캔 매칭, 직관적인 노드 그래프 관리</td>
+        </tr>
+        <tr>
+          <td><b>ROS 2 지원</b></td>
+          <td><code>cartographer_ros</code> 패키지 연동</td>
+          <td><code>slam_toolbox</code> 공식 패키지 제공</td>
+        </tr>
+        <tr>
+          <td><b>주요 특징</b></td>
+          <td>노이즈에 강하고 정밀한 궤적 추정 가능</td>
+          <td>설정이 비교적 간단하고 지도 수정(Lifelong) 및 저장/로드 기능 우수</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 코드 섹션: SLAM 실행 런치 파일 예시 -->
+    <div class="section-title">설정 및 코드 예시</div>
+
+    <div class="code-block-header">📄 slam_launch.py (ROS 2 Slam Toolbox 실행 런치 파일 템플릿)</div>
+    <pre><code><span class="code-keyword">import</span> os
+<span class="code-keyword">from</span> launch <span class="code-keyword">import</span> LaunchDescription
+<span class="code-keyword">from</span> launch.actions <span class="code-keyword">import</span> DeclareLaunchArgument
+<span class="code-keyword">from</span> launch.substitutions <span class="code-keyword">import</span> LaunchConfiguration
+<span class="code-keyword">from</span> launch_ros.actions <span class="code-keyword">import</span> Node
+<span class="code-keyword">from</span> ament_index_python.packages <span class="code-keyword">import</span> get_package_share_directory
+
+<span class="code-keyword">def</span> <span class="code-title">generate_launch_description</span>():
+    <span class="code-comment"># 패키지 경로 및 설정 파일 지정</span>
+    use_sim_time = LaunchConfiguration(<span class="code-string">'use_sim_time'</span>, default=<span class="code-string">'true'</span>)
+    
+    <span class="code-comment"># Slam Toolbox 노드 실행 설정</span>
+    slam_toolbox_node = Node(
+        package=<span class="code-string">'slam_toolbox'</span>,
+        executable=<span class="code-string">'async_slam_toolbox_node'</span>,
+        name=<span class="code-string">'slam_toolbox'</span>,
+        output=<span class="code-string">'screen'</span>,
+        parameters=[{
+            <span class="code-string">'use_sim_time'</span>: use_sim_time,           <span class="code-comment"># 시뮬레이션 시간(Gazebo 등) 사용 여부</span>
+            <span class="code-string">'resolution'</span>: 0.05,                     <span class="code-comment"># 지도 해상도 5cm 설정</span>
+            <span class="code-string">'max_laser_range'</span>: 25.0,                <span class="code-comment"># 라이다 최대 유효 거리 센싱 설정</span>
+            <span class="code-string">'minimum_travel_distance'</span>: 0.2,         <span class="code-comment"># 로봇이 일정 거리 이동 시 스캔 갱신</span>
+            <span class="code-string">'minimum_travel_heading'</span>: 0.2,          <span class="code-comment"># 로봇 회전 각도 변화 시 스캔 갱신</span>
+        }]
+    )
+
+    <span class="code-keyword">return</span> LaunchDescription([
+        DeclareLaunchArgument(
+            <span class="code-string">'use_sim_time'</span>,
+            default_value=<span class="code-string">'true'</span>,
+            description=<span class="code-string">'Use simulation (Gazebo) clock if true'</span>
+        ),
+        slam_toolbox_node
+    ])
+</code></pre>
+
+  </div>
+
+</body>
+</html>

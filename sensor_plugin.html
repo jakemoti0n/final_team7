@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>1-3. 센서 연동 및 Gazebo 플러그인</title>
+  <style>
+    :root {
+      --border-color: #2b3a2e;       /* 차분한 딥 그린 테두리 */
+      --bg-color: #f4f7f4;           /* 부드러운 그린 톤 배경 */
+      --card-bg: #ffffff;
+      --primary-color: #2e7d32;     /* 차분한 딥 그린 */
+      --primary-hover: #1b5e20;
+      --accent-color: #81c784;      /* 스피아민트 그린 (포인트) */
+      --light-green: #e8f5e9;       /* 박스/호버용 연두색 */
+      --text-main: #1b4332;         /* 텍스트 메인 컬러 */
+      --text-sub: #384e3b;          /* 텍스트 서브 컬러 */
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .outer-container {
+      width: 100%;
+      max-width: 850px;
+      border: 3px solid var(--border-color);
+      padding: 28px;
+      background-color: var(--card-bg);
+      box-shadow: 0 4px 16px rgba(46, 125, 50, 0.08);
+    }
+
+    /* 상단 헤더 영역 */
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 2px solid var(--primary-color);
+      padding-bottom: 12px;
+    }
+
+    .btn-back {
+      display: inline-block;
+      padding: 8px 16px;
+      background-color: var(--primary-color);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: background-color 0.2s ease;
+    }
+
+    .btn-back:hover {
+      background-color: var(--primary-hover);
+    }
+
+    h1 {
+      font-size: 1.7rem;
+      color: var(--text-main);
+    }
+
+    .section-title {
+      font-size: 1.25rem;
+      color: var(--text-main);
+      margin: 24px 0 12px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 18px;
+      background-color: var(--primary-color);
+      border-radius: 2px;
+    }
+
+    p {
+      line-height: 1.65;
+      color: var(--text-sub);
+      margin-bottom: 14px;
+      font-size: 0.95rem;
+    }
+
+    /* 다이어그램 및 이미지 영역 */
+    .diagram-box {
+      background-color: #f9fbf9;
+      border: 1px solid #c8e6c9;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    .img-caption {
+      font-size: 0.85rem;
+      color: var(--text-sub);
+      margin-top: 10px;
+      font-weight: 500;
+    }
+
+    /* 요약 강조 박스 */
+    .summary-box {
+      background-color: #f1f8e9;
+      border-left: 4px solid var(--primary-color);
+      padding: 14px 18px;
+      margin: 16px 0;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .summary-box ul {
+      margin-left: 18px;
+      color: var(--text-main);
+      line-height: 1.8;
+    }
+
+    /* 테이블 디자인 */
+    .plugin-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 0.9rem;
+    }
+
+    .plugin-table th, .plugin-table td {
+      border: 1px solid #c8e6c9;
+      padding: 10px 14px;
+      text-align: left;
+    }
+
+    .plugin-table th {
+      background-color: var(--light-green);
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .plugin-table td {
+      color: var(--text-sub);
+    }
+
+    /* 코드 블록 디자인 */
+    .code-block-header {
+      background-color: #2b3a2e;
+      color: #a5d6a7;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      font-family: 'Consolas', monospace;
+      border-radius: 6px 6px 0 0;
+      margin-top: 16px;
+    }
+
+    pre {
+      background-color: #1e241e;
+      color: #e8f5e9;
+      padding: 16px;
+      border-radius: 0 0 6px 6px;
+      border-left: 4px solid var(--accent-color);
+      overflow-x: auto;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    .code-comment { color: #81c784; font-weight: bold; }
+    .code-keyword { color: #ffb74d; }
+    .code-string { color: #ce9178; }
+  </style>
+</head>
+<body>
+
+  <div class="outer-container">
+    
+    <!-- Header Bar -->
+    <div class="header-bar">
+      <h1>1-3. 센서 연동 및 Gazebo 플러그인 (LiDAR & IMU)</h1>
+      <a href="index.html" class="btn-back">← 메인 목록</a>
+    </div>
+
+    <!-- 개요 설명 -->
+    <p>
+      Gazebo 물리 시뮬레이션 환경에 배치된 로봇에 <b>2D LiDAR 센서</b>와 <b>IMU(관성 측정 장치)</b> 플러그인을 결합합니다.
+      가상 공간의 물체 레이캐스팅(Ray-casting) 및 가속도/각속도 데이터를 생성한 뒤, Gazebo ROS 플러그인(`gazebo_ros_ray_sensor`)을 통해 표준 ROS 2 센서 토픽 메시지(`sensor_msgs/LaserScan`, `sensor_msgs/Imu`)로 변환하여 시각화 도구(RViz2) 및 SLAM/Nav2 노드와 연동합니다.
+    </p>
+
+    <!-- [1-3 전용 파이프라인 다이어그램] 센서 레이캐스팅 -> ROS2 토픽 -> RViz2 모니터링 -->
+    <div class="diagram-box">
+      <svg viewBox="0 0 760 260" style="width: 100%; height: auto; background: #ffffff; border-radius: 8px; border: 1px solid #c8e6c9;">
+        
+        <!-- STEP 1: Gazebo 센서 레이 시뮬레이션 -->
+        <g transform="translate(15, 20)">
+          <rect x="0" y="0" width="220" height="220" fill="#f4fbf4" stroke="#a5d6a7" stroke-width="1.5" rx="8"/>
+          <text x="110" y="25" fill="#1b4332" font-size="12" font-weight="bold" text-anchor="middle">1. Gazebo 3D 레이 스캔</text>
+          
+          <!-- 장애물 및 레이 스캐닝 비주얼 -->
+          <rect x="150" y="55" width="45" height="45" fill="#2e7d32" rx="4"/>
+          <text x="172" y="81" fill="#ffffff" font-size="9" text-anchor="middle">장애물</text>
+
+          <!-- LiDAR 센서 노드 -->
+          <circle cx="60" cy="130" r="16" fill="#0288d1" stroke="#01579b" stroke-width="1.5"/>
+          <text x="60" y="134" fill="#ffffff" font-size="9" font-weight="bold" text-anchor="middle">LiDAR</text>
+
+          <!-- 방사형 스캔 레이 (붉은 점선) -->
+          <line x1="60" y1="130" x2="150" y2="78" stroke="#e53935" stroke-width="1.5" stroke-dasharray="3 2"/>
+          <line x1="60" y1="130" x2="150" y2="100" stroke="#e53935" stroke-width="1.5" stroke-dasharray="3 2"/>
+          <line x1="60" y1="130" x2="180" y2="140" stroke="#81c784" stroke-width="1" stroke-dasharray="2 2"/>
+          <line x1="60" y1="130" x2="140" y2="180" stroke="#81c784" stroke-width="1" stroke-dasharray="2 2"/>
+
+          <!-- 반사 충돌 지점 표시 -->
+          <circle cx="150" cy="78" r="3" fill="#e53935"/>
+          <circle cx="150" cy="100" r="3" fill="#e53935"/>
+
+          <rect x="15" y="180" width="190" height="26" fill="#ffffff" stroke="#c8e6c9" rx="4"/>
+          <text x="110" y="197" fill="#384e3b" font-size="9" text-anchor="middle">가상 거리/각도 레이캐스팅 연산</text>
+        </g>
+
+        <!-- 화살표 1: Gazebo -> ROS Plugin -->
+        <g transform="translate(240, 115)">
+          <path d="M 0 0 L 22 0" stroke="#2e7d32" stroke-width="2.5"/>
+          <polygon points="22,-4 30,0 22,4" fill="#2e7d32"/>
+        </g>
+
+        <!-- STEP 2: Gazebo ROS Plugin 파싱 및 토픽 변환 -->
+        <g transform="translate(275, 20)">
+          <rect x="0" y="0" width="220" height="220" fill="#ffffff" stroke="#2e7d32" stroke-width="2" rx="8"/>
+          <text x="110" y="25" fill="#1b4332" font-size="12" font-weight="bold" text-anchor="middle">2. Gazebo ROS Plugin</text>
+
+          <!-- 변환 엔진 카드 1 -->
+          <rect x="15" y="45" width="190" height="68" fill="#e1f5fe" stroke="#0288d1" rx="6"/>
+          <text x="25" y="65" fill="#01579b" font-size="10" font-weight="bold">libgazebo_ros_ray_sensor.so</text>
+          <rect x="25" y="75" width="170" height="26" fill="#ffffff" rx="3"/>
+          <text x="110" y="92" fill="#e65100" font-size="9.5" font-family="Consolas" font-weight="bold" text-anchor="middle">/scan (LaserScan)</text>
+
+          <!-- 변환 엔진 카드 2 -->
+          <rect x="15" y="130" width="190" height="68" fill="#efebe9" stroke="#6d4c41" rx="6"/>
+          <text x="25" y="150" fill="#4e342e" font-size="10" font-weight="bold">libgazebo_ros_imu_sensor.so</text>
+          <rect x="25" y="160" width="170" height="26" fill="#ffffff" rx="3"/>
+          <text x="110" y="177" fill="#e65100" font-size="9.5" font-family="Consolas" font-weight="bold" text-anchor="middle">/imu (sensor_msgs/Imu)</text>
+        </g>
+
+        <!-- 화살표 2: ROS Plugin -> RViz2 / SLAM -->
+        <g transform="translate(500, 115)">
+          <path d="M 0 0 L 22 0" stroke="#2e7d32" stroke-width="2.5"/>
+          <polygon points="22,-4 30,0 22,4" fill="#2e7d32"/>
+        </g>
+
+        <!-- STEP 3: RViz2 시각화 및 노드 활용 -->
+        <g transform="translate(535, 20)">
+          <rect x="0" y="0" width="210" height="220" fill="#f4fbf4" stroke="#a5d6a7" stroke-width="1.5" rx="8"/>
+          <text x="105" y="25" fill="#1b4332" font-size="12" font-weight="bold" text-anchor="middle">3. RViz2 / SLAM 연동</text>
+
+          <!-- RViz2 모니터링 시각화 화면 -->
+          <rect x="20" y="45" width="170" height="110" fill="#1e1e1e" rx="4"/>
+          <!-- grid 세로선 -->
+          <line x1="60" y1="45" x2="60" y2="155" stroke="#333333" stroke-width="1"/>
+          <line x1="105" y1="45" x2="105" y2="155" stroke="#333333" stroke-width="1"/>
+          <line x1="150" y1="45" x2="150" y2="155" stroke="#333333" stroke-width="1"/>
+          <!-- grid 가로선 -->
+          <line x1="20" y1="80" x2="190" y2="80" stroke="#333333" stroke-width="1"/>
+          <line x1="20" y1="120" x2="190" y2="120" stroke="#333333" stroke-width="1"/>
+          
+          <!-- Point Cloud / Red Scan Points -->
+          <circle cx="140" cy="70" r="2.5" fill="#ff5252"/>
+          <circle cx="145" cy="72" r="2.5" fill="#ff5252"/>
+          <circle cx="150" cy="75" r="2.5" fill="#ff5252"/>
+          <circle cx="152" cy="80" r="2.5" fill="#ff5252"/>
+          
+          <!-- 로봇 중심점 및 TF 헤더 -->
+          <circle cx="105" cy="110" r="5" fill="#81c784"/>
+          <line x1="105" y1="110" x2="120" y2="110" stroke="#ff1744" stroke-width="1.5"/>
+          <line x1="105" y1="110" x2="105" y2="95" stroke="#29b6f6" stroke-width="1.5"/>
+
+          <rect x="20" y="170" width="170" height="35" fill="#e8f5e9" stroke="#81c784" rx="4"/>
+          <text x="105" y="185" fill="#1b4332" font-size="9" font-weight="bold" text-anchor="middle">SLAM & Nav2 노드 입력</text>
+          <text x="105" y="198" fill="#384e3b" font-size="8" text-anchor="middle">(지도 생성 및 위치 추정)</text>
+        </g>
+
+      </svg>
+
+      <div class="img-caption">▲ [그림 1-3] Gazebo 가상 센서 스캐닝부터 ROS 2 토픽 변환 및 RViz2 3D Point Cloud 시각화 처리 파이프라인</div>
+    </div>
+
+    <!-- 주요 역할 및 특징 -->
+    <div class="section-title">주요 역할 및 특징</div>
+    <div class="summary-box">
+      <ul>
+        <li><b>가상 물리 스캐닝 (Ray-Casting):</b> Gazebo 시뮬레이터 내부의 3D 메쉬 환경과 충돌하는 가상 레이(Ray)를 방사하여 정밀한 거리 데이터 생성</li>
+        <li><b>ROS 2 표준 메시지 바인딩:</b> Gazebo 내부 C++ 데이터를 <code>sensor_msgs/msg/LaserScan</code> 및 <code>sensor_msgs/msg/Imu</code> 토픽 표준 규격으로 변환</li>
+        <li><b>센서 노이즈(Noise) 모델링:</b> 가우시안 노이즈(Gaussian Noise) 파라미터를 추가하여 실제 센서와 유사한 오차 환경 시뮬레이션</li>
+        <li><b>TF 3D 좌표계 연동:</b> <code>lidar_link</code>, <code>imu_link</code>와 로봇 기준 프레임(`base_link`) 간의 상대적 정적/동적 변환 정보 실시간 유지</li>
+      </ul>
+    </div>
+
+    <!-- 구성 요소 태그 사양 테이블 -->
+    <div class="section-title">센서 플러그인 사양 및 토픽 명세</div>
+    <table class="plugin-table">
+      <thead>
+        <tr>
+          <th>센서 종류</th>
+          <th>Gazebo Plugin 파일명</th>
+          <th>발행 토픽 (Topic)</th>
+          <th>메시지 타입 (Message Type)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>2D LiDAR 센서</b></td>
+          <td><code>libgazebo_ros_ray_sensor.so</code></td>
+          <td><code>/scan</code></td>
+          <td><code>sensor_msgs/msg/LaserScan</code></td>
+        </tr>
+        <tr>
+          <td><b>IMU 관성 센서</b></td>
+          <td><code>libgazebo_ros_imu_sensor.so</code></td>
+          <td><code>/imu</code></td>
+          <td><code>sensor_msgs/msg/Imu</code></td>
+        </tr>
+        <tr>
+          <td><b>RGB-D 카메라</b></td>
+          <td><code>libgazebo_ros_camera.so</code></td>
+          <td><code>/camera/image_raw</code></td>
+          <td><code>sensor_msgs/msg/Image</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 코드 섹션 1: Xacro 센서 플러그인 설정 파일 (100% 한글 줄별 주석) -->
+    <div class="section-title">설정 및 코드 예시</div>
+
+    <div class="code-block-header">📄 lidar_sensor.xacro (LiDAR 센서 및 Gazebo 플러그인 Xacro 설정)</div>
+    <pre><code>&lt;?xml version="1.0"?&gt;                                 <span class="code-comment">&lt;!-- XML 문서 형식을 1.0 표준으로 선언 --&gt;</span>
+&lt;robot xmlns:xacro="http://www.ros.org/wiki/xacro"&gt;   <span class="code-comment">&lt;!-- Xacro 네임스페이스 등록 --&gt;</span>
+
+  <span class="code-comment">&lt;!-- ================= LiDAR 센서 Link 및 Joint 정의 ================= --&gt;</span>
+  &lt;joint name="laser_joint" type="fixed"&gt;              <span class="code-comment">&lt;!-- 차체에 센서를 고정할 고정 관절(fixed joint) 선언 --&gt;</span>
+    &lt;parent link="base_link"/&gt;                        <span class="code-comment">&lt;!-- 부모 노드를 로봇 차체(base_link)로 지정 --&gt;</span>
+    &lt;child link="laser_frame"/&gt;                       <span class="code-comment">&lt;!-- 자식 노드를 LiDAR 스캔 프레임(laser_frame)으로 지정 --&gt;</span>
+    &lt;origin xyz="0.1 0 0.175" rpy="0 0 0"/&gt;           <span class="code-comment">&lt;!-- 차체 중심으로부터 상단 앞쪽 (X:+10cm, Z:+17.5cm) 위치 배치 --&gt;</span>
+  &lt;/joint&gt;                                            <span class="code-comment">&lt;!-- Joint 정의 종료 --&gt;</span>
+
+  &lt;link name="laser_frame"&gt;                           <span class="code-comment">&lt;!-- LiDAR 물리 강체(Link) 정의 --&gt;</span>
+    &lt;visual&gt;                                          <span class="code-comment">&lt;!-- RViz2 및 Gazebo에서 보일 원기둥 모양 시각화 --&gt;</span>
+      &lt;geometry&gt;                                      <span class="code-comment">&lt;!-- 형상 설정 --&gt;</span>
+        &lt;cylinder radius="0.05" length="0.04"/&gt;        <span class="code-comment">&lt;!-- 반지름 5cm, 높이 4cm 원기둥 센서 외형 생성 --&gt;</span>
+      &lt;/geometry&gt;                                     <span class="code-comment">&lt;!-- 형상 종료 --&gt;</span>
+      &lt;material name="blue"&gt;                          <span class="code-comment">&lt;!-- 파란색 재질 색상 지정 --&gt;</span>
+        &lt;color rgba="0.1 0.3 0.8 1.0"/&gt;               <span class="code-comment">&lt;!-- RGBA 파란색 지정 --&gt;</span>
+      &lt;/material&gt;                                     <span class="code-comment">&lt;!-- 재질 종료 --&gt;</span>
+    &lt;/visual&gt;                                         <span class="code-comment">&lt;!-- 시각화 설정 종료 --&gt;</span>
+  &lt;/link&gt;                                             <span class="code-comment">&lt;!-- Link 정의 종료 --&gt;</span>
+
+  <span class="code-comment">&lt;!-- ================= Gazebo LiDAR 플러그인 바인딩 ================= --&gt;</span>
+  &lt;gazebo reference="laser_frame"&gt;                    <span class="code-comment">&lt;!-- 플러그인을 적용할 대상 Link를 laser_frame으로 지정 --&gt;</span>
+    &lt;sensor name="laser" type="ray"&gt;                   <span class="code-comment">&lt;!-- 센서 이름을 laser, 방사형 레이(ray) 타입으로 설정 --&gt;</span>
+      &lt;pose&gt;0 0 0 0 0 0&lt;/pose&gt;                        <span class="code-comment">&lt;!-- 센서 원점 오프셋 설정 --&gt;</span>
+      &lt;visualize&gt;true&lt;/visualize&gt;                     <span class="code-comment">&lt;!-- Gazebo 화면상에 붉은색 스캔 레이 선을 보일지 여부 (참) --&gt;</span>
+      &lt;update_rate&gt;10&lt;/update_rate&gt;                   <span class="code-comment">&lt;!-- 센서 데이터 업데이트 주기를 10Hz (초당 10회)로 지정 --&gt;</span>
+      
+      &lt;ray&gt;                                           <span class="code-comment">&lt;!-- 레이 스캐닝 정밀도 및 범위 설정 시작 --&gt;</span>
+        &lt;scan&gt;                                        <span class="code-comment">&lt;!-- 스캔 각도 및 샘플링 개수 정의 --&gt;</span>
+          &lt;horizontal&gt;                                <span class="code-comment">&lt;!-- 수평 평면 2D 스캔 범위를 설정 --&gt;</span>
+            &lt;samples&gt;360&lt;/samples&gt;                    <span class="code-comment">&lt;!-- 1회 회전당 360개의 레이 샘플 방사 (1도 간격) --&gt;</span>
+            &lt;resolution&gt;1&lt;/resolution&gt;                 <span class="code-comment">&lt;!-- 해상도 계수 설정 --&gt;</span>
+            &lt;min_angle&gt;-3.14&lt;/min_angle&gt;              <span class="code-comment">&lt;!-- 최소 스캔 각도 (-180도, -PI rad) --&gt;</span>
+            &lt;max_angle&gt;3.14&lt;/max_angle&gt;               <span class="code-comment">&lt;!-- 최대 스캔 각도 (+180도, +PI rad) --&gt;</span>
+          &lt;/horizontal&gt;                               <span class="code-comment">&lt;!-- 수평 스캔 설정 종료 --&gt;</span>
+        &lt;/scan&gt;                                       <span class="code-comment">&lt;!-- 스캔 설정 종료 --&gt;</span>
+        &lt;range&gt;                                       <span class="code-comment">&lt;!-- 센서 측정이 가능한 최소/최대 거리 설정 --&gt;</span>
+          &lt;min&gt;0.3&lt;/min&gt;                              <span class="code-comment">&lt;!-- 최소 탐지 거리 0.3m (30cm 이내는 무시) --&gt;</span>
+          &lt;max&gt;12.0&lt;/max&gt;                             <span class="code-comment">&lt;!-- 최대 탐지 거리 12.0m --&gt;</span>
+        &lt;/range&gt;                                      <span class="code-comment">&lt;!-- 거리 설정 종료 --&gt;</span>
+      &lt;/ray&gt;                                          <span class="code-comment">&lt;!-- 레이 설정 종료 --&gt;</span>
+
+      <span class="code-comment">&lt;!-- ROS 2 토픽 브릿지 C++ 플러그인 동적 라이브러리 연결 --&gt;</span>
+      &lt;plugin name="laser_controller" filename="libgazebo_ros_ray_sensor.so"&gt;
+        &lt;ros&gt;                                         <span class="code-comment">&lt;!-- ROS 2 설정 구문 시작 --&gt;</span>
+          &lt;remapping&gt;~/out:=/scan&lt;/remapping&gt;        <span class="code-comment">&lt;!-- 출력 기본 토픽명을 표준 /scan 토픽으로 리매핑 --&gt;</span>
+        &lt;/ros&gt;                                        <span class="code-comment">&lt;!-- ROS 2 설정 종료 --&gt;</span>
+        &lt;output_type&gt;sensor_msgs/LaserScan&lt;/output_type&gt; <span class="code-comment">&lt;!-- 출력 메시지 규격을 sensor_msgs/LaserScan으로 지정 --&gt;</span>
+        &lt;frame_name&gt;laser_frame&lt;/frame_name&gt;          <span class="code-comment">&lt;!-- 헤더 TF 프레임 ID를 laser_frame으로 설정 --&gt;</span>
+      &lt;/plugin&gt;                                       <span class="code-comment">&lt;!-- 플러그인 설정 종료 --&gt;</span>
+    &lt;/sensor&gt;                                         <span class="code-comment">&lt;!-- 센서 정의 종료 --&gt;</span>
+  &lt;/gazebo&gt;                                           <span class="code-comment">&lt;!-- Gazebo 설정 종료 --&gt;</span>
+
+&lt;/robot&gt;                                              <span class="code-comment">&lt;!-- Xacro 문서 종료 --&gt;</span></code></pre>
+
+    <!-- 코드 섹션 2: Python 센서 구독 및 검증 코드 (100% 한글 줄별 주석) -->
+    <div class="code-block-header">💻 scan_sub_node.py (ROS 2 센서 수신 검증 파이썬 노드)</div>
+    <pre><code><span class="code-keyword">import</span> rclpy                                          <span class="code-comment"># ROS 2 파이썬 Client 라이브러리 임포트</span>
+<span class="code-keyword">from</span> rclpy.node <span class="code-keyword">import</span> Node                             <span class="code-comment"># ROS 2 Node 기본 클래스 임포트</span>
+<span class="code-keyword">from</span> sensor_msgs.msg <span class="code-keyword">import</span> LaserScan                 <span class="code-comment"># 레이저 스캔 메시지 타입 임포트</span>
+
+<span class="code-keyword">class</span> <span class="code-string">LidarSubscriberNode</span>(Node):                     <span class="code-comment"># LidarSubscriberNode 클래스 선언</span>
+    <span class="code-keyword">def</span> <span class="code-string">__init__</span>(self):
+        <span class="code-keyword">super</span>().__init__(<span class="code-string">'lidar_subscriber_node'</span>)     <span class="code-comment"># 노드 이름을 'lidar_subscriber_node'로 초기화</span>
+        
+        <span class="code-comment"># /scan 토픽 구독자(Subscriber) 생성 (QoS Depth: 10)</span>
+        self.subscription = self.create_subscription(
+            LaserScan,                                <span class="code-comment"># 구독할 메시지 타입</span>
+            <span class="code-string">'/scan'</span>,                                  <span class="code-comment"># 구독할 토픽 이름</span>
+            self.scan_callback,                       <span class="code-comment"># 데이터 수신 시 호출할 콜백 함수</span>
+            10                                        <span class="code-comment"># 통신 버퍼 수신 통로 크기(QoS)</span>
+        )
+        self.get_logger().info(<span class="code-string">'LiDAR 센서 수신 검증 노드가 시작되었습니다.'</span>) <span class="code-comment"># 노드 실행 확인 로그 출력</span>
+
+    <span class="code-keyword">def</span> <span class="code-string">scan_callback</span>(self, msg):                    <span class="code-comment"># LiDAR 데이터가 들어올 때 실행되는 콜백 함수</span>
+        <span class="code-comment"># 정면 0도 방향의 거리 데이터 추출 (360개 배열 중 중간 인덱스)</span>
+        center_index = len(msg.ranges) // 2           <span class="code-comment"># 스캔 배열의 중앙 인덱스 계산</span>
+        front_distance = msg.ranges[center_index]     <span class="code-comment"># 정면 방향 측정 거리값(m) 가져오기</span>
+
+        <span class="code-comment"># 터미널 창에 정면 거리 상태 출력</span>
+        self.get_logger().info(f<span class="code-string">'[LiDAR] 정면 장애물 거리: {front_distance:.2f} m'</span>)
+
+<span class="code-keyword">def</span> <span class="code-string">main</span>(args=None):                                  <span class="code-comment"># 메인 함수</span>
+    rclpy.init(args=args)                             <span class="code-comment"># ROS 2 파이썬 통신 체계 초기화</span>
+    node = LidarSubscriberNode()                     <span class="code-comment"># 노드 인스턴스 객체 생성</span>
+    
+    <span class="code-keyword">try</span>:
+        rclpy.spin(node)                              <span class="code-comment"># 콜백 함수 반복 수신 루프 대기</span>
+    <span class="code-keyword">except</span> KeyboardInterrupt:
+        <span class="code-keyword">pass</span>                                         <span class="code-comment"># Ctrl+C 입력 시 정상 종료 처리</span>
+    <span class="code-keyword">finally</span>:
+        node.destroy_node()                          <span class="code-comment"># 노드 자원 해제</span>
+        rclpy.shutdown()                             <span class="code-comment"># ROS 2 파이썬 통신 종료</span>
+
+<span class="code-keyword">if</span> __name__ == <span class="code-string">'__main__'</span>:
+    main()                                           <span class="code-comment"># 파일 직접 실행 시 main() 함수 호출</span></code></pre>
+
+  </div>
+
+</body>
+</html>

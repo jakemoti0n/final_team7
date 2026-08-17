@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Behavior Tree - Nav2 Plugins</title>
+  <style>
+    :root {
+      --border-color: #2b3a2e;       /* 차분한 딥 그린 테두리 */
+      --bg-color: #f4f7f4;           /* 부드러운 그린 톤 배경 */
+      --card-bg: #ffffff;
+      --primary-color: #2e7d32;     /* 차분한 딥 그린 */
+      --primary-hover: #1b5e20;
+      --accent-color: #81c784;      /* 스피아민트 그린 (포인트) */
+      --light-green: #e8f5e9;       /* 박스/호버용 연두색 */
+      --text-main: #1b4332;         /* 텍스트 메인 컬러 */
+      --text-sub: #384e3b;          /* 텍스트 서브 컬러 */
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .outer-container {
+      width: 100%;
+      max-width: 850px;
+      border: 3px solid var(--border-color);
+      padding: 28px;
+      background-color: var(--card-bg);
+      box-shadow: 0 4px 16px rgba(46, 125, 50, 0.08);
+    }
+
+    /* 상단 헤더 영역 */
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 2px solid var(--primary-color);
+      padding-bottom: 12px;
+    }
+
+    .btn-back {
+      display: inline-block;
+      padding: 8px 16px;
+      background-color: var(--primary-color);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: background-color 0.2s ease;
+    }
+
+    .btn-back:hover {
+      background-color: var(--primary-hover);
+    }
+
+    h1 {
+      font-size: 1.7rem;
+      color: var(--text-main);
+    }
+
+    .section-title {
+      font-size: 1.25rem;
+      color: var(--text-main);
+      margin: 24px 0 12px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 18px;
+      background-color: var(--primary-color);
+      border-radius: 2px;
+    }
+
+    p {
+      line-height: 1.65;
+      color: var(--text-sub);
+      margin-bottom: 14px;
+      font-size: 0.95rem;
+    }
+
+    /* 이미지 및 다이어그램 영역 */
+    .diagram-box {
+      background-color: var(--light-green);
+      border: 1px solid #c8e6c9;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      margin: 16px 0;
+    }
+
+    .img-caption {
+      font-size: 0.85rem;
+      color: var(--text-sub);
+      margin-top: 8px;
+    }
+
+    /* 기능 강조 박스 */
+    .summary-box {
+      background-color: #f1f8e9;
+      border-left: 4px solid var(--primary-color);
+      padding: 14px 18px;
+      margin: 16px 0;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .summary-box ul {
+      margin-left: 18px;
+      color: var(--text-main);
+      line-height: 1.8;
+    }
+
+    /* 플러그인 비교 테이블 */
+    .plugin-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 0.9rem;
+    }
+
+    .plugin-table th, .plugin-table td {
+      border: 1px solid #c8e6c9;
+      padding: 10px 14px;
+      text-align: left;
+    }
+
+    .plugin-table th {
+      background-color: var(--light-green);
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .plugin-table td {
+      color: var(--text-sub);
+    }
+
+    /* 코드 블록 디자인 */
+    .code-block-header {
+      background-color: #2b3a2e;
+      color: #a5d6a7;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      font-family: 'Consolas', monospace;
+      border-radius: 6px 6px 0 0;
+      margin-top: 16px;
+    }
+
+    pre {
+      background-color: #1e241e;
+      color: #e8f5e9;
+      padding: 16px;
+      border-radius: 0 0 6px 6px;
+      border-left: 4px solid var(--accent-color);
+      overflow-x: auto;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.85rem;
+      line-height: 1.45;
+      margin-bottom: 20px;
+    }
+
+    .code-comment { color: #81c784; }
+    .code-keyword { color: #ffb74d; }
+    .code-string { color: #ce9178; }
+  </style>
+</head>
+<body>
+
+  <div class="outer-container">
+    
+    <!-- Header Bar -->
+    <div class="header-bar">
+      <h1>3. Behavior Tree Navigator</h1>
+      <a href="index.html" class="btn-back">← 메인 목록</a>
+    </div>
+
+    <!-- 개요 설명 -->
+    <p>
+      <b>Behavior Tree Navigator (BT Navigator)</b>는 Nav2의 전체 자율주행 작업 흐름(Workflow)을 총괄하는 **오케스트레이터(지휘자)** 역할을 담당합니다.
+      단순히 경로를 계산하고 따라가는 것을 넘어, **"경로 생성 ➔ 경로 추종 ➔ 실패 시 복구 동작(Recovery)"**으로 이어지는 복잡한 내비게이션 논리를 계층 트리 구조(Behavior Tree)로 유연하게 관리합니다.
+    </p>
+
+    <!-- Behavior Tree 전용 직관적 다이어그램 -->
+    <div class="diagram-box">
+      <svg viewBox="0 0 700 240" style="width: 100%; height: auto; max-height: 250px; background: #ffffff; border-radius: 6px; border: 1px solid #c8e6c9;">
+        <!-- 연결선들 -->
+        <path d="M 350 35 L 200 85 M 350 35 L 500 85" stroke="#2e7d32" stroke-width="2"/>
+        <path d="M 200 115 L 120 165 M 200 115 L 280 165" stroke="#2e7d32" stroke-width="2"/>
+        <path d="M 500 115 L 420 165 M 500 115 L 580 165" stroke="#2e7d32" stroke-width="2"/>
+
+        <!-- Root Node (Pipeline Sequence) -->
+        <rect x="275" y="10" width="150" height="30" fill="#1b4332" rx="5"/>
+        <text x="350" y="30" fill="#ffffff" font-size="11" text-anchor="middle" font-weight="bold">Root: PipelineSequence</text>
+
+        <!-- Sub-Control Nodes -->
+        <!-- Left: Rate Controller -->
+        <rect x="135" y="85" width="130" height="30" fill="#2e7d32" rx="5"/>
+        <text x="200" y="105" fill="#ffffff" font-size="11" text-anchor="middle" font-weight="bold">RateController (1Hz)</text>
+
+        <!-- Right: Recovery Fallback -->
+        <rect x="435" y="85" width="130" height="30" fill="#2e7d32" rx="5"/>
+        <text x="500" y="105" fill="#ffffff" font-size="11" text-anchor="middle" font-weight="bold">Recovery Fallback</text>
+
+        <!-- Leaf Action Nodes -->
+        <!-- Action 1: ComputePathToPose -->
+        <rect x="50" y="165" width="140" height="32" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2" rx="5"/>
+        <text x="120" y="185" fill="#1b4332" font-size="11" text-anchor="middle" font-weight="bold">ComputePathToPose</text>
+
+        <!-- Action 2: FollowPath -->
+        <rect x="210" y="165" width="140" height="32" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2" rx="5"/>
+        <text x="280" y="185" fill="#1b4332" font-size="11" text-anchor="middle" font-weight="bold">FollowPath</text>
+
+        <!-- Action 3: ClearCostmap -->
+        <rect x="350" y="165" width="140" height="32" fill="#ffebee" stroke="#ef5350" stroke-width="2" rx="5"/>
+        <text x="420" y="185" fill="#c62828" font-size="11" text-anchor="middle" font-weight="bold">ClearEntireCostmap</text>
+
+        <!-- Action 4: Spin / Wait -->
+        <rect x="510" y="165" width="140" height="32" fill="#ffebee" stroke="#ef5350" stroke-width="2" rx="5"/>
+        <text x="580" y="185" fill="#c62828" font-size="11" text-anchor="middle" font-weight="bold">Spin / Wait</text>
+
+        <!-- 설명 뱃지 -->
+        <text x="120" y="215" fill="#384e3b" font-size="10" text-anchor="middle">1. 경로 생성 (Planner)</text>
+        <text x="280" y="215" fill="#384e3b" font-size="10" text-anchor="middle">2. 경로 추종 (Controller)</text>
+        <text x="500" y="215" fill="#c62828" font-size="10" text-anchor="middle">3. 실패 시 복구 동작 (Recovery)</text>
+      </svg>
+      <div class="img-caption">▲ [Behavior Tree] 주행 성공/실패 여부에 따라 다음 하위 작업(Action)을 유연하게 제어하는 트리 구조</div>
+    </div>
+
+    <!-- 핵심 기능 및 특징 -->
+    <div class="section-title">주요 역할 및 특징</div>
+    <div class="summary-box">
+      <ul>
+        <li><b>XML 기반 유연성:</b> C++ 코드 수정 없이 XML 파일 편집만으로 전체 내비게이션 논리 변경 가능</li>
+        <li><b>모듈화 및 재사용성:</b> 각 기능(경로 생성, 회종, 복구)이 독립된 노드로 분리되어 손쉬운 재조합 가능</li>
+        <li><b>상태 기반 제어:</b> 자식 노드의 반환 값(<code>SUCCESS</code>, <code>FAILURE</code>, <code>RUNNING</code>)을 보고 실시간 조건 제어</li>
+        <li><b>Groot 시각화 지원:</b> 오픈소스 GUI 도구인 Groot를 통해 실시간 트리 진행 상태 모니터링 가능</li>
+      </ul>
+    </div>
+
+    <!-- 주요 노드 유형 정리 -->
+    <div class="section-title">Behavior Tree 핵심 노드 유형</div>
+    <table class="plugin-table">
+      <thead>
+        <tr>
+          <th>노드 종류 (Type)</th>
+          <th>대표 노드 예시</th>
+          <th>역할 및 동작 방식</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>Control Node</b></td>
+          <td>Sequence, Fallback, Parallel</td>
+          <td>자식 노드들의 실행 순서를 제어 (예: Sequence는 자식이 모두 성공해야 전체 성공)</td>
+        </tr>
+        <tr>
+          <td><b>Decorator Node</b></td>
+          <td>RateController, DistanceController</td>
+          <td>단일 자식 노드의 실행 주기를 제한하거나 실행 조건을 감싸서 변형</td>
+        </tr>
+        <tr>
+          <td><b>Action Node</b></td>
+          <td>ComputePathToPose, FollowPath, Spin</td>
+          <td>실제 로봇 동작을 수행하기 위해 ROS 2 Action Server를 호출하는 최하단 Leaf 노드</td>
+        </tr>
+        <tr>
+          <td><b>Condition Node</b></td>
+          <td>IsStuck, GoalReached</td>
+          <td>현재 로봇 상태나 조건을 확인하여 True/False 형태의 성공/실패 반환</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 코드 섹션 1: BT XML 설정 예시 -->
+    <div class="section-title">설정 및 코드 예시</div>
+
+    <div class="code-block-header">📄 navigate_to_pose_w_replanning_and_recovery.xml (BT XML 예시)</div>
+    <pre><code><span class="code-comment">&lt;!-- Behavior Tree 루트 태그 및 사용할 메인 트리 이름 지정 --&gt;</span>
+&lt;<span class="code-keyword">root</span> main_tree_to_execute="MainTree"&gt;
+  
+  &lt;<span class="code-keyword">BehaviorTree</span> ID="MainTree"&gt;
+    <span class="code-comment">&lt;!-- Fallback: 주행 시도(Sequence)가 실패하면 아래 RecoveryFallback 동작 실행 --&gt;</span>
+    &lt;<span class="code-keyword">RecoveryFallback</span>&gt;
+      
+      <span class="code-comment">&lt;!-- PipelineSequence: 경로 재계산과 경로 추종을 병렬/순차적으로 파이프라이닝 --&gt;</span>
+      &lt;<span class="code-keyword">PipelineSequence</span> name="NavigateWithReplanning"&gt;
+        
+        <span class="code-comment">&lt;!-- RateController: 경로 재계산을 지정한 주기(예: 1Hz, 초당 1회)로 제한 --&gt;</span>
+        &lt;<span class="code-keyword">RateController</span> hz="1.0"&gt;
+          <span class="code-comment">&lt;!-- Planner Server 액션을 호출하여 최신 경로 업데이트 --&gt;</span>
+          &lt;<span class="code-keyword">ComputePathToPose</span> goal="{goal}" path="{path}" planner_id="GridBased"/&gt;
+        &lt;/<span class="code-keyword">RateController</span>&gt;
+        
+        <span class="code-comment">&lt;!-- Controller Server 액션을 호출하여 업데이트된 경로 추종 --&gt;</span>
+        &lt;<span class="code-keyword">FollowPath</span> path="{path}" controller_id="FollowPath"/&gt;
+        
+      &lt;/<span class="code-keyword">PipelineSequence</span>&gt;
+
+      <span class="code-comment">&lt;!-- 내비게이션 실패 시 실행되는 복구(Recovery) 동작 순서 --&gt;</span>
+      &lt;<span class="code-keyword">Sequence</span> name="RecoveryActions"&gt;
+        <span class="code-comment">&lt;!-- 1단계: 코스트맵 장애물 잔상 초기화 --&gt;</span>
+        &lt;<span class="code-keyword">ClearEntireCostmap</span> service_name="global_costmap/clear_entirely_global_costmap"/&gt;
+        <span class="code-comment">&lt;!-- 2단계: 제자리 회전을 통해 고립 탈출 시도 --&gt;</span>
+        &lt;<span class="code-keyword">Spin</span> spin_dist="1.57"/&gt;
+      &lt;/<span class="code-keyword">Sequence</span>&gt;
+
+    &lt;/<span class="code-keyword">RecoveryFallback</span>&gt;
+  &lt;/<span class="code-keyword">BehaviorTree</span>&gt;
+&lt;/<span class="code-keyword">root</span>&gt;</code></pre>
+
+<!-- 코드 섹션 2: Python Action Client 예시 -->
+<div class="code-block-header">💻 Python rclpy Action Client (NavigateToPose 호출 예시)</div>
+<pre><code><span class="code-keyword">import</span> rclpy                                      <span class="code-comment"># ROS 2 Python 클라이언트 라이브러리 임포트</span>
+<span class="code-keyword">from</span> rclpy.node <span class="code-keyword">import</span> Node                       <span class="code-comment"># ROS 2 노드 클래스 임포트</span>
+<span class="code-keyword">from</span> rclpy.action <span class="code-keyword">import</span> ActionClient             <span class="code-comment"># ROS 2 Action Client 모듈 임포트</span>
+<span class="code-keyword">from</span> nav2_msgs.action <span class="code-keyword">import</span> NavigateToPose       <span class="code-comment"># BT Navigator 최상위 자율주행 Action 메시지 임포트</span>
+<span class="code-keyword">from</span> geometry_msgs.msg <span class="code-keyword">import</span> PoseStamped         <span class="code-comment"># 위치/방향 정보 생성을 위한 PoseStamped 메시지 임포트</span>
+
+<span class="code-keyword">class</span> <span class="code-string">BTNavigatorClient</span>(Node):
+<span class="code-keyword">def</span> <span class="code-string">__init__</span>(self):
+    <span class="code-keyword">super</span>().__init__(<span class="code-string">'bt_navigator_action_client'</span>) <span class="code-comment"># 'bt_navigator_action_client' 이름의 노드 초기화</span>
+    <span class="code-comment"># BT Navigator의 "navigate_to_pose" 액션 서버와 통신할 ActionClient 생성</span>
+    self._action_client = ActionClient(self, NavigateToPose, <span class="code-string">'navigate_to_pose'</span>)
+
+<span class="code-keyword">def</span> <span class="code-string">send_nav_goal</span>(self, target_x=5.0, target_y=2.0):
+    <span class="code-comment"># 1. BT Navigator에 전달할 목표 메시지(Goal) 객체 생성</span>
+    goal_msg = NavigateToPose.Goal()
+
+    <span class="code-comment"># 2. 최종 도달할 목표 위치(PoseStamped) 객체 생성 및 좌표계/좌표 설정</span>
+    goal_msg.pose = PoseStamped()
+    goal_msg.pose.header.frame_id = <span class="code-string">'map'</span>     <span class="code-comment"># 글로벌 지도 좌표계 "map" 기준</span>
+    goal_msg.pose.header.stamp = self.get_clock().now().to_msg() <span class="code-comment"># 현재 타임스탬프 저장</span>
+    goal_msg.pose.pose.position.x = target_x  <span class="code-comment"># 목표 X 좌표 (m)</span>
+    goal_msg.pose.pose.position.y = target_y  <span class="code-comment"># 목표 Y 좌표 (m)</span>
+
+    <span class="code-comment"># 3. 커스텀 BT XML 경로를 지정하고 싶을 경우 사용 (기본 트리 사용 시 생략 가능)</span>
+    goal_msg.behavior_tree = <span class="code-string">'navigate_to_pose_w_replanning_and_recovery.xml'</span>
+
+    <span class="code-comment"># 4. 액션 서버 준비 상태 확인 및 대기</span>
+    self._action_client.wait_for_server()
+
+    <span class="code-comment"># 5. BT Navigator에 전체 내비게이션 수행 비동기 요청 전송</span>
+    <span class="code-keyword">return</span> self._action_client.send_goal_async(goal_msg)
+
+<span class="code-keyword">def</span> <span class="code-string">main</span>(args=None):
+rclpy.init(args=args)                         <span class="code-comment"># ROS 2 Python 통신 시스템 초기화</span>
+nav_node = BTNavigatorClient()                <span class="code-comment"># 자율주행 요청 노드 인스턴스 생성</span>
+nav_node.send_nav_goal(target_x=5.0, target_y=2.0) <span class="code-comment"># (5.0, 2.0) 위치로 전체 내비게이션 구동</span>
+rclpy.spin(nav_node)                          <span class="code-comment"># 콜백 이벤트 대기 루프 실행</span>
+
+<span class="code-keyword">if</span> __name__ == <span class="code-string">'__main__'</span>:
+main()</code></pre>
+
+</body>
+</html>

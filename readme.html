@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>팀 프로젝트 Git 워크플로우 가이드</title>
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --accent: #38bdf8;
+            --accent-gradient: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+            --code-bg: #090d16;
+            --code-text: #e2e8f0;
+            --border-color: #334155;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.7;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 25px;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            color: var(--text-sub);
+            font-size: 1.1rem;
+        }
+
+        .section {
+            margin-bottom: 35px;
+        }
+
+        h2 {
+            font-size: 1.3rem;
+            color: var(--accent);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        p {
+            color: var(--text-sub);
+            margin-bottom: 12px;
+        }
+
+        strong {
+            color: var(--text-main);
+        }
+
+        pre {
+            background-color: var(--code-bg);
+            color: var(--code-text);
+            padding: 20px;
+            border-radius: 10px;
+            overflow-x: auto;
+            font-family: 'Fira Code', Consolas, Monaco, monospace;
+            font-size: 0.95rem;
+            border: 1px solid var(--border-color);
+            margin-top: 10px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        ul {
+            list-style: none;
+            background-color: var(--code-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 10px;
+        }
+
+        li {
+            color: var(--text-sub);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        li:last-child {
+            margin-bottom: 0;
+        }
+
+        li::before {
+            content: "•";
+            color: var(--accent);
+            font-weight: bold;
+        }
+
+        .step {
+            color: var(--accent);
+            font-weight: 600;
+            background-color: rgba(56, 189, 248, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        code {
+            font-family: 'Fira Code', Consolas, monospace;
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #38bdf8;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 600px) {
+            body { padding: 20px 10px; }
+            .container { padding: 20px; }
+            h1 { font-size: 1.8rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>🚀 팀 프로젝트 Git 워크플로우</h1>
+            <p>우리 팀의 매끄러운 협업과 충돌 방지를 위한 공식 가이드</p>
+        </header>
+    <!-- 안내서 최상단에 추가된 섹션 -->
+    <div class="section">
+        <h2>0. 최초 프로젝트 환경 설정 (딱 한 번만!)</h2>
+        <p>프로젝트를 처음 시작할 때 <strong>한 번만</strong> 진행하세요.</p>
+        <pre># 1. 저장소 가져오기
+    git clone &lt;저장소_주소&gt;
+    cd &lt;저장소_폴더명&gt;
+
+    # 2. dev 브랜치로 이동
+    git switch dev
+
+    # 3. 본인 전용 브랜치 및 이동
+    git branch &lt;본인_브랜치명&gt;
+    git switch &lt;본인_브랜치명&gt;</pre>
+    </div>
+        <div class="section">
+            <h2>1. 매일 코딩 시작 전 (최신 상태 동기화)</h2>
+            <p>무작정 작업하면 코드 충돌이 발생할 수 있습니다. 코딩을 시작하기 전 <strong>반드시</strong> 아래 루틴을 지켜주세요.</p>
+            <pre># 1. dev 브랜치로 이동
+git switch dev
+
+# 2. 최신 코드 받아오기
+git pull origin dev
+
+# 3. 내 브랜치로 돌아와서 최신 내용 합치기
+git switch &lt;본인_브랜치명&gt;
+git merge dev</pre>
+        </div>
+
+        <div class="section">
+            <h2>2. 작업 완료 후 (코드 업로드)</h2>
+            <p>구현이 끝난 코드를 로컬 저장소에 기록하고 원격 서버로 전송합니다.</p>
+            <pre># 1. 변경된 파일 전체 스테이징
+git add .
+
+# 2. 작업 내용 커밋 메시지와 함께 기록
+git commit -m "이름 : 작업 내용 요약"
+
+# 3. 내 개인 브랜치로 푸시
+git push origin &lt;본인_브랜치명&gt;</pre>
+        </div>
+
+        <div class="section">
+            <h2>3. 깃 관리자에게 검토 요청 (Pull Request)</h2>
+            <p>GitHub 웹사이트에서 본인의 코드를 <code>dev</code> 브랜치로 합쳐달라고 요청합니다.</p>
+            <ul>
+                <li><span class="step">Pull requests</span> 탭 이동 후 <span class="step">New pull request</span> 버튼 클릭</li>
+                <li><strong>Base: <code>dev</code></strong> (기본 설정됨) ⟵ <strong>Compare: <code>&lt;본인_브랜치명&gt;</code></strong> 선택</li>
+                <li>변경 사항 최종 확인 후 하단의 <span class="step">Create pull request</span> 클릭!</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
