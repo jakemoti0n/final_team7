@@ -1,0 +1,145 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <gazebo reference="left_wheel_link">
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+  </gazebo>
+
+  <gazebo reference="right_wheel_link">
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+  </gazebo>
+
+  <gazebo reference="front_caster_wheel_link">
+    <mu1>0.5</mu1>
+    <mu2>0.5</mu2>
+  </gazebo>
+
+  <gazebo reference="rear_caster_wheel_link">
+    <mu1>0.5</mu1>
+    <mu2>0.5</mu2>
+  </gazebo>
+
+  <gazebo>
+    <plugin filename="gz-sim-diff-drive-system"
+            name="gz::sim::systems::DiffDrive">
+      <left_joint>left_wheel_joint</left_joint>
+      <right_joint>right_wheel_joint</right_joint>
+
+      <wheel_separation>${wheel_separation}</wheel_separation>
+      <wheel_radius>${wheel_radius}</wheel_radius>
+
+      <topic>cmd_vel</topic>
+      <odom_topic>odom</odom_topic>
+      <tf_topic>tf</tf_topic>
+      <frame_id>odom</frame_id>
+      <child_frame_id>base_footprint</child_frame_id>
+      <odom_publish_frequency>50</odom_publish_frequency>
+
+      <max_linear_velocity>0.3</max_linear_velocity>
+      <min_linear_velocity>-0.3</min_linear_velocity>
+
+      <max_angular_velocity>0.6</max_angular_velocity>
+      <min_angular_velocity>-0.6</min_angular_velocity>
+
+      <max_linear_acceleration>0.5</max_linear_acceleration>
+      <min_linear_acceleration>-0.5</min_linear_acceleration>
+
+      <max_angular_acceleration>1.2</max_angular_acceleration>
+      <min_angular_acceleration>-1.2</min_angular_acceleration>
+    </plugin>
+
+    <plugin filename="gz-sim-joint-state-publisher-system"
+            name="gz::sim::systems::JointStatePublisher">
+      <topic>joint_states</topic>
+      <joint_name>left_wheel_joint</joint_name>
+      <joint_name>right_wheel_joint</joint_name>
+
+      <joint_name>front_caster_swivel_joint</joint_name>
+      <joint_name>front_caster_wheel_joint</joint_name>
+
+      <joint_name>rear_caster_swivel_joint</joint_name>
+      <joint_name>rear_caster_wheel_joint</joint_name>
+
+      <update_rate>50</update_rate>
+    </plugin>
+
+  </gazebo>
+
+  <!-- ================================ -->
+<!-- Livox MID-360 Simulation        -->
+<!-- ================================ -->
+
+<gazebo reference="mid360_link">
+
+  <sensor name="mid360_sensor" type="gpu_lidar">
+
+    <topic>mid360</topic>
+    <gz_frame_id>mid360_link</gz_frame_id>
+
+    <!-- 실제 MID-360의 일반 frame rate -->
+    <update_rate>10</update_rate>
+
+    <lidar>
+
+      <scan>
+
+        <!-- 360 degree horizontal FOV -->
+        <horizontal>
+
+          <!--
+            360 samples = 약 1도 간격
+            SLAM/Nav 테스트용으로 충분한 초기값
+          -->
+          <samples>720</samples>
+          <resolution>1</resolution>
+
+          <min_angle>-3.141592653589793</min_angle>
+          <max_angle>3.141592653589793</max_angle>
+
+        </horizontal>
+
+
+        <!-- MID-360 vertical FOV: -7 ~ +52 degrees -->
+        <vertical>
+
+          <samples>60</samples>
+          <resolution>1</resolution>
+
+          <!-- -7 deg -->
+          <min_angle>-0.1221730476</min_angle>
+
+          <!-- +52 deg -->
+          <max_angle>0.9075712110</max_angle>
+
+        </vertical>
+
+      </scan>
+
+
+      <range>
+
+        <!-- 실제 MID-360 최소 측정거리 -->
+        <min>0.10</min>
+
+        <!-- 10% reflectivity 기준 -->
+        <max>40.0</max>
+
+        <!-- 거리 resolution은 simulation 설정값 -->
+        <resolution>0.01</resolution>
+
+      </range>
+
+    </lidar>
+
+    <always_on>true</always_on>
+
+    <!-- Gazebo에서 광선을 눈으로 보고 싶으면 true -->
+    <visualize>true</visualize>
+
+  </sensor>
+
+</gazebo>
+
+</robot>

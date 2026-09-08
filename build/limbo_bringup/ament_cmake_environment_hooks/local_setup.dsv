@@ -1,0 +1,2 @@
+source;share/limbo_bringup/environment/ament_prefix_path.sh
+source;share/limbo_bringup/environment/path.sh

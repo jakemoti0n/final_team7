@@ -1,0 +1,32 @@
+[0.015s] Invoking command in '/home/david/limbo/build/limbo_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/david/limbo/build/limbo_description -- -j12 -l12
+[0.051s] Invoked command in '/home/david/limbo/build/limbo_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/david/limbo/build/limbo_description -- -j12 -l12
+[0.052s] Invoking command in '/home/david/limbo/build/limbo_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/david/limbo/build/limbo_description
+[0.058s] -- Install configuration: ""
+[0.058s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/urdf
+[0.058s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/urdf/limbo.urdf.xacro
+[0.059s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/urdf/limbo.gazebo.xacro
+[0.059s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/meshes
+[0.059s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/meshes/right_wheel.stl
+[0.060s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/meshes/front_caster.stl
+[0.060s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/meshes/rear_caster.stl
+[0.060s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/meshes/left_wheel.stl
+[0.060s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/meshes/body.stl
+[0.060s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/launch
+[0.061s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/launch/display_generated.launch.py
+[0.061s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/rviz
+[0.061s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/ament_index/resource_index/package_run_dependencies/limbo_description
+[0.061s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/ament_index/resource_index/parent_prefix_path/limbo_description
+[0.062s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/environment/ament_prefix_path.sh
+[0.062s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/environment/ament_prefix_path.dsv
+[0.062s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/environment/path.sh
+[0.063s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/environment/path.dsv
+[0.063s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/local_setup.bash
+[0.064s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/local_setup.sh
+[0.064s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/local_setup.zsh
+[0.064s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/local_setup.dsv
+[0.065s] -- Installing: /home/david/limbo/install/limbo_description/share/limbo_description/package.dsv
+[0.065s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/ament_index/resource_index/packages/limbo_description
+[0.066s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/cmake/limbo_descriptionConfig.cmake
+[0.066s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/cmake/limbo_descriptionConfig-version.cmake
+[0.066s] -- Up-to-date: /home/david/limbo/install/limbo_description/share/limbo_description/package.xml
+[0.140s] Invoked command in '/home/david/limbo/build/limbo_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/david/limbo/build/limbo_description

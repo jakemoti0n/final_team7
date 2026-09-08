@@ -1,0 +1,404 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="Limbo">
+
+  <!--
+    Limbo mobile robot - ROS 2 Jazzy / Gazebo Harmonic draft
+    Coordinate convention:
+      +X = forward
+      +Y = left
+      +Z = up
+
+    Physical target envelope: 0.45 x 0.45 x 0.60 m
+    Nominal total mass used for simulation: 21.0 kg
+  -->
+
+  <!-- Geometry parameters -->
+  <xacro:property name="wheel_radius" value="0.050"/>
+  <xacro:property name="wheel_width" value="0.030"/>
+  <xacro:property name="wheel_separation" value="0.3009130859375"/>
+  <xacro:property name="wheel_y" value="${wheel_separation / 2.0}"/>
+
+  <!-- base_link is placed at drive-wheel axle height -->
+  <xacro:property name="base_link_height" value="0.050"/>
+
+  <xacro:property name="caster_separation" value="0.38"/>
+  <xacro:property name="front_caster_x" value="${caster_separation / 2.0}"/>
+  <xacro:property name="rear_caster_x" value="${-caster_separation / 2.0}"/>
+  <xacro:property name="caster_origin_z_global" value="0.04483131"/>
+  <xacro:property name="caster_joint_z" value="${caster_origin_z_global - base_link_height}"/>
+
+  <xacro:property name="caster_wheel_radius" value="0.025"/>
+  <xacro:property name="caster_wheel_width" value="0.020"/>
+
+  <!-- Distance between swivel axis and wheel center -->
+  <xacro:property name="caster_trail" value="0.025"/>
+
+  <!-- Wheel center Z relative to caster swivel link -->
+  <xacro:property name="caster_wheel_z"
+                  value="${caster_wheel_radius - caster_origin_z_global}"/>
+
+  <!--
+    Total caster mass remains 0.4 kg each.
+    Split between swivel assembly and wheel.
+  -->
+  <xacro:property name="caster_swivel_mass" value="0.10"/>
+  <xacro:property name="caster_wheel_mass" value="0.30"/>
+
+  <!-- Nominal masses: total = 21.0 kg -->
+  <xacro:property name="body_mass" value="18.8"/>
+  <xacro:property name="wheel_mass" value="0.7"/>
+
+  <!-- Simplified body collision / inertia dimensions -->
+  <xacro:property name="body_collision_x" value="0.45"/>
+  <xacro:property name="body_collision_y" value="0.45"/>
+  <xacro:property name="body_collision_z" value="0.55"/>
+  <xacro:property name="body_com_z" value="0.275"/>
+
+  <!-- Inertia macros -->
+
+  <xacro:macro name="box_inertial" params="mass x y z origin_xyz">
+    <inertial>
+      <origin xyz="${origin_xyz}" rpy="0 0 0"/>
+      <mass value="${mass}"/>
+      <inertia
+        ixx="${mass * (y*y + z*z) / 12.0}"
+        ixy="0.0"
+        ixz="0.0"
+        iyy="${mass * (x*x + z*z) / 12.0}"
+        iyz="0.0"
+        izz="${mass * (x*x + y*y) / 12.0}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- Cylinder axis is Y. -->
+  <xacro:macro name="wheel_inertial" params="mass radius width">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="${mass}"/>
+      <inertia
+        ixx="${mass * (3.0*radius*radius + width*width) / 12.0}"
+        ixy="0.0"
+        ixz="0.0"
+        iyy="${0.5 * mass * radius*radius}"
+        iyz="0.0"
+        izz="${mass * (3.0*radius*radius + width*width) / 12.0}"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="sphere_inertial" params="mass radius">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="${mass}"/>
+      <inertia
+        ixx="${0.4 * mass * radius*radius}"
+        ixy="0.0"
+        ixz="0.0"
+        iyy="${0.4 * mass * radius*radius}"
+        iyz="0.0"
+        izz="${0.4 * mass * radius*radius}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- Materials -->
+
+  <material name="limbo_body_color">
+    <color rgba="0.70 0.70 0.72 1.0"/>
+  </material>
+
+  <material name="limbo_wheel_color">
+    <color rgba="0.08 0.08 0.08 1.0"/>
+  </material>
+
+  <!-- Base frames -->
+
+  <link name="base_footprint"/>
+
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${base_link_height}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="base_link">
+    <visual name="body_visual">
+      <origin xyz="0 0 ${-base_link_height}" rpy="0 0 ${pi}"/>
+      <geometry>
+        <mesh filename="package://limbo_description/meshes/body.stl"/>
+      </geometry>
+      <material name="limbo_body_color"/>
+    </visual>
+
+    <collision name="body_collision">
+      <origin xyz="0 0 ${body_com_z}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${body_collision_x} ${body_collision_y} ${body_collision_z}"/>
+      </geometry>
+    </collision>
+
+    <xacro:box_inertial
+      mass="${body_mass}"
+      x="${body_collision_x}"
+      y="${body_collision_y}"
+      z="${body_collision_z}"
+      origin_xyz="0 0 ${body_com_z}"/>
+  </link>
+
+  <!-- Drive wheels -->
+
+  <link name="left_wheel_link">
+    <visual name="left_wheel_visual">
+      <geometry>
+        <mesh filename="package://limbo_description/meshes/left_wheel.stl"/>
+      </geometry>
+      <material name="limbo_wheel_color"/>
+    </visual>
+    <collision name="left_wheel_collision">
+      <origin xyz="0 0 0" rpy="${pi/2.0} 0 0"/>
+      <geometry>
+        <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+      </geometry>
+    </collision>
+    <xacro:wheel_inertial
+      mass="${wheel_mass}"
+      radius="${wheel_radius}"
+      width="${wheel_width}"/>
+  </link>
+
+  <joint name="left_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="left_wheel_link"/>
+    <origin xyz="0 ${wheel_y} 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.05" friction="0.0"/>
+  </joint>
+
+  <link name="right_wheel_link">
+    <visual name="right_wheel_visual">
+      <geometry>
+        <mesh filename="package://limbo_description/meshes/right_wheel.stl"/>
+      </geometry>
+      <material name="limbo_wheel_color"/>
+    </visual>
+    <collision name="right_wheel_collision">
+      <origin xyz="0 0 0" rpy="${pi/2.0} 0 0"/>
+      <geometry>
+        <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+      </geometry>
+    </collision>
+    <xacro:wheel_inertial
+      mass="${wheel_mass}"
+      radius="${wheel_radius}"
+      width="${wheel_width}"/>
+  </link>
+
+  <joint name="right_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="right_wheel_link"/>
+    <origin xyz="0 ${-wheel_y} 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.05" friction="0.0"/>
+  </joint>
+
+    <!-- ================================================== -->
+  <!-- Front caster                                       -->
+  <!-- ================================================== -->
+
+  <!--
+    The existing caster STL contains the complete caster
+    appearance. It is attached to the swivel link.
+
+    Collision / dynamics are modeled separately using
+    an invisible cylindrical caster wheel.
+  -->
+
+  <link name="front_caster_swivel_link">
+
+    <visual name="front_caster_visual">
+      <geometry>
+        <mesh filename="package://limbo_description/meshes/front_caster.stl"/>
+      </geometry>
+    </visual>
+
+    <!-- Approximate inertia of caster bracket -->
+    <xacro:box_inertial
+      mass="${caster_swivel_mass}"
+      x="0.03"
+      y="0.03"
+      z="0.03"
+      origin_xyz="0 0 0"/>
+
+  </link>
+
+
+  <!--
+    Swivel joint:
+    allows caster assembly to rotate freely around Z.
+  -->
+  <joint name="front_caster_swivel_joint" type="continuous">
+
+    <parent link="base_link"/>
+    <child link="front_caster_swivel_link"/>
+
+    <origin xyz="${front_caster_x} 0 ${caster_joint_z}"
+            rpy="0 0 0"/>
+
+    <axis xyz="0 0 1"/>
+
+    <!--
+      Small damping suppresses uncontrolled caster oscillation
+      while still allowing passive steering.
+    -->
+    <dynamics damping="0.10"
+              friction="0.01"/>
+
+  </joint>
+
+
+  <!-- Invisible physical caster wheel -->
+  <link name="front_caster_wheel_link">
+
+    <collision name="front_caster_wheel_collision">
+
+      <origin xyz="0 0 0"
+              rpy="${pi/2.0} 0 0"/>
+
+      <geometry>
+        <cylinder
+          radius="${caster_wheel_radius}"
+          length="${caster_wheel_width}"/>
+      </geometry>
+
+    </collision>
+
+    <xacro:wheel_inertial
+      mass="${caster_wheel_mass}"
+      radius="${caster_wheel_radius}"
+      width="${caster_wheel_width}"/>
+
+  </link>
+
+
+  <!--
+    Wheel is offset behind the swivel axis.
+    This offset (caster trail) lets the caster naturally align
+    itself with the direction of travel.
+  -->
+  <joint name="front_caster_wheel_joint" type="continuous">
+
+    <parent link="front_caster_swivel_link"/>
+    <child link="front_caster_wheel_link"/>
+
+    <origin
+      xyz="${-caster_trail} 0 ${caster_wheel_z}"
+      rpy="0 0 0"/>
+
+    <axis xyz="0 1 0"/>
+
+    <dynamics damping="0.02"
+              friction="0.0"/>
+
+  </joint>
+
+
+  <!-- ================================================== -->
+  <!-- Rear caster                                        -->
+  <!-- ================================================== -->
+
+  <link name="rear_caster_swivel_link">
+
+    <visual name="rear_caster_visual">
+      <geometry>
+        <mesh filename="package://limbo_description/meshes/rear_caster.stl"/>
+      </geometry>
+    </visual>
+
+    <xacro:box_inertial
+      mass="${caster_swivel_mass}"
+      x="0.03"
+      y="0.03"
+      z="0.03"
+      origin_xyz="0 0 0"/>
+
+  </link>
+
+
+  <joint name="rear_caster_swivel_joint" type="continuous">
+
+    <parent link="base_link"/>
+    <child link="rear_caster_swivel_link"/>
+
+    <origin xyz="${rear_caster_x} 0 ${caster_joint_z}"
+            rpy="0 0 0"/>
+
+    <axis xyz="0 0 1"/>
+
+    <dynamics damping="0.10"
+              friction="0.01"/>
+
+  </joint>
+
+
+  <link name="rear_caster_wheel_link">
+
+    <collision name="rear_caster_wheel_collision">
+
+      <origin xyz="0 0 0"
+              rpy="${pi/2.0} 0 0"/>
+
+      <geometry>
+        <cylinder
+          radius="${caster_wheel_radius}"
+          length="${caster_wheel_width}"/>
+      </geometry>
+
+    </collision>
+
+    <xacro:wheel_inertial
+      mass="${caster_wheel_mass}"
+      radius="${caster_wheel_radius}"
+      width="${caster_wheel_width}"/>
+
+  </link>
+
+
+  <joint name="rear_caster_wheel_joint" type="continuous">
+
+    <parent link="rear_caster_swivel_link"/>
+    <child link="rear_caster_wheel_link"/>
+
+    <origin
+      xyz="${-caster_trail} 0 ${caster_wheel_z}"
+      rpy="0 0 0"/>
+
+    <axis xyz="0 1 0"/>
+
+    <dynamics damping="0.02"
+              friction="0.0"/>
+
+  </joint>
+
+  <!-- ================================ -->
+
+  <!-- ================================ -->
+  <!-- Livox MID-360                    -->
+  <!-- ================================ -->
+
+  <!--
+    MID-360 외형은 body.stl 안에 이미 포함되어 있음.
+    따라서 이 link는 센서의 좌표계(frame) 역할만 수행한다.
+  -->
+
+  <link name="mid360_link"/>
+
+  <joint name="mid360_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="mid360_link"/>
+
+    <!-- body.stl에 모델링된 LiDAR 위치 -->
+    <origin xyz="0.19 0 0.59" rpy="0 0 0"/>
+  </joint>
+
+  <xacro:include
+    filename="$(find limbo_description)/urdf/limbo.gazebo.xacro"/>
+
+</robot>

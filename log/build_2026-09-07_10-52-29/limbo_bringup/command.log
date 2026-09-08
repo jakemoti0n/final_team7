@@ -1,0 +1,4 @@
+Invoking command in '/home/david/limbo/build/limbo_bringup': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/david/limbo/build/limbo_bringup -- -j12 -l12
+Invoked command in '/home/david/limbo/build/limbo_bringup' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/david/limbo/build/limbo_bringup -- -j12 -l12
+Invoking command in '/home/david/limbo/build/limbo_bringup': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/david/limbo/build/limbo_bringup
+Invoked command in '/home/david/limbo/build/limbo_bringup' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/david/limbo/build/limbo_bringup
