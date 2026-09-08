@@ -1,4 +1,0 @@
-Invoking command in '/home/david/limbo/build/limbo_simulation': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/david/limbo/build/limbo_simulation -- -j12 -l12
-Invoked command in '/home/david/limbo/build/limbo_simulation' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/david/limbo/build/limbo_simulation -- -j12 -l12
-Invoking command in '/home/david/limbo/build/limbo_simulation': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/david/limbo/build/limbo_simulation
-Invoked command in '/home/david/limbo/build/limbo_simulation' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/david/limbo/build/limbo_simulation

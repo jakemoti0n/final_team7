@@ -1,5 +1,0 @@
-[31mCMake Error at cmake_install.cmake:46 (file):
-  file INSTALL cannot find "/home/david/limbo/src/limbo_description/params":
-  No such file or directory.
-
-[0m
