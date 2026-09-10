@@ -4,7 +4,7 @@
 
 ros2 run pointcloud_to_laserscan pointcloud_to_laserscan_node \
   --ros-args \
-  -r cloud_in:=/mid360/points \
+  -r cloud_in:=/mid360/points_filtered \
   -r scan:=/scan \
   -p use_sim_time:=true \
   -p target_frame:=mid360_link \
