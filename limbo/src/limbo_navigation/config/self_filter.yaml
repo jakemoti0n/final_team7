@@ -1,0 +1,23 @@
+self_filter:
+  ros__parameters:
+    sensor_frame: mid360_link
+
+    keep_organized: false
+    invert: false
+    min_sensor_dist: 0.01
+    publish_collision_shapes: true
+
+    default_sphere_scale: 1.0
+    default_sphere_padding: 0.01
+
+    default_box_scale: [1.0, 1.0, 1.0]
+    default_box_padding: [0.02, 0.02, 0.02]
+
+    default_cylinder_scale: [1.0, 1.0]
+    default_cylinder_padding: [0.01, 0.01]
+
+    # roof_link was added because the new roof can also appear in MID-360 returns.
+    self_see_links:
+      names:
+        - base_link
+        - roof_link

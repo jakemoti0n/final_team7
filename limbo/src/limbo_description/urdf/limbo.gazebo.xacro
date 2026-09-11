@@ -64,82 +64,94 @@
 
       <update_rate>50</update_rate>
     </plugin>
-
   </gazebo>
 
   <!-- ================================ -->
-<!-- Livox MID-360 Simulation        -->
-<!-- ================================ -->
+  <!-- Livox MID-360 Simulation         -->
+  <!-- ================================ -->
 
-<gazebo reference="mid360_link">
+  <!--
+    The sensor is attached to mid360_link. Its physical position is defined
+    by mid360_joint in limbo.urdf.xacro, so no Gazebo-side XYZ change is
+    required when the LiDAR mount moves.
+  -->
+  <gazebo reference="mid360_link">
+    <sensor name="mid360_sensor" type="gpu_lidar">
+      <topic>mid360</topic>
+      <gz_frame_id>mid360_link</gz_frame_id>
 
-  <sensor name="mid360_sensor" type="gpu_lidar">
+      <!-- MID-360 general frame rate -->
+      <update_rate>10</update_rate>
 
-    <topic>mid360</topic>
-    <gz_frame_id>mid360_link</gz_frame_id>
+      <lidar>
+        <scan>
+          <!-- 360 degree horizontal FOV -->
+          <horizontal>
+            <samples>720</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.141592653589793</min_angle>
+            <max_angle>3.141592653589793</max_angle>
+          </horizontal>
 
-    <!-- 실제 MID-360의 일반 frame rate -->
-    <update_rate>10</update_rate>
+          <!-- MID-360 vertical FOV: -7 ~ +52 degrees -->
+          <vertical>
+            <samples>60</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.1221730476</min_angle>
+            <max_angle>0.9075712110</max_angle>
+          </vertical>
+        </scan>
 
-    <lidar>
+        <range>
+          <min>0.10</min>
+          <max>40.0</max>
+          <resolution>0.01</resolution>
+        </range>
+      </lidar>
 
-      <scan>
+      <always_on>true</always_on>
+      <visualize>true</visualize>
+    </sensor>
+  </gazebo>
 
-        <!-- 360 degree horizontal FOV -->
-        <horizontal>
+  <!-- ================================ -->
+  <!-- RGB-D Camera Simulation          -->
+  <!-- ================================ -->
 
-          <!--
-            360 samples = 약 1도 간격
-            SLAM/Nav 테스트용으로 충분한 초기값
-          -->
-          <samples>720</samples>
-          <resolution>1</resolution>
+  <gazebo reference="rgbd_camera_link">
 
-          <min_angle>-3.141592653589793</min_angle>
-          <max_angle>3.141592653589793</max_angle>
+    <sensor name="rgbd_camera" type="rgbd_camera">
+      <gz_frame_id>rgbd_camera_link</gz_frame_id>
 
-        </horizontal>
+      <camera>
 
+        <!-- 약 71.6 deg -->
+        <horizontal_fov>1.25</horizontal_fov>
 
-        <!-- MID-360 vertical FOV: -7 ~ +52 degrees -->
-        <vertical>
+        <image>
+          <width>320</width>
+          <height>240</height>
+        </image>
 
-          <samples>60</samples>
-          <resolution>1</resolution>
-
-          <!-- -7 deg -->
-          <min_angle>-0.1221730476</min_angle>
-
-          <!-- +52 deg -->
-          <max_angle>0.9075712110</max_angle>
-
-        </vertical>
-
-      </scan>
+        <clip>
+          <near>0.10</near>
+          <far>5.0</far>
+        </clip>
 
 
-      <range>
+      </camera>
 
-        <!-- 실제 MID-360 최소 측정거리 -->
-        <min>0.10</min>
+      <always_on>true</always_on>
 
-        <!-- 10% reflectivity 기준 -->
-        <max>40.0</max>
+      <!-- 현재 노트북 부하 고려 -->
+      <update_rate>15</update_rate>
 
-        <!-- 거리 resolution은 simulation 설정값 -->
-        <resolution>0.01</resolution>
+      <visualize>true</visualize>
 
-      </range>
+      <topic>rgbd_camera</topic>
 
-    </lidar>
+    </sensor>
 
-    <always_on>true</always_on>
-
-    <!-- Gazebo에서 광선을 눈으로 보고 싶으면 true -->
-    <visualize>true</visualize>
-
-  </sensor>
-
-</gazebo>
+  </gazebo>
 
 </robot>
