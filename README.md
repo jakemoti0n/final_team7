@@ -1,5 +1,13 @@
 ## Gazebo 실행 후 필요한 명령어 모음!
 
+### **처음 clone 받을 때 주의 사항**
+- 같이 다운 받아야할 submodules가 있으니 git clone --recurse-submodules <저장소_URL> 와 같은 형태로 받을것!!!!!
+
+#### 통합 실행 명령어
+
+ros2 launch limbo_bringup start_simulation.launch.py
+
+
 #### PointCloud : 3D LiDAR 센서 2D로 변환
 
 ros2 run pointcloud_to_laserscan pointcloud_to_laserscan_node \
@@ -53,3 +61,7 @@ ros2 launch robot_self_filter self_filter.launch.py \
 ros2 service call /collision_monitor/toggle \
   nav2_msgs/srv/Toggle \
   "{enable: true}"   <-false로 고치면 끄기
+
+#### 하드웨어 조립 후 조정해야할 파타미터 정리
+
+- nav2_params.yaml -> source_timeout : 센서의 반영 속도 / 노트북 메모리 과열로 현재 2.0으로 설정. 이후 0.5까지 점차적으로 감소시켜 보기
