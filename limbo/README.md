@@ -1,5 +1,8 @@
 ## Gazebo 실행 후 필요한 명령어 모음!
 
+### **처음 clone 받을 때 주의 사항**
+- 같이 다운 받아야할 submodules가 있으니 git clone --recurse-submodules <저장소_URL> 와 같은 형태로 받을것!!!!!
+
 #### 통합 실행 명령어
 
 ros2 launch limbo_bringup start_simulation.launch.py
