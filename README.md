@@ -3,6 +3,19 @@
 ### **처음 clone 받을 때 주의 사항**
 - 같이 다운 받아야할 submodules가 있으니 git clone --recurse-submodules <저장소_URL> 와 같은 형태로 받을것!!!!!
 
+### colcon build 할 때 주의 사항!!!!!
+limbo_perception은 yolo를 통해 사람 인식하려고 만든 패키지인데 얘는 새로 받은 yolo용 python 써야해서 이제부터 빌드할 때
+python -m colcon build --symlink-install 로 사용해야함. alias 만들어서 사용할 것을 추천...ㅠ
+
+### 몇개 잊었지만 늦게라도 적어보는 받아야할 pkg 목록
+1. sudo apt install ros-jazzy-cv-bridge python3-venv : openCV 관련 pkg
+2. python3 -m venv --system-site-packages ~/limbo/venvs/limbo_yolo
+source ~/limbo/venvs/limbo_yolo/bin/activate
+pip install -r ~/limbo/requirements.txt : YOLO용 Python 환경 설치
+3. python -m pip install --force-reinstall \
+  "numpy==1.26.4" \
+  "opencv-python==4.10.0.84" : python과 yolo 충돌 안나게 버전 고정
+
 #### 통합 실행 명령어
 
 ros2 launch limbo_bringup start_simulation.launch.py
@@ -65,3 +78,9 @@ ros2 service call /collision_monitor/toggle \
 #### 하드웨어 조립 후 조정해야할 파타미터 정리
 
 - nav2_params.yaml -> source_timeout : 센서의 반영 속도 / 노트북 메모리 과열로 현재 2.0으로 설정. 이후 0.5까지 점차적으로 감소시켜 보기
+
+#### YOLO를 통한 사람 구별
+
+ros2 run limbo_perception person_detector \
+  --ros-args \
+  -p use_sim_time:=true

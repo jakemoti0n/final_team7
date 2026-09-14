@@ -1022,5 +1022,116 @@
       <cast_shadows>0</cast_shadows>
       <direction>0 0 -1</direction>
     </light>
+
+    <!-- ================================ -->
+    <!-- Test walking person              -->
+    <!-- ================================ -->
+
+    <actor name="test_person">
+
+      <!-- 사람 외형 -->
+      <skin>
+        <filename>
+          https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae
+        </filename>
+        <scale>1.0</scale>
+      </skin>
+
+      <!-- 걷기 애니메이션 -->
+      <animation name="walk">
+        <filename>
+          https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae
+        </filename>
+
+        <interpolate_x>true</interpolate_x>
+      </animation>
+
+      <!-- 이동 경로 -->
+      <script>
+
+        <loop>true</loop>
+        <delay_start>0.0</delay_start>
+        <auto_start>true</auto_start>
+
+        <trajectory id="0" type="walk">
+
+          <!-- 시작 -->
+          <waypoint>
+            <time>0.0</time>
+            <pose>-0.5 -1.0 1.0 0 0 1.57</pose>
+          </waypoint>
+
+          <!-- 왼쪽 → 오른쪽 이동 -->
+          <waypoint>
+            <time>4.0</time>
+            <pose>-0.5 1.0 1.0 0 0 1.57</pose>
+          </waypoint>
+
+          <!-- 방향 전환 -->
+          <waypoint>
+            <time>4.5</time>
+            <pose>-0.5 1.0 1.0 0 0 -1.57</pose>
+          </waypoint>
+
+          <!-- 오른쪽 → 왼쪽 -->
+          <waypoint>
+            <time>8.5</time>
+            <pose>-0.5 -1.0 1.0 0 0 -1.57</pose>
+          </waypoint>
+
+          <!-- 원래 방향 -->
+          <waypoint>
+            <time>9.0</time>
+            <pose>-0.5 -1.0 1.0 0 0 1.57</pose>
+          </waypoint>
+
+        </trajectory>
+
+      </script>
+
+    </actor>
+
+    <actor name="standing_person">
+
+      <pose>3.0 0.0 1.0 0 0 3.14</pose>
+
+      <!-- 사람 외형 -->
+      <skin>
+        <filename>
+          https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae
+        </filename>
+        <scale>1.0</scale>
+      </skin>
+
+      <!-- 걷기 애니메이션 -->
+      <animation name="walk">
+        <filename>
+          https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae
+        </filename>
+
+        <interpolate_x>true</interpolate_x>
+      </animation>
+
+      <!-- 이동 경로 -->
+      <script>
+        <loop>true</loop>
+        <auto_start>true</auto_start>
+
+        <trajectory id="0" type="walk">
+
+          <waypoint>
+            <time>0.0</time>
+            <pose>0 0 0 0 0 0</pose>
+          </waypoint>
+
+          <waypoint>
+            <time>100.0</time>
+            <pose>0 0 0 0 0 0</pose>
+          </waypoint>
+
+        </trajectory>
+      </script>
+
+    </actor>
   </world>
 </sdf>
