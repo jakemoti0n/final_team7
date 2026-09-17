@@ -1064,25 +1064,25 @@
           <!-- 왼쪽 → 오른쪽 이동 -->
           <waypoint>
             <time>4.0</time>
-            <pose>-0.5 1.0 1.0 0 0 1.57</pose>
+            <pose>-0.20 1.0 1.0 0 0 1.57</pose>
           </waypoint>
 
           <!-- 방향 전환 -->
           <waypoint>
             <time>4.5</time>
-            <pose>-0.5 1.0 1.0 0 0 -1.57</pose>
+            <pose>-0.20 1.0 1.0 0 0 -1.57</pose>
           </waypoint>
 
           <!-- 오른쪽 → 왼쪽 -->
           <waypoint>
             <time>8.5</time>
-            <pose>-0.5 -1.0 1.0 0 0 -1.57</pose>
+            <pose>-0.20 -1.0 1.0 0 0 -1.57</pose>
           </waypoint>
 
           <!-- 원래 방향 -->
           <waypoint>
             <time>9.0</time>
-            <pose>-0.5 -1.0 1.0 0 0 1.57</pose>
+            <pose>-0.20 -1.0 1.0 0 0 1.57</pose>
           </waypoint>
 
         </trajectory>

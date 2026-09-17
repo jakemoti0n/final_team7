@@ -84,3 +84,8 @@ ros2 service call /collision_monitor/toggle \
 ros2 run limbo_perception person_detector \
   --ros-args \
   -p use_sim_time:=true
+
+#### waypoint 설정을 통한 주행 경로 설정: limbo_patrol
+
+#### rviz에 찍힌 좌표 값을 가져오는 명령어
+ros2 topic echo /clicked_point

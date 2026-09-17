@@ -1,0 +1,44 @@
+waypoints:
+
+  - name: A
+    type: pass
+    x: -2.422729253768921
+    y: 5.579357624053955
+    yaw: 0.0
+    wait_sec: 0
+
+  - name: B
+    type: pass
+    x: -6.900049686431885
+    y: 1.243448257446289
+    yaw: 0.0
+    wait_sec: 0
+
+  - name: C
+    type: stop
+    x: -3.943735122680664
+    y: -3.170903444290161
+    yaw: 90
+    wait_sec: 10
+
+  - name: D
+    type: pass
+    x: -2.059467077255249
+    y: -6.292500972747803
+    yaw: 0
+    wait_sec: 0
+
+  - name: E
+    type: pass
+    x: 2.482361316680908
+    y: -3.2045986652374268
+    yaw: 0
+    wait_sec: 0
+
+  - name: F
+    type: stop
+    x: 4.898601055145264
+    y: 1.5472331047058105
+    yaw: 0
+    wait_sec: 0
+
