@@ -23,6 +23,12 @@ from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
 from geometry_msgs.msg import Point
+import math
+
+from limbo_interfaces.msg import (
+    PersonPrediction,
+    PersonPredictionArray
+)
 
 class PersonKalmanFilter:
 
@@ -127,6 +133,13 @@ class PersonDetector(Node):
 
     def __init__(self):
         super().__init__('person_detector')
+
+        # humanCostmap을 발행하기 위한 publisher
+        self.prediction_pub = self.create_publisher(
+            PersonPredictionArray,
+            '/person_detector/predictions',
+            10
+        )
 
         # 이 속도 이하면 정지 상태로 간주
         self.stationary_speed_threshold = 0.05
@@ -272,6 +285,25 @@ class PersonDetector(Node):
         #   }
         # }
         self.track_states = {}
+
+        # ============================================================
+        # Track Manager
+        # ============================================================
+
+        # BoT-SORT ID → Limbo 내부 person ID
+        self.raw_to_person_id = {}
+
+        # Limbo 내부 person ID → 현재 연결된 BoT-SORT ID
+        self.person_to_raw_id = {}
+
+        # Limbo가 독립적으로 발급하는 ID
+        self.next_person_id = 1
+
+        # ID가 바뀌었을 때 기존 track과 재연결을 시도할 최대 시간
+        self.reassociate_max_age = 3.0  # sec
+
+        # Kalman 예상 위치와 새 detection 위치의 최대 허용 거리
+        self.reassociate_max_distance = 0.50  # meter
 
         # ID switch / 이상치 방어
         self.max_position_jump = 0.8
@@ -506,6 +538,7 @@ class PersonDetector(Node):
         robot_x = None
         robot_y = None
 
+
         if robot_odom_point is not None:
 
             robot_x = robot_odom_point.point.x
@@ -562,10 +595,10 @@ class PersonDetector(Node):
             or result.boxes.id is None
         ):
             boxes = []
-            track_ids = []
+            raw_track_ids = []
         else:
             boxes = result.boxes
-            track_ids = (
+            raw_track_ids = (
                 result.boxes.id
                 .int()
                 .cpu()
@@ -582,11 +615,14 @@ class PersonDetector(Node):
         # ==============================
 
         prediction_data = []
+        matched_person_ids = set()
 
-        for box, track_id in zip(
+
+        for box, raw_track_id in zip(
             boxes,
-            track_ids
+            raw_track_ids
         ):
+            person_id = None
 
             # TF 또는 tracking이 한 frame 실패해도
             # 화면 표시 코드가 죽지 않도록 기본값 설정
@@ -702,9 +738,21 @@ class PersonDetector(Node):
                 ox = odom_point.point.x
                 oy = odom_point.point.y
 
+                current_time_sec = current_time
+
+                person_id = self.resolve_person_id(
+                    raw_track_id=raw_track_id,
+                    measured_x=ox,
+                    measured_y=oy,
+                    current_time_sec=current_time_sec,
+                    matched_person_ids=matched_person_ids
+                )
+
+                matched_person_ids.add(person_id)
+
                 filtered_x, filtered_y, vx, vy, stable = (
                     self.update_person_track(
-                        track_id,
+                        person_id,
                         ox,
                         oy,
                         current_time
@@ -718,6 +766,14 @@ class PersonDetector(Node):
                     )
                 )
 
+                track_state = self.track_states[person_id]
+
+                track_state['manager_x'] = filtered_x
+                track_state['manager_y'] = filtered_y
+                track_state['manager_vx'] = vx
+                track_state['manager_vy'] = vy
+                track_state['manager_last_seen'] = current_time_sec
+
                 if stable:
 
                     predicted_points = self.predict_trajectory(
@@ -729,10 +785,12 @@ class PersonDetector(Node):
 
                     prediction_data.append(
                         {
-                            'track_id': track_id,
+                            'track_id': person_id,
                             'current_x': filtered_x,
                             'current_y': filtered_y,
-                            'points': predicted_points
+                            'points': predicted_points,
+                            'vx': vx,
+                            'vy': vy
                         }
                     )
 
@@ -767,7 +825,7 @@ class PersonDetector(Node):
 
                     approach_intent, approach_duration = (
                         self.update_approach_intent(
-                            track_id,
+                            person_id,
                             motion_state,
                             person_base_x,
                             person_base_y,
@@ -801,9 +859,13 @@ class PersonDetector(Node):
             else:
                 display_state = motion_state
 
+            if person_id is not None:
+                id_text = f'P:{person_id} B:{raw_track_id}'
+            else:
+                id_text = f'B:{raw_track_id}'
 
             text = (
-                f'ID:{track_id} '
+                f'ID:{id_text} '
                 f'{distance:.2f}m '
                 f'v:{speed:.2f}m/s '
                 f'{display_state}'
@@ -834,6 +896,10 @@ class PersonDetector(Node):
                 nearest_odom_point = odom_point
 
         self.publish_predicted_paths(
+            prediction_data
+        )
+
+        self.publish_prediction_data(
             prediction_data
         )
 
@@ -1081,18 +1147,51 @@ class PersonDetector(Node):
 
         remove_ids = []
 
-        for track_id, track in self.track_states.items():
+        # ========================================================
+        # 1. timeout된 Limbo person_id 찾기
+        # ========================================================
+        for person_id, track in self.track_states.items():
 
             if (
                 current_time
                 - track['last_seen']
                 > self.track_timeout
             ):
-                remove_ids.append(track_id)
+                remove_ids.append(person_id)
 
-        for track_id in remove_ids:
+        # ========================================================
+        # 2. track + Track Manager mapping 같이 삭제
+        # ========================================================
+        for person_id in remove_ids:
 
-            del self.track_states[track_id]
+            # person_id와 현재 연결된 BoT-SORT raw ID 찾기
+            raw_track_id = self.person_to_raw_id.pop(
+                person_id,
+                None
+            )
+
+            # raw ID → person ID mapping 삭제
+            if raw_track_id is not None:
+
+                if (
+                    self.raw_to_person_id.get(raw_track_id)
+                    == person_id
+                ):
+                    del self.raw_to_person_id[raw_track_id]
+
+            # 혹시 남아 있는 stale mapping이 있다면 같이 제거
+            stale_raw_ids = [
+                raw_id
+                for raw_id, mapped_person_id
+                in self.raw_to_person_id.items()
+                if mapped_person_id == person_id
+            ]
+
+            for raw_id in stale_raw_ids:
+                del self.raw_to_person_id[raw_id]
+
+            # 마지막으로 실제 Kalman / track 상태 삭제
+            del self.track_states[person_id]
 
     def update_approach_intent(
         self,
@@ -1330,6 +1429,237 @@ class PersonDetector(Node):
             marker_array
         )
 
+    def publish_prediction_data(
+        self,
+        prediction_data
+    ):
+        msg = PersonPredictionArray()
+
+        # 이 prediction의 좌표계는 odom
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'odom'
+
+        for person in prediction_data:
+
+            prediction = PersonPrediction()
+
+            # Limbo Track Manager가 관리하는 안정적인 person ID
+            prediction.person_id = int(
+                person['track_id']
+            )
+
+            # 현재 위치
+            prediction.current_position.x = float(
+                person['current_x']
+            )
+            prediction.current_position.y = float(
+                person['current_y']
+            )
+            prediction.current_position.z = 0.0
+
+            # 현재 추정 속도
+            prediction.velocity.x = float(
+                person['vx']
+            )
+            prediction.velocity.y = float(
+                person['vy']
+            )
+            prediction.velocity.z = 0.0
+
+            # 미래 예측 위치
+            for future_x, future_y, t in person['points']:
+
+                point = Point()
+
+                point.x = float(future_x)
+                point.y = float(future_y)
+                point.z = 0.0
+
+                prediction.predicted_positions.append(
+                    point
+                )
+
+                prediction.time_offsets.append(
+                    float(t)
+                )
+
+            msg.predictions.append(
+                prediction
+            )
+
+        self.prediction_pub.publish(
+            msg
+        )    
+
+    def resolve_person_id(
+        self,
+        raw_track_id,
+        measured_x,
+        measured_y,
+        current_time_sec,
+        matched_person_ids
+    ):
+        """
+        BoT-SORT의 raw_track_id를
+        Limbo 내부 person_id로 변환한다.
+
+        1. 기존 raw ID가 정상적으로 이어지고 있으면 그대로 사용
+        2. raw ID가 바뀌었으면 Kalman 예상 위치와 비교해서 기존 person과 재연결
+        3. 연결할 사람이 없으면 새로운 person_id 생성
+        """
+
+        raw_track_id = int(raw_track_id)
+
+        # ========================================================
+        # 1. 기존 BoT-SORT ID가 이미 연결되어 있는 경우
+        # ========================================================
+
+        if raw_track_id in self.raw_to_person_id:
+
+            person_id = self.raw_to_person_id[raw_track_id]
+
+            if (
+                person_id in self.track_states
+                and person_id not in matched_person_ids
+            ):
+                state = self.track_states[person_id]
+
+                if (
+                    'manager_x' in state
+                    and 'manager_last_seen' in state
+                ):
+                    age = (
+                        current_time_sec
+                        - state['manager_last_seen']
+                    )
+
+                    if 0.0 <= age <= self.reassociate_max_age:
+
+                        predicted_x = (
+                            state['manager_x']
+                            + state['manager_vx'] * age
+                        )
+
+                        predicted_y = (
+                            state['manager_y']
+                            + state['manager_vy'] * age
+                        )
+
+                        distance = math.hypot(
+                            measured_x - predicted_x,
+                            measured_y - predicted_y
+                        )
+
+                        # raw ID도 같고 위치도 정상적이면
+                        # 기존 person 유지
+                        if distance <= self.reassociate_max_distance:
+                            return person_id
+
+        # ========================================================
+        # 2. raw ID가 바뀌었거나 위치가 이상한 경우
+        #
+        # 최근에 봤던 모든 Limbo person 중에서
+        # Kalman 예상 위치가 가장 가까운 사람을 찾는다.
+        # ========================================================
+
+        best_person_id = None
+        best_distance = float('inf')
+
+        for person_id, state in self.track_states.items():
+
+            # 현재 frame에서 이미 다른 detection에 할당된 사람은 제외
+            if person_id in matched_person_ids:
+                continue
+
+            if (
+                'manager_x' not in state
+                or 'manager_last_seen' not in state
+            ):
+                continue
+
+            age = (
+                current_time_sec
+                - state['manager_last_seen']
+            )
+
+            # 너무 오래 전에 사라진 사람은 재연결하지 않음
+            if age < 0.0 or age > self.reassociate_max_age:
+                continue
+
+            # Constant Velocity 모델로 현재 위치 예상
+            predicted_x = (
+                state['manager_x']
+                + state['manager_vx'] * age
+            )
+
+            predicted_y = (
+                state['manager_y']
+                + state['manager_vy'] * age
+            )
+
+            distance = math.hypot(
+                measured_x - predicted_x,
+                measured_y - predicted_y
+            )
+
+            if (
+                distance <= self.reassociate_max_distance
+                and distance < best_distance
+            ):
+                best_distance = distance
+                best_person_id = person_id
+
+        # ========================================================
+        # 3. 기존 사람과 재연결 성공
+        # ========================================================
+
+        if best_person_id is not None:
+
+            old_raw_id = self.person_to_raw_id.get(
+                best_person_id
+            )
+
+            # 이전 BoT-SORT ID mapping 제거
+            if old_raw_id is not None:
+                if (
+                    self.raw_to_person_id.get(old_raw_id)
+                    == best_person_id
+                ):
+                    del self.raw_to_person_id[old_raw_id]
+
+            # 새로운 BoT-SORT ID를 기존 Limbo person에 연결
+            self.raw_to_person_id[raw_track_id] = best_person_id
+            self.person_to_raw_id[best_person_id] = raw_track_id
+
+            if old_raw_id != raw_track_id:
+                self.get_logger().info(
+                    f'[TRACK MANAGER] '
+                    f'BoT-SORT ID {old_raw_id} -> {raw_track_id}, '
+                    f'keep person_id={best_person_id}, '
+                    f'distance={best_distance:.2f}m'
+                )
+
+            return best_person_id
+
+        # ========================================================
+        # 4. 기존 사람과 연결 불가능
+        # → 완전히 새로운 사람
+        # ========================================================
+
+        new_person_id = self.next_person_id
+        self.next_person_id += 1
+
+        self.raw_to_person_id[raw_track_id] = new_person_id
+        self.person_to_raw_id[new_person_id] = raw_track_id
+
+        self.get_logger().info(
+            f'[TRACK MANAGER] '
+            f'New person_id={new_person_id}, '
+            f'raw_track_id={raw_track_id}'
+        )
+
+        return new_person_id
+
 
 def main(args=None):
 
@@ -1343,9 +1673,11 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
 
-    node.destroy_node()
+    finally:
+        node.destroy_node()
 
-    rclpy.shutdown()
+    if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

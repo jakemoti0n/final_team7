@@ -79,6 +79,8 @@ ros2 service call /collision_monitor/toggle \
 
 - nav2_params.yaml -> source_timeout : 센서의 반영 속도 / 노트북 메모리 과열로 현재 2.0으로 설정. 이후 0.5까지 점차적으로 감소시켜 보기
 
+- person_detector.py -> self.reassociate_max_age : tracking된 사람 정보 유지 시간. 3초로 설정했지만 실제 사람들이 많이 교차되는 환경에서 오랜 시간 유지되는 tracking 데이터가 어떤식으로 작동할지 몰라 주시 필요함
+
 #### YOLO를 통한 사람 구별
 
 ros2 run limbo_perception person_detector \
@@ -89,3 +91,6 @@ ros2 run limbo_perception person_detector \
 
 #### rviz에 찍힌 좌표 값을 가져오는 명령어
 ros2 topic echo /clicked_point
+
+#### 지정된 wayPoint로 이동하는 명령어
+ros2 run limbo_patrol patrol_node

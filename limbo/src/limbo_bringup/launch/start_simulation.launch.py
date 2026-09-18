@@ -36,6 +36,10 @@ def generate_launch_description():
         'nav2_bringup'
     )
 
+    limbo_perception_dir = get_package_share_directory(
+        'limbo_perception'
+    )
+
 
     # ============================================================
     # File paths
@@ -163,7 +167,10 @@ def generate_launch_description():
                 'launch',
                 'localization.launch.py'
             )
-        )
+        ),
+        launch_arguments={
+            'use_sim_time': 'true',
+        }.items()
     )
 
 
@@ -202,6 +209,16 @@ def generate_launch_description():
         package='rviz2',
         executable='rviz2',
         name='rviz2',
+        output='screen',
+        parameters=[
+            {'use_sim_time': True}
+        ]
+    )
+
+    detector = Node(
+        package='limbo_perception',
+        executable='person_detector',
+        name='person_detector',
         output='screen',
         parameters=[
             {'use_sim_time': True}
@@ -250,4 +267,6 @@ def generate_launch_description():
             period=14.0,
             actions=[rviz]
         ),
+
+        detector,
     ])
