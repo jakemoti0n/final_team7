@@ -17,7 +17,7 @@ def generate_launch_description():
 
     # 지금은 네 실제 map 저장 경로를 직접 기본값으로 사용
     default_map_file = os.path.expanduser(
-        "~/limbo/limbo/src/limbo_navigation/maps/bookstore_map.yaml"
+        "~/limbo/limbo/src/limbo_navigation/maps/human_test_map.yaml"
     )
 
     map_arg = DeclareLaunchArgument(

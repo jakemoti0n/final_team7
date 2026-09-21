@@ -188,7 +188,7 @@ class PersonDetector(Node):
         # 경로 예측을 위한 파라미터 값
         # ==============
         self.prediction_horizon = 2.0
-        self.prediction_dt = 0.5
+        self.prediction_dt = 0.25
 
         # 예측한 경로를 marker로 출력하기 위해 발행
         self.prediction_marker_pub = self.create_publisher(

@@ -54,6 +54,18 @@ private:
   PredictionArray::SharedPtr latest_predictions_;
 
   std::mutex prediction_mutex_;
+
+  // updateBounds()에서 선택한 prediction을
+  // 같은 cycle의 updateCosts()에서도 사용하기 위한 snapshot
+  PredictionArray::SharedPtr cycle_predictions_;
+
+  // 이전 cycle에서 Human cost가 존재했던 영역
+  bool has_previous_bounds_{false};
+
+  double previous_min_x_{0.0};
+  double previous_min_y_{0.0};
+  double previous_max_x_{0.0};
+  double previous_max_y_{0.0};
 };
 
 }  // namespace limbo_navigation

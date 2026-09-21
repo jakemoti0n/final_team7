@@ -81,6 +81,8 @@ ros2 service call /collision_monitor/toggle \
 
 - person_detector.py -> self.reassociate_max_age : tracking된 사람 정보 유지 시간. 3초로 설정했지만 실제 사람들이 많이 교차되는 환경에서 오랜 시간 유지되는 tracking 데이터가 어떤식으로 작동할지 몰라 주시 필요함
 
+- SLAM을 통해 초기 map을 생성할 때 pointclaud에서 잘라오는 3D 데이터의 높이 설정을 수정할 필요 있음. 현재 LiDAR 기준 +20cm 까지 감지하기 때문에 충분히 지나갈 수 있는 높이의 장애물을 못 지나가거나 돌아가는 선택지가 발생
+
 #### YOLO를 통한 사람 구별
 
 ros2 run limbo_perception person_detector \
