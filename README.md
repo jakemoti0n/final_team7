@@ -96,3 +96,14 @@ ros2 topic echo /clicked_point
 
 #### 지정된 wayPoint로 이동하는 명령어
 ros2 run limbo_patrol patrol_node
+
+#### 제 alias 설정!
+alias sb="source ~/.bashrc; echo \"bashrc is reloaded!\""
+alias jazzy="source /opt/ros/jazzy/setup.bash && ros_domain && echo \"ROS2 Jazzy is activated!\""
+alias ros_domain="export ROS_DOMAIN_ID=97; echo \"ROS_DOMAIN_ID=97\""
+alias start_ros="jazzy; source ~/ros2_study/install/setup.bash; echo \"ros2_study is activated!\""
+alias pink="jazzy && source ~/pinky/install/setup.bash && echo \"pinky is acticvated\""
+alias nav="jazzy && source ~/pinky_ws/install/setup.bash && echo \"nav2 is activated\""
+alias limbo="jazzy && goyolo && source ~/limbo/limbo/install/setup.bash && echo \"limbo is activated\""
+alias goyolo="source ~/limbo/venvs/limbo_yolo/bin/activate && echo \"Lets start YOLO\""
+alias build_limbo="cd ~/limbo/limbo && python -m colcon build --symlink-install"
