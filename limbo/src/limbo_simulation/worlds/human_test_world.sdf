@@ -311,7 +311,7 @@
           -->
           <waypoint>
 
-            <time>12.0</time>
+            <time>8.0</time>
 
             <pose>
               0 3 1.0 0 0 1.5708
@@ -323,7 +323,7 @@
           <!-- 위쪽에서 방향 전환 -->
           <waypoint>
 
-            <time>12.5</time>
+            <time>8.5</time>
 
             <pose>
               0 3 1.0 0 0 -1.5708
@@ -335,7 +335,7 @@
           <!-- 다시 아래쪽으로 이동 -->
           <waypoint>
 
-            <time>24.5</time>
+            <time>16.5</time>
 
             <pose>
               0 -3 1.0 0 0 -1.5708
@@ -347,7 +347,7 @@
           <!-- 다음 loop를 위한 방향 복구 -->
           <waypoint>
 
-            <time>25.0</time>
+            <time>17.0</time>
 
             <pose>
               0 -3 1.0 0 0 1.5708

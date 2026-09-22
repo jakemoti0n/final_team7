@@ -66,7 +66,7 @@ def generate_launch_description():
     world_file = os.path.join(
     simulation_pkg,
     "worlds",
-    "human_test_world.sdf"
+    "bookstore_world.sdf"
 )
 
     gz_sim = IncludeLaunchDescription(
