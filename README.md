@@ -10,9 +10,9 @@ python -m colcon build --symlink-install 로 사용해야함. alias 만들어서
 ### 몇개 잊었지만 늦게라도 적어보는 받아야할 pkg 목록
 1. sudo apt install ros-jazzy-cv-bridge python3-venv : openCV 관련 pkg
 2. python3 -m venv --system-site-packages ~/limbo/venvs/limbo_yolo
-source ~/limbo/venvs/limbo_yolo/bin/activate
-pip install -r ~/limbo/requirements.txt : YOLO용 Python 환경 설치
-3. python -m pip install --force-reinstall \
+3. source ~/limbo/venvs/limbo_yolo/bin/activate
+4. pip install -r ~/limbo/requirements.txt : YOLO용 Python 환경 설치
+5. python -m pip install --force-reinstall \
   "numpy==1.26.4" \
   "opencv-python==4.10.0.84" : python과 yolo 충돌 안나게 버전 고정
 
