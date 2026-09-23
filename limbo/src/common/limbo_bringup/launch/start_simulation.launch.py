@@ -241,9 +241,9 @@ def generate_launch_description():
                               description='limbo_navigation/config/localization/<name>.yaml'),
         DeclareLaunchArgument('use_perception', default_value='true',
                               description='false 로 끄면 person_detector·human_layer 없이 반응적 회피만 (대조군·디버깅용)'),
-        DeclareLaunchArgument('map', default_value='human_test_map',
+        DeclareLaunchArgument('map', default_value='human_test_map', # bookstore_map
                               description='limbo_navigation/maps/<name>.yaml'),
-        DeclareLaunchArgument('world', default_value='human_test_world',
+        DeclareLaunchArgument('world', default_value='human_test_world', # bookstore_world
                               description='limbo_simulation/worlds/<name>.sdf'),
 
         # 바로 Gazebo 실행

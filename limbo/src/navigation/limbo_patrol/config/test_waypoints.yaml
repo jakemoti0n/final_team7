@@ -1,0 +1,80 @@
+waypoints:
+
+  - name: A
+    type: pass
+    x: 5.8353118896484375
+    y: 6.3149919509887695
+    yaw: 0.0
+    wait_sec: 0
+
+  - name: B
+    type: pass
+    x: 1.5900347232818604
+    y: 6.105988502502441
+    yaw: 0.0
+    wait_sec: 0
+
+  - name: C
+    type: stop
+    x: 0.695149838924408
+    y: 1.013081431388855
+    yaw: 90
+    wait_sec: 10
+
+  - name: D
+    type: pass
+    x: -5.308406829833984
+    y: 6.058589458465576
+    yaw: 0
+    wait_sec: 0
+
+  - name: E
+    type: pass
+    x: -6.206844806671143
+    y: 0.32255446910858154
+    yaw: 0
+    wait_sec: 0
+
+  - name: F
+    type: pass
+    x: -1.920595407485962
+    y: -0.09749388694763184
+    yaw: 0
+    wait_sec: 0
+
+  - name: G
+    type: stop
+    x: -5.949109077453613
+    y: -5.905009746551514
+    yaw: 0
+    wait_sec: 0
+
+  - name: H
+    type: pass
+    x: -0.07958000898361206
+    y: -1.9494022130966187
+    yaw: 0
+    wait_sec: 0
+
+  - name: I
+    type: pass
+    x: 5.427760601043701
+    y: -6.128470420837402
+    yaw: 0
+    wait_sec: 0
+
+  - name: J
+    type: pass
+    x: 5.764880180358887
+    y: 0.006017088890075684
+    yaw: 0
+    wait_sec: 0
+
+  - name: K
+    type: stop
+    x: 0.18000823259353638
+    y: -0.09501504898071289
+    yaw: 0
+    wait_sec: 0
+
+

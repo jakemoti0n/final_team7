@@ -64,7 +64,7 @@ def generate_launch_description():
         value_type=str,
     )
 
-    # world:=<이름>  (worlds/<이름>.sdf)  기본 human_test_world
+    # world:=<이름>  (worlds/<이름>.sdf)
     world_file = PathJoinSubstitution([
         simulation_pkg, "worlds",
         PythonExpression(["'", LaunchConfiguration("world"), ".sdf'"]),
@@ -123,7 +123,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        DeclareLaunchArgument("world", default_value="human_test_world", description="worlds/<name>.sdf"),
+        DeclareLaunchArgument("world", default_value="human_test_world", description="worlds/<name>.sdf"), # bookstore_world
         set_gz_resource_path,
         bookstore_resource_path,
         gz_sim,

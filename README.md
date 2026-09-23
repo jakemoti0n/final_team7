@@ -15,6 +15,7 @@ python -m colcon build --symlink-install 로 사용해야함. alias 만들어서
 5. python -m pip install --force-reinstall \
   "numpy==1.26.4" \
   "opencv-python==4.10.0.84" : python과 yolo 충돌 안나게 버전 고정
+6. sudo apt install ros-jazzy-robot-self-filter # self-filter 설치
 
 #### 통합 실행 명령어
 

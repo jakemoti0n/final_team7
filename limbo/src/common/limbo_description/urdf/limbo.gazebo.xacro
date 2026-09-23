@@ -40,14 +40,14 @@
       <max_linear_velocity>0.6</max_linear_velocity>
       <min_linear_velocity>-0.6</min_linear_velocity>
 
-      <max_angular_velocity>0.8</max_angular_velocity>
-      <min_angular_velocity>-0.8</min_angular_velocity>
+      <max_angular_velocity>1.8</max_angular_velocity>
+      <min_angular_velocity>-1.8</min_angular_velocity>
 
       <max_linear_acceleration>1.0</max_linear_acceleration>
       <min_linear_acceleration>-1.0</min_linear_acceleration>
 
-      <max_angular_acceleration>1.5</max_angular_acceleration>
-      <min_angular_acceleration>-1.5</min_angular_acceleration>
+      <max_angular_acceleration>3.0</max_angular_acceleration>
+      <min_angular_acceleration>-3.0</min_angular_acceleration>
     </plugin>
 
     <plugin filename="gz-sim-joint-state-publisher-system"

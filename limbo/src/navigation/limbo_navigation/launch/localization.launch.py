@@ -48,7 +48,7 @@ def _launch_setup(context, *args, **kwargs):
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument('map', default_value='human_test_map',
+        DeclareLaunchArgument('map', default_value='human_test_map', # bookstore_map
                               description='maps/<name>.yaml 의 이름 또는 yaml 전체 경로'),
         DeclareLaunchArgument('localization', default_value='amcl',
                               description='config/localization/<name>.yaml'),
