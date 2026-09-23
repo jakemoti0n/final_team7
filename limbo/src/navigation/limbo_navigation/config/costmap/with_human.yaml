@@ -1,0 +1,28 @@
+# ============================================================
+# 인지 파트 오버레이 (팀원 소유)
+# costmap/base.yaml 위에 겹쳐서 사람 예측 경로(human_layer)를 반영한다.
+# use_perception:=true 일 때만 로드됨. 컨트롤러·플래너와 무관.
+#
+# 규칙: 여기에는 "인지 기능 때문에 필요한" costmap 값만 둔다.
+#       로봇 전체 정책(inflation 등)은 주행 담당과 협의해 base.yaml에 반영.
+# ============================================================
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      # 사람 예측 경로(수 m 앞)를 담기 위해 local costmap을 넓힘
+      width: 8
+      height: 8
+
+      # 리스트는 병합이 아니라 통째로 덮어쓰기됨 → 전체 목록을 다시 적어야 함
+      plugins: ["static_layer", "stvl_layer", "human_layer", "inflation_layer"]
+
+      human_layer:
+        plugin: "limbo_navigation::HumanLayer"
+        enabled: true
+
+      stvl_layer:
+        # 사람을 더 멀리서부터 관측하기 위해 mark 범위 확장
+        mid360_mark:
+          obstacle_range: 4.5
+        rgbd_mark:
+          obstacle_range: 4.5

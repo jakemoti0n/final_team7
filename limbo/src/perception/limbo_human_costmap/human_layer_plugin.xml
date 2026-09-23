@@ -1,0 +1,14 @@
+<library path="human_layer">
+
+  <class
+    name="limbo_navigation::HumanLayer"
+    type="limbo_navigation::HumanLayer"
+    base_class_type="nav2_costmap_2d::Layer">
+
+    <description>
+      Human prediction costmap layer for Limbo
+    </description>
+
+  </class>
+
+</library>

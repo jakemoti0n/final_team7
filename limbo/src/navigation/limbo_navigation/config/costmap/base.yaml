@@ -1,0 +1,239 @@
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 5.0
+      publish_frequency: 2.0
+      global_frame: odom
+      robot_base_frame: base_link
+      footprint: "[[0.225, 0.225], [0.225, -0.225], [-0.225, -0.225], [-0.225, 0.225]]"
+      footprint_padding: 0.02
+      rolling_window: true
+      width: 4
+      height: 4
+      resolution: 0.05
+      use_maximum: true
+      plugins: ["static_layer", "stvl_layer", "inflation_layer"]
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 5.0
+        inflation_radius: 0.40
+
+      stvl_layer:
+        plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"
+
+        enabled: true
+
+        # ------------------------------------------
+        # 시간 기반 obstacle 제거
+        # ------------------------------------------
+
+        # linear decay
+        decay_model: 0
+
+        # 약 1초 동안 재관측되지 않은 voxel을 decay
+        voxel_decay: 1.0
+
+        voxel_size: 0.05
+
+        # local costmap이므로 unknown 공간을 별도로 유지하지 않음
+        track_unknown_space: false
+
+        mark_threshold: 0
+
+        update_footprint_enabled: true
+
+        # 기존 costmap과 max 방식으로 결합
+        combination_method: 1
+
+        origin_z: 0.0
+
+        # 디버깅 중에는 켜두기
+        publish_voxel_map: true
+
+        transform_tolerance: 0.3
+
+        mapping_mode: false
+
+        map_save_duration: 60.0
+
+
+        # ==================================================
+        # Observation Sources
+        # ==================================================
+
+        observation_sources: "mid360_mark mid360_clear rgbd_mark rgbd_clear"
+
+
+        # ==================================================
+        # MID-360 MARK
+        # 실제 장애물 voxel 생성
+        # ==================================================
+
+        mid360_mark:
+
+          data_type: PointCloud2
+
+          topic: /mid360/points_filtered
+
+          marking: true
+          clearing: false
+
+          obstacle_range: 3.0
+
+          min_obstacle_height: 0.03
+          max_obstacle_height: 0.80
+
+          expected_update_rate: 0.0
+          observation_persistence: 0.0
+
+          inf_is_valid: false
+
+          filter: "voxel"
+
+          voxel_min_points: 0
+
+          clear_after_reading: true
+
+
+        # ==================================================
+        # MID-360 CLEAR
+        # MID-360 시야 + temporal clearing
+        # ==================================================
+
+        mid360_clear:
+
+          enabled: true
+
+          data_type: PointCloud2
+
+          topic: /mid360/points_filtered
+
+          marking: false
+          clearing: true
+
+          # LiDAR 유효 범위
+          min_z: 0.10
+          max_z: 20.0
+
+          # MID-360:
+          # vertical FOV = -7° ~ +52°
+          # 전체 약 59° = 1.03 rad
+          vertical_fov_angle: 1.03
+
+          # 중심은 약 +22.5°
+          vertical_fov_offset: 0.393
+
+          # 360°
+          horizontal_fov_angle: 6.283
+
+          vertical_fov_padding: 0.05
+
+          # 3D LiDAR
+          model_type: 1
+
+          decay_acceleration: 5.0
+
+
+        # ==================================================
+        # RGB-D MARK
+        # ==================================================
+
+        rgbd_mark:
+
+          data_type: PointCloud2
+
+          topic: /rgbd_camera/points
+
+          marking: true
+          clearing: false
+
+          obstacle_range: 2.5
+
+          min_obstacle_height: 0.02
+          max_obstacle_height: 0.80
+
+          expected_update_rate: 0.0
+          observation_persistence: 0.0
+
+          inf_is_valid: false
+
+          filter: "voxel"
+
+          voxel_min_points: 0
+
+          clear_after_reading: true
+
+
+        # ==================================================
+        # RGB-D CLEAR
+        # ==================================================
+
+        rgbd_clear:
+
+          enabled: true
+
+          data_type: PointCloud2
+
+          topic: /rgbd_camera/points
+
+          marking: false
+          clearing: true
+
+          min_z: 0.10
+          max_z: 5.0
+
+          # 현재 Gazebo RGB-D horizontal_fov = 1.25
+          horizontal_fov_angle: 1.25
+
+          # 우선 일반적인 depth camera 값으로 시작
+          vertical_fov_angle: 0.95
+
+          # Depth camera model
+          model_type: 0
+
+          decay_acceleration: 5.0
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        enabled: true
+        map_topic: /map
+        map_subscribe_transient_local: True
+        subscribe_to_updates: true
+        transform_tolerance: 0.2
+      always_send_full_costmap: True
+
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+
+      global_frame: map
+      robot_base_frame: base_link
+      use_sim_time: true
+
+      footprint: "[[0.225, 0.225], [0.225, -0.225], [-0.225, -0.225], [-0.225, 0.225]]"
+      footprint_padding: 0.02
+
+      resolution: 0.05
+      track_unknown_space: true
+
+      plugins: ["static_layer", "inflation_layer"]
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: true
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        enabled: true
+
+        inflation_radius: 0.35
+        cost_scaling_factor: 4.0
+
+# The yaml_filename does not need to be specified since it going to be set by defaults in launch.
+# If you'd rather set it in the yaml, remove the default "map" value in the tb3_simulation_launch.py
+# file & provide full path to map below. If CLI map configuration or launch default is provided, that will be used.
+# map_server:
+#   ros__parameters:
+#     yaml_filename: ""
+
