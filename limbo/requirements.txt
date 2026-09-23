@@ -1,0 +1,14 @@
+# limbo_perception(YOLO)용 venv 의존성
+# 사용법 (README 참고):
+#   python3 -m venv --system-site-packages ~/limbo/venvs/limbo_yolo
+#   source ~/limbo/venvs/limbo_yolo/bin/activate
+#   pip install --no-cache-dir -r requirements.txt
+#
+# torch는 CPU 빌드. NVIDIA 드라이버가 있는 PC는 --index-url 줄을 지우고 설치하면 CUDA 빌드로 받아짐.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.0
+torchvision==0.29.0
+ultralytics==8.4.158
+# ROS cv_bridge(numpy 1.x 기준 빌드)와 충돌 방지를 위해 고정
+numpy==1.26.4
+opencv-python==4.10.0.84

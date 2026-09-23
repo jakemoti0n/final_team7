@@ -1,0 +1,15 @@
+# ============================================================
+# 로봇 환경 오버레이 — 실물 로봇 (아직 미작성)
+# 실물 로봇 PC 환경이 정해지면 시뮬과 다른 값만 여기 적는다. 예:
+#
+# local_costmap:
+#   local_costmap:
+#     ros__parameters:
+#       stvl_layer:
+#         mid360_mark:
+#           topic: /livox/lidar        # 실제 LiDAR 드라이버 토픽
+# velocity_smoother:
+#   ros__parameters:
+#     max_velocity: [0.4, 0.0, 0.6]    # 실물 안전 속도
+# ============================================================
+{}
