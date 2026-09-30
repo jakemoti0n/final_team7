@@ -1,3 +1,0 @@
-[submodule "src/robot_self_filter"]
-	path = src/robot_self_filter
-	url = https://github.com/leggedrobotics/robot_self_filter.git
