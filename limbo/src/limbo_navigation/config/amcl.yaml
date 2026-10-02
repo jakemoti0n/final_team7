@@ -31,8 +31,14 @@ amcl:
     update_min_d: 0.10
     update_min_a: 0.10
 
-    # 초기 pose는 RViz에서 줄 것이므로 false
-    set_initial_pose: false
+    # 초기 pose가 없으면 map→odom TF가 안 나와 Nav2 bringup이 시간 초과된다.
+    # 시뮬레이션 스폰 위치(map 원점, 0°)로 시작하고, 다른 위치면 RViz 2D Pose Estimate로 덮어쓴다.
+    set_initial_pose: true
+    initial_pose:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      yaw: 0.0
 
     # 노이즈 계수 (초기 기본값)
     alpha1: 0.2
