@@ -5,7 +5,8 @@
 
 ### colcon build 할 때 주의 사항!!!!!
 limbo_perception은 yolo를 통해 사람 인식하려고 만든 패키지인데 얘는 새로 받은 yolo용 python 써야해서 이제부터 빌드할 때
-python -m colcon build --symlink-install 로 사용해야함. alias 만들어서 사용할 것을 추천...ㅠ
+/usr/bin/python3 -m colcon build --symlink-install
+로 사용해야함. alias 만들어서 사용할 것을 추천...ㅠ
 
 ### 몇개 잊었지만 늦게라도 적어보는 받아야할 pkg 목록
 1. sudo apt install ros-jazzy-cv-bridge python3-venv : openCV 관련 pkg
@@ -15,6 +16,7 @@ python -m colcon build --symlink-install 로 사용해야함. alias 만들어서
 5. python -m pip install --force-reinstall \
   "numpy==1.26.4" \
   "opencv-python==4.10.0.84" : python과 yolo 충돌 안나게 버전 고정
+6. sudo apt install ros-jazzy-robot-self-filter # self-filter 설치
 
 #### 통합 실행 명령어
 
