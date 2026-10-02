@@ -77,7 +77,8 @@ def generate_launch_description():
                 "gz_sim.launch.py",
             )
         ),
-        launch_arguments={"gz_args": world_file}.items(),
+        # -r 없이 띄우면 일시정지 상태로 시작해 sim time과 TF가 멈추고 Nav2 bringup이 시간 초과된다
+        launch_arguments={"gz_args": f"-r {world_file}"}.items(),
     )
 
     robot_state_publisher = Node(
