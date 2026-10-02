@@ -221,6 +221,7 @@ def generate_launch_description():
         name='person_detector',
         output='screen',
         parameters=[
+            os.path.join(limbo_perception_dir, 'config', 'person_detector.yaml'),
             {'use_sim_time': True}
         ]
     )
