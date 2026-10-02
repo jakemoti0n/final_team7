@@ -1,10 +1,13 @@
 import math
+import json
 
 import rclpy
 
 import time
 
 from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import String
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
 from nav2_simple_commander.robot_navigator import (
     BasicNavigator,
@@ -100,133 +103,179 @@ def create_waypoint(
     return pose
 
 
+def publish_status(publisher, state, target='', detail=''):
+    message = String()
+    message.data = json.dumps({
+        'state': state,
+        'target': target,
+        'detail': detail,
+    }, ensure_ascii=False)
+    publisher.publish(message)
+
+
+def nav2_failure_detail(navigator):
+    action = navigator.result_future.result() if navigator.result_future else None
+    result = action.result if action else None
+    message = getattr(result, 'error_msg', '')
+    code = getattr(result, 'error_code', None)
+    if message:
+        return f'Nav2 이동 실패 (코드 {code}): {message}'
+    return f'Nav2 이동 실패 (코드 {code})' if code is not None else 'Nav2 이동이 실패했습니다'
+
+
 def main(args=None):
 
     rclpy.init(args=args)
 
     navigator = BasicNavigator()
 
-    print('Waiting for Nav2...')
+    status_qos = QoSProfile(depth=1)
+    status_qos.reliability = ReliabilityPolicy.RELIABLE
+    status_qos.durability = DurabilityPolicy.TRANSIENT_LOCAL
+    status_pub = navigator.create_publisher(
+        String, 'limbo/patrol_status', status_qos
+    )
 
-    navigator.waitUntilNav2Active()
+    try:
+        print('Waiting for Nav2...')
+        publish_status(status_pub, 'waiting', detail='Nav2 활성화 대기 중')
 
-    print('Nav2 is active')
+        navigator.waitUntilNav2Active()
 
-    waypoint_configs = load_waypoints()
+        print('Nav2 is active')
 
-    if not waypoint_configs or waypoint_configs[-1]['type'] != 'stop':
-        raise ValueError('마지막 waypoint는 stop이어야 합니다')
+        waypoint_configs = load_waypoints()
 
-    print('Starting waypoint mission')
+        if not waypoint_configs or waypoint_configs[-1]['type'] != 'stop':
+            raise ValueError('마지막 waypoint는 stop이어야 합니다')
 
-    route_segment = []
+        print('Starting waypoint mission')
 
-    mission_succeeded = True
+        route_segment = []
 
-    for waypoint_config in waypoint_configs:
+        mission_succeeded = True
 
-        name = waypoint_config['name']
+        for waypoint_config in waypoint_configs:
 
-        # =========================================
-        # 현재 waypoint의 PoseStamped 생성
-        # =========================================
+            name = waypoint_config['name']
 
-        waypoint = create_waypoint(
-            navigator,
-            x=waypoint_config['x'],
-            y=waypoint_config['y'],
-            yaw=math.radians(waypoint_config['yaw'])
-        )
+            # =========================================
+            # 현재 waypoint의 PoseStamped 생성
+            # =========================================
 
-        # 현재 waypoint를 경로에 추가
-        route_segment.append(waypoint)
-
-        # =========================================
-        # Nav2에게 이 waypoint까지 이동 명령
-        # =========================================
-
-        if waypoint_config['type'] == 'pass' :
-            continue
-
-        if waypoint_config['type'] == 'stop' :
-
-            print(
-                f'Moving to waypoint {name}'
+            waypoint = create_waypoint(
+                navigator,
+                x=waypoint_config['x'],
+                y=waypoint_config['y'],
+                yaw=math.radians(waypoint_config['yaw'])
             )
 
-            accepted =navigator.goThroughPoses(
-                route_segment
-            )
+            # 현재 waypoint를 경로에 추가
+            route_segment.append(waypoint)
 
-            if not accepted:
-                print(f'Navigation goal rejected: {name}')
-                mission_succeeded = False
-                break
+            # =========================================
+            # Nav2에게 이 waypoint까지 이동 명령
+            # =========================================
 
-            # 주행 완료까지 기다린다.
-            while not navigator.isTaskComplete():
+            if waypoint_config['type'] == 'pass' :
+                continue
 
-                time.sleep(0.1)
-
-
-            result = navigator.getResult()
-
-
-            if result == TaskResult.SUCCEEDED:
+            if waypoint_config['type'] == 'stop' :
 
                 print(
-                    f"Arrived at "
-                    f"{waypoint_config['name']}"
+                    f'Moving to waypoint {name}'
+                )
+                publish_status(status_pub, 'moving', name, '목표 지점으로 이동 중')
+
+                accepted =navigator.goThroughPoses(
+                    route_segment
                 )
 
+                if not accepted:
+                    print(f'Navigation goal rejected: {name}')
+                    publish_status(status_pub, 'error', name, 'Nav2가 이동 목표를 거부했습니다')
+                    mission_succeeded = False
+                    break
 
-            elif result == TaskResult.CANCELED:
-
-                print('Navigation canceled')
-                mission_succeeded = False
-                break
-
-
-            elif result == TaskResult.FAILED:
-
-                print('Navigation failed')
-                mission_succeeded = False
-                break
-
-            else:
-                print(f'Navigation {result}')
-                mission_succeeded = False
-                break
-
-            # -------------------------------------
-            # 서비스 지점 대기
-            # -------------------------------------
-
-            wait_sec = waypoint_config['wait_sec']
-
-            if wait_sec > 0:
-
-                print(
-                    f'Waiting for {wait_sec} seconds'
-                )
-
-                time.sleep(
-                    wait_sec
-                )
+                # 주행 완료까지 기다린다. Nav2 복구 횟수는 상태 표시에만 사용한다.
+                last_recoveries = 0
+                while not navigator.isTaskComplete():
+                    feedback = navigator.getFeedback()
+                    if feedback and feedback.number_of_recoveries > last_recoveries:
+                        last_recoveries = feedback.number_of_recoveries
+                        publish_status(
+                            status_pub, 'recovering', name,
+                            f'Nav2 복구 시도 {last_recoveries}회; 이동 상태를 확인하세요'
+                        )
+                    time.sleep(0.1)
 
 
-            # 이번 구간은 끝났으므로 초기화
-            route_segment = []
+                result = navigator.getResult()
 
-    if mission_succeeded:
-        print('Patrol mission completed')
-        print('Waypoint mission succeeded')
-    else:
-        print('Patrol mission failed')
 
-    navigator.destroyNode()
+                if result == TaskResult.SUCCEEDED:
 
-    rclpy.shutdown()
+                    print(
+                        f"Arrived at "
+                        f"{waypoint_config['name']}"
+                    )
+
+
+                elif result == TaskResult.CANCELED:
+
+                    print('Navigation canceled')
+                    publish_status(status_pub, 'error', name, '이동이 취소되었습니다')
+                    mission_succeeded = False
+                    break
+
+
+                elif result == TaskResult.FAILED:
+
+                    print('Navigation failed')
+                    publish_status(status_pub, 'error', name, nav2_failure_detail(navigator))
+                    mission_succeeded = False
+                    break
+
+                else:
+                    print(f'Navigation {result}')
+                    publish_status(status_pub, 'error', name, f'예상하지 못한 이동 결과: {result}')
+                    mission_succeeded = False
+                    break
+
+                # -------------------------------------
+                # 서비스 지점 대기
+                # -------------------------------------
+
+                wait_sec = waypoint_config['wait_sec']
+
+                if wait_sec > 0:
+                    publish_status(status_pub, 'paused', name, f'{wait_sec}초 동안 대기 중')
+
+                    print(
+                        f'Waiting for {wait_sec} seconds'
+                    )
+
+                    time.sleep(
+                        wait_sec
+                    )
+
+
+                # 이번 구간은 끝났으므로 초기화
+                route_segment = []
+
+        if mission_succeeded:
+            print('Patrol mission completed')
+            print('Waypoint mission succeeded')
+            publish_status(status_pub, 'completed', detail='모든 지점을 순찰했습니다')
+        else:
+            print('Patrol mission failed')
+
+    except Exception as error:
+        publish_status(status_pub, 'error', detail=str(error))
+        raise
+    finally:
+        navigator.destroyNode()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':
