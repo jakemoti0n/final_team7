@@ -115,6 +115,35 @@
   </gazebo>
 
   <!-- ================================ -->
+  <!-- MID-360 내장 IMU                  -->
+  <!-- ================================ -->
+
+  <!--
+    실제 MID-360에 들어 있는 6축 IMU(자이로+가속도)를 같은 위치에 둔다.
+    바퀴 odom의 회전 오차를 EKF로 보정하는 데 쓴다. 지자기는 없어서 절대 방향은 주지 않는다.
+  -->
+  <gazebo reference="mid360_link">
+    <sensor name="mid360_imu" type="imu">
+      <topic>imu</topic>
+      <gz_frame_id>mid360_link</gz_frame_id>
+      <update_rate>200</update_rate>
+      <always_on>true</always_on>
+      <imu>
+        <angular_velocity>
+          <x><noise type="gaussian"><mean>0</mean><stddev>0.005</stddev><bias_mean>0.0005</bias_mean><bias_stddev>0.0001</bias_stddev></noise></x>
+          <y><noise type="gaussian"><mean>0</mean><stddev>0.005</stddev><bias_mean>0.0005</bias_mean><bias_stddev>0.0001</bias_stddev></noise></y>
+          <z><noise type="gaussian"><mean>0</mean><stddev>0.005</stddev><bias_mean>0.0005</bias_mean><bias_stddev>0.0001</bias_stddev></noise></z>
+        </angular_velocity>
+        <linear_acceleration>
+          <x><noise type="gaussian"><mean>0</mean><stddev>0.02</stddev><bias_mean>0.01</bias_mean><bias_stddev>0.001</bias_stddev></noise></x>
+          <y><noise type="gaussian"><mean>0</mean><stddev>0.02</stddev><bias_mean>0.01</bias_mean><bias_stddev>0.001</bias_stddev></noise></y>
+          <z><noise type="gaussian"><mean>0</mean><stddev>0.02</stddev><bias_mean>0.01</bias_mean><bias_stddev>0.001</bias_stddev></noise></z>
+        </linear_acceleration>
+      </imu>
+    </sensor>
+  </gazebo>
+
+  <!-- ================================ -->
   <!-- RGB-D Camera Simulation          -->
   <!-- ================================ -->
 
