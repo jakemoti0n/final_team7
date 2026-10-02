@@ -1,9 +1,9 @@
 import os
 
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command
+from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 
 from launch_ros.actions import Node
 
@@ -75,7 +75,10 @@ def generate_launch_description():
                 'launch',
                 'gazebo.launch.py'
             )
-        )
+        ),
+        launch_arguments={
+            'world': LaunchConfiguration('world'),
+        }.items()
     )
 
 
@@ -170,6 +173,9 @@ def generate_launch_description():
         ),
         launch_arguments={
             'use_sim_time': 'true',
+            'map': PathJoinSubstitution(
+                [limbo_navigation_dir, 'maps', [LaunchConfiguration('map'), '.yaml']]
+            ),
         }.items()
     )
 
@@ -235,6 +241,10 @@ def generate_launch_description():
     # ============================================================
 
     return LaunchDescription([
+
+        # 월드와 지도는 같은 건물끼리 짝지어 바꾼다 (예: world:=aischool_2f map:=aischool_2f_map)
+        DeclareLaunchArgument('world', default_value='human_test_world'),
+        DeclareLaunchArgument('map', default_value='human_test_map'),
 
         # 바로 Gazebo 실행
         gazebo,
