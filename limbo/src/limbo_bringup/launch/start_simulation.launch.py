@@ -127,6 +127,15 @@ def generate_launch_description():
     # /scan
     # ============================================================
 
+    # 바퀴 odom(전진 속도) + IMU(회전 속도)를 합쳐 odom → base_footprint TF를 낸다
+    ekf = Node(
+        package='robot_localization',
+        executable='ekf_node',
+        name='ekf_filter_node',
+        output='screen',
+        parameters=[os.path.join(limbo_navigation_dir, 'config', 'ekf.yaml')]
+    )
+
     pointcloud_to_laserscan = Node(
         package='pointcloud_to_laserscan',
         executable='pointcloud_to_laserscan_node',
@@ -248,6 +257,7 @@ def generate_launch_description():
 
         # 바로 Gazebo 실행
         gazebo,
+        ekf,
 
         # Gazebo sensor / TF 준비 대기
         TimerAction(

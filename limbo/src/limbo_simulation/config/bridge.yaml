@@ -18,11 +18,7 @@
   gz_type_name: "gz.msgs.Odometry"
   direction: GZ_TO_ROS
 
-- ros_topic_name: "tf"
-  gz_topic_name: "tf"
-  ros_type_name: "tf2_msgs/msg/TFMessage"
-  gz_type_name: "gz.msgs.Pose_V"
-  direction: GZ_TO_ROS
+# odom → base_footprint TF는 EKF(ekf.yaml)가 낸다. diff-drive TF까지 브리지하면 TF가 두 곳에서 나와 튄다.
 
 - ros_topic_name: "imu"
   gz_topic_name: "imu"
