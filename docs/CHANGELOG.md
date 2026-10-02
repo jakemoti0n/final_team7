@@ -79,7 +79,7 @@ build_limbo
 - Nav2 파라미터를 축별 yaml 조합에서 `limbo_navigation/config/nav2_params.yaml` 한 파일로 되돌렸음
 - `human_layer`를 `limbo_human_costmap`에서 `limbo_navigation`으로 옮기고, 오래된 예측을 버리는 `max_prediction_age` 검사를 넣었음
 - person_detector가 RGB와 depth를 `ApproximateTimeSynchronizer`로 같은 시점끼리 묶고, TF를 이미지 시각으로 조회하게 바꿨음. 실행기를 `MultiThreadedExecutor`(2스레드)로 바꿨음
-- patrol_node에 충돌 상태 감시(watchdog)를 추가했음. 수정 전 파일은 `.codex-backups/`에 남아 있음
+- patrol_node를 stuck 재시도 로직이 없는 단순 버전(232줄)으로 바꿨음. stuck 로직이 있던 이전 버전은 `.codex-backups/`에 백업으로 남아 있음
 - `limbo_patrol/config/test_waypoints.yaml` 추가
 - `limbo/requirements.txt`, `limbo/README.md`를 지우고 루트 `README.md`를 정리했음
 
@@ -90,7 +90,7 @@ build_limbo
 - YOLO용 `requirements.txt`, 상세 `limbo/README.md`(주행·인지 투트랙 가이드) 추가
 - (ktj) Gazebo diff-drive 각속도·각가속도 한계를 Nav2 값(1.8 / 3.0)에 맞췄음. MPPI 사람 회피 오버레이를 `mppi.yaml`로 흡수했음
 - (ktj) `docs/PROJECT.md`(프로젝트 개요와 할 일) 추가
-- (kkh, 9/30에 병합) patrol_node에 stuck 감지 후 재시도 로직 추가, `human_test_world` 걷는 사람을 1명에서 10명으로 늘림, MPPI 값 조정
+- (kkh) patrol_node에 stuck 감지 후 재시도 로직 추가(9/30 PR #5에서 단순 버전으로 다시 바뀜), `human_test_world` 걷는 사람을 1명에서 10명으로 늘림, MPPI 값 조정
 
 ## 2026-09-22 1차 테스트
 
