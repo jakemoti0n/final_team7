@@ -1,0 +1,45 @@
+{
+  "checks": {
+    "full_10_minutes": true,
+    "qos_all_four_matched": true,
+    "independent_v1_validation": true,
+    "bounded_payload": true,
+    "normal_receive_rates": true,
+    "stopped_camera": true,
+    "stopped_all": true,
+    "zero_speed_rotation": true,
+    "invalid_odom": true,
+    "clock_pause_and_reversal": true,
+    "latest_after_real_server_restart": true,
+    "continued_collection_during_errors": true,
+    "normal_heartbeat_within_2s": true,
+    "shutdown_bounded": true,
+    "steady_rss_growth_under_16mib": true
+  },
+  "all_passed": true,
+  "measurements": {
+    "samples": 600,
+    "baseline_publisher_cpu_mean": 4.266666666666667,
+    "baseline_publisher_rss_mean": 73187054.93333334,
+    "publisher_cpu_mean": 5.1065,
+    "bridge_cpu_mean": 18.964166666666667,
+    "bridge_rss_min": 91197440,
+    "bridge_rss_max": 94330880,
+    "bridge_rss_first_steady": 91340800,
+    "bridge_rss_last": 92819456,
+    "receive_hz_mean": {
+      "odom": 19.6475,
+      "lidar_raw": 19.765625,
+      "lidar_filtered": 19.788125,
+      "camera_raw": 19.806875
+    },
+    "max_payload_bytes": 1000,
+    "all_topics_matched": true
+  },
+  "shutdown_s": 0.21409054001560435,
+  "unique_snapshots": 487,
+  "normal_max_heartbeat_gap_s": 1.010453608003445,
+  "local_callback_to_snapshot_ms_max": 210.0,
+  "local_callback_to_snapshot_ms_mean": 28.0,
+  "bytes_accepted": 482813
+}

@@ -1,0 +1,10 @@
+{
+  "robot_id": "LIMBO-01",
+  "bridge_delay_s": 3.0,
+  "bridge_disconnect_s": 10.0,
+  "topic_delay_s": {"odom": 3.0, "lidar_raw": 3.0, "lidar_filtered": 3.0, "camera_raw": 3.0},
+  "browser_delay_s": 3.0,
+  "linear_threshold_mps": 0.05,
+  "angular_threshold_radps": 0.05,
+  "alert_limit": 100
+}

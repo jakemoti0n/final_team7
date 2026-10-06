@@ -1,0 +1,27 @@
+robot_id: LIMBO-01
+server_url: http://127.0.0.1:8000
+send_interval_s: 1.0
+request_timeout_s: 1.0
+source_clock: ros_sim
+# v1 fixes the frequency window at 5 s and retry delays at 1/2/4/8/10 s.
+topics:
+  odom:
+    name: /odom
+    reliability: best_effort
+    durability: volatile
+    depth: 1
+  lidar_raw:
+    name: /mid360/points
+    reliability: best_effort
+    durability: volatile
+    depth: 1
+  lidar_filtered:
+    name: /mid360/points_filtered
+    reliability: best_effort
+    durability: volatile
+    depth: 1
+  camera_raw:
+    name: /rgbd_camera/image
+    reliability: best_effort
+    durability: volatile
+    depth: 1
