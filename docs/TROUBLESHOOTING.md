@@ -108,6 +108,14 @@
 - **확인**: bag 재생 기준 프레임당 CPU −44%, 처리 속도 8.7 → 13.6Hz. 시뮬레이션 중 775% → 116%, 시스템 idle 17% → 48%
 - **참고**: README에 "노트북 과열로 collision_monitor `source_timeout`을 2.0으로 설정"이라는 메모가 있었는데, 이 문제가 과열의 원인이었을 가능성이 큼
 
+### Python 노드가 하는 일 없이 CPU를 많이 씀 (`/clock` 처리) — 2026-10-06
+- **증상**: `wheel_slip_monitor`가 0.5초마다 한 번 계산하는데 CPU 약 50%. 스레드는 30개지만 메인 스레드 하나만 바쁨
+- **원인**: `use_sim_time: True`면 노드가 `/clock`을 구독하는데, Gazebo는 물리 스텝(1ms)마다 시계를 내서 약 740Hz로 들어옴. Python(rclpy)이 이걸 전부 처리하느라 CPU를 씀
+- **해결**: 이 노드는 스캔 메시지끼리의 시각만 비교하고 자기 시계를 쓰지 않아서 launch에서 `use_sim_time: False`로 실행 (`14d11dc`)
+- **확인**: 같은 노드를 나란히 띄워 비교: sim time 켬 50.3%, 끔 5.0%. 판단 결과는 같음
+- **참고**: sim time이 꼭 필요한 Python 노드(person_detector)는 이 방법을 못 씀 → `KNOWN_ISSUES.md`
+- **측정할 때 주의**: Gazebo가 일시정지 상태면 센서가 렌더링을 안 해 CPU가 낮게 나옴. 측정 전에 `gz topic -e -t /stats -n 1`에 `paused: true`가 없는지, `/scan`이 나오는지 확인할 것
+
 ### 리팩터링 전후로 동작이 같은지 확인하기 — 2026-10-02
 - **방법**: 카메라 입력(RGB, depth, camera_info, TF, clock)만 rosbag으로 녹화하고, 전후 노드에 같은 bag을 0.5배속 + `use_sim_time:=true`로 재생해 출력 토픽을 비교. 도구는 `~/limbo_bags/` (`capture.sh`, `compare.py`)
 - **주의**: 녹화기를 강제 종료하면 `metadata.yaml`이 안 생김 → `ros2 bag reindex <bag> -s mcap`으로 복구. 재색인한 bag은 파일 순서와 받은 순서가 달라서, 메시지를 받은 시각 기준으로 프레임을 묶어야 함
