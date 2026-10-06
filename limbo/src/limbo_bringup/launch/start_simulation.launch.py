@@ -136,6 +136,20 @@ def generate_launch_description():
         parameters=[os.path.join(limbo_navigation_dir, 'config', 'ekf.yaml')]
     )
 
+    # 바퀴는 도는데 로봇이 안 움직이면(헛돎) Nav2 Goal을 취소해 위치 추정이 틀어지는 걸 막는다
+    wheel_slip_monitor = Node(
+        package='limbo_monitor',
+        executable='wheel_slip_monitor',
+        name='wheel_slip_monitor',
+        output='screen',
+        parameters=[
+            os.path.join(
+                get_package_share_directory('limbo_monitor'),
+                'config', 'wheel_slip_monitor.yaml'),
+            {'use_sim_time': True}
+        ]
+    )
+
     pointcloud_to_laserscan = Node(
         package='pointcloud_to_laserscan',
         executable='pointcloud_to_laserscan_node',
@@ -268,7 +282,7 @@ def generate_launch_description():
         # filtered PointCloud가 나온 뒤 실행
         TimerAction(
             period=6.0,
-            actions=[pointcloud_to_laserscan]
+            actions=[pointcloud_to_laserscan, wheel_slip_monitor]
         ),
 
         # /scan 생성 후 AMCL 실행
