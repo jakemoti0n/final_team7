@@ -146,7 +146,9 @@ def generate_launch_description():
             os.path.join(
                 get_package_share_directory('limbo_monitor'),
                 'config', 'wheel_slip_monitor.yaml'),
-            {'use_sim_time': True}
+            # 스캔 메시지끼리의 시각만 비교하므로 sim time이 필요 없다.
+            # 켜면 Gazebo /clock(약 740Hz)을 Python에서 전부 받느라 CPU를 10배 쓴다 (50% → 5%)
+            {'use_sim_time': False}
         ]
     )
 
