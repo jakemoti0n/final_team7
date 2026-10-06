@@ -111,9 +111,12 @@
 ### Python 노드가 하는 일 없이 CPU를 많이 씀 (`/clock` 처리) — 2026-10-06
 - **증상**: `wheel_slip_monitor`가 0.5초마다 한 번 계산하는데 CPU 약 50%. 스레드는 30개지만 메인 스레드 하나만 바쁨
 - **원인**: `use_sim_time: True`면 노드가 `/clock`을 구독하는데, Gazebo는 물리 스텝(1ms)마다 시계를 내서 약 740Hz로 들어옴. Python(rclpy)이 이걸 전부 처리하느라 CPU를 씀
-- **해결**: 이 노드는 스캔 메시지끼리의 시각만 비교하고 자기 시계를 쓰지 않아서 launch에서 `use_sim_time: False`로 실행 (`14d11dc`)
-- **확인**: 같은 노드를 나란히 띄워 비교: sim time 켬 50.3%, 끔 5.0%. 판단 결과는 같음
-- **참고**: sim time이 꼭 필요한 Python 노드(person_detector)는 이 방법을 못 씀 → `KNOWN_ISSUES.md`
+- **해결**: 메시지에 찍힌 시각만 쓰면 sim time이 필요 없음. launch에서 `use_sim_time: False`로 실행
+  - `wheel_slip_monitor`: 스캔 메시지끼리의 시각만 비교하고 있었음 (`14d11dc`)
+  - `person_detector`: 예측 메시지 시각에만 노드 시계를 쓰고 있어서, 그 사진을 찍은 카메라 이미지 시각으로 바꿈 (`5616520`). human_layer가 예측의 나이를 잴 때도 이쪽이 더 정확함
+- **확인**: 같은 노드를 나란히 띄워 비교
+  - `wheel_slip_monitor`: sim time 켬 50.3%, 끔 5.0%. 판단 결과는 같음
+  - `person_detector`: 139% → 109% (끈 쪽이 프레임을 더 많이 처리하면서도 낮음). 녹화 bag 재생 비교에서 출력 870프레임 동일
 - **측정할 때 주의**: Gazebo가 일시정지 상태면 센서가 렌더링을 안 해 CPU가 낮게 나옴. 측정 전에 `gz topic -e -t /stats -n 1`에 `paused: true`가 없는지, `/scan`이 나오는지 확인할 것
 
 ### 리팩터링 전후로 동작이 같은지 확인하기 — 2026-10-02

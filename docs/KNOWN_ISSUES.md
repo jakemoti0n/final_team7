@@ -31,6 +31,6 @@
 | YOLO를 카메라 15Hz 매 프레임 콜백 안에서 실행, costmap은 5Hz로만 사용 | `limbo_perception/person_detector.py` `image_callback` | 예측의 약 2/3가 쓰이지 않음. 10Hz 타이머로 줄이면 연산 약 1/3 감소 |
 | 주석 이미지를 구독자가 없어도 매 프레임 그림 | 같은 파일 `visualization.draw_detection` 호출부 | 불필요한 CPU |
 | 3D LiDAR 720×60 @10Hz (실제 MID-360의 약 2배) | `limbo_description/urdf/limbo.gazebo.xacro` | 브리지·필터·costmap 전체 부하 |
-| Gazebo `/clock`이 초당 약 740번 발행돼 sim time을 쓰는 Python 노드가 CPU를 많이 씀 | 물리 스텝 1ms마다 시계 발행. `wheel_slip_monitor`는 sim time을 꺼서 50%→5%로 해결했지만, `person_detector`는 예측 메시지 시각에 sim time이 필요해 끌 수 없음 | person_detector CPU의 상당 부분이 시계 처리일 수 있음 | Gazebo 물리 스텝 1ms → 4ms (`/clock` 250Hz, 물리 CPU도 감소). 캐스터·주행 안정성 시험 필요 |
+| `person_detector`의 남는 실행기 스레드가 YOLO가 도는 동안 헛돎 (약 20%p) | `person_detector.py` `main()`의 `MultiThreadedExecutor`. 콜백이 한 그룹이라 동시에 못 도는데 다른 스레드가 "실행할 게 있나"를 계속 확인함 | 그냥 싱글스레드로 바꾸면 YOLO 동안 TF를 못 받아 위치 조회가 0.1초씩 기다려 처리량이 절반(14→6.7Hz). TF 대기를 0으로 하면 처리량은 돌아오지만 TF 실패가 0→54번으로 늘어 동작이 바뀜. tf2 `spin_thread=True`는 오히려 CPU 173%. TF만 따로 받는 구조가 필요 |
 | MID-360 LiDAR가 설정은 10Hz인데 실제 약 5Hz | `limbo.gazebo.xacro` `update_rate`, 측정: `/mid360/points` 5.4Hz | AMCL·costmap 업데이트가 드묾. 시뮬레이션 부하 때문일 수 있음 |
 | 모델 경로가 상대경로 (`yolo11n.pt`) | `person_detector.yaml`의 `yolo.model` | 실행 위치에 따라 모델을 새로 내려받음 |
