@@ -31,7 +31,6 @@
 | YOLO를 카메라 15Hz 매 프레임 콜백 안에서 실행, costmap은 5Hz로만 사용 | `limbo_perception/person_detector.py` `image_callback` | 예측의 약 2/3가 쓰이지 않음. 10Hz 타이머로 줄이면 연산 약 1/3 감소 |
 | 주석 이미지를 구독자가 없어도 매 프레임 그림 | 같은 파일 `visualization.draw_detection` 호출부 | 불필요한 CPU |
 | 3D LiDAR 720×60 @10Hz (실제 MID-360의 약 2배) | `limbo_description/urdf/limbo.gazebo.xacro` | 브리지·필터·costmap 전체 부하 |
-| 아무도 구독하지 않는 `mid360` LaserScan 브리지 | `limbo_simulation/config/bridge.yaml` | 불필요한 변환 |
 | `wheel_slip_monitor`가 CPU 약 54% 사용 | `limbo_monitor/wheel_slip_monitor.py` | 0.5초마다 한 번 계산하는 것치고 과함. 바퀴 odom(50Hz)을 Python으로 전부 받는 비용으로 추정 |
 | MID-360 LiDAR가 설정은 10Hz인데 실제 약 5Hz | `limbo.gazebo.xacro` `update_rate`, 측정: `/mid360/points` 5.4Hz | AMCL·costmap 업데이트가 드묾. 시뮬레이션 부하 때문일 수 있음 |
 | 모델 경로가 상대경로 (`yolo11n.pt`) | `person_detector.yaml`의 `yolo.model` | 실행 위치에 따라 모델을 새로 내려받음 |

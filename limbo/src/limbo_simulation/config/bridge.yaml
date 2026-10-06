@@ -33,14 +33,6 @@
   direction: GZ_TO_ROS
 
 
-  # MID-360 raw lidar scan
-- ros_topic_name: "mid360"
-  gz_topic_name: "mid360"
-  ros_type_name: "sensor_msgs/msg/LaserScan"
-  gz_type_name: "gz.msgs.LaserScan"
-  direction: GZ_TO_ROS
-
-
 # MID-360 3D point cloud
 - ros_topic_name: "mid360/points"
   gz_topic_name: "mid360/points"
