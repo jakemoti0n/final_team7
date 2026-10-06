@@ -3,15 +3,17 @@
 시뮬레이션과 코드 점검 중에 발견했지만 아직 고치지 않은 문제를 모은다.
 고치면 이 표에서 지우고 커밋 메시지에 남긴다.
 
-마지막 갱신: 2026-10-06 (왼쪽 복도 AMCL 틀어짐 조사 결과 추가)
+마지막 갱신: 2026-10-06 (왼쪽 복도 AMCL 점프 해결 → TROUBLESHOOTING으로 이동)
 
 ## 주행·위치 추정
 
 | 문제 | 근거 | 영향 | 대책 후보 |
 |---|---|---|---|
-| `aischool_2f` 왼쪽 복도 위쪽 절반(y 5~7.5)을 지나면 **AMCL만 혼자 틀어짐** → Nav2가 멈춤 (원인 미확정) | 매번 같은 구간에서 재현. 회전 명령 0으로 5.5m 직진 시험: 실제 방향 변화 0.0°, EKF −0.7°, 바퀴 0.0°인데 AMCL은 방향 88°→73°, 옆으로 +0.4m 끌려감. AMCL σ가 0.2→1.3으로 먼저 커진 뒤 틀어짐. 이후 로봇이 복도 끝 문틀 모서리에 걸리고 Nav2 복구 20회 실패. 배제한 것: 걷는 사람(6~8m 밖), 바퀴 헛돎, odom/EKF, 지도·월드 불일치(코어 벽 x=−5.04 동일, 실제 위치에서 스캔-지도 일치 90%), AMCL 측정 모델(같은 likelihood field 계산으로 정답이 틀어진 위치보다 log 점수 46 높음), 스캔 시각 지연(0.03s) | 그 구간을 지나는 Goal이 실패하고, 틀린 위치로 벽 쪽에 붙음 | AMCL 설정을 하나씩 바꿔 같은 직진 시험 반복: `resample_interval` 1→2(파티클 고갈 의심), `max_beams` 60→180, LiDAR 실제 주기(약 5Hz) 확인 |
-| 로봇이 걷는 사람 경로 위에서 붙잡힘 (원인 미확정) | `aischool_2f` (−4.14, 8.38)에서 정지. 근처 정적 벽 없음(코어 벽까지 0.52m). person_2 경로(y 8.60) 위 | 시뮬레이션 테스트가 중간에 멈춤 | 사람 경로에 로봇을 세워 두고 재현해서 원인 확인 |
+| 로봇이 위쪽 복도에서 30초간 붙잡힘 (원인 미확정) | `aischool_2f` (−4.14, 8.38)에서 바퀴는 도는데 정지(2026-10-02). 근처 정적 벽 없음(코어 벽까지 0.52m). **걷는 사람은 원인이 아님**(사람 모델은 충돌이 없어 로봇을 통과함, 2026-10-06 확인). 당시 AMCL이 틀어져 있었을 가능성 있음 | 시뮬레이션 테스트가 중간에 멈춤 | beamskip 적용 후 다시 발생하는지 지켜봄 |
 | 바퀴 마찰 계수가 낮음 (`mu1`, `mu2` = 0.5) | `limbo_description/urdf/limbo.gazebo.xacro` | 회전·가속 시 바퀴가 미끄러짐. 바퀴 odom 회전 오차 약 10%의 원인으로 추정(EKF로 보정 중) | 실제 바퀴·바닥에 맞는 값으로 조정 |
+| 좁은 복도(1.54m)에서 제자리 회전 실패 | `aischool_2f` 왼쪽 복도에서 `behavior_server: Collision Ahead - Exiting Spin`. 로봇이 정사각형(0.45m)이라 돌 때 모서리가 그리는 원(반지름 0.32m)이 벽 inflation에 걸림 | 좁은 곳에서 방향을 돌려야 하는 Goal이 실패 | 복구 동작 순서(후진 먼저), footprint·inflation 조정, 실제 복도 폭 실측 |
+| MPPI 컨트롤러가 목표 주기를 못 냄 | `Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.4935 Hz` (CPU 부하 평균 14~16/16코어일 때) | 부하가 높을 때 경로 추종이 나빠지고 `Failed to make progress` | 시뮬레이션 CPU 줄이기(YOLO 10Hz, LiDAR 해상도, wheel_slip_monitor), MPPI `batch_size`·`time_steps` 조정 |
+| 사람이 많아 LiDAR 시야 대부분이 가려지는 상황 | AMCL beamskip은 안 맞는 빔이 90%를 넘으면 꺼지고 원래 방식으로 계산함 | 혼잡한 곳에서 위치 추정이 다시 불안정해질 수 있음 | 실제 환경에서 확인 |
 | 시작 직후 `collision_monitor` 응답 끊김 → Nav2 전체 재시작 (약 5초) | `CRITICAL FAILURE: SERVER collision_monitor IS DOWN after not receiving a heartbeat for 4000 ms` | 그 사이 보낸 Goal은 거절됨 | 시작 순서·CPU 부하 확인, bond timeout 조정 |
 
 ## 시뮬레이션·월드
