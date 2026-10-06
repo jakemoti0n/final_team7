@@ -1,0 +1,13 @@
+# limbo_perception(YOLO)용 venv 의존성. 설치 방법은 README "3. YOLO용 Python 환경" 참고
+#
+# NVIDIA GPU가 있으면 아래 --extra-index-url 줄을 빼고 설치해야 CUDA 버전 torch가 받아진다.
+# 그대로 설치하면 CPU 버전.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.0
+torchvision==0.29.0
+ultralytics==8.4.158
+# ROS cv_bridge(numpy 1.x 기준 빌드)와 충돌 방지를 위해 고정
+numpy==1.26.4
+opencv-python==4.10.0.84
+# 최신 pip가 설치하는 setuptools 80 이상은 colcon과 충돌한다
+setuptools<80
