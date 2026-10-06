@@ -253,7 +253,9 @@ def generate_launch_description():
         output='screen',
         parameters=[
             os.path.join(limbo_perception_dir, 'config', 'person_detector.yaml'),
-            {'use_sim_time': True}
+            # 모든 시각을 카메라·TF 메시지에서 가져오므로 sim time이 필요 없다.
+            # 켜면 Gazebo /clock(약 740Hz)을 Python에서 전부 받느라 CPU를 많이 쓴다
+            {'use_sim_time': False}
         ]
     )
 

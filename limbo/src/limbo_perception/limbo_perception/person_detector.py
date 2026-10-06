@@ -220,7 +220,8 @@ class PersonDetector(Node):
                     result.approach_duration))
 
         self._publish_predictions(
-            [r.prediction for r in results if r.prediction is not None])
+            [r.prediction for r in results if r.prediction is not None],
+            msg.header.stamp)
         self._publish_approach_intent(
             any(r.approach_intent for r in results), current_time)
         self._publish_nearest(results)
@@ -310,8 +311,8 @@ class PersonDetector(Node):
 
         return result
 
-    def _publish_predictions(self, predictions):
-        stamp = self.get_clock().now().to_msg()
+    def _publish_predictions(self, predictions, stamp):
+        # 예측은 그 카메라 사진을 찍은 시각 기준이다. 노드 시계를 안 쓰면 sim time(/clock 구독)이 필요 없어진다
         self.prediction_marker_pub.publish(
             visualization.prediction_markers(
                 predictions, self.odom_frame, stamp))
