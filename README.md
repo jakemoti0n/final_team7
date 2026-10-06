@@ -19,7 +19,7 @@
 
 ## 설치 (처음 한 번)
 
-Ubuntu 24.04, ROS 2 Jazzy Desktop이 설치돼 있다고 가정한다.
+Ubuntu 24.04에 ROS 2 Jazzy Desktop이 설치돼 있다고 가정한다 ([설치 안내](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)). 처음 실행할 때 YOLO 모델과 걷는 사람 모델을 내려받으므로 인터넷이 필요하다.
 
 ### 1. ROS 패키지
 
@@ -28,7 +28,11 @@ sudo apt install \
   ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-ros-gz \
   ros-jazzy-cv-bridge ros-jazzy-pcl-ros ros-jazzy-pointcloud-to-laserscan \
   ros-jazzy-spatio-temporal-voxel-layer ros-jazzy-slam-toolbox \
-  ros-jazzy-robot-localization python3-venv
+  ros-jazzy-robot-localization ros-dev-tools python3-venv
+
+# rosdep을 한 번도 안 썼으면
+sudo rosdep init
+rosdep update
 ```
 
 ### 2. 저장소 받기
@@ -36,8 +40,14 @@ sudo apt install \
 서브모듈(`robot_self_filter`)이 있어서 `--recurse-submodules`가 꼭 필요하다. 아래 경로(`~/limbo`)를 기준으로 alias와 문서가 쓰여 있다.
 
 ```bash
-git clone --recurse-submodules git@github.com:jakemoti0n/final_team7.git ~/limbo
+git clone --recurse-submodules https://github.com/jakemoti0n/final_team7.git ~/limbo   # 기본 브랜치 dev
+
+# 빠진 ROS 의존성이 있으면 설치 (아무것도 안 나오면 다 있는 것)
+rosdep install --from-paths ~/limbo/limbo/src --ignore-src -r -y --rosdistro jazzy
 ```
+
+- push까지 하려면 GitHub에 SSH 키를 등록하고 `git@github.com:jakemoti0n/final_team7.git` 주소를 쓴다
+- 이미 서브모듈 없이 받았다면 `git submodule update --init --recursive`
 
 ### 3. YOLO용 Python 환경
 
@@ -47,11 +57,19 @@ git clone --recurse-submodules git@github.com:jakemoti0n/final_team7.git ~/limbo
 python3 -m venv --system-site-packages ~/limbo/venvs/limbo_yolo
 source ~/limbo/venvs/limbo_yolo/bin/activate
 pip install --upgrade pip
-pip install -r ~/limbo/requirements.txt
+pip install -r ~/limbo/requirements.txt          # CPU 버전 torch
 ```
 
-- **NVIDIA GPU가 있으면** `requirements.txt`의 `--extra-index-url` 줄을 빼고 설치한다 (CUDA 버전 torch, 2~3GB). 그대로 설치하면 CPU 버전
-- 확인: `python -c "import torch, ultralytics, cv_bridge; print(torch.cuda.is_available())"`
+- **NVIDIA GPU가 있으면** 위 마지막 줄 대신 아래로 설치한다 (CUDA 버전 torch, 2~3GB). `requirements.txt` 파일은 고치지 않는다
+  ```bash
+  grep -v -- '--extra-index-url' ~/limbo/requirements.txt > /tmp/limbo_req_gpu.txt
+  pip install -r /tmp/limbo_req_gpu.txt
+  ```
+- 확인 (GPU 버전이면 마지막에 `True`):
+  ```bash
+  source /opt/ros/jazzy/setup.bash
+  python -c "import torch, ultralytics, cv_bridge; print(torch.cuda.is_available())"
+  ```
 
 ### 4. alias 등록
 
