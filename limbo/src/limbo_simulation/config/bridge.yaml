@@ -18,6 +18,13 @@
   gz_type_name: "gz.msgs.Odometry"
   direction: GZ_TO_ROS
 
+# 평가용 정답 위치 (limbo_evaluation 전용, 주행 노드는 쓰지 않음)
+- ros_topic_name: "ground_truth/odom"
+  gz_topic_name: "ground_truth/odom"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.Odometry"
+  direction: GZ_TO_ROS
+
 # odom → base_footprint TF는 EKF(ekf.yaml)가 낸다. diff-drive TF까지 브리지하면 TF가 두 곳에서 나와 튄다.
 
 - ros_topic_name: "imu"

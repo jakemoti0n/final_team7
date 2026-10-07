@@ -2,6 +2,7 @@ import os
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 
@@ -78,6 +79,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             'world': LaunchConfiguration('world'),
+            'gui': LaunchConfiguration('gui'),
         }.items()
     )
 
@@ -259,6 +261,22 @@ def generate_launch_description():
         ]
     )
 
+    # 주행 평가 기록 (record:=true일 때만). Goal이 끝날 때마다 ~/limbo_results/에 CSV 한 줄
+    nav_recorder = Node(
+        package='limbo_evaluation',
+        executable='nav_recorder',
+        name='nav_recorder',
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('record')),
+        parameters=[
+            os.path.join(
+                get_package_share_directory('limbo_evaluation'),
+                'config', 'nav_recorder.yaml'),
+            # 사람 시간표를 이 월드의 SDF에서 읽는다. 시각은 정답 위치 메시지에서 가져와 sim time이 필요 없다
+            {'world': LaunchConfiguration('world'), 'use_sim_time': False}
+        ]
+    )
+
 
     # ============================================================
     # Start sequence
@@ -272,6 +290,10 @@ def generate_launch_description():
         # 월드와 지도는 같은 건물끼리 짝지어 바꾼다 (예: world:=aischool_2f map:=aischool_2f_map)
         DeclareLaunchArgument('world', default_value='human_test_world'),
         DeclareLaunchArgument('map', default_value='human_test_map'),
+        # 오래 주행 시험할 때나 컴퓨터가 버거울 때 gui:=false (Gazebo 3D 창만 끔, 동작은 같음)
+        DeclareLaunchArgument('gui', default_value='true'),
+        # 주행 평가를 CSV로 남기려면 record:=true (limbo_evaluation/nav_recorder)
+        DeclareLaunchArgument('record', default_value='false'),
 
         # 바로 Gazebo 실행
         gazebo,
@@ -308,4 +330,5 @@ def generate_launch_description():
         ),
 
         detector,
+        nav_recorder,
     ])

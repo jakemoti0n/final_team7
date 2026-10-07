@@ -1,0 +1,6 @@
+# nav_recorder 설정. 바꾼 뒤 빌드 없이 노드만 다시 띄우면 적용된다.
+# world는 launch(start_simulation.launch.py record:=true)가 실행 중인 월드 이름으로 넣어 준다.
+nav_recorder:
+  ros__parameters:
+    output_dir: ~/limbo_results   # 실행할 때마다 nav_<월드>_<날짜_시각>.csv 파일이 생긴다
+    personal_space: 0.5           # m, 사람 중심에서 이 거리 안에 들어간 시간을 센다

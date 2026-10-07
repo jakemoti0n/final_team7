@@ -108,6 +108,18 @@
 - **확인**: bag 재생 기준 프레임당 CPU −44%, 처리 속도 8.7 → 13.6Hz. 시뮬레이션 중 775% → 116%, 시스템 idle 17% → 48%
 - **참고**: README에 "노트북 과열로 collision_monitor `source_timeout`을 2.0으로 설정"이라는 메모가 있었는데, 이 문제가 과열의 원인이었을 가능성이 큼
 
+### MPPI 컨트롤러가 목표 주기(20Hz)를 못 내고 주행이 실패함 — 2026-10-07
+- **증상**: `Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.4935 Hz`. 부하 평균 14~16/16코어일 때 경로 추종이 나빠지고 `Failed to make progress`
+- **원인**: 시뮬레이션 전체 CPU 부족. 컨트롤러 자체 문제가 아니라 같은 컴퓨터의 다른 노드들이 CPU를 쓰고 있었음
+- **해결**: 아래 CPU 절감의 결과로 해결됨. 컨트롤러 설정은 바꾸지 않았음
+  - `wheel_slip_monitor` sim time 해제 (50% → 5%)
+  - `person_detector` sim time 해제 (약 −30%p)
+  - 더 필요하면 `gui:=false`로 Gazebo 창 끄기 (Gazebo 285% → 110%)
+- **확인**: `aischool_2f_scenarios`에서 홀 ↔ 왼쪽 복도 위쪽 끝 왕복 2번(이동 4번)
+  - Gazebo 창 켬(기본): 4/4 성공, 주기 경고 1번(12.5Hz), 부하 평균 11.3
+  - Gazebo 창 끔: 4/4 성공, 주기 경고 0번, 부하 평균 9.9
+- **확인 방법**: `~/.ros/log/controller_server_*.log`에서 `Control loop missed` 줄 수 세기
+
 ### Python 노드가 하는 일 없이 CPU를 많이 씀 (`/clock` 처리) — 2026-10-06
 - **증상**: `wheel_slip_monitor`가 0.5초마다 한 번 계산하는데 CPU 약 50%. 스레드는 30개지만 메인 스레드 하나만 바쁨
 - **원인**: `use_sim_time: True`면 노드가 `/clock`을 구독하는데, Gazebo는 물리 스텝(1ms)마다 시계를 내서 약 740Hz로 들어옴. Python(rclpy)이 이걸 전부 처리하느라 CPU를 씀

@@ -107,6 +107,7 @@ ros2 launch limbo_bringup start_simulation.launch.py
 
 이 launch 하나로 Gazebo, EKF, self filter, LiDAR→`/scan` 변환, AMCL, Nav2, RViz, 사람 인식, 바퀴 헛돎 감시가 순서대로 뜬다 (약 15초).
 
+- **Gazebo 3D 창이 필요 없으면 `gui:=false`.** 센서·물리·사람은 그대로 돌고 창만 안 뜬다. Gazebo CPU가 약 285% → 110%로 준다. 로봇·지도·사람 인식 결과는 RViz로 본다
 - **2D Pose Estimate 없이 바로 Goal을 찍어도 된다.** AMCL이 스폰 위치(0, 0, 0°)에서 시작한다
 - 다른 곳에서 시작했거나 위치가 틀어지면 RViz의 2D Pose Estimate로 다시 맞춘다
 
@@ -118,7 +119,25 @@ ros2 launch limbo_bringup start_simulation.launch.py
 |---|---|---|
 | `human_test_world` (기본) | 없음 | 15m 정사각형 방, 걷는 사람 10명 |
 | `aischool_2f` | `world:=aischool_2f map:=aischool_2f_map` | 학원 2층 (피난안내도로 만든 실제 구조), 걷는 사람 3명 |
+| `aischool_2f_scenarios` | `world:=aischool_2f_scenarios map:=aischool_2f_map` | 같은 학원 2층에 시험용 사람 6명. 모두 정해진 시간표대로 움직이고 로봇에 반응하지 않는다. 장소마다 상황이 하나씩: 로봇 시작 위치 1.6m 앞에 와서 4초 멈춤(로봇이 시작 위치에 있을 때 접근 판단 시험), 홀→오른쪽 복도로 꺾음, 왼쪽 복도에 서 있음, 위쪽 복도에 둘이 나란히 천천히, 왼쪽 아래 복도에 빨리 걸음. 경로는 `tools/aischool_2f/gen_world.py`의 `SCENARIO_PATHS` |
 | `bookstore_world` | `world:=bookstore_world map:=bookstore_map` | 서점, 걷는 사람 2명. 초기 위치가 맞는지 아직 확인 안 함 (틀리면 2D Pose Estimate) |
+
+### 주행 평가 기록 (`record:=true`)
+
+launch에 `record:=true`를 붙이면 Nav2 Goal이 끝날 때마다 `~/limbo_results/nav_<월드>_<날짜_시각>.csv`에 한 줄이 쌓인다. Goal은 RViz로 찍든 순찰 노드가 보내든 상관없다. 알고리즘·파라미터를 바꿔 가며 같은 경로를 돌리고 CSV를 비교하는 용도다.
+
+| 열 | 내용 |
+|---|---|
+| `status` | SUCCEEDED / ABORTED / CANCELED / PREEMPTED(끝나기 전에 새 Goal) |
+| `duration_s`, `path_length_m`, `mean_speed_mps` | 걸린 시간, 실제 주행 거리, 평균 속도 (Gazebo 정답 위치 기준) |
+| `min_person_distance_m`, `nearest_person` | 사람 중심까지 가장 가까웠던 거리와 그 사람 (월드 SDF의 시간표 기준) |
+| `personal_space_time_s` | 사람 0.5m 안에 있던 시간 (`nav_recorder.yaml`의 `personal_space`) |
+| `localization_error_mean_m`, `_max_m` | 위치 추정 오차. TF `map → base_footprint`를 같은 시각의 정답과 비교하므로 AMCL을 다른 방식으로 바꿔도 같은 기준 |
+| `recoveries`, `controller_rate_warnings`, `wheel_slip_events` | 복구 동작 횟수, 컨트롤러 주기 경고 수, 헛돎 감지 수 |
+
+- 시뮬레이션 전용이다. 정답 위치는 로봇 모델의 Gazebo 플러그인이 `/ground_truth/odom`으로 낸다 (주행 노드는 안 씀)
+- 지도 원점과 Gazebo 월드 원점이 같다고 가정한다 (`human_test_world`, `aischool_2f*`는 같음)
+- 사람은 정해진 시간표대로 움직이므로 같은 시각에 같은 Goal을 보내면 같은 상황이 재현된다
 
 ### 자주 쓰는 명령
 
@@ -156,6 +175,7 @@ ros2 launch slam_toolbox online_async_launch.py use_sim_time:=true \
 | `limbo_interfaces` | 사람 예측 메시지 `PersonPrediction(Array)` |
 | `limbo_patrol` | waypoint 순찰 |
 | `limbo_monitor` | `wheel_slip_monitor`: 바퀴 헛돎을 감지하면 Nav2 Goal을 취소 |
+| `limbo_evaluation` | `nav_recorder`: Goal마다 주행 평가 지표를 CSV로 기록 (시뮬레이션 전용, `record:=true`) |
 | `robot_self_filter` | (서브모듈) LiDAR에서 로봇 몸체 점을 걸러 냄 |
 
 ### 주요 토픽
@@ -181,6 +201,7 @@ ros2 launch slam_toolbox online_async_launch.py use_sim_time:=true \
 | `limbo_navigation/config/amcl.yaml` | AMCL, 초기 위치 |
 | `limbo_navigation/config/ekf.yaml` | 바퀴 odom + IMU 융합 |
 | `limbo_monitor/config/wheel_slip_monitor.yaml` | 헛돎 판단 기준 |
+| `limbo_evaluation/config/nav_recorder.yaml` | 평가 결과 폴더, 개인 공간 거리 |
 
 ---
 

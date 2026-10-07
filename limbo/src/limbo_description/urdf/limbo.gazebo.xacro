@@ -64,6 +64,18 @@
 
       <update_rate>50</update_rate>
     </plugin>
+
+    <!-- 평가용 정답 위치 (Gazebo world 기준, 미끄러짐·센서 오차 없음). limbo_evaluation이 AMCL 오차·주행 거리 계산에 쓴다.
+         실제 로봇에는 없는 값이라 주행 노드는 쓰지 않는다. tf는 ROS로 브리지하지 않는다 -->
+    <plugin filename="gz-sim-odometry-publisher-system"
+            name="gz::sim::systems::OdometryPublisher">
+      <odom_topic>ground_truth/odom</odom_topic>
+      <tf_topic>ground_truth/tf</tf_topic>
+      <odom_frame>world</odom_frame>
+      <robot_base_frame>base_footprint</robot_base_frame>
+      <dimensions>2</dimensions>
+      <odom_publish_frequency>20</odom_publish_frequency>
+    </plugin>
   </gazebo>
 
   <!-- ================================ -->
