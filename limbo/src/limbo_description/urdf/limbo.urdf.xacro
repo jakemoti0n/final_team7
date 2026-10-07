@@ -418,12 +418,8 @@
     <child link="rgbd_camera_link"/>
 
     <!--
-      base_link는 바닥에서 0.05 m
-      camera 중심 목표 높이 약 0.30 m
-      따라서 base_link 기준 z = 0.25 m
-
-      x = +0.22 : 전방
-      pitch +10deg : 아래쪽을 향함
+      base_link는 바닥에서 0.05 m, camera는 base_link 위 0.45 m (바닥에서 0.50 m), 전방 0.22 m, 수평.
+      높이·기울기는 아직 정하지 않았다 (docs/KNOWN_ISSUES.md "센서 배치")
     -->
     <origin
       xyz="0.22 0 0.45"
