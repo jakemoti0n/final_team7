@@ -81,7 +81,7 @@ ros2 run limbo_navigation nav2_params_tool.py diff --controller mppi --vs-contro
 ### 우선순위 높음
 
 1. **대안 알고리즘 yaml 추가** — RPP, DWB, Smac 2D 등. Nav2 내장 플러그인이 이미 설치되어 있으므로 yaml만 작성하면 `controller:=rpp`로 바로 비교할 수 있다.
-2. **측정 도구 `limbo_evaluation`** — 주행 시간, 경로 길이, 사람과의 최소 거리, 정지·recovery 횟수, 추종 오차, CPU 사용률을 CSV로 저장한다. 이것이 없으면 수십 번 돌려도 눈대중 비교가 된다.
+2. ✅ (2026-10-07, README "주행 평가 기록") **측정 도구 `limbo_evaluation`** — 주행 시간, 경로 길이, 사람과의 최소 거리, 정지·recovery 횟수, 추종 오차, CPU 사용률을 CSV로 저장한다. 이것이 없으면 수십 번 돌려도 눈대중 비교가 된다.
 3. **`experiments/` 폴더** — 조합별 결과와 그 시점의 파라미터 스냅샷을 누적해 실물 설정의 근거로 삼는다.
 
 ### 결정이 필요한 것
