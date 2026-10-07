@@ -1,5 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import (
+    DeclareLaunchArgument,
     IncludeLaunchDescription,
     TimerAction,
     AppendEnvironmentVariable,
@@ -7,7 +8,7 @@ from launch.actions import (
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
-from launch.substitutions import Command
+from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from ament_index_python.packages import (
     get_package_share_directory,
     get_package_prefix,
@@ -63,11 +64,14 @@ def generate_launch_description():
         value_type=str,
     )
 
-    world_file = os.path.join(
-    simulation_pkg,
-    "worlds",
-    "human_test_world.sdf"
-)
+    world_arg = DeclareLaunchArgument(
+        "world",
+        default_value="human_test_world",
+        description="limbo_simulation/worlds/<world>.sdf",
+    )
+    world_file = PathJoinSubstitution(
+        [simulation_pkg, "worlds", [LaunchConfiguration("world"), ".sdf"]]
+    )
 
     gz_sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -77,7 +81,8 @@ def generate_launch_description():
                 "gz_sim.launch.py",
             )
         ),
-        launch_arguments={"gz_args": world_file}.items(),
+        # -r 없이 띄우면 일시정지 상태로 시작해 sim time과 TF가 멈추고 Nav2 bringup이 시간 초과된다
+        launch_arguments={"gz_args": ["-r ", world_file]}.items(),
     )
 
     robot_state_publisher = Node(
@@ -122,6 +127,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        world_arg,
         set_gz_resource_path,
         bookstore_resource_path,
         gz_sim,

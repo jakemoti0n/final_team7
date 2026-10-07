@@ -1,64 +1,14 @@
 import os
-import sys
 
 from launch import LaunchDescription
-from launch.actions import EmitEvent, ExecuteProcess, IncludeLaunchDescription, LogInfo, RegisterEventHandler, TimerAction
-from launch.event_handlers import OnProcessExit
-from launch.events import Shutdown
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command
+from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 
 from launch_ros.actions import Node
 
 from ament_index_python.packages import get_package_share_directory
 
-
-WAIT_FOR_SIM_READY = """
-import sys
-import time
-
-import rclpy
-from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy
-from rosgraph_msgs.msg import Clock
-from tf2_msgs.msg import TFMessage
-
-node = None
-try:
-    rclpy.init()
-    node = Node('limbo_wait_for_sim_ready')
-    qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
-    state = {'clock': None, 'clock_running': False, 'odom_tf': False}
-
-    def on_clock(msg):
-        stamp = (msg.clock.sec, msg.clock.nanosec)
-        if state['clock'] is not None and stamp != state['clock']:
-            state['clock_running'] = True
-        state['clock'] = stamp
-
-    def on_tf(msg):
-        for transform in msg.transforms:
-            if (transform.header.frame_id.lstrip('/') == 'odom'
-                    and transform.child_frame_id.lstrip('/') == 'base_footprint'):
-                state['odom_tf'] = True
-
-    node.create_subscription(Clock, '/clock', on_clock, qos)
-    node.create_subscription(TFMessage, '/tf', on_tf, qos)
-    deadline = time.monotonic() + 60.0
-    while time.monotonic() < deadline:
-        rclpy.spin_once(node, timeout_sec=0.2)
-        if state['clock_running'] and state['odom_tf']:
-            print('Gazebo clock and odom -> base_footprint TF are ready', flush=True)
-            sys.exit(0)
-    print('Timed out waiting for Gazebo clock and odom -> base_footprint TF. '
-          'Check that Gazebo is running and the robot was spawned.', file=sys.stderr, flush=True)
-    sys.exit(1)
-finally:
-    if node is not None:
-        node.destroy_node()
-    if rclpy.ok():
-        rclpy.shutdown()
-"""
 
 def generate_launch_description():
 
@@ -86,6 +36,11 @@ def generate_launch_description():
         'nav2_bringup'
     )
 
+    limbo_perception_dir = get_package_share_directory(
+        'limbo_perception'
+    )
+
+
     # ============================================================
     # File paths
     # ============================================================
@@ -108,16 +63,6 @@ def generate_launch_description():
         'nav2_params.yaml'
     )
 
-    perception_python = os.environ.get(
-        'LIMBO_PERCEPTION_PYTHON',
-        os.path.join(os.path.expanduser('~'), 'limbo', 'venvs', 'limbo_yolo', 'bin', 'python')
-    )
-    if not os.path.isfile(perception_python):
-        raise FileNotFoundError(
-            f'YOLO Python not found: {perception_python}. '
-            'Set LIMBO_PERCEPTION_PYTHON to the limbo_yolo environment Python.'
-        )
-
 
     # ============================================================
     # 1. Gazebo
@@ -130,7 +75,10 @@ def generate_launch_description():
                 'launch',
                 'gazebo.launch.py'
             )
-        )
+        ),
+        launch_arguments={
+            'world': LaunchConfiguration('world'),
+        }.items()
     )
 
 
@@ -179,6 +127,31 @@ def generate_launch_description():
     # /scan
     # ============================================================
 
+    # 바퀴 odom(전진 속도) + IMU(회전 속도)를 합쳐 odom → base_footprint TF를 낸다
+    ekf = Node(
+        package='robot_localization',
+        executable='ekf_node',
+        name='ekf_filter_node',
+        output='screen',
+        parameters=[os.path.join(limbo_navigation_dir, 'config', 'ekf.yaml')]
+    )
+
+    # 바퀴는 도는데 로봇이 안 움직이면(헛돎) Nav2 Goal을 취소해 위치 추정이 틀어지는 걸 막는다
+    wheel_slip_monitor = Node(
+        package='limbo_monitor',
+        executable='wheel_slip_monitor',
+        name='wheel_slip_monitor',
+        output='screen',
+        parameters=[
+            os.path.join(
+                get_package_share_directory('limbo_monitor'),
+                'config', 'wheel_slip_monitor.yaml'),
+            # 스캔 메시지끼리의 시각만 비교하므로 sim time이 필요 없다.
+            # 켜면 Gazebo /clock(약 740Hz)을 Python에서 전부 받느라 CPU를 10배 쓴다 (50% → 5%)
+            {'use_sim_time': False}
+        ]
+    )
+
     pointcloud_to_laserscan = Node(
         package='pointcloud_to_laserscan',
         executable='pointcloud_to_laserscan_node',
@@ -225,6 +198,9 @@ def generate_launch_description():
         ),
         launch_arguments={
             'use_sim_time': 'true',
+            'map': PathJoinSubstitution(
+                [limbo_navigation_dir, 'maps', [LaunchConfiguration('map'), '.yaml']]
+            ),
         }.items()
     )
 
@@ -274,41 +250,62 @@ def generate_launch_description():
         package='limbo_perception',
         executable='person_detector',
         name='person_detector',
-        prefix=perception_python,
         output='screen',
         parameters=[
-            {'use_sim_time': True}
+            os.path.join(limbo_perception_dir, 'config', 'person_detector.yaml'),
+            # 모든 시각을 카메라·TF 메시지에서 가져오므로 sim time이 필요 없다.
+            # 켜면 Gazebo /clock(약 740Hz)을 Python에서 전부 받느라 CPU를 많이 쓴다
+            {'use_sim_time': False}
         ]
     )
 
 
     # ============================================================
-    # Start TF-dependent nodes only after Gazebo clock and odometry TF exist.
+    # Start sequence
+    #
+    # 한꺼번에 시작하면 Gazebo / PointCloud / Nav2가 동시에
+    # 초기화되면서 노트북 부하가 커질 수 있으므로 순차 실행
     # ============================================================
-
-    wait_for_sim_ready = ExecuteProcess(
-        cmd=[sys.executable, '-u', '-c', WAIT_FOR_SIM_READY],
-        name='wait_for_sim_ready',
-        output='screen',
-    )
-
-    def on_sim_ready(event, context):
-        if event.returncode != 0:
-            return [EmitEvent(event=Shutdown(reason='Gazebo clock or odom TF did not become ready'))]
-        return [
-            LogInfo(msg='Gazebo is ready; starting Limbo nodes'),
-            self_filter,
-            detector,
-            TimerAction(period=2.0, actions=[pointcloud_to_laserscan]),
-            TimerAction(period=4.0, actions=[localization]),
-            TimerAction(period=7.0, actions=[navigation]),
-            TimerAction(period=10.0, actions=[rviz]),
-        ]
 
     return LaunchDescription([
+
+        # 월드와 지도는 같은 건물끼리 짝지어 바꾼다 (예: world:=aischool_2f map:=aischool_2f_map)
+        DeclareLaunchArgument('world', default_value='human_test_world'),
+        DeclareLaunchArgument('map', default_value='human_test_map'),
+
+        # 바로 Gazebo 실행
         gazebo,
-        wait_for_sim_ready,
-        RegisterEventHandler(
-            OnProcessExit(target_action=wait_for_sim_ready, on_exit=on_sim_ready)
+        ekf,
+
+        # Gazebo sensor / TF 준비 대기
+        TimerAction(
+            period=4.0,
+            actions=[self_filter]
         ),
+
+        # filtered PointCloud가 나온 뒤 실행
+        TimerAction(
+            period=6.0,
+            actions=[pointcloud_to_laserscan, wheel_slip_monitor]
+        ),
+
+        # /scan 생성 후 AMCL 실행
+        TimerAction(
+            period=8.0,
+            actions=[localization]
+        ),
+
+        # localization 준비 후 Nav2 실행
+        TimerAction(
+            period=11.0,
+            actions=[navigation]
+        ),
+
+        # 마지막으로 RViz
+        TimerAction(
+            period=14.0,
+            actions=[rviz]
+        ),
+
+        detector,
     ])

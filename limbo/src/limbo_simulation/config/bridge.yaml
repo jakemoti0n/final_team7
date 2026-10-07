@@ -18,24 +18,18 @@
   gz_type_name: "gz.msgs.Odometry"
   direction: GZ_TO_ROS
 
-- ros_topic_name: "tf"
-  gz_topic_name: "tf"
-  ros_type_name: "tf2_msgs/msg/TFMessage"
-  gz_type_name: "gz.msgs.Pose_V"
+# odom → base_footprint TF는 EKF(ekf.yaml)가 낸다. diff-drive TF까지 브리지하면 TF가 두 곳에서 나와 튄다.
+
+- ros_topic_name: "imu"
+  gz_topic_name: "imu"
+  ros_type_name: "sensor_msgs/msg/Imu"
+  gz_type_name: "gz.msgs.IMU"
   direction: GZ_TO_ROS
 
 - ros_topic_name: "joint_states"
   gz_topic_name: "joint_states"
   ros_type_name: "sensor_msgs/msg/JointState"
   gz_type_name: "gz.msgs.Model"
-  direction: GZ_TO_ROS
-
-
-  # MID-360 raw lidar scan
-- ros_topic_name: "mid360"
-  gz_topic_name: "mid360"
-  ros_type_name: "sensor_msgs/msg/LaserScan"
-  gz_type_name: "gz.msgs.LaserScan"
   direction: GZ_TO_ROS
 
 

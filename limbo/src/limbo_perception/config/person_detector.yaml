@@ -1,0 +1,42 @@
+# person_detector 튜닝 값. 바꾼 뒤 빌드 없이 노드만 다시 띄우면 적용된다.
+# 토픽·좌표계 이름은 튜닝 대상이 아니라 코드 기본값을 쓴다.
+person_detector:
+  ros__parameters:
+    yolo:
+      confidence: 0.3
+
+    sync:
+      queue_size: 5
+      slop: 0.03            # sec, RGB와 depth 시각 차이 허용
+
+    tf_timeout: 0.1         # sec
+
+    depth:
+      roi_margin: 0.30      # box 각 변에서 잘라낼 비율 (배경 제외)
+      min_depth: 0.1        # m
+      max_depth: 5.0        # m
+
+    tracking:
+      reassociate_max_age: 3.0        # sec
+      reassociate_max_distance: 0.50  # m
+      max_position_jump: 0.8          # m
+      min_track_hits: 5               # frame
+      track_timeout: 3.0              # sec
+      kalman_measurement_noise: 0.05
+      kalman_process_noise: 0.5
+
+    motion:
+      stationary_speed_threshold: 0.05  # m/s
+      approach_speed_threshold: 0.03    # m/s
+
+    prediction:
+      horizon: 2.0   # sec
+      dt: 0.25       # sec
+
+    intent:
+      interaction_min_x: 0.3        # m, base_link 기준 앞쪽
+      interaction_max_x: 2.0        # m
+      interaction_half_width: 0.8   # m, 좌우
+      approach_hold_time: 0.5       # sec
+      intent_min_hold_time: 2.0     # sec
+      intent_lost_grace_time: 1.0   # sec

@@ -1,0 +1,18 @@
+# wheel_slip_monitor 튜닝 값. 바꾼 뒤 빌드 없이 노드만 다시 띄우면 적용된다.
+wheel_slip_monitor:
+  ros__parameters:
+    cancel_navigation_on_slip: true
+
+    check_period: 0.5        # sec, 이 간격마다 바퀴와 스캔 이동량을 비교
+    scan_range_max: 10.0     # m, 먼 점은 노이즈가 커서 뺀다
+
+    icp:
+      max_iterations: 20
+      max_correspondence: 0.3   # m
+
+    slip:
+      min_wheel_distance: 0.15      # m, 바퀴가 이만큼은 갔다고 해야 판단
+      max_scan_ratio: 0.3           # 스캔 이동 < 바퀴 이동 × 이 비율이면 의심
+      min_forward_constraint: 0.1   # 이보다 작으면(긴 복도) 판단 보류
+      max_wheel_rotation: 0.35      # rad, 크게 도는 동안은 판단 보류
+      consecutive_windows: 2        # 연속 의심 횟수 → 헛돎 확정 (0.5초 × 2 = 1초)
