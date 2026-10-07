@@ -78,6 +78,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             'world': LaunchConfiguration('world'),
+            'gui': LaunchConfiguration('gui'),
         }.items()
     )
 
@@ -272,6 +273,8 @@ def generate_launch_description():
         # 월드와 지도는 같은 건물끼리 짝지어 바꾼다 (예: world:=aischool_2f map:=aischool_2f_map)
         DeclareLaunchArgument('world', default_value='human_test_world'),
         DeclareLaunchArgument('map', default_value='human_test_map'),
+        # 오래 주행 시험할 때나 컴퓨터가 버거울 때 gui:=false (Gazebo 3D 창만 끔, 동작은 같음)
+        DeclareLaunchArgument('gui', default_value='true'),
 
         # 바로 Gazebo 실행
         gazebo,

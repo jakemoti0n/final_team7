@@ -107,6 +107,7 @@ ros2 launch limbo_bringup start_simulation.launch.py
 
 이 launch 하나로 Gazebo, EKF, self filter, LiDAR→`/scan` 변환, AMCL, Nav2, RViz, 사람 인식, 바퀴 헛돎 감시가 순서대로 뜬다 (약 15초).
 
+- **Gazebo 3D 창이 필요 없으면 `gui:=false`.** 센서·물리·사람은 그대로 돌고 창만 안 뜬다. Gazebo CPU가 약 285% → 110%로 준다. 로봇·지도·사람 인식 결과는 RViz로 본다
 - **2D Pose Estimate 없이 바로 Goal을 찍어도 된다.** AMCL이 스폰 위치(0, 0, 0°)에서 시작한다
 - 다른 곳에서 시작했거나 위치가 틀어지면 RViz의 2D Pose Estimate로 다시 맞춘다
 
