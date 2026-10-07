@@ -34,6 +34,50 @@ def test_botsort_id_switch_keeps_person_id():
     assert manager.raw_to_person_id == {2: before.person_id}
 
 
+def test_person_who_stopped_and_was_missed_keeps_person_id():
+    # 시나리오 월드에서 본 상황: 걷다가 멈춘 사람이 1.5초 검출이 끊긴 뒤 같은 자리에서 다시 잡힘
+    manager = tracking.TrackManager(tracking.TrackerConfig())
+    walked = _walk(manager, raw_id=1, start_x=0.0, vx=1.0, start_t=0.0,
+                   steps=20)
+    stop_x = 0.1 * 19
+    _walk(manager, raw_id=1, start_x=stop_x, vx=0.0, start_t=2.0, steps=5)
+
+    seen_again = manager.observe(1, stop_x, 0.0, 2.4 + 1.5, set())
+
+    assert seen_again.person_id == walked.person_id
+
+
+def test_walking_person_is_not_treated_as_stopped():
+    manager = tracking.TrackManager(tracking.TrackerConfig())
+    obs = _walk(manager, raw_id=1, start_x=0.0, vx=0.5, start_t=0.0,
+                steps=30)
+
+    assert abs(obs.vx - 0.5) < 0.1
+
+
+def test_stopped_person_velocity_drops_to_zero_quickly():
+    # 칼만 필터만으로는 멈춘 뒤 2초가 지나도 0.4 m/s가 남았다 (시나리오 월드)
+    config = tracking.TrackerConfig()
+    manager = tracking.TrackManager(config)
+    _walk(manager, raw_id=1, start_x=0.0, vx=1.0, start_t=0.0, steps=20)
+    stop_x = 0.1 * 19
+    steps = int((config.stop_window + 0.2) / 0.1)
+    obs = _walk(manager, raw_id=1, start_x=stop_x, vx=0.0, start_t=2.0,
+                steps=steps)
+
+    assert abs(obs.vx) < 0.05
+    assert abs(obs.x - stop_x) < 0.1
+
+
+def test_person_who_walks_again_gets_velocity_back():
+    manager = tracking.TrackManager(tracking.TrackerConfig())
+    _walk(manager, raw_id=1, start_x=0.0, vx=0.0, start_t=0.0, steps=20)
+    obs = _walk(manager, raw_id=1, start_x=0.0, vx=1.0, start_t=2.0,
+                steps=15)
+
+    assert obs.vx > 0.7
+
+
 def test_far_detection_gets_new_person_id():
     manager = tracking.TrackManager(tracking.TrackerConfig())
     first = _walk(manager, raw_id=1, start_x=1.0, vx=0.0, start_t=0.0,

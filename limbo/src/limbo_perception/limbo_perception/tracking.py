@@ -1,6 +1,7 @@
 """사람 track 관리: BoT-SORT ID 재연결 + 사람별 칼만 필터 (ROS 의존 없음)."""
 
-from dataclasses import dataclass
+from collections import deque
+from dataclasses import dataclass, field
 import math
 from typing import Optional
 
@@ -24,6 +25,10 @@ class TrackerConfig:
     min_track_hits: int = 5
     # 이 시간 이상 안 보이면 track 제거 (sec)
     track_timeout: float = 3.0
+    # 이 시간 동안 측정 위치가 stop_max_displacement 미만으로 움직였으면 멈춘 것으로 본다.
+    # 칼만 필터는 갑자기 멈추는 걸 늦게 따라가서 멈춘 뒤에도 속도가 몇 초간 남는다
+    stop_window: float = 0.6            # sec
+    stop_max_displacement: float = 0.15  # m
     kalman_measurement_noise: float = 0.05
     kalman_process_noise: float = 0.5
 
@@ -34,6 +39,8 @@ class Track:
     last_time: float
     last_seen: float
     hits: int = 1
+    # 정지 판단용 최근 측정 위치 (시각, x, y)
+    recent: deque = field(default_factory=deque)
     # intent.py가 갱신한다
     approach_start_time: Optional[float] = None
     intent_confirmed: bool = False
@@ -110,6 +117,7 @@ class TrackManager:
         track.last_seen = current_time
         track.hits = 1
         track.approach_start_time = None
+        track.recent.clear()
         return measured_x, measured_y, 0.0, 0.0, False
 
     def update_track(self, track_id, measured_x, measured_y, current_time):
@@ -140,6 +148,11 @@ class TrackManager:
             return self._restart(track, measured_x, measured_y, current_time)
 
         track.kalman.update(measured_x, measured_y)
+        if self._has_stopped(track, measured_x, measured_y, current_time):
+            # 멈추기 전 필터가 앞으로 밀어 둔 위치도 버리고 최근 측정의 평균으로 맞춘다
+            track.kalman.stop(
+                sum(x for _, x, _ in track.recent) / len(track.recent),
+                sum(y for _, _, y in track.recent) / len(track.recent))
         x, y, vx, vy = track.kalman.get_state()
 
         track.last_time = current_time
@@ -149,6 +162,19 @@ class TrackManager:
         # 막 생긴 track은 속도 추정이 불안정해서 몇 frame 지난 뒤부터 쓴다
         stable = track.hits >= self.config.min_track_hits
         return x, y, vx, vy, stable
+
+    def _has_stopped(self, track, measured_x, measured_y, current_time):
+        """stop_window 동안 측정 위치가 거의 안 움직였으면 True."""
+        recent = track.recent
+        recent.append((current_time, measured_x, measured_y))
+        while current_time - recent[0][0] > self.config.stop_window:
+            recent.popleft()
+        oldest_time, oldest_x, oldest_y = recent[0]
+        # 측정이 stop_window만큼 쌓이기 전에는 판단하지 않는다 (막 생긴 track, 프레임 누락)
+        if current_time - oldest_time < self.config.stop_window * 0.8:
+            return False
+        moved = math.hypot(measured_x - oldest_x, measured_y - oldest_y)
+        return moved < self.config.stop_max_displacement
 
     def _reassociation_distance(self, track, measured_x, measured_y,
                                 current_time):
@@ -161,7 +187,11 @@ class TrackManager:
         if age < 0.0 or age > self.config.reassociate_max_age:
             return None
 
-        return math.hypot(measured_x - predicted_x, measured_y - predicted_y)
+        # 안 보이는 동안 계속 걸었을 수도, 그 자리에 멈췄을 수도 있어서 둘 중 가까운 쪽으로 잰다.
+        # 멈춘 직후에는 필터 속도가 남아 있어 외삽 위치만 쓰면 같은 사람을 새 사람으로 본다
+        kept_walking = math.hypot(measured_x - predicted_x, measured_y - predicted_y)
+        stayed = math.hypot(measured_x - track.manager_x, measured_y - track.manager_y)
+        return min(kept_walking, stayed)
 
     def resolve_person_id(self, raw_track_id, measured_x, measured_y,
                           current_time, matched_person_ids):
