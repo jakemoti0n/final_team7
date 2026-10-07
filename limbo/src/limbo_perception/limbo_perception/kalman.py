@@ -52,6 +52,10 @@ class PersonKalmanFilter:
         self.x = self.x + K @ y
         self.P = (np.eye(4) - K @ self.H) @ self.P
 
+    def stop(self, x, y):
+        """멈춘 것이 확실할 때 남아 있는 속도를 지우고 위치를 (x, y)로 맞춘다."""
+        self.x[:, 0] = (x, y, 0.0, 0.0)
+
     def get_state(self):
         """(x, y, vx, vy)를 float로 반환한다."""
         return (
