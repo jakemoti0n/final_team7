@@ -29,6 +29,7 @@
   <exec_depend>pointcloud_to_laserscan</exec_depend>
   <exec_depend>robot_localization</exec_depend>
   <exec_depend>limbo_monitor</exec_depend>
+  <exec_depend>limbo_evaluation</exec_depend>
 
   <exec_depend>nav2_bringup</exec_depend>
   <exec_depend>rviz2</exec_depend>

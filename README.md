@@ -1,111 +1,223 @@
-## Gazebo 실행 후 필요한 명령어 모음!
+# Limbo
 
-### **처음 clone 받을 때 주의 사항**
-- 같이 다운 받아야할 submodules가 있으니 git clone --recurse-submodules <저장소_URL> 와 같은 형태로 받을것!!!!!
+사람을 인식하고 피하면서 실내를 순찰하는 로봇. ROS 2 Jazzy + Gazebo Harmonic + Nav2.
 
-### colcon build 할 때 주의 사항!!!!!
-limbo_perception은 yolo를 통해 사람 인식하려고 만든 패키지인데 얘는 새로 받은 yolo용 python 써야해서 이제부터 빌드할 때
-/usr/bin/python3 -m colcon build --symlink-install
-로 사용해야함. alias 만들어서 사용할 것을 추천...ㅠ
+- 센서: Livox MID-360 (3D LiDAR + 내장 IMU), RGB-D 카메라
+- 사람 인식: YOLO(yolo11n) + depth로 사람 위치 추정, 칼만 필터로 추적, 2초 앞 경로 예측
+- 주행: Nav2 (AMCL 위치 추정, MPPI 컨트롤러, 사람 예측 경로에 cost를 주는 `human_layer`)
 
-### 몇개 잊었지만 늦게라도 적어보는 받아야할 pkg 목록
-1. sudo apt install ros-jazzy-cv-bridge python3-venv : openCV 관련 pkg
-2. python3 -m venv --system-site-packages ~/limbo/venvs/limbo_yolo
-3. source ~/limbo/venvs/limbo_yolo/bin/activate
-4. pip install -r ~/limbo/requirements.txt : YOLO용 Python 환경 설치
-5. python -m pip install --force-reinstall \
-  "numpy==1.26.4" \
-  "opencv-python==4.10.0.84" : python과 yolo 충돌 안나게 버전 고정
-6. sudo apt install ros-jazzy-robot-self-filter # self-filter 설치
+## 문서
 
-#### 통합 실행 명령어
+| 문서 | 내용 |
+|---|---|
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | 무엇이 바뀌었고 pull한 뒤 무엇을 해야 하는지. **pull 받으면 맨 위 "할 일"부터** |
+| [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | 아직 해결하지 못한 문제 |
+| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | 겪었던 문제의 증상·원인·해결. 에러가 나면 여기부터 찾기 |
+| [docs/PROJECT.md](docs/PROJECT.md) | 프로젝트 개요와 할 일 |
 
-ros2 launch limbo_bringup start_simulation.launch.py
+---
 
+## 설치 (처음 한 번)
 
-#### PointCloud : 3D LiDAR 센서 2D로 변환
+Ubuntu 24.04에 ROS 2 Jazzy Desktop이 설치돼 있다고 가정한다 ([설치 안내](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)). 처음 실행할 때 YOLO 모델과 걷는 사람 모델을 내려받으므로 인터넷이 필요하다.
 
-ros2 run pointcloud_to_laserscan pointcloud_to_laserscan_node \
-  --ros-args \
-  -r cloud_in:=/mid360/points_filtered \
-  -r scan:=/scan \
-  -p use_sim_time:=true \
-  -p target_frame:=mid360_link \
-  -p min_height:=-0.03 \
-  -p max_height:=0.20 \
-  -p angle_min:=-3.14159265 \
-  -p angle_max:=3.14159265 \
-  -p angle_increment:=0.0174533 \
-  -p scan_time:=0.1 \
-  -p range_min:=0.10 \
-  -p range_max:=20.0
+### 1. ROS 패키지
 
+```bash
+sudo apt install \
+  ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-ros-gz \
+  ros-jazzy-cv-bridge ros-jazzy-pcl-ros ros-jazzy-pointcloud-to-laserscan \
+  ros-jazzy-spatio-temporal-voxel-layer ros-jazzy-slam-toolbox \
+  ros-jazzy-robot-localization ros-dev-tools python3-venv
 
-#### slam_toolbox 실행 : 주행할 지도를 만들 때만 사용
+# rosdep을 한 번도 안 썼으면
+sudo rosdep init
+rosdep update
+```
 
-ros2 launch slam_toolbox online_async_launch.py \
-  use_sim_time:=true \
-  slam_params_file:=$HOME/limbo/install/limbo_navigation/share/limbo_navigation/config/slam.yaml
+### 2. 저장소 받기
 
+서브모듈(`robot_self_filter`)이 있어서 `--recurse-submodules`가 꼭 필요하다. 아래 경로(`~/limbo`)를 기준으로 alias와 문서가 쓰여 있다.
 
-#### AMCL과 map_server 실행 : slam을 통해 만든 map 불러오기 + 로봇 위치 파악
+```bash
+git clone --recurse-submodules https://github.com/jakemoti0n/final_team7.git ~/limbo   # 기본 브랜치 dev
 
-ros2 launch limbo_navigation localization.launch.py
+# 빠진 ROS 의존성이 있으면 설치 (아무것도 안 나오면 다 있는 것)
+rosdep install --from-paths ~/limbo/limbo/src --ignore-src -r -y --rosdistro jazzy
+```
 
-#### map을 교체하고 싶다??
-navigation/launch에 있는 localization.launch.py 파일에서 default_map_file 변경하기
+- push까지 하려면 GitHub에 SSH 키를 등록하고 `git@github.com:jakemoti0n/final_team7.git` 주소를 쓴다
+- 이미 서브모듈 없이 받았다면 `git submodule update --init --recursive`
 
-#### Nav2 실행
+### 3. YOLO용 Python 환경
 
-ros2 launch nav2_bringup navigation_launch.py   use_sim_time:=true   autostart:=true   params_file:=$HOME/limbo/limbo/install/limbo_navigation/share/limbo_navigation/config/nav2_params.yaml
+`limbo_perception`은 YOLO가 설치된 별도 venv에서 돈다.
 
-#### self-filter 실행 : 로봇 몸체를 LiDAR가 인식하지 않도록 필터링
+```bash
+python3 -m venv --system-site-packages ~/limbo/venvs/limbo_yolo
+source ~/limbo/venvs/limbo_yolo/bin/activate
+pip install --upgrade pip
+pip install -r ~/limbo/requirements.txt          # CPU 버전 torch
+```
 
-ros2 launch robot_self_filter self_filter.launch.py \
-  robot_description:="$(xacro $HOME/limbo/limbo/src/limbo_description/urdf/limbo.urdf.xacro)" \
-  filter_config:=$HOME/limbo/limbo/src/limbo_navigation/config/self_filter.yaml \
-  in_pointcloud_topic:=/mid360/points \
-  out_pointcloud_topic:=/mid360/points_filtered \
-  lidar_sensor_type:=0 \
-  zero_for_removed_points:=false \
-  use_sim_time:=true
+- **NVIDIA GPU가 있으면** 위 마지막 줄 대신 아래로 설치한다 (CUDA 버전 torch, 2~3GB). `requirements.txt` 파일은 고치지 않는다
+  ```bash
+  grep -v -- '--extra-index-url' ~/limbo/requirements.txt > /tmp/limbo_req_gpu.txt
+  pip install -r /tmp/limbo_req_gpu.txt
+  ```
+- 확인 (GPU 버전이면 마지막에 `True`):
+  ```bash
+  source /opt/ros/jazzy/setup.bash
+  python -c "import torch, ultralytics, cv_bridge; print(torch.cuda.is_available())"
+  ```
 
+### 4. alias 등록
 
-#### Collision Monitor on/off
+`~/.bashrc` 맨 아래에 추가하고 `source ~/.bashrc`.
 
-ros2 service call /collision_monitor/toggle \
-  nav2_msgs/srv/Toggle \
-  "{enable: true}"   <-false로 고치면 끄기
-
-#### 하드웨어 조립 후 조정해야할 파타미터 정리
-
-- nav2_params.yaml -> source_timeout : 센서의 반영 속도 / 노트북 메모리 과열로 현재 2.0으로 설정. 이후 0.5까지 점차적으로 감소시켜 보기
-
-- person_detector.py -> self.reassociate_max_age : tracking된 사람 정보 유지 시간. 3초로 설정했지만 실제 사람들이 많이 교차되는 환경에서 오랜 시간 유지되는 tracking 데이터가 어떤식으로 작동할지 몰라 주시 필요함
-
-- SLAM을 통해 초기 map을 생성할 때 pointclaud에서 잘라오는 3D 데이터의 높이 설정을 수정할 필요 있음. 현재 LiDAR 기준 +20cm 까지 감지하기 때문에 충분히 지나갈 수 있는 높이의 장애물을 못 지나가거나 돌아가는 선택지가 발생
-
-#### YOLO를 통한 사람 구별
-
-ros2 run limbo_perception person_detector \
-  --ros-args \
-  -p use_sim_time:=true
-
-#### waypoint 설정을 통한 주행 경로 설정: limbo_patrol
-
-#### rviz에 찍힌 좌표 값을 가져오는 명령어
-ros2 topic echo /clicked_point
-
-#### 지정된 wayPoint로 이동하는 명령어
-ros2 run limbo_patrol patrol_node
-
-#### 제 alias 설정!
-alias sb="source ~/.bashrc; echo \"bashrc is reloaded!\""
-alias jazzy="source /opt/ros/jazzy/setup.bash && ros_domain && echo \"ROS2 Jazzy is activated!\""
+```bash
+# ===== limbo =====
 alias ros_domain="export ROS_DOMAIN_ID=97; echo \"ROS_DOMAIN_ID=97\""
-alias start_ros="jazzy; source ~/ros2_study/install/setup.bash; echo \"ros2_study is activated!\""
-alias pink="jazzy && source ~/pinky/install/setup.bash && echo \"pinky is acticvated\""
-alias nav="jazzy && source ~/pinky_ws/install/setup.bash && echo \"nav2 is activated\""
+alias jazzy="source /opt/ros/jazzy/setup.bash && ros_domain"
+alias goyolo="source ~/limbo/venvs/limbo_yolo/bin/activate"
 alias limbo="jazzy && goyolo && source ~/limbo/limbo/install/setup.bash && echo \"limbo is activated\""
-alias goyolo="source ~/limbo/venvs/limbo_yolo/bin/activate && echo \"Lets start YOLO\""
-alias build_limbo="cd ~/limbo/limbo && python -m colcon build --symlink-install"
+alias build_limbo="jazzy && goyolo && cd ~/limbo/limbo && python -m colcon build --symlink-install"
+```
+
+- `ROS_DOMAIN_ID=97`: 같은 번호끼리만 ROS 통신이 된다. 팀원과 맞출 것
+- **빌드는 반드시 `build_limbo`로.** venv의 python으로 colcon을 돌려야 `limbo_perception`이 YOLO를 찾는다
+
+### 5. 빌드
+
+```bash
+build_limbo
+```
+
+RAM 8GB 이하 PC는 병렬 빌드 중 멈출 수 있다: `MAKEFLAGS="-j2" python -m colcon build --symlink-install --executor sequential`
+
+---
+
+## 실행
+
+```bash
+limbo
+export __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia   # NVIDIA 노트북이면 (Gazebo·RViz를 GPU로)
+ros2 launch limbo_bringup start_simulation.launch.py
+```
+
+이 launch 하나로 Gazebo, EKF, self filter, LiDAR→`/scan` 변환, AMCL, Nav2, RViz, 사람 인식, 바퀴 헛돎 감시가 순서대로 뜬다 (약 15초).
+
+- **Gazebo 3D 창이 필요 없으면 `gui:=false`.** 센서·물리·사람은 그대로 돌고 창만 안 뜬다. Gazebo CPU가 약 285% → 110%로 준다. 로봇·지도·사람 인식 결과는 RViz로 본다
+- **2D Pose Estimate 없이 바로 Goal을 찍어도 된다.** AMCL이 스폰 위치(0, 0, 0°)에서 시작한다
+- 다른 곳에서 시작했거나 위치가 틀어지면 RViz의 2D Pose Estimate로 다시 맞춘다
+
+### 월드 바꾸기
+
+월드와 지도는 같은 건물끼리 짝지어 바꾼다.
+
+| 월드 | 명령 인자 | 내용 |
+|---|---|---|
+| `human_test_world` (기본) | 없음 | 15m 정사각형 방, 걷는 사람 10명 |
+| `aischool_2f` | `world:=aischool_2f map:=aischool_2f_map` | 학원 2층 (피난안내도로 만든 실제 구조), 걷는 사람 3명 |
+| `aischool_2f_scenarios` | `world:=aischool_2f_scenarios map:=aischool_2f_map` | 같은 학원 2층에 시험용 사람 6명. 모두 정해진 시간표대로 움직이고 로봇에 반응하지 않는다. 장소마다 상황이 하나씩: 로봇 시작 위치 1.6m 앞에 와서 4초 멈춤(로봇이 시작 위치에 있을 때 접근 판단 시험), 홀→오른쪽 복도로 꺾음, 왼쪽 복도에 서 있음, 위쪽 복도에 둘이 나란히 천천히, 왼쪽 아래 복도에 빨리 걸음. 경로는 `tools/aischool_2f/gen_world.py`의 `SCENARIO_PATHS` |
+| `bookstore_world` | `world:=bookstore_world map:=bookstore_map` | 서점, 걷는 사람 2명. 초기 위치가 맞는지 아직 확인 안 함 (틀리면 2D Pose Estimate) |
+
+### 주행 평가 기록 (`record:=true`)
+
+launch에 `record:=true`를 붙이면 Nav2 Goal이 끝날 때마다 `~/limbo_results/nav_<월드>_<날짜_시각>.csv`에 한 줄이 쌓인다. Goal은 RViz로 찍든 순찰 노드가 보내든 상관없다. 알고리즘·파라미터를 바꿔 가며 같은 경로를 돌리고 CSV를 비교하는 용도다.
+
+| 열 | 내용 |
+|---|---|
+| `status` | SUCCEEDED / ABORTED / CANCELED / PREEMPTED(끝나기 전에 새 Goal) |
+| `duration_s`, `path_length_m`, `mean_speed_mps` | 걸린 시간, 실제 주행 거리, 평균 속도 (Gazebo 정답 위치 기준) |
+| `min_person_distance_m`, `nearest_person` | 사람 중심까지 가장 가까웠던 거리와 그 사람 (월드 SDF의 시간표 기준) |
+| `personal_space_time_s` | 사람 0.5m 안에 있던 시간 (`nav_recorder.yaml`의 `personal_space`) |
+| `localization_error_mean_m`, `_max_m` | 위치 추정 오차. TF `map → base_footprint`를 같은 시각의 정답과 비교하므로 AMCL을 다른 방식으로 바꿔도 같은 기준 |
+| `recoveries`, `controller_rate_warnings`, `wheel_slip_events` | 복구 동작 횟수, 컨트롤러 주기 경고 수, 헛돎 감지 수 |
+
+- 시뮬레이션 전용이다. 정답 위치는 로봇 모델의 Gazebo 플러그인이 `/ground_truth/odom`으로 낸다 (주행 노드는 안 씀)
+- 지도 원점과 Gazebo 월드 원점이 같다고 가정한다 (`human_test_world`, `aischool_2f*`는 같음)
+- 사람은 정해진 시간표대로 움직이므로 같은 시각에 같은 Goal을 보내면 같은 상황이 재현된다
+
+### 자주 쓰는 명령
+
+```bash
+ros2 run limbo_patrol patrol_node        # waypoint 순찰 (limbo_patrol/config/waypoints.yaml)
+ros2 topic echo /clicked_point           # RViz Publish Point로 찍은 좌표 (waypoint 만들 때)
+
+# Collision Monitor 켜기/끄기 (끌 때는 false)
+ros2 service call /collision_monitor/toggle nav2_msgs/srv/Toggle "{enable: true}"
+```
+
+### 새 지도 만들기 (SLAM)
+
+시뮬레이션을 띄운 상태에서 다른 터미널로:
+
+```bash
+limbo
+ros2 launch slam_toolbox online_async_launch.py use_sim_time:=true \
+  slam_params_file:=$HOME/limbo/limbo/install/limbo_navigation/share/limbo_navigation/config/slam.yaml
+```
+
+로봇을 돌아다니게 한 뒤 `ros2 run nav2_map_server map_saver_cli -f <이름>`으로 저장하고, 만들어진 `.pgm`, `.yaml`을 `limbo_navigation/maps/`에 넣는다.
+
+---
+
+## 패키지 구성
+
+| 패키지 | 내용 |
+|---|---|
+| `limbo_bringup` | 통합 실행 `start_simulation.launch.py` |
+| `limbo_description` | 로봇 모델 (URDF), Gazebo 센서(MID-360 LiDAR·IMU, RGB-D 카메라) |
+| `limbo_simulation` | Gazebo 월드, ros_gz 브리지 설정, `tools/aischool_2f/`(도면 사진 → 월드·지도 생성 스크립트) |
+| `limbo_navigation` | Nav2 설정(`nav2_params.yaml`), AMCL, EKF, 지도, 사람 cost 플러그인 `human_layer` |
+| `limbo_perception` | `person_detector`: YOLO 사람 인식·추적·경로 예측 |
+| `limbo_interfaces` | 사람 예측 메시지 `PersonPrediction(Array)` |
+| `limbo_patrol` | waypoint 순찰 |
+| `limbo_monitor` | `wheel_slip_monitor`: 바퀴 헛돎을 감지하면 Nav2 Goal을 취소 |
+| `limbo_evaluation` | `nav_recorder`: Goal마다 주행 평가 지표를 CSV로 기록 (시뮬레이션 전용, `record:=true`) |
+| `robot_self_filter` | (서브모듈) LiDAR에서 로봇 몸체 점을 걸러 냄 |
+
+### 주요 토픽
+
+| 토픽 | 내용 |
+|---|---|
+| `/mid360/points` → `/mid360/points_filtered` → `/scan` | 3D LiDAR → 몸체 제거 → 2D 스캔 |
+| `/imu` | MID-360 내장 IMU (200Hz) |
+| `/odom` | 바퀴 odom (diff-drive). `odom → base_footprint` TF는 EKF가 냄 (`/odometry/filtered`) |
+| `/person_detector/predictions` | 사람별 현재 위치·속도·2초 앞 예측 (→ `human_layer`) |
+| `/person_detector/annotated_image` | YOLO 결과 이미지 (RViz Image로 보기) |
+| `/person_detector/approach_intent` | 로봇에게 다가오는 사람이 있는지 |
+| `/wheel_slip` | 바퀴 헛돎 여부 |
+
+### 튜닝 값 위치
+
+빌드 없이 노드만 다시 띄우면 적용된다.
+
+| 파일 | 내용 |
+|---|---|
+| `limbo_perception/config/person_detector.yaml` | YOLO confidence, 추적, 예측 시간, 접근 의도 판단 |
+| `limbo_navigation/config/nav2_params.yaml` | Nav2 전체 (MPPI, costmap, collision monitor 등) |
+| `limbo_navigation/config/amcl.yaml` | AMCL, 초기 위치 |
+| `limbo_navigation/config/ekf.yaml` | 바퀴 odom + IMU 융합 |
+| `limbo_monitor/config/wheel_slip_monitor.yaml` | 헛돎 판단 기준 |
+| `limbo_evaluation/config/nav_recorder.yaml` | 평가 결과 폴더, 개인 공간 거리 |
+
+---
+
+## 하드웨어 조립 후 조정할 값
+
+원작자 메모 (2026-09).
+
+- `nav2_params.yaml` 의 collision monitor `source_timeout`: 노트북 과열로 2.0으로 설정. 0.5까지 점차 줄여 볼 것. (과열의 원인이었을 person_detector CPU 문제는 2026-10-02에 해결됨, `docs/TROUBLESHOOTING.md` 참고)
+- `person_detector.yaml` 의 `tracking.reassociate_max_age`: 추적한 사람 정보를 유지하는 시간(3초). 사람이 많이 교차하는 실제 환경에서 어떻게 동작하는지 지켜볼 것
+- SLAM으로 처음 지도를 만들 때 포인트클라우드에서 잘라 오는 높이: 지금은 LiDAR 기준 +20cm까지 장애물로 봐서, 지나갈 수 있는 높이의 장애물을 못 지나가거나 돌아가는 경우가 있음
+
+---
+
+## 작업 방식
+
+- 작업은 개인 브랜치에서 하고 `dev`에 합친다. 리팩터링 전 원본은 `kkh` 브랜치에 있다
+- 커밋 메시지는 바꾼 이유 한 줄. "수정본", "최종" 같은 메시지는 쓰지 않는다
+- `dev`에 올릴 때 `docs/CHANGELOG.md` 맨 위에 항목을 추가한다 (할 일 / 변경 / 참고)
+- 문제를 해결하면 `docs/TROUBLESHOOTING.md`에 남기고, `KNOWN_ISSUES.md`에 있던 항목이면 거기서 지운다
