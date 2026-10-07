@@ -73,10 +73,11 @@ head, rest = base.split('</world>')[0], '</world>' + base.split('</world>')[1]
 # human_test_world의 기존 모델(벽 등)은 빼고, 지면/조명/플러그인만 남긴다
 kept = re.sub(r'\s*<model name="(?!ground_plane)[^"]*">.*?</model>', '', head, flags=re.S)
 kept = re.sub(r'\s*<actor .*?</actor>', '', kept, flags=re.S)
-open(os.path.join(WORLD_DIR, f'{NAME}.sdf'), 'w').write(kept + '\n' + walls_model + '\n  ' + rest)
+walls_world = kept + '\n' + walls_model + '\n  ' + rest
 print(f'map {cells_w}x{cells_h} cells, origin ({ox:.2f},{oy:.2f}), wall boxes {len(boxes)}, building {W*METERS_PER_PX:.1f}x{H*METERS_PER_PX:.1f} m')
 
-# --- 걷는 사람: 홀과 복도를 오가는 경로 (도면 px 좌표). 모서리에서는 제자리에서 방향만 바꾼다
+# --- 걷는 사람 (도면 px 좌표). 모서리에서는 제자리에서 방향만 바꾼다
+# 경로 점은 (u, v) 또는 (u, v, 멈춤 초). 시작과 끝이 다르면 왕복한다
 WALK_SPEED = 1.0   # m/s
 TURN_TIME = 0.5    # sec
 ACTOR_PATHS = {
@@ -84,12 +85,38 @@ ACTOR_PATHS = {
     'person_2': [(220, 470), (548, 470), (548, 222), (220, 222), (220, 470)],  # 코어 둘레 순환
     'person_3': [(300, 452), (500, 452)],                                 # 홀 가로지르기
 }
+
+# 시나리오 월드: 장소마다 한 가지 상황. 로봇을 그 장소로 보내 시험한다 (이름: (속도 m/s, 경로))
+# 로봇은 (400, 490)에서 동쪽(+u)을 보고 시작한다
+SCENARIO_PATHS = {
+    # 오른쪽 아래 복도(폭 1m) 가운데로 오다가 로봇 정면 1.6m 앞(접근 의도 판단 범위 0.3~2.0m)에서 4초 멈췄다 돌아간다
+    'approach_stop': (1.0, [(720, 521), (560, 521), (450, 500, 4.0)]),
+    # 왼쪽 복도(폭 1.6m) 서쪽 벽에 붙어 서 있다. 동쪽으로 약 1m가 남는다
+    'standing': (0.0, [(207, 340)]),
+    # 홀에서 동쪽으로 걷다가 오른쪽 복도로 90° 꺾어 북쪽으로 간다
+    'turn_corner': (1.0, [(440, 455), (547, 455), (547, 300)]),
+    # 위쪽 복도(폭 1.5m)를 0.6m 간격으로 나란히 천천히 걷는다. u=475 돌출부 앞에서 돌아선다
+    'pair_left': (0.7, [(240, 210), (450, 210)]),
+    'pair_right': (0.7, [(240, 229), (450, 229)]),
+    # 왼쪽 아래 복도(폭 1m)를 빨리 걷는다
+    'fast': (1.6, [(40, 521), (330, 521)]),
+}
+
 SKIN = 'https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae'
+STAND_LOOP_TIME = 10.0   # sec, 서 있는 사람의 궤적 길이 (Gazebo 궤적에는 점이 두 개 이상 필요)
 import math
-def actor_xml(name, path_px):
-    pts = [px_to_world(u, v) for u, v in path_px]
+
+
+def waypoints_of(path_px, speed):
+    stops = [p[2] if len(p) > 2 else 0.0 for p in path_px]
+    pts = [px_to_world(p[0], p[1]) for p in path_px]
+    if len(pts) == 1:
+        # 멈춰 있는 걷기 애니메이션은 걷던 자세 그대로 서 있다
+        x, y = pts[0]
+        return [(0.0, x, y, 0.0), (STAND_LOOP_TIME, x, y, 0.0)]
     if pts[0] != pts[-1]:
         pts = pts + pts[-2::-1]          # 왕복 경로
+        stops = stops + stops[-2::-1]
     waypoints, t = [], 0.0
     for i in range(len(pts) - 1):
         (x0, y0), (x1, y1) = pts[i], pts[i + 1]
@@ -97,10 +124,17 @@ def actor_xml(name, path_px):
         if i > 0:
             t += TURN_TIME
         waypoints.append((t, x0, y0, yaw))
-        t += math.hypot(x1 - x0, y1 - y0) / WALK_SPEED
+        t += math.hypot(x1 - x0, y1 - y0) / speed
         waypoints.append((t, x1, y1, yaw))
+        if stops[i + 1] > 0:
+            t += stops[i + 1]
+            waypoints.append((t, x1, y1, yaw))
+    return waypoints
+
+
+def actor_xml(name, path_px, speed=WALK_SPEED):
     wp = '\n'.join(f'          <waypoint><time>{tt:.2f}</time><pose>{x:.2f} {y:.2f} 1.0 0 0 {yw:.4f}</pose></waypoint>'
-                   for tt, x, y, yw in waypoints)
+                   for tt, x, y, yw in waypoints_of(path_px, speed))
     return f'''    <actor name="{name}">
       <skin><filename>{SKIN}</filename><scale>1.0</scale></skin>
       <animation name="walk"><filename>{SKIN}</filename><interpolate_x>true</interpolate_x></animation>
@@ -112,8 +146,13 @@ def actor_xml(name, path_px):
       </script>
     </actor>'''
 
-sdf = open(os.path.join(WORLD_DIR, f'{NAME}.sdf')).read()
-actors = '\n'.join(actor_xml(n, p) for n, p in ACTOR_PATHS.items())
-sdf = sdf.replace('\n  </world>', '\n' + actors + '\n  </world>', 1)
-open(os.path.join(WORLD_DIR, f'{NAME}.sdf'), 'w').write(sdf)
-print('actors', list(ACTOR_PATHS))
+
+def write_world(world_name, actors):
+    sdf = re.sub(r'<world name="[^"]+">', f'<world name="{world_name}">', walls_world)
+    sdf = sdf.replace('\n  </world>', '\n' + '\n'.join(actors) + '\n  </world>', 1)
+    open(os.path.join(WORLD_DIR, f'{world_name}.sdf'), 'w').write(sdf)
+    print(world_name, 'actors', len(actors))
+
+
+write_world(NAME, [actor_xml(n, p) for n, p in ACTOR_PATHS.items()])
+write_world(f'{NAME}_scenarios', [actor_xml(n, p, v) for n, (v, p) in SCENARIO_PATHS.items()])

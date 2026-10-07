@@ -118,6 +118,7 @@ ros2 launch limbo_bringup start_simulation.launch.py
 |---|---|---|
 | `human_test_world` (기본) | 없음 | 15m 정사각형 방, 걷는 사람 10명 |
 | `aischool_2f` | `world:=aischool_2f map:=aischool_2f_map` | 학원 2층 (피난안내도로 만든 실제 구조), 걷는 사람 3명 |
+| `aischool_2f_scenarios` | `world:=aischool_2f_scenarios map:=aischool_2f_map` | 같은 학원 2층에 시험용 사람 6명. 장소마다 상황이 하나씩: 로봇 정면으로 와서 멈춤(시작 위치에서 보임), 홀→오른쪽 복도로 꺾음, 왼쪽 복도에 서 있음, 위쪽 복도에 둘이 나란히 천천히, 왼쪽 아래 복도에 빨리 걸음. 경로는 `tools/aischool_2f/gen_world.py`의 `SCENARIO_PATHS` |
 | `bookstore_world` | `world:=bookstore_world map:=bookstore_map` | 서점, 걷는 사람 2명. 초기 위치가 맞는지 아직 확인 안 함 (틀리면 2D Pose Estimate) |
 
 ### 자주 쓰는 명령
