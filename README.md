@@ -142,7 +142,7 @@ launch에 `record:=true`를 붙이면 Nav2 Goal이 끝날 때마다 `~/limbo_res
 ### 자주 쓰는 명령
 
 ```bash
-ros2 run limbo_patrol patrol_node        # waypoint 순찰 (limbo_patrol/config/waypoints.yaml)
+ros2 run limbo_patrol patrol_node --ros-args -p use_sim_time:=true  # waypoint 순찰 (limbo_patrol/config/test_waypoints.yaml)
 ros2 topic echo /clicked_point           # RViz Publish Point로 찍은 좌표 (waypoint 만들 때)
 
 # Collision Monitor 켜기/끄기 (끌 때는 false)
