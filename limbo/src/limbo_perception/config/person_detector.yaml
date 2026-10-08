@@ -22,6 +22,10 @@ person_detector:
       max_position_jump: 0.8          # m
       min_track_hits: 5               # frame
       track_timeout: 3.0              # sec
+      # 이 시간 동안 측정 위치가 이 거리 미만으로 움직였으면 멈춘 것으로 보고 속도를 0으로 한다.
+      # 실제 카메라는 위치가 시뮬레이션보다 많이 흔들리므로, 서 있는 사람이 걷는 것으로 나오면 거리를 키운다
+      stop_window: 0.6                # sec
+      stop_max_displacement: 0.15     # m
       kalman_measurement_noise: 0.05
       kalman_process_noise: 0.5
 

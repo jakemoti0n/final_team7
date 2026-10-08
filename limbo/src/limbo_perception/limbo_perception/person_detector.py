@@ -146,6 +146,9 @@ class PersonDetector(Node):
             min_track_hits=p(
                 'tracking.min_track_hits', t.min_track_hits).value,
             track_timeout=p('tracking.track_timeout', t.track_timeout).value,
+            stop_window=p('tracking.stop_window', t.stop_window).value,
+            stop_max_displacement=p(
+                'tracking.stop_max_displacement', t.stop_max_displacement).value,
             kalman_measurement_noise=p(
                 'tracking.kalman_measurement_noise',
                 t.kalman_measurement_noise).value,
