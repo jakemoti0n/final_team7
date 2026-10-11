@@ -1,10 +1,12 @@
 import math
 
 import rclpy
+from rclpy.time import Time
 
 import time
 
 from geometry_msgs.msg import PoseStamped
+from tf2_ros import Buffer, TransformListener
 
 from nav2_simple_commander.robot_navigator import (
     BasicNavigator,
@@ -100,15 +102,34 @@ def create_waypoint(
     return pose
 
 
+def wait_for_localization(navigator, timeout_sec=30.0):
+    """AMCL pose와 TF를 기다리되 초기 위치를 다시 발행하지 않는다."""
+    tf_buffer = Buffer()
+    tf_listener = TransformListener(tf_buffer, navigator)
+    deadline = time.monotonic() + timeout_sec
+    while time.monotonic() < deadline:
+        if (navigator.initial_pose_received and
+                tf_buffer.can_transform('map', 'base_footprint', Time())):
+            return
+        rclpy.spin_once(navigator, timeout_sec=0.2)
+    raise TimeoutError(
+        'Localization not ready. Check /amcl_pose and map -> base_footprint TF.'
+    )
+
+
 def main(args=None):
 
     rclpy.init(args=args)
 
     navigator = BasicNavigator()
 
-    print('Waiting for Nav2...')
+    print('Waiting for AMCL pose and TF...')
+    wait_for_localization(navigator)
 
-    navigator.waitUntilNav2Active()
+    print('Waiting for Nav2...')
+    # AMCL의 set_initial_pose가 이미 초기 위치를 지정한다.
+    # BasicNavigator가 기본 초기 위치를 /initialpose로 다시 보내지 않게 한다.
+    navigator.waitUntilNav2Active(localizer='robot_localization')
 
     print('Nav2 is active')
 
