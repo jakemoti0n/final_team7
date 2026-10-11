@@ -119,7 +119,7 @@ ros2 launch limbo_bringup start_simulation.launch.py
 |---|---|---|
 | `human_test_world` (기본) | 없음 | 15m 정사각형 방, 걷는 사람 10명 |
 | `aischool_2f` | `world:=aischool_2f map:=aischool_2f_map` | 학원 2층 (피난안내도로 만든 실제 구조), 걷는 사람 3명 |
-| `aischool_2f_scenarios` | `world:=aischool_2f_scenarios map:=aischool_2f_map` | 같은 학원 2층에 시험용 사람 6명. 모두 정해진 시간표대로 움직이고 로봇에 반응하지 않는다. 장소마다 상황이 하나씩: 로봇 시작 위치 1.6m 앞에 와서 4초 멈춤(로봇이 시작 위치에 있을 때 접근 판단 시험), 홀→오른쪽 복도로 꺾음, 왼쪽 복도에 서 있음, 위쪽 복도에 둘이 나란히 천천히, 왼쪽 아래 복도에 빨리 걸음. 경로는 `tools/aischool_2f/gen_world.py`의 `SCENARIO_PATHS` |
+| `aischool_2f_scenarios` | `world:=aischool_2f_scenarios map:=aischool_2f_map` | 같은 학원 2층에 시험용 사람 6명과 지도에 없는 낮은 상자 2개(홀 서쪽, 0.1m·0.3m). 모두 정해진 시간표대로 움직이고 로봇에 반응하지 않는다. 장소마다 상황이 하나씩: 로봇 시작 위치 1.6m 앞에 와서 4초 멈춤(로봇이 시작 위치에 있을 때 접근 판단 시험), 홀→오른쪽 복도로 꺾음, 왼쪽 복도에 서 있음, 위쪽 복도에 둘이 나란히 천천히, 왼쪽 아래 복도에 빨리 걸음. 경로는 `tools/aischool_2f/gen_world.py`의 `SCENARIO_PATHS` |
 | `bookstore_world` | `world:=bookstore_world map:=bookstore_map` | 서점, 걷는 사람 2명. 초기 위치가 맞는지 아직 확인 안 함 (틀리면 2D Pose Estimate) |
 
 ### 주행 평가 기록 (`record:=true`)
@@ -132,6 +132,7 @@ launch에 `record:=true`를 붙이면 Nav2 Goal이 끝날 때마다 `~/limbo_res
 | `duration_s`, `path_length_m`, `mean_speed_mps` | 걸린 시간, 실제 주행 거리, 평균 속도 (Gazebo 정답 위치 기준) |
 | `min_person_distance_m`, `nearest_person` | 사람 중심까지 가장 가까웠던 거리와 그 사람 (월드 SDF의 시간표 기준) |
 | `personal_space_time_s` | 사람 0.5m 안에 있던 시간 (`nav_recorder.yaml`의 `personal_space`) |
+| `min_obstacle_distance_m`, `nearest_obstacle`, `obstacle_contact_time_s` | 로봇 외곽에서 지도에 없는 장애물(월드 SDF에서 이름이 `obstacle_`로 시작하는 상자)까지 가장 가까웠던 거리, 그 장애물, 닿아 있던 시간 |
 | `localization_error_mean_m`, `_max_m` | 위치 추정 오차. TF `map → base_footprint`를 같은 시각의 정답과 비교하므로 AMCL을 다른 방식으로 바꿔도 같은 기준 |
 | `recoveries`, `controller_rate_warnings`, `wheel_slip_events` | 복구 동작 횟수, 컨트롤러 주기 경고 수, 헛돎 감지 수 |
 

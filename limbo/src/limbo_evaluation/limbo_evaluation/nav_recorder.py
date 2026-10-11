@@ -14,7 +14,7 @@ import time
 
 from action_msgs.msg import GoalStatus, GoalStatusArray
 from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
-from limbo_evaluation import actors, csv_log, goal_metrics
+from limbo_evaluation import actors, csv_log, goal_metrics, obstacles
 from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import Odometry
 from rcl_interfaces.msg import Log
@@ -48,7 +48,7 @@ class NavRecorder(Node):
         super().__init__('nav_recorder')
         self._declare_parameters()
 
-        self.trajectories = self._load_actors()
+        self.trajectories, self.boxes = self._load_world()
         self.goal_id = None    # 따라가는 Goal의 uuid
         self.metrics = None
         self.truth_times = []
@@ -72,7 +72,8 @@ class NavRecorder(Node):
         self.create_subscription(Bool, self.slip_topic, self.slip_callback, QUEUE)
 
         self.get_logger().info(
-            f'Nav recorder started: {len(self.trajectories)} people in {self.world}, '
+            f'Nav recorder started: {len(self.trajectories)} people, '
+            f'{len(self.boxes)} obstacles in {self.world}, '
             f'results -> {self.csv_path}')
 
     def _declare_parameters(self):
@@ -87,24 +88,31 @@ class NavRecorder(Node):
         self.navigate_action = p('navigate_action', '/navigate_to_pose').value
         self.slip_topic = p('slip_topic', '/wheel_slip').value
         self.controller_node = p('controller_node', 'controller_server').value
+        # 로봇 외곽 (정사각형 한 변의 절반). nav2_params.yaml의 footprint와 맞춘다
+        self.robot_half_size = p('robot_half_size', 0.225).value
 
         m = goal_metrics.MetricsConfig()
         self.metrics_config = goal_metrics.MetricsConfig(
             personal_space=p('personal_space', m.personal_space).value)
 
-    def _load_actors(self):
+    def _load_world(self):
+        """(사람 시간표, 장애물 상자). 월드 파일을 못 읽으면 둘 다 비운다."""
         try:
             path = os.path.join(
                 get_package_share_directory('limbo_simulation'), 'worlds', f'{self.world}.sdf')
             with open(path) as f:
-                return actors.parse_actor_trajectories(f.read())
+                sdf = f.read()
         except (OSError, PackageNotFoundError) as e:
-            self.get_logger().warn(f'No people for {self.world} ({e}). Person metrics are empty')
-            return {}
+            self.get_logger().warn(f'Cannot read {self.world} ({e}). Person metrics are empty')
+            return {}, []
+        return actors.parse_actor_trajectories(sdf), obstacles.parse_boxes(sdf)
 
     def truth_callback(self, msg):
         t = stamp_sec(msg.header.stamp)
         x, y = msg.pose.pose.position.x, msg.pose.pose.position.y
+        q = msg.pose.pose.orientation
+        yaw = math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
+        dt = t - self.truth_times[-1] if self.truth_times else 0.0
         self.truth_times.append(t)
         self.truth_poses.append((t, x, y))
         cut = bisect.bisect_left(self.truth_times, t - TRUTH_HISTORY_SEC)
@@ -113,6 +121,8 @@ class NavRecorder(Node):
         if self.metrics is not None:
             name, distance = actors.nearest_person(self.trajectories, t, x, y)
             self.metrics.add_truth(t, x, y, name, distance)
+            name, distance = obstacles.nearest_box(self.boxes, x, y, yaw, self.robot_half_size)
+            self.metrics.add_obstacle(dt, name, distance)
             self._add_localization_error()
 
     def _add_localization_error(self):

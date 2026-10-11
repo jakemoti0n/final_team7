@@ -22,6 +22,9 @@ class GoalMetrics:
         self.min_person_distance = math.inf
         self.nearest_person = ''
         self.personal_space_time = 0.0
+        self.min_obstacle_distance = math.inf
+        self.nearest_obstacle = ''
+        self.obstacle_contact_time = 0.0
         self.localization_errors = []
         self.recoveries = 0
         self.controller_warnings = 0
@@ -40,6 +43,14 @@ class GoalMetrics:
         if person_distance < self.min_person_distance:
             self.min_person_distance = person_distance
             self.nearest_person = person_name
+
+    def add_obstacle(self, dt, name, distance):
+        """정답 위치 한 번마다 로봇 외곽에서 가장 가까운 장애물까지 거리 (0이면 닿음)."""
+        if distance <= 0.0:
+            self.obstacle_contact_time += dt
+        if distance < self.min_obstacle_distance:
+            self.min_obstacle_distance = distance
+            self.nearest_obstacle = name
 
     def add_localization_error(self, error):
         self.localization_errors.append(error)
@@ -62,6 +73,9 @@ class GoalMetrics:
             'min_person_distance_m': _round(self.min_person_distance, 2),
             'nearest_person': self.nearest_person,
             'personal_space_time_s': _round(self.personal_space_time, 1),
+            'min_obstacle_distance_m': _round(self.min_obstacle_distance, 2),
+            'nearest_obstacle': self.nearest_obstacle,
+            'obstacle_contact_time_s': _round(self.obstacle_contact_time, 1),
             'localization_error_mean_m': _round(sum(errors) / len(errors), 3) if errors else '',
             'localization_error_max_m': _round(max(errors), 3) if errors else '',
             'controller_rate_warnings': self.controller_warnings,

@@ -4,3 +4,4 @@ nav_recorder:
   ros__parameters:
     output_dir: ~/limbo_results   # 실행할 때마다 nav_<월드>_<날짜_시각>.csv 파일이 생긴다
     personal_space: 0.5           # m, 사람 중심에서 이 거리 안에 들어간 시간을 센다
+    robot_half_size: 0.225        # m, 로봇 외곽 정사각형 한 변의 절반 (nav2_params.yaml footprint와 같게)
