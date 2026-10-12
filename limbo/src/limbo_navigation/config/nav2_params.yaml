@@ -621,6 +621,7 @@ planner_server:
       tolerance: 0.5
       use_astar: true
       allow_unknown: true
+      use_final_approach_orientation: true
 
 smoother_server:
   ros__parameters:
