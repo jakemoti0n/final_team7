@@ -1,0 +1,10 @@
+patrol_home1 OK 431s
+patrol_home2 OK 200s
+patrol_home3 OK 193s
+patrol_home4 OK 202s
+patrol_home5 OK 212s
+patrol_home6 OK 201s
+patrol_home7 OK 435s
+patrol_home8 OK 198s
+patrol_home9 OK 214s
+patrol_home10 OK 203s

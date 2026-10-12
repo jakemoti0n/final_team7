@@ -9,7 +9,7 @@
 
 | 요청 | 상태 | 시작 커밋 | 메모 |
 |---|---|---|---|
-| R1 학원 2층 순찰 반복 | 진행 | `6372d97` (home1), `6808ade` (home2~) | 14:15 시작. 1단계 2/10 끝(OK 2). home1은 녹화 수정 전 도구라 reindex 후 근사 분석 예정. 이후 pull은 문서만 바뀐 커밋(`2e5f852`)이라 도구 변화 없음 |
+| R1 학원 2층 순찰 반복 | 완료 | `6372d97` (home1), `6808ade` (home2~10) | 14:15~15:00. 1단계 10/10 OK → 2단계 생략 |
 
 ---
 
@@ -32,9 +32,26 @@
 
 `docs/CHANGELOG.md`에서 (19) 항목이 (20) 바로 아래 빈 줄·`---` 없이 붙어 있다. 다른 항목은 `---`로 나뉘어 있음. lab에서 고쳐도 되는지.
 
+### Q4. `patrol_analyze.py`의 collision monitor 칸이 거의 항상 "기록 없음" — 대기
+
+`/collision_monitor_state`는 상태가 바뀔 때만 나오는데(회차당 10~20개), 분석은 멈춘 구간 **안**의 메시지만 본다(`patrol_analyze.py` 75행). 그래서 멈춘 동안 collision monitor가 막고 있었어도 "기록 없음"이 나와 원인 후보 1번을 가릴 수 없다.
+제안: 구간 시작 직전 마지막 메시지(`bisect_right(ts, s) - 1`)를 포함. R1에서는 `experiments/2026-10-12_patrol_repro/cm_state.py`로 따로 계산했다. 도구는 노트북 담당이라 고치지 않았음. 서브 PC가 고쳐도 되면 알려 주세요.
+
+### Q5. 시뮬레이션 시작 실패 빈도 — 참고
+
+R1 10회 중 2회(home1, home7) Nav2 시작 실패: `Failed to activate global_costmap because transform from base_link to map did not become available before timeout`. `sim_ctl.sh` 재시도로 둘 다 회복. `KNOWN_ISSUES`의 "AMCL이 Configuring에서 멈춤(가끔)"과 증상은 다르지만(이번엔 map→base_link TF 대기 시간 초과) 시작 부하 계열로 보임. 회차 시간이 200초 → 430초로 늘어나는 정도라 반복 시험에는 지장 없음.
+
 ---
 
 ## 결과
+
+### R1. 학원 2층 순찰 반복 — 완료 (2026-10-12)
+
+자세히: [`experiments/2026-10-12_patrol_repro/`](../../experiments/2026-10-12_patrol_repro/README.md)
+
+- **"목표 34cm 앞 정지 후 실패"는 재현 안 됨. 10/10 OK** (사람 3명). 실패가 없어 2단계(사람 없음)는 지시대로 생략
+- **위쪽 복도 (x −3.5~−4.8, y 8.5)에서 3~5초 머뭇거림 9회 중 4회** (home1은 녹화 수정 전이라 제외). 원인 후보 **2번(MPPI)**: MPPI 명령부터 0.01~0.02 m/s, collision monitor 개입 없음, 위치 오차 0.05 m 이하. 매번 직전에 `APPROACH` 감속이 잠깐 켜짐 → 걷는 사람과 만나는 시각으로 추정 (사람 위치는 녹화 안 돼서 미확정). `KNOWN_ISSUES` "위쪽 복도 30초 붙잡힘"과 같은 구간
+- 제안: 사람 없는 월드 10회로 머뭇거림이 사라지는지 확인, 녹화에 사람 예측 토픽 추가. 팀원 실패 회차 bag이 있으면 같은 분석 가능
 
 ### R0. 서브 PC 환경 — 완료 (2026-10-12)
 
