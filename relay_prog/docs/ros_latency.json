@@ -1,0 +1,48 @@
+{
+  "domain": 89,
+  "publisher_qos": "reliable/volatile/keep_last/1",
+  "rounds": [
+    {
+      "index": 1,
+      "publish_to_accept_s": 0.8738951830309816,
+      "motion": {
+        "linear_speed_mps": 0.0,
+        "angular_velocity_radps": 0.0,
+        "last_received_at": "2026-10-06T02:15:08.550Z",
+        "age_ms": 871.6167320380919
+      }
+    },
+    {
+      "index": 2,
+      "publish_to_accept_s": 0.9996245119837113,
+      "motion": {
+        "linear_speed_mps": 0.0,
+        "angular_velocity_radps": 0.75,
+        "last_received_at": "2026-10-06T02:15:09.425Z",
+        "age_ms": 997.8155379649252
+      }
+    },
+    {
+      "index": 3,
+      "publish_to_accept_s": 0.9988456339924596,
+      "motion": {
+        "linear_speed_mps": null,
+        "angular_velocity_radps": null,
+        "last_received_at": null,
+        "age_ms": null
+      }
+    },
+    {
+      "index": 4,
+      "publish_to_accept_s": 0.9970828240038827,
+      "motion": {
+        "linear_speed_mps": 3.0,
+        "angular_velocity_radps": -0.5,
+        "last_received_at": "2026-10-06T02:15:11.428Z",
+        "age_ms": 995.5426010419615
+      }
+    }
+  ],
+  "initial_empty": true,
+  "all_passed": true
+}

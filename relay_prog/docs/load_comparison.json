@@ -1,0 +1,330 @@
+{
+  "domain": 88,
+  "payload_bytes": {
+    "lidar_raw": 1048576,
+    "lidar_filtered": 1048576,
+    "camera_raw": 921600
+  },
+  "before": [
+    {
+      "publisher_cpu": 3.0,
+      "publisher_rss": 80396288
+    },
+    {
+      "publisher_cpu": 2.0,
+      "publisher_rss": 80396288
+    },
+    {
+      "publisher_cpu": 4.0,
+      "publisher_rss": 80396288
+    },
+    {
+      "publisher_cpu": 2.0,
+      "publisher_rss": 80396288
+    },
+    {
+      "publisher_cpu": 3.0,
+      "publisher_rss": 80396288
+    },
+    {
+      "publisher_cpu": 2.0,
+      "publisher_rss": 80396288
+    },
+    {
+      "publisher_cpu": 3.0,
+      "publisher_rss": 80400384
+    },
+    {
+      "publisher_cpu": 2.0,
+      "publisher_rss": 80400384
+    },
+    {
+      "publisher_cpu": 3.0,
+      "publisher_rss": 80400384
+    },
+    {
+      "publisher_cpu": 3.0,
+      "publisher_rss": 80400384
+    },
+    {
+      "publisher_cpu": 2.0,
+      "publisher_rss": 80400384
+    },
+    {
+      "publisher_cpu": 3.0,
+      "publisher_rss": 80400384
+    },
+    {
+      "publisher_cpu": 2.0,
+      "publisher_rss": 80400384
+    },
+    {
+      "publisher_cpu": 3.0,
+      "publisher_rss": 80400384
+    },
+    {
+      "publisher_cpu": 2.0,
+      "publisher_rss": 80400384
+    }
+  ],
+  "after": [
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 20.0,
+      "bridge_rss": 90992640
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 19.0,
+      "bridge_rss": 91000832
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 21.0,
+      "bridge_rss": 91013120
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 19.0,
+      "bridge_rss": 91017216
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 19.0,
+      "bridge_rss": 91021312
+    },
+    {
+      "publisher_cpu": 6.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 20.0,
+      "bridge_rss": 91025408
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 21.0,
+      "bridge_rss": 91025408
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 20.0,
+      "bridge_rss": 91033600
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 20.0,
+      "bridge_rss": 91033600
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 19.0,
+      "bridge_rss": 91033600
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 20.0,
+      "bridge_rss": 91041792
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 20.0,
+      "bridge_rss": 91045888
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 20.0,
+      "bridge_rss": 91049984
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 20.0,
+      "bridge_rss": 91049984
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 20.0,
+      "bridge_rss": 91049984
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 19.0,
+      "bridge_rss": 91049984
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 20.0,
+      "bridge_rss": 91049984
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 19.0,
+      "bridge_rss": 91054080
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 20.0,
+      "bridge_rss": 91058176
+    },
+    {
+      "publisher_cpu": 6.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 20.0,
+      "bridge_rss": 91058176
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 19.0,
+      "bridge_rss": 91062272
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 18.0,
+      "bridge_rss": 91062272
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 19.0,
+      "bridge_rss": 91062272
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 19.0,
+      "bridge_rss": 91066368
+    },
+    {
+      "publisher_cpu": 4.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 16.0,
+      "bridge_rss": 91070464
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 19.0,
+      "bridge_rss": 91070464
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 19.0,
+      "bridge_rss": 91070464
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 18.0,
+      "bridge_rss": 91074560
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 20.0,
+      "bridge_rss": 91078656
+    },
+    {
+      "publisher_cpu": 5.0,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 19.0,
+      "bridge_rss": 91078656
+    }
+  ],
+  "telemetry_bytes_per_second": 983.9491227068953,
+  "odom_received_hz": 19.99151649534852,
+  "latest": {
+    "schema_version": 1,
+    "robot_id": "LIMBO-01",
+    "bridge_session_id": "70cac50d-8cc6-43a7-9453-ff17ceae05ee",
+    "sequence": 35,
+    "sent_at": "2026-10-06T02:15:12.928Z",
+    "source_clock": "ros_sim",
+    "topics": {
+      "odom": {
+        "header_stamp": {
+          "sec": 100,
+          "nanosec": 0
+        },
+        "last_received_at": "2026-10-06T02:15:12.913Z",
+        "age_ms": 15.38246200652793,
+        "received_count": 680,
+        "receive_hz": 19.8
+      },
+      "lidar_raw": {
+        "header_stamp": {
+          "sec": 100,
+          "nanosec": 0
+        },
+        "last_received_at": "2026-10-06T02:15:12.915Z",
+        "age_ms": 12.858096975833178,
+        "received_count": 676,
+        "receive_hz": 19.8
+      },
+      "lidar_filtered": {
+        "header_stamp": {
+          "sec": 100,
+          "nanosec": 0
+        },
+        "last_received_at": "2026-10-06T02:15:12.920Z",
+        "age_ms": 8.147123968228698,
+        "received_count": 678,
+        "receive_hz": 19.8
+      },
+      "camera_raw": {
+        "header_stamp": {
+          "sec": 100,
+          "nanosec": 0
+        },
+        "last_received_at": "2026-10-06T02:15:12.917Z",
+        "age_ms": 10.531105974223465,
+        "received_count": 679,
+        "receive_hz": 19.8
+      }
+    },
+    "motion": {
+      "linear_speed_mps": 0.0,
+      "angular_velocity_radps": 0.75,
+      "last_received_at": "2026-10-06T02:15:12.913Z",
+      "age_ms": 15.38246200652793
+    }
+  },
+  "restart": {
+    "new_session": true,
+    "sequence": 1,
+    "empty_counts": true
+  },
+  "sigterm_shutdown_s": 1.0658190189860761,
+  "sigterm_exit_code": 0,
+  "summary": {
+    "before": {
+      "publisher_cpu": 2.6,
+      "publisher_rss": 80398745.6
+    },
+    "after": {
+      "publisher_cpu": 5.033333333333333,
+      "publisher_rss": 80822272,
+      "bridge_cpu": 19.4,
+      "bridge_rss": 91046707.2
+    }
+  },
+  "all_passed": true
+}

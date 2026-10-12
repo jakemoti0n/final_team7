@@ -1,0 +1,7 @@
+{
+  "name": "limbo-dashboard", "version": "1.0.0", "private": true, "type": "module",
+  "packageManager": "pnpm@10.17.1",
+  "scripts": {"dev": "vite --host 127.0.0.1", "build": "tsc -b && vite build", "test": "vitest run src", "test:e2e": "playwright test"},
+  "dependencies": {"react": "19.1.0", "react-dom": "19.1.0"},
+  "devDependencies": {"@playwright/test": "1.56.1", "@types/react": "19.1.2", "@types/react-dom": "19.1.2", "@types/node": "22.15.3", "@vitejs/plugin-react": "4.4.1", "typescript": "5.8.3", "vite": "6.3.5", "vitest": "3.1.3"}
+}
