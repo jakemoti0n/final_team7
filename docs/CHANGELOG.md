@@ -8,6 +8,21 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-12 (18) launch에 사람 인식 모델 선택 인자 추가
+
+**할 일**
+- 없음 (launch 파일만 바뀜)
+
+**변경**
+- `start_simulation.launch.py`에 `person_model` 인자를 추가했음. 경로를 주면 yaml을 고치지 않고 그 모델로 사람 인식을 돌림. 비우면(기본) 지금처럼 `person_detector.yaml`의 yolo11n
+  ```bash
+  ros2 launch limbo_bringup start_simulation.launch.py world:=aischool_2f_scenarios map:=aischool_2f_map \
+    person_model:=$HOME/limbo/human-leg/runs/person_leg_stage1/weights/best.pt
+  ```
+- 하반신 모델은 아직 학습 중이라 기본으로 바꾸지 않았음. 새 모델이 나오면 경로만 바꿔 같은 시험을 반복하면 됨
+
+---
+
 ## 2026-10-12 (17) 사람 거리 계산 수정 (다리만 보일 때), 하반신 모델 평가
 
 **할 일**
