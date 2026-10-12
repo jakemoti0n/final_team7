@@ -24,10 +24,13 @@ class DepthConfig:
     roi_margin: float = 0.30
     min_depth: float = 0.1
     max_depth: float = 5.0
+    # 박스 안에서 사람은 보통 배경보다 앞에 있으므로 가까운 쪽 값을 쓴다.
+    # 중앙값(50)을 쓰면 다리만 보이는 박스에서 다리 사이로 보이는 뒤쪽 벽까지 거리를 잰다
+    percentile: float = 25.0
 
 
 def person_depth(depth_image, x1, y1, x2, y2, config):
-    """박스 중앙 영역의 유효 depth 중앙값(m), 없으면 None."""
+    """박스 중앙 영역의 유효 depth 중 가까운 쪽 값(m, percentile), 없으면 None."""
     if depth_image is None:
         return None
 
@@ -61,8 +64,7 @@ def person_depth(depth_image, x1, y1, x2, y2, config):
     if len(valid_depth) == 0:
         return None
 
-    # 평균보다는 median이 outlier에 강함
-    return float(np.median(valid_depth))
+    return float(np.percentile(valid_depth, config.percentile))
 
 
 def pixel_to_optical_point(u, v, depth, intrinsics):

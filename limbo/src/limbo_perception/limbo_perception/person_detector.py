@@ -132,6 +132,7 @@ class PersonDetector(Node):
             roi_margin=p('depth.roi_margin', d.roi_margin).value,
             min_depth=p('depth.min_depth', d.min_depth).value,
             max_depth=p('depth.max_depth', d.max_depth).value,
+            percentile=p('depth.percentile', d.percentile).value,
         )
 
         t = tracking.TrackerConfig()

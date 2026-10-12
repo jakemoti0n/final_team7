@@ -15,6 +15,7 @@ person_detector:
       roi_margin: 0.30      # box 각 변에서 잘라낼 비율 (배경 제외)
       min_depth: 0.1        # m
       max_depth: 5.0        # m
+      percentile: 25.0      # 중앙 영역 depth 중 가까운 쪽 25% 값 (50이면 중앙값. 다리만 보일 때 배경을 잴 수 있음)
 
     tracking:
       reassociate_max_age: 3.0        # sec

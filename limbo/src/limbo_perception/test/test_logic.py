@@ -137,3 +137,21 @@ def test_person_depth_ignores_invalid_values():
 
     assert geometry.person_depth(depth, 20, 20, 80, 80, config) == 2.0
     assert geometry.person_depth(None, 0, 0, 10, 10, config) is None
+
+
+def test_person_depth_legs_only_box_measures_the_legs():
+    # 다리만 보이는 박스: 가운데 영역의 절반 이상이 다리 사이로 보이는 뒤쪽 벽(4m)
+    depth = np.full((100, 100), 4.0, dtype=np.float32)
+    depth[:, 30:42] = 1.5   # 왼쪽 다리
+    depth[:, 58:70] = 1.5   # 오른쪽 다리
+    config = geometry.DepthConfig()
+
+    assert abs(geometry.person_depth(depth, 20, 0, 80, 100, config) - 1.5) < 0.01
+
+
+def test_person_depth_full_body_is_unchanged():
+    depth = np.full((100, 100), 4.0, dtype=np.float32)
+    depth[10:95, 25:75] = np.linspace(1.9, 2.1, 50, dtype=np.float32)  # 몸통 (조금 둥근 면)
+    config = geometry.DepthConfig()
+
+    assert abs(geometry.person_depth(depth, 25, 10, 75, 95, config) - 2.0) < 0.05
