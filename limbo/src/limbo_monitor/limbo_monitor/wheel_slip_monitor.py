@@ -82,6 +82,7 @@ class WheelSlipMonitor(Node):
                 'slip.min_forward_constraint', s.min_forward_constraint).value,
             max_wheel_rotation=p('slip.max_wheel_rotation', s.max_wheel_rotation).value,
             consecutive_windows=p('slip.consecutive_windows', s.consecutive_windows).value,
+            min_inlier_ratio=p('slip.min_inlier_ratio', s.min_inlier_ratio).value,
         )
 
     def odom_callback(self, msg):

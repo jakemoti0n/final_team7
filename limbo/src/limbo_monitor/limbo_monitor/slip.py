@@ -18,8 +18,12 @@ class SlipConfig:
     min_forward_constraint: float = 0.1
     # 크게 회전하는 동안은 ICP가 불안정해서 판단을 보류한다
     max_wheel_rotation: float = 0.35          # rad
-    # 의심이 이만큼 연속돼야 헛돎으로 확정한다 (사람이 스캔을 가리는 순간적 오판 방지)
-    consecutive_windows: int = 2
+    # 의심이 이만큼 연속돼야 헛돎으로 확정한다 (사람이 스캔을 가리는 순간적 오판 방지).
+    # 진짜로 막혔을 때는 계속 이어지므로 늘려도 늦게 잡을 뿐 놓치지 않는다
+    consecutive_windows: int = 4
+    # 두 스캔의 점이 이 비율보다 적게 맞으면(사람이 가리는 등) 스캔 이동 추정을 믿지 않고 판단을 보류한다.
+    # 시뮬레이션 정상 주행 하위 10%가 0.88~0.91, 진짜 헛돎은 0.95 이상이었다
+    min_inlier_ratio: float = 0.8
 
 
 class SlipDetector:
@@ -38,7 +42,8 @@ class SlipDetector:
 
         if (motion is None
                 or abs(wheel_rotation) > cfg.max_wheel_rotation
-                or motion.forward_constraint < cfg.min_forward_constraint):
+                or motion.forward_constraint < cfg.min_forward_constraint
+                or motion.inlier_ratio < cfg.min_inlier_ratio):
             return UNKNOWN
 
         scan_distance = (motion.dx ** 2 + motion.dy ** 2) ** 0.5

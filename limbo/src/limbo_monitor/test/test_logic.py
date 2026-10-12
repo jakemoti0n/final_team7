@@ -56,8 +56,8 @@ def test_long_corridor_has_no_forward_constraint():
     assert m.forward_constraint < 0.1
 
 
-def _motion(dx, constraint=0.5):
-    return scan_motion.MotionEstimate(dx, 0.0, 0.0, constraint, 1.0)
+def _motion(dx, constraint=0.5, inlier_ratio=1.0):
+    return scan_motion.MotionEstimate(dx, 0.0, 0.0, constraint, inlier_ratio)
 
 
 def test_slip_needs_consecutive_windows():
@@ -73,6 +73,22 @@ def test_real_motion_resets_suspicion():
     detector.update(0.2, 0.0, _motion(0.0))
     assert detector.update(0.2, 0.0, _motion(0.19)) == slip.OK
     assert detector.update(0.2, 0.0, _motion(0.0)) == slip.SUSPECT
+
+
+def test_poorly_matched_scan_is_unknown():
+    # 사람이 스캔을 가리면 두 스캔이 잘 안 맞는다. 그때 낸 이동 추정은 믿지 않는다
+    detector = slip.SlipDetector(slip.SlipConfig(consecutive_windows=2, min_inlier_ratio=0.8))
+
+    assert detector.update(0.2, 0.0, _motion(0.0, inlier_ratio=0.6)) == slip.UNKNOWN
+    assert detector.update(0.2, 0.0, _motion(0.0, inlier_ratio=0.6)) == slip.UNKNOWN
+    assert detector.update(0.2, 0.0, _motion(0.0, inlier_ratio=0.95)) == slip.SUSPECT
+
+
+def test_default_needs_two_seconds_of_suspicion():
+    detector = slip.SlipDetector(slip.SlipConfig())
+
+    states = [detector.update(0.2, 0.0, _motion(0.0)) for _ in range(4)]
+    assert states == [slip.SUSPECT, slip.SUSPECT, slip.SUSPECT, slip.SLIP]
 
 
 def test_unknown_in_corridor_and_slow_motion_is_ok():

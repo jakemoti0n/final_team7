@@ -17,4 +17,5 @@ wheel_slip_monitor:
       max_scan_ratio: 0.3           # 스캔 이동 < 바퀴 이동 × 이 비율이면 의심
       min_forward_constraint: 0.1   # 이보다 작으면(긴 복도) 판단 보류
       max_wheel_rotation: 0.35      # rad, 크게 도는 동안은 판단 보류
-      consecutive_windows: 2        # 연속 의심 횟수 → 헛돎 확정 (0.5초 × 2 = 1초)
+      consecutive_windows: 4        # 연속 의심 횟수 → 헛돎 확정 (0.5초 × 4 = 2초). 사람이 지나가는 순간적 오판을 거른다
+      min_inlier_ratio: 0.8         # 두 스캔이 이 비율보다 덜 맞으면(사람이 가림 등) 판단 보류
