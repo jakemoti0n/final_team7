@@ -231,3 +231,29 @@ write_world(NAME, [actor_xml(n, p) for n, p in ACTOR_PATHS.items()])
 write_world(f'{NAME}_scenarios',
             [actor_xml(n, p, v) for n, (v, p) in SCENARIO_PATHS.items()]
             + [obstacle_xml(n, *spec) for n, spec in SCENARIO_OBSTACLES.items()])
+
+# --- 가구 월드: 기본 월드 + 걷는 사람 + 실제 가구 모델 (furniture.py, 모델은 limbo_simulation/models).
+# 지도는 따로 두고 고정 가구(정수기)만 더한다. 가구는 모두 static (로봇이 밀어도 안 움직임)
+import furniture
+
+
+def include_xml(name, model, x, y, yaw):
+    return (f'    <include><uri>model://{model}</uri><name>{name}</name><static>true</static>'
+            f'<pose>{x:.3f} {y:.3f} 0 0 0 {yaw:.4f}</pose></include>')
+
+
+furniture_models = [include_xml(f'{model.lower()}_{i}', model, x, y, yaw)
+                    for i, (model, x, y, yaw) in enumerate(furniture.place())]
+write_world(f'{NAME}_furnished', [actor_xml(n, p) for n, p in ACTOR_PATHS.items()] + furniture_models)
+
+furnished_grid = grid.copy()
+for *_, in_map in furniture.AGAINST_WALL:
+    if in_map:
+        x0, y0, x1, y1 = in_map
+        c0, c1 = int((x0 - ox) / MAP_RESOLUTION), int(np.ceil((x1 - ox) / MAP_RESOLUTION))
+        r0, r1 = int(cells_h - np.ceil((y1 - oy) / MAP_RESOLUTION)), int(cells_h - (y0 - oy) / MAP_RESOLUTION)
+        furnished_grid[r0:r1, c0:c1] = True
+cv2.imwrite(os.path.join(MAP_DIR, f'{NAME}_furnished_map.pgm'), np.where(furnished_grid, 0, 254).astype(np.uint8))
+open(os.path.join(MAP_DIR, f'{NAME}_furnished_map.yaml'), 'w').write(
+    open(os.path.join(MAP_DIR, f'{NAME}_map.yaml')).read().replace(f'{NAME}_map.pgm', f'{NAME}_furnished_map.pgm'))
+print(f'{NAME}_furnished: 가구 {len(furniture_models)}개, 지도에 고정 가구 {sum(1 for f in furniture.AGAINST_WALL if f[-1])}개')

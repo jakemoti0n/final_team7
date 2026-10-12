@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <model name="water_dispenser">
+    <static>true</static>
+    <link name="link">
+      <!-- 몸체 0.35 x 0.35 x 0.95 m. 앞(+x)에 물 받는 어두운 판 -->
+      <collision name="body_collision"><pose>0 0 0.475 0 0 0</pose><geometry><box><size>0.35 0.35 0.95</size></box></geometry></collision>
+      <visual name="body"><pose>0 0 0.475 0 0 0</pose><geometry><box><size>0.35 0.35 0.95</size></box></geometry>
+        <material><ambient>0.92 0.92 0.9 1</ambient><diffuse>0.92 0.92 0.9 1</diffuse></material></visual>
+      <visual name="tap_panel"><pose>0.176 0 0.72 0 0 0</pose><geometry><box><size>0.005 0.22 0.25</size></box></geometry>
+        <material><ambient>0.2 0.2 0.22 1</ambient><diffuse>0.2 0.2 0.22 1</diffuse></material></visual>
+      <!-- 물통 지름 0.27 m, 높이 0.42 m (위쪽 끝 약 1.37 m) -->
+      <collision name="jug_collision"><pose>0 0 1.16 0 0 0</pose><geometry><cylinder><radius>0.135</radius><length>0.42</length></cylinder></geometry></collision>
+      <visual name="jug"><pose>0 0 1.16 0 0 0</pose><geometry><cylinder><radius>0.135</radius><length>0.42</length></cylinder></geometry>
+        <material><ambient>0.45 0.65 0.9 0.6</ambient><diffuse>0.45 0.65 0.9 0.6</diffuse></material>
+        <transparency>0.4</transparency></visual>
+    </link>
+  </model>
+</sdf>
