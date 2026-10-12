@@ -9,7 +9,7 @@
 import math
 
 from action_msgs.srv import CancelGoal
-from limbo_monitor import scan_motion, slip
+from limbo_monitor import pose_history, scan_motion, slip
 from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.executors import ExternalShutdownException
@@ -35,7 +35,7 @@ class WheelSlipMonitor(Node):
         self._declare_parameters()
 
         self.detector = slip.SlipDetector(self.slip_config)
-        self.latest_odom = None
+        self.odom_history = pose_history.PoseHistory()
         self.reference = None   # (stamp_sec, scan points, odom x, y, yaw)
         self.slipping = False
 
@@ -86,30 +86,34 @@ class WheelSlipMonitor(Node):
 
     def odom_callback(self, msg):
         pose = msg.pose.pose
-        self.latest_odom = (pose.position.x, pose.position.y, yaw_of(pose.orientation))
+        self.odom_history.add(
+            msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+            pose.position.x, pose.position.y, yaw_of(pose.orientation))
 
     def scan_callback(self, msg):
-        if self.latest_odom is None:
+        stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        # 스캔은 늦게 도착하므로 도착 순간의 최신 odom이 아니라 스캔을 찍은 시각의 odom과 비교한다
+        odom = self.odom_history.at(stamp)
+        if odom is None:
             return
 
-        stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         points = scan_motion.scan_to_points(
             msg.ranges, msg.angle_min, msg.angle_increment,
             self.scan_range_min, self.scan_range_max)
 
         if self.reference is None:
-            self.reference = (stamp, points, *self.latest_odom)
+            self.reference = (stamp, points, *odom)
             return
         if stamp - self.reference[0] < self.check_period:
             return
 
-        state = self._judge(points)
-        self.reference = (stamp, points, *self.latest_odom)
+        state = self._judge(points, odom)
+        self.reference = (stamp, points, *odom)
         self._publish(state)
 
-    def _judge(self, points):
+    def _judge(self, points, odom):
         _, ref_points, ref_x, ref_y, ref_yaw = self.reference
-        x, y, yaw = self.latest_odom
+        x, y, yaw = odom
         wheel_distance = math.hypot(x - ref_x, y - ref_y)
         wheel_rotation = math.remainder(yaw - ref_yaw, 2 * math.pi)
         motion = scan_motion.estimate_motion(ref_points, points, self.icp_config)
