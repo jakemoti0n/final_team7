@@ -21,6 +21,22 @@
 **참고**
 - 팀원 환경의 오탐 원인은 아직 확정 못 했음. 이번 수정 후에도 오탐이 나면 터미널의 `[wheel_slip_monitor]: SUSPECT/SLIP: wheel ... m, scan ... m` 줄을 보내 주세요
 - 주행 취소는 계속 꺼져 있음 (진짜로 막혀도 로봇이 계속 밈). 오탐이 사라진 게 확인되면 다시 켤 예정
+## 2026-10-12 (19) 순찰 waypoint 파일을 월드별로 고르기
+
+**할 일**
+- **빌드 한 번 필요** (`aischool_waypoints.yaml`이 설치되도록): `build_limbo`
+- 로컬에서 `patrol_node.py`의 파일 이름을 바꿨거나 `test_waypoints.yaml`을 학원 좌표로 덮어썼다면, pull 전에 그 수정을 되돌리거나 따로 보관할 것 (충돌 날 수 있음)
+
+**변경**
+- 순찰 노드가 `test_waypoints.yaml`만 읽도록 코드에 고정돼 있어서 학원 waypoint로는 순찰할 수 없었음. `waypoints` 파라미터로 파일을 고르게 했음. 기본값은 그대로 `test_waypoints.yaml`
+  - human_test_world: `ros2 run limbo_patrol patrol_node --ros-args -p use_sim_time:=true`
+  - 학원 2층: `... -p waypoints:=aischool_waypoints.yaml`
+  - 서점: `... -p waypoints:=waypoints.yaml`
+- 시뮬레이션에서 학원 waypoint로 순찰이 시작되는 것을 확인했음
+
+**참고**
+- 월드별 파일 표와 새 파일 추가 방법은 README "순찰"
+- `patrol_node.py`는 아직 리팩터링 전이라 코드 스타일 검사(flake8, pep257)가 실패함 (이번 수정 전부터)
 
 ---
 
