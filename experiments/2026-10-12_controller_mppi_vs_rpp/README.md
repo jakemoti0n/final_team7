@@ -22,6 +22,17 @@
 
 원본 CSV: 이 폴더의 `mppi_people*.csv`, `rpp_people*.csv` (열 설명은 README "주행 평가 기록")
 
+## CPU (2026-10-12 추가)
+`tools/sim_trials/cpu_controller.sh <라벨>`: `controller_server` CPU를 서 있을 때 15초, 주행(홀 → 왼쪽 복도 끝) 25초 동안 1초 간격으로 잼. 이 프로세스에는 로컬 costmap(STVL)도 같이 돌아서 둘의 차이를 컨트롤러 계산으로 봄. 노트북(RTX 4060 노트북) 기준, CPU 한 코어 = 100%.
+
+| | 서 있을 때 | 주행 중 | 컨트롤러 계산 (차이) | 주기 경고 |
+|---|---|---|---|---|
+| MPPI (batch 2000, 80단계) | 23.5% | 50.3% | **약 27%** | 0 |
+| RPP | 23.4% | 25.8% | **약 2%** | 0 |
+
+- RPP의 남은 강점은 계산량(약 13배 가벼움). 노트북에서는 둘 다 여유 있음
+- Jetson은 코어가 2~3배 느리다고 보면 MPPI가 코어 하나의 55~80% 예상. 실측 필요. 모자라면 RPP보다 먼저 MPPI 경량화(`batch_size`, `time_steps`; 예측 시간을 줄이면 `prune_distance` 상한 관계도 같이 맞출 것)
+
 ## 다시 하려면
 ```bash
 cd ~/limbo/tools/sim_trials
