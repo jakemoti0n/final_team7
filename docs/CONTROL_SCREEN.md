@@ -142,7 +142,7 @@ ros2 service call /patrol/resume std_srvs/srv/Trigger
 | 동시 pause 5개 / resume 5개 | 매번 접수 1개, 나머지는 `already paused` / `resume already requested` |
 | 0.1~0.5초 간격 섞어 40번 | 응답 없음 0번, 응답 평균 4 ms·최대 31 ms, 마지막 접수 명령대로 정리, 이후 순찰 계속 |
 | `Ctrl+C` 종료 | 처음엔 서비스 스레드가 `RCLError`를 찍음 → 종료 순서를 고쳐 0건 |
-| **끝까지** | **확인 못 함**. 정지·재개 없이도 순찰이 A 앞·C 다음 구간에서 갇혀 실패하는 일이 있음 (2번 중 1번, KNOWN_ISSUES) |
+| **끝까지** | **확인 못 함**. 정지 지점 0.2~0.4 m 앞에서 갇히는 일이 있었음 → dev PR #9(정지 지점 yaw 수정, CHANGELOG (21))로 해결된 문제로 보여 다시 확인 |
 | **`stop` 대기 중 pause → resume** | **확인 못 함** (시험이 갇혀 멈춘 것을 대기로 잘못 잡음) |
 | 구간 사이 pause (상태가 `patrolling`으로 잠깐 튀는 경우) | 코드에서 막음(`start_navigating`). 그 순간을 직접 맞춘 시험은 아직 |
 
