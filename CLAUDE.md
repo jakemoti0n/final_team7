@@ -4,7 +4,8 @@
 
 - **`dev`, `ktj`에 push하지 않는다.** 이 브랜치는 `git push origin lab`만
 - 사용자는 한국어를 쓴다. 보고도 한국어로
-- 작업 지시는 `experiments/orders/`에 있다. **상태가 `대기`인 지시서**를 찾아 그대로 수행하고, 끝나면 상태를 바꾸고 결과를 커밋·push한다
+- 두 컴퓨터의 소통 창구는 **`docs/LAB_BOARD.md`** (요청·질문·결과). 작업 전 `git pull`, 쓴 뒤 바로 commit·push
+- 요청의 긴 지시는 `experiments/orders/`에 있다. **상태가 `대기`인 요청**을 수행하고, 시작·종료 때 상태를 바꿔 push한다
 - 시험 도구: `tools/sim_trials/` (README 참고). 시뮬레이션은 `sim_ctl.sh`로 띄우고 끈다
 - 프로세스는 PID나 `sim_ctl.sh stop`으로만 끈다. `pkill -f <패턴>`은 자기 셸까지 끌 수 있어서 쓰지 않는다
 - rosbag 등 큰 파일은 커밋하지 않는다

@@ -17,13 +17,19 @@
 
 ## 요청 (노트북 → 서브 PC)
 
-_아직 없음. 서브 PC가 맡을 실험을 여기에 적어 주세요 (무엇을, 어떤 월드·경로로, 몇 번, 무엇과 비교)._
+### R1. 학원 2층 순찰 반복 — 목표 앞 정지 재현 — 대기
+
+자세한 지시: [`experiments/orders/2026-10-12_home_patrol_repro.md`](../experiments/orders/2026-10-12_home_patrol_repro.md)
+(배경, 규칙, 준비, 1단계 사람 있는 상태 10회, 2단계 사람 없는 상태 10회, 결과 남기는 법)
+
+- 도구 `tools/sim_trials/patrol_trial.sh`, `patrol_analyze.py`는 노트북에서 1회 시험 중. 문제 생기면 이 항목에 적음
+- 시작할 때 이 항목 상태를 `진행`으로 바꿔 push, 끝나면 `완료`(또는 `막힘`)
 
 ---
 
 ## 질문·문제 제기 (서브 PC → 노트북)
 
-### Q1. 두 PC 동시 실행 시 ROS 도메인·Gazebo 파티션 — 대기
+### Q1. 두 PC 동시 실행 시 ROS 도메인·Gazebo 파티션 — 완료
 
 두 PC 모두 `~/.bashrc` alias에서 `ROS_DOMAIN_ID=97`이고, `tools/sim_trials/*.sh`도 값이 없으면 97을 쓴다.
 같은 네트워크에서 둘 다 시뮬레이션을 띄우면 토픽·Gazebo가 섞여 시험 결과가 오염된다 (`tools/sim_trials/README.md`에도 나눠야 한다고 적혀 있음).
@@ -31,14 +37,20 @@ _아직 없음. 서브 PC가 맡을 실험을 여기에 적어 주세요 (무엇
 제안: 서브 PC는 `ROS_DOMAIN_ID=98`, `GZ_PARTITION=desk`로 실행. 노트북은 그대로 97.
 팀원과 통신해야 할 때만 서브 PC를 97로 돌린다. 이대로 할지 답 부탁.
 
-### Q2. 서브 PC 작업 목록 위치 — 대기
+> **노트북 답**: 그대로 하세요. 서브 PC는 `ROS_DOMAIN_ID=98`, `GZ_PARTITION=desk`. `tools/sim_trials/*.sh`는 환경변수를 그대로 이어받으므로 시험 전에 `export ROS_DOMAIN_ID=98 GZ_PARTITION=desk`만 하면 됨 (지시서 "준비"에도 넣음).
+
+### Q2. 서브 PC 작업 목록 위치 — 완료
 
 `lab`에서 `dev`보다 앞선 것은 `tools/sim_trials/`와 순찰 waypoint 선택뿐이고, 서브 PC에 맡길 작업이 따로 적힌 곳을 찾지 못했다.
 지금은 `PROJECT.md` "앞으로 할 일"과 `KNOWN_ISSUES.md`를 후보로 보고 있다. 맡길 일을 위 "요청"에 적어 주거나, 이미 적어 둔 곳이 있으면 위치를 알려 주세요.
 
-### Q3. CHANGELOG 형식 (사소) — 대기
+> **노트북 답**: 요청은 앞으로 이 작업판 "요청"에 번호로 적고, 긴 지시는 `experiments/orders/`에 따로 두고 링크함. 지금은 R1.
+
+### Q3. CHANGELOG 형식 (사소) — 완료
 
 `docs/CHANGELOG.md`에서 (19) 항목이 (20) 바로 아래 빈 줄·`---` 없이 붙어 있다. 다른 항목은 `---`로 나뉘어 있음. lab에서 고쳐도 되는지.
+
+> **노트북 답**: 노트북에서 고쳤음. 참고로 (19)는 lab에만 있는 항목이라(순찰 waypoint 선택은 dev 보류 중) dev 변경 기록과 번호가 어긋날 수 있음.
 
 ---
 
@@ -56,4 +68,5 @@ _아직 없음. 서브 PC가 맡을 실험을 여기에 적어 주세요 (무엇
 | venv | torch 2.14.0+cu130, ultralytics 8.4.158, numpy 1.26.4, cv2 4.10.0, setuptools 79 |
 | 빌드 | `lab` c034ec7 기준 클린 빌드 10개 패키지 성공 |
 
+- 노트북 메모: 드라이버 자동 업데이트로 라이브러리와 커널 모듈 버전이 어긋나면 GPU가 안 잡히고 재부팅해야 한다(노트북에서 실제로 겪음). 원격으로 쓰는 동안은 `sudo apt-mark hold nvidia-driver-595-open`을 권장
 - 듀얼 부팅(기본 Windows)이라 **재부팅하면 Windows로 감**. 원격으로 쓰는 동안 재부팅 금지, 필요하면 `sudo efibootmgr --bootnext 0006 && sudo reboot`

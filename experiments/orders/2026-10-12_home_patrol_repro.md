@@ -22,7 +22,9 @@
 - 막히면(빌드 실패, 시뮬레이션이 안 뜸 등) 더 진행하지 말고 아래 "결과"에 증상과 로그를 적고 상태를 `막힘`으로 바꿔 push한다
 
 ## 준비 (한 번)
+노트북과 같은 네트워크일 수 있으므로 서브 PC는 ROS·Gazebo 통신을 분리한다 (LAB_BOARD Q1).
 ```bash
+export ROS_DOMAIN_ID=98 GZ_PARTITION=desk     # 시험하는 터미널마다
 cd ~/limbo && git fetch && git switch lab && git pull
 build_limbo
 cd tools/sim_trials && ./sim_ctl.sh start check && ./sim_ctl.sh stop
@@ -64,4 +66,5 @@ for k in $(seq 1 10); do WORLD=aischool_2f_noactors ./patrol_trial.sh home_noact
    - 결론: 재현됐는지, 됐다면 원인 후보 셋 중 무엇인지, 사람 유무에 따라 달라지는지
 2. 이 지시서의 **상태**를 `완료`(또는 `막힘`)로 바꾼다
 3. `experiments/README.md` 표에 한 줄 추가한다
-4. 커밋하고 `lab`에 push한다 (`git push origin lab`)
+4. `docs/LAB_BOARD.md`의 R1 상태를 바꾸고 결론 한두 줄을 "결과"에 적는다
+5. 커밋하고 `lab`에 push한다 (`git push origin lab`)
