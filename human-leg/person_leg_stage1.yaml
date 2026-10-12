@@ -1,0 +1,7 @@
+path: /data/human/roboflow_leg
+train: train/images
+val: valid/images
+test: test/images
+names:
+  0: person
+  1: leg
