@@ -1,0 +1,10 @@
+patrol_room1 OK 287s
+patrol_room2 OK 222s
+patrol_room3 FAIL (Navigation failed) 337s
+patrol_room4 FAIL (Navigation failed) 269s
+patrol_room5 OK 243s
+patrol_room6 OK 243s
+patrol_room7 OK 296s
+patrol_room8 OK 225s
+patrol_room9 OK 239s
+patrol_room10 FAIL (Navigation failed) 269s
