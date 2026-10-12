@@ -20,7 +20,11 @@ from ament_index_python.packages import (
     get_package_share_directory
 )
 
-def load_waypoints():
+# 월드마다 waypoint 파일을 따로 두고 실행할 때 'waypoints' 파라미터로 고른다 (README "순찰")
+DEFAULT_WAYPOINTS = 'test_waypoints.yaml'   # human_test_world
+
+
+def load_waypoints(file_name):
 
     package_share_dir = get_package_share_directory(
         'limbo_patrol'
@@ -29,7 +33,7 @@ def load_waypoints():
     waypoint_file = os.path.join(
         package_share_dir,
         'config',
-        'test_waypoints.yaml'
+        file_name
     )
 
     with open(
@@ -123,6 +127,11 @@ def main(args=None):
 
     navigator = BasicNavigator()
 
+    # 파일 이름이 틀렸으면 Nav2를 기다리기 전에 바로 알 수 있게 먼저 읽는다
+    waypoints_name = navigator.declare_parameter('waypoints', DEFAULT_WAYPOINTS).value
+    print(f'Waypoints: {waypoints_name}')
+    waypoint_configs = load_waypoints(waypoints_name)
+
     print('Waiting for AMCL pose and TF...')
     wait_for_localization(navigator)
 
@@ -132,8 +141,6 @@ def main(args=None):
     navigator.waitUntilNav2Active(localizer='robot_localization')
 
     print('Nav2 is active')
-
-    waypoint_configs = load_waypoints()
 
     if not waypoint_configs or waypoint_configs[-1]['type'] != 'stop':
         raise ValueError('마지막 waypoint는 stop이어야 합니다')

@@ -149,10 +149,27 @@ launch에 `record:=true`를 붙이면 Nav2 Goal이 끝날 때마다 `~/limbo_res
 - 지도 원점과 Gazebo 월드 원점이 같다고 가정한다 (`human_test_world`, `aischool_2f*`는 같음)
 - 사람은 정해진 시간표대로 움직이므로 같은 시각에 같은 Goal을 보내면 같은 상황이 재현된다
 
+### 순찰 (`limbo_patrol`)
+
+월드마다 waypoint 파일을 따로 두고, 실행할 때 `waypoints` 파라미터로 고른다. 좌표·순서·대기 시간은 그 yaml 파일에서 정한다.
+
+| 월드 | waypoint 파일 (`limbo_patrol/config/`) |
+|---|---|
+| `human_test_world` | `test_waypoints.yaml` (기본값) |
+| `aischool_2f`, `aischool_2f_scenarios` | `aischool_waypoints.yaml` |
+| `bookstore_world` | `waypoints.yaml` |
+
+```bash
+ros2 run limbo_patrol patrol_node --ros-args -p use_sim_time:=true                                    # human_test_world
+ros2 run limbo_patrol patrol_node --ros-args -p use_sim_time:=true -p waypoints:=aischool_waypoints.yaml   # 학원 2층
+```
+
+- 새 월드용 파일은 `limbo_patrol/config/`에 yaml을 추가하고 `build_limbo`를 한 번 한 뒤 `-p waypoints:=새파일.yaml`
+- 마지막 waypoint는 `type: stop`이어야 한다. 파일 이름이 틀리면 Nav2를 기다리기 전에 바로 오류가 난다
+
 ### 자주 쓰는 명령
 
 ```bash
-ros2 run limbo_patrol patrol_node --ros-args -p use_sim_time:=true  # waypoint 순찰 (limbo_patrol/config/test_waypoints.yaml)
 ros2 topic echo /clicked_point           # RViz Publish Point로 찍은 좌표 (waypoint 만들 때)
 
 # Collision Monitor 켜기/끄기 (끌 때는 false)
