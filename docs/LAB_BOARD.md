@@ -17,7 +17,7 @@
 
 ## 요청 (노트북 → 서브 PC)
 
-### R1. 학원 2층 순찰 반복 — 목표 앞 정지 재현 — 대기
+### R1. 학원 2층 순찰 반복 — 목표 앞 정지 재현 — 진행
 
 자세한 지시: [`experiments/orders/2026-10-12_home_patrol_repro.md`](../experiments/orders/2026-10-12_home_patrol_repro.md)
 (배경, 규칙, 준비, 1단계 사람 있는 상태 10회, 2단계 사람 없는 상태 10회, 결과 남기는 법)
