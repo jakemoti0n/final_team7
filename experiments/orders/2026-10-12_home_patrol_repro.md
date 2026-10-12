@@ -66,5 +66,5 @@ for k in $(seq 1 10); do WORLD=aischool_2f_noactors ./patrol_trial.sh home_noact
    - 결론: 재현됐는지, 됐다면 원인 후보 셋 중 무엇인지, 사람 유무에 따라 달라지는지
 2. 이 지시서의 **상태**를 `완료`(또는 `막힘`)로 바꾼다
 3. `experiments/README.md` 표에 한 줄 추가한다
-4. `docs/LAB_BOARD.md`의 R1 상태를 바꾸고 결론 한두 줄을 "결과"에 적는다
+4. `docs/lab/reports.md`의 R1 진행 상태를 바꾸고 결론 한두 줄을 "결과"에 적는다 (예전 `LAB_BOARD.md`는 쓰지 않음)
 5. 커밋하고 `lab`에 push한다 (`git push origin lab`)

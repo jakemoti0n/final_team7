@@ -4,8 +4,14 @@
 
 - **`dev`, `ktj`에 push하지 않는다.** 이 브랜치는 `git push origin lab`만
 - 사용자는 한국어를 쓴다. 보고도 한국어로
-- 두 컴퓨터의 소통 창구는 **`docs/LAB_BOARD.md`** (요청·질문·결과). 작업 전 `git pull`, 쓴 뒤 바로 commit·push
-- 요청의 긴 지시는 `experiments/orders/`에 있다. **상태가 `대기`인 요청**을 수행하고, 시작·종료 때 상태를 바꿔 push한다
+- 두 컴퓨터의 소통 창구는 `docs/lab/` (예전 `docs/LAB_BOARD.md`는 쓰지 않음)
+  - `docs/lab/requests.md`: 요청·답변. **노트북만 쓴다**
+  - `docs/lab/reports.md`: 진행 상태·결과·질문. **서브 PC만 쓴다**
+  - 상대 파일은 읽기만 한다. 같은 파일을 두 PC가 고치면 커밋이 충돌한다
+- 서브 PC: `requests.md`에서 `reports.md` 진행 상태가 아직 없거나 `대기`인 요청을 수행한다. 긴 지시는 `experiments/orders/`에 있다
+- push 전에 항상 `git pull --rebase origin lab`. **`git push --force` 금지**
+- 실험 묶음(예: 10회 반복) 도중에는 pull하지 않는다. 시작 커밋 해시를 결과에 적고 끝난 뒤 pull한다
+- 실험 결과 폴더 `experiments/<날짜>_<주제>/`는 그 실험을 한 PC만 쓴다
 - 시험 도구: `tools/sim_trials/` (README 참고). 시뮬레이션은 `sim_ctl.sh`로 띄우고 끈다
 - 프로세스는 PID나 `sim_ctl.sh stop`으로만 끈다. `pkill -f <패턴>`은 자기 셸까지 끌 수 있어서 쓰지 않는다
 - rosbag 등 큰 파일은 커밋하지 않는다
