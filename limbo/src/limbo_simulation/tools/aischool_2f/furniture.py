@@ -17,6 +17,7 @@ import numpy as np
 WALL_GAP = 0.9
 AISLE = 1.2
 STEP = 0.05
+WALL_TOUCH = 0.05   # 벽에 붙인 책상 줄과 벽 사이 (실제 교실처럼 양쪽 줄은 벽에 붙인다)
 
 # (이름, 높이 m, [(x0, y0, x1, y1), ...]) — 한 줄이 한 방(같은 방 가구끼리 AISLE을 지킨다)
 ROOMS = [
@@ -52,6 +53,7 @@ WOOD_TABLE = (1.5, 0.8)     # Table: 긴 쪽이 x, 높이 1.0 m
 CHAIR = 0.5                 # foldable_chair: 앉은 사람이 -y를 봄
 CHAIR_OUT = 0.05            # 의자 가운데가 책상 끝에서 바깥으로 나온 거리 (반쯤 밀어 넣은 상태 → 통로로 0.3 m 나옴)
 STUDENT_DESK = (0.65, 0.5)  # student_desk: 긴 쪽(0.65)이 x
+SEATS_ACROSS = 2            # 띠 한 줄에 나란히 앉는 자리 수 (실제 교실처럼 2자리)
 SEAT_PITCH = 1.0            # 띠를 따라 책상 + 의자 한 자리 간격
 # rows 교실의 앞(교탁 쪽) 방향. 띠의 긴 방향을 따라 문이 있는 끝이 앞이다.
 # 208·205는 양쪽 끝에 문이 있어 북쪽을 앞으로 골랐다
@@ -93,39 +95,67 @@ def fit(rooms=ROOMS):
             d += STEP
         return d
 
-    def spread_rows(boxes):
-        """나란한 책상 줄을 방 폭에 고르게 놓는다. 줄이 아니면 그대로 둔다"""
+    def spread_rows(boxes, against_walls):
+        """나란한 책상 줄을 방 폭에 놓는다. 줄이 아니면 그대로 둔다.
+        against_walls면 양 끝 줄은 벽에 붙이고 가운데 줄은 그 사이에 고르게 (폭은 1인용 책상 폭).
+        아니면 벽에서 WALL_GAP, 줄 사이 AISLE로 고르게. 돌려주는 값: (상자들, 줄이 쌓이는 축 또는 None)"""
         if len(boxes) < 2:
-            return boxes
+            return boxes, None
         # 줄 = 길이가 폭의 2.5배 넘는 긴 가구가 같은 방향으로 나란히 (긴 쪽이 서로 겹침)
         horizontal = all(b[2] - b[0] > 2.5 * (b[3] - b[1]) for b in boxes)
         vertical = all(b[3] - b[1] > 2.5 * (b[2] - b[0]) for b in boxes)
         if not (horizontal or vertical):
-            return boxes
+            return boxes, None
         a = 1 if horizontal else 0          # 줄이 쌓이는 축 (가로 줄이면 y)
         L = 1 - a                           # 줄의 긴 축
         if max(b[L] for b in boxes) > min(b[L + 2] for b in boxes):
-            return boxes                    # 긴 쪽이 안 겹치면 나란한 줄이 아님
+            return boxes, None              # 긴 쪽이 안 겹치면 나란한 줄이 아님
         cx = sum(b[0] + b[2] for b in boxes) / (2 * len(boxes))
         cy = sum(b[1] + b[3] for b in boxes) / (2 * len(boxes))
+        # 벽 위치는 줄 길이를 따라 여러 곳에서 재고 가장 안쪽 값을 쓴다 (벽이 고르지 않은 방이 있음)
+        span0, span1 = min(b[L] for b in boxes), max(b[L + 2] for b in boxes)
+        samples = list(np.arange(span0, span1 + STEP, STEP))
         if a == 1:
-            lo, hi = cy - free_extent(cx, cy, 0, -1), cy + free_extent(cx, cy, 0, 1)
+            lo = max(cy - free_extent(t, cy, 0, -1) for t in samples)
+            hi = min(cy + free_extent(t, cy, 0, 1) for t in samples)
         else:
-            lo, hi = cx - free_extent(cx, cy, -1, 0), cx + free_extent(cx, cy, 1, 0)
+            lo = max(cx - free_extent(cx, t, -1, 0) for t in samples)
+            hi = min(cx + free_extent(cx, t, 1, 0) for t in samples)
         n = len(boxes)
+        ordered = sorted(boxes, key=lambda b: b[a])
+        if against_walls:
+            thick = STUDENT_DESK[0] * SEATS_ACROSS
+            first, last = lo + WALL_TOUCH, hi - WALL_TOUCH - thick
+            for k, b in enumerate(ordered):
+                b[a] = first + (last - first) * k / (n - 1)
+                b[a + 2] = b[a] + thick
+            aisle = (last - first) / (n - 1) - thick
+            if aisle < AISLE:
+                raise SystemExit(f'책상 줄 사이 통로가 {aisle:.2f} m로 {AISLE} m보다 좁음 (자리 수를 줄일 것)')
+            return boxes, a
         drawn = max(b[a + 2] - b[a] for b in boxes)
         thick = min(drawn, (hi - lo - 2 * WALL_GAP - (n - 1) * AISLE) / n)
         used = n * thick + (n - 1) * AISLE
         start = (lo + hi - used) / 2
-        for k, b in enumerate(sorted(boxes, key=lambda b: b[a])):
+        for k, b in enumerate(ordered):
             b[a] = start + k * (thick + AISLE)
             b[a + 2] = b[a] + thick
-        return boxes
+        return boxes, a
 
     out = []
     for name, height, boxes in rooms:
-        boxes = spread_rows([list(b) for b in boxes])
-        for b in boxes:   # 벽에서 WALL_GAP
+        boxes, stack_axis = spread_rows([list(b) for b in boxes], against_walls=KIND.get(name) == 'rows')
+        if KIND.get(name) == 'rows' and stack_axis is not None:
+            # 벽에 붙인 줄: 줄의 앞뒤 끝만, 끝 가운데에서 앞쪽 벽까지 WALL_GAP이 되게 줄인다
+            for b in boxes:
+                cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
+                if stack_axis == 1:   # 가로 줄: 끝은 왼쪽·오른쪽
+                    b[0] = max(b[0], cx - free_extent(cx, cy, -1, 0) + WALL_GAP)
+                    b[2] = min(b[2], cx + free_extent(cx, cy, 1, 0) - WALL_GAP)
+                else:                 # 세로 줄: 끝은 아래·위
+                    b[1] = max(b[1], cy - free_extent(cx, cy, 0, -1) + WALL_GAP)
+                    b[3] = min(b[3], cy + free_extent(cx, cy, 0, 1) - WALL_GAP)
+        for b in boxes if KIND.get(name) != 'rows' else []:   # 벽에서 WALL_GAP
             for _ in range(200):
                 moved = False
                 for side, i, d in (('left', 0, STEP), ('right', 2, -STEP), ('bottom', 1, STEP), ('top', 3, -STEP)):
@@ -200,10 +230,13 @@ def classroom_rows(strips, front):
         fronts.append(front_end)
         for k in range(int(length // SEAT_PITCH)):
             back = STUDENT_DESK[1] / 2 + k * SEAT_PITCH            # 앞 끝에서 책상 가운데까지
-            dxk, dyk = front_end[0] - dx * back, front_end[1] - dy * back
-            out.append(('student_desk', dxk, dyk, desk_yaw))
-            chair = STUDENT_DESK[1] / 2 + CHAIR_OUT
-            out.append(('foldable_chair', dxk - dx * chair, dyk - dy * chair, chair_yaw(face)))
+            for j in range(SEATS_ACROSS):                            # 띠 폭 방향으로 나란히
+                side = (j - (SEATS_ACROSS - 1) / 2) * STUDENT_DESK[0]
+                sx, sy = (side, 0.0) if dx == 0 else (0.0, side)     # 앞 방향과 직각으로 옮김
+                dxk, dyk = front_end[0] - dx * back + sx, front_end[1] - dy * back + sy
+                out.append(('student_desk', dxk, dyk, desk_yaw))
+                chair = STUDENT_DESK[1] / 2 + CHAIR_OUT
+                out.append(('foldable_chair', dxk - dx * chair, dyk - dy * chair, chair_yaw(face)))
     # 교탁: 띠 앞 끝과 앞 벽의 가운데, 방 가로 가운데
     wall, ox, oy = load_map()
     h = wall.shape[0]
