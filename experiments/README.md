@@ -11,3 +11,4 @@
 | 2026-10-12 | [컨트롤러 MPPI vs RPP](2026-10-12_controller_mppi_vs_rpp/README.md) | MPPI 유지 (사람 있는 복도에서 RPP 6/12 중단) |
 | 2026-10-12 | [학원 2층 순찰 반복 — 목표 앞 정지 재현](2026-10-12_patrol_repro/README.md) | 재현 안 됨 (10/10 OK). 위쪽 복도 3~5초 머뭇거림 4/9회, MPPI 쪽 |
 | 2026-10-12 | [넓은 네모 맵 순찰 반복 (목표 앞 정지)](2026-10-12_patrol_repro_room/README.md) | 재현됨 3/10 실패. **원인 판단은 틀림** → 정지 waypoint 방향 문제 (원작자 PR #9, 기록 안 정정 참고) |
+| 2026-10-12 | [MPPI 속도 튜닝](2026-10-12_mppi_speed/README.md) | `prune_distance` 1.7→2.5로 상자 구간 −26%, 복도 12/12 유지. vx_std·CostCritic은 효과 없음 |
