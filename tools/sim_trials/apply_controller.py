@@ -1,4 +1,4 @@
-"""nav2_params.yaml의 컨트롤러(FollowPath)를 바꾼다 (실험용, ktj2). 사용법: apply_controller.py rpp
+"""nav2_params.yaml의 컨트롤러(FollowPath)를 바꾼다 (실험용, lab). 사용법: apply_controller.py rpp
 되돌리기: cd ~/limbo && git checkout limbo/src/limbo_navigation/config/nav2_params.yaml"""
 import os, sys
 RPP = '''    FollowPath:
