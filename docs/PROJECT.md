@@ -87,7 +87,7 @@ ros2 run limbo_navigation nav2_params_tool.py diff --controller mppi --vs-contro
 ### 결정이 필요한 것
 
 4. **mid360 기울기 각도** — 정하면 두 곳을 함께 고쳐야 한다. `pointcloud_to_laserscan`의 `target_frame`이 `mid360_link`라 센서를 기울이면 2D 스캔 슬라이스도 같이 기울어져 AMCL이 망가진다(중력 정렬 프레임으로 변경 필요). STVL `mid360_clear`의 `vertical_fov_offset`(현재 0.393 rad = 22.5°, FOV 중심각)도 기울인 만큼 내려야 한다.
-5. **global costmap에 STVL을 넣을지** — 현재 전역 지도는 static + inflation뿐이라 플래너가 사람이나 맵에 없는 장애물을 전혀 모른다. 서 있는 사람이 통로를 막으면 플래너는 계속 그 통로로 경로를 그리고, 1 m 정지 정책과 겹치면 영원히 지나가지 못한다. 반면 넣으면 경로가 자주 바뀌어 진동할 수 있다.
+5. ✅ (2026-10-12 적용, 기억 15초. 근거는 TROUBLESHOOTING "지도에 없는 낮은 장애물에 부딪힘") **global costmap에 STVL을 넣을지** — 현재 전역 지도는 static + inflation뿐이라 플래너가 사람이나 맵에 없는 장애물을 전혀 모른다. 서 있는 사람이 통로를 막으면 플래너는 계속 그 통로로 경로를 그리고, 1 m 정지 정책과 겹치면 영원히 지나가지 못한다. 반면 넣으면 경로가 자주 바뀌어 진동할 수 있다.
 6. **실물 모터 스펙 확인** — 각속도 1.8 rad/s가 실제로 가능한 값인지. 시뮬에서만 올려두면 실물에서 다시 튜닝해야 한다.
 7. **`backup` recovery 제거** — 후진이 금지되어 명령이 0으로 잘리므로 실질적으로 동작하지 않는다. recovery 순서에 남아 있어 시간만 소모한다.
 8. **`__pycache__` 추적 해제** — `.pyc` 파일이 저장소에 추적되고 있어 실행할 때마다 변경으로 뜨고 merge 시 바이너리 충돌이 난다.
