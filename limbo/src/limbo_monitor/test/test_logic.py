@@ -2,7 +2,7 @@
 
 import math
 
-from limbo_monitor import scan_motion, slip
+from limbo_monitor import pose_history, scan_motion, slip
 import numpy as np
 
 ANGLES = np.linspace(-math.pi, math.pi, 720, endpoint=False)
@@ -81,3 +81,31 @@ def test_unknown_in_corridor_and_slow_motion_is_ok():
     assert detector.update(0.2, 0.0, _motion(0.0, constraint=0.01)) == slip.UNKNOWN
     assert detector.update(0.2, 0.0, None) == slip.UNKNOWN
     assert detector.update(0.05, 0.0, _motion(0.0)) == slip.OK
+
+
+def test_pose_history_interpolates_at_scan_time():
+    history = pose_history.PoseHistory()
+    for i in range(11):
+        history.add(i * 0.02, i * 0.01, 0.0, 0.0)   # 0.5 m/s 직진
+
+    x, _, _ = history.at(0.05)
+    assert abs(x - 0.025) < 1e-9
+
+
+def test_pose_history_out_of_range_is_none():
+    history = pose_history.PoseHistory()
+    history.add(1.0, 0.0, 0.0, 0.0)
+    history.add(1.02, 0.01, 0.0, 0.0)
+
+    assert history.at(0.9) is None              # 기록보다 오래됨
+    assert history.at(1.05) == (0.01, 0.0, 0.0)  # 최근 값 바로 뒤는 최근 값
+    assert history.at(1.5) is None              # 너무 뒤
+
+
+def test_pose_history_yaw_wraps():
+    history = pose_history.PoseHistory()
+    history.add(0.0, 0.0, 0.0, math.pi - 0.1)
+    history.add(1.0, 0.0, 0.0, -math.pi + 0.1)
+
+    _, _, yaw = history.at(0.5)
+    assert abs(abs(yaw) - math.pi) < 1e-6
