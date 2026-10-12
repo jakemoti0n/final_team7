@@ -72,8 +72,12 @@ def main():
         smooth = mean_in(data.get('/cmd_vel_smoothed', []), s, e, lambda m: abs(twist(m).linear.x))
         final = mean_in(data.get('/cmd_vel', []), s, e, lambda m: abs(twist(m).linear.x))
         turn = mean_in(data.get('/cmd_vel', []), s, e, lambda m: abs(twist(m).angular.z))
-        cm = [m.action_type for t, m in data.get('/collision_monitor_state', []) if s <= t <= e]
-        cm_text = ', '.join(sorted({ACTIONS.get(a, str(a)) for a in cm})) or '기록 없음'
+        # 이 토픽은 상태가 바뀔 때만 나오므로 구간 시작 직전 마지막 상태도 포함한다 (서브 PC Q4)
+        cm_all = data.get('/collision_monitor_state', [])
+        cm_times = [t for t, _ in cm_all]
+        before = bisect.bisect_right(cm_times, s) - 1
+        cm = ([cm_all[before][1].action_type] if before >= 0 else []) + [m.action_type for t, m in cm_all if s < t <= e]
+        cm_text = ', '.join(sorted({ACTIONS.get(a, str(a)) for a in cm})) or '상태 메시지 없음 (개입 없음으로 봄)'
         near = [m for t, m in amcl if s <= t <= e]
         err = (math.hypot(near[-1].pose.pose.position.x - x, near[-1].pose.pose.position.y - y)
                if near else float('nan'))

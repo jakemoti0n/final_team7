@@ -38,7 +38,7 @@
 
 | 문제 | 근거 | 영향 | 대책 후보 |
 |---|---|---|---|
-| 시작할 때 AMCL이 Configuring에서 멈춰 Nav2가 안 뜸 (가끔) | `human_test_world`에서 1번, 같은 조건으로 다시 띄우자 정상. `amcl: failed to send response to /amcl/change_state (timeout)` | 시뮬레이션을 다시 띄워야 함 | 시작할 때 부하가 몰려서로 추정. 반복되면 lifecycle 대기 시간 늘리기 |
+| 시작할 때 Nav2 lifecycle이 시간 초과로 안 뜸 (가끔) | `human_test_world`에서 AMCL Configuring 멈춤 1번, 학원 순찰 10회 중 2회 `Failed to activate global_costmap because transform from base_link to map did not become available before timeout` (서브 PC R1). 다시 띄우면 정상 | 시뮬레이션을 다시 띄워야 함 | 시작할 때 부하가 몰려서로 추정. 반복되면 lifecycle 대기 시간 늘리기 |
 | `human_test_world`는 정사각형 방이라 스캔만으로 방향 구분이 안 됨 | (0,0)에서 0°/90°/−90°/180° 모두 스캔 일치 94~95% | Pose Estimate를 손으로 찍으면 크게 틀리기 쉬움 (실제로 두 번 다 틀림: 일치 9%, 4%) | 초기 위치는 `amcl.yaml` 값 사용 (적용 완료) |
 | `aischool_2f`는 피난안내도 사진 기반 근사 | 축척은 교실 깊이 실측(약 6.1m, 보폭 기준)과 복도 폭(약 1.5m)으로 맞춤. 문은 0.9m로 통일 | 벽 위치 오차 수십 cm 가능 | 실측 치수를 더 받으면 `tools/aischool_2f/build_mask.py`에서 보정 |
 | 이전에 녹화한 rosbag 두 개는 Pose Estimate가 틀린 상태 | 스캔-지도 일치 9%, 4% | 그 bag으로 Nav2 성능을 비교했다면 결과를 다시 봐야 함. person_detector 비교는 카메라 기준이라 영향 없음 | 새로 녹화 |
