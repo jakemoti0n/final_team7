@@ -85,8 +85,13 @@ class Telemetry(StrictModel):
 
     @model_validator(mode="after")
     def coherent(self):
-        if self.topics.odom.received_count == 0 and self.motion.age_ms is not None:
-            raise ValueError("motion requires odom reception")
+        if self.motion.age_ms is not None:
+            odom = self.topics.odom
+            if odom.received_count == 0:
+                raise ValueError("motion requires odom reception")
+            if (self.motion.last_received_at != odom.last_received_at
+                    or self.motion.age_ms != odom.age_ms):
+                raise ValueError("motion must refer to latest odom")
         return self
 
 
