@@ -122,6 +122,15 @@ ros2 launch limbo_bringup start_simulation.launch.py
 | `aischool_2f_scenarios` | `world:=aischool_2f_scenarios map:=aischool_2f_map` | 같은 학원 2층에 시험용 사람 6명과 지도에 없는 낮은 상자 2개(홀 서쪽, 0.1m·0.3m). 모두 정해진 시간표대로 움직이고 로봇에 반응하지 않는다. 장소마다 상황이 하나씩: 로봇 시작 위치 1.6m 앞에 와서 4초 멈춤(로봇이 시작 위치에 있을 때 접근 판단 시험), 홀→오른쪽 복도로 꺾음, 왼쪽 복도에 서 있음, 위쪽 복도에 둘이 나란히 천천히, 왼쪽 아래 복도에 빨리 걸음. 경로는 `tools/aischool_2f/gen_world.py`의 `SCENARIO_PATHS` |
 | `bookstore_world` | `world:=bookstore_world map:=bookstore_map` | 서점, 걷는 사람 2명. 초기 위치가 맞는지 아직 확인 안 함 (틀리면 2D Pose Estimate) |
 
+### 사람 인식 모델 바꿔 시험하기 (`person_model:=`)
+
+기본은 `person_detector.yaml`의 `yolo.model`(yolo11n)이다. yaml을 고치지 않고 다른 모델로 시험하려면 경로를 넘긴다. 예: 팀원이 학습 중인 하반신 모델
+
+```bash
+ros2 launch limbo_bringup start_simulation.launch.py world:=aischool_2f_scenarios map:=aischool_2f_map \
+  person_model:=$HOME/limbo/human-leg/runs/person_leg_stage1/weights/best.pt
+```
+
 ### 주행 평가 기록 (`record:=true`)
 
 launch에 `record:=true`를 붙이면 Nav2 Goal이 끝날 때마다 `~/limbo_results/nav_<월드>_<날짜_시각>.csv`에 한 줄이 쌓인다. Goal은 RViz로 찍든 순찰 노드가 보내든 상관없다. 알고리즘·파라미터를 바꿔 가며 같은 경로를 돌리고 CSV를 비교하는 용도다.

@@ -1,7 +1,7 @@
 import os
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
@@ -248,18 +248,26 @@ def generate_launch_description():
         ]
     )
 
-    detector = Node(
-        package='limbo_perception',
-        executable='person_detector',
-        name='person_detector',
-        output='screen',
-        parameters=[
+    def make_detector(context):
+        parameters = [
             os.path.join(limbo_perception_dir, 'config', 'person_detector.yaml'),
             # 모든 시각을 카메라·TF 메시지에서 가져오므로 sim time이 필요 없다.
             # 켜면 Gazebo /clock(약 740Hz)을 Python에서 전부 받느라 CPU를 많이 쓴다
             {'use_sim_time': False}
         ]
-    )
+        # person_model:=<경로>를 주면 yaml의 yolo.model 대신 그 모델로 시험한다 (비우면 yaml 그대로)
+        model = LaunchConfiguration('person_model').perform(context)
+        if model:
+            parameters.append({'yolo.model': model})
+        return [Node(
+            package='limbo_perception',
+            executable='person_detector',
+            name='person_detector',
+            output='screen',
+            parameters=parameters
+        )]
+
+    detector = OpaqueFunction(function=make_detector)
 
     # 주행 평가 기록 (record:=true일 때만). Goal이 끝날 때마다 ~/limbo_results/에 CSV 한 줄
     nav_recorder = Node(
@@ -294,6 +302,8 @@ def generate_launch_description():
         DeclareLaunchArgument('gui', default_value='true'),
         # 주행 평가를 CSV로 남기려면 record:=true (limbo_evaluation/nav_recorder)
         DeclareLaunchArgument('record', default_value='false'),
+        # 사람 인식 모델을 바꿔 시험하려면 person_model:=<.pt 경로> (예: 하반신 모델). 비우면 yaml의 모델
+        DeclareLaunchArgument('person_model', default_value=''),
 
         # 바로 Gazebo 실행
         gazebo,
