@@ -10,7 +10,8 @@ T0=$(date +%s)
 $D/sim_ctl.sh start patrol_$1 || { $D/sim_ctl.sh stop; echo "patrol_$1 START_FAIL" >> $LOGS/patrol_results.txt; exit 1; }
 source /opt/ros/jazzy/setup.bash; source ~/limbo/limbo/install/setup.bash; export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-97}; cd /tmp
 rm -rf $LOGS/patrol_$1_bag
-ros2 bag record -s mcap -o $LOGS/patrol_$1_bag /cmd_vel_nav /cmd_vel_smoothed /cmd_vel /collision_monitor_state \
+# 액션 상태(/navigate_through_poses/_action/status)는 숨김 토픽이라 --include-hidden-topics가 있어야 녹화된다
+ros2 bag record --include-hidden-topics -s mcap -o $LOGS/patrol_$1_bag /cmd_vel_nav /cmd_vel_smoothed /cmd_vel /collision_monitor_state \
   /amcl_pose /ground_truth/odom /odom /navigate_through_poses/_action/status /wheel_slip > /dev/null 2>&1 &
 BAG=$!
 sleep 2
@@ -21,6 +22,8 @@ if kill -0 $P 2>/dev/null; then   # 시간 초과: ros2 run이 띄운 python 자
   for c in $(pgrep -P $P); do kill -INT $c; done; kill -INT $P; sleep 3; kill -9 $P $(pgrep -P $P) 2>/dev/null
 fi
 kill -INT $BAG; for i in $(seq 1 15); do kill -0 $BAG 2>/dev/null || break; sleep 1; done; kill -9 $BAG 2>/dev/null
+# 녹화가 마무리되지 못하면 metadata가 없어 읽을 수 없다. 재색인으로 복구한다
+[ -f $LOGS/patrol_$1_bag/metadata.yaml ] || ros2 bag reindex $LOGS/patrol_$1_bag -s mcap > /dev/null 2>&1
 $D/sim_ctl.sh stop > /dev/null
 if grep -q "Patrol mission completed" $LOGS/patrol_$1.log; then R=OK
 elif grep -q "Patrol mission failed" $LOGS/patrol_$1.log; then R="FAIL ($(grep -m1 -E 'Navigation (failed|canceled)|rejected' $LOGS/patrol_$1.log))"

@@ -43,10 +43,16 @@ def main():
     data = read(sys.argv[1])
     gt = [(t, m.pose.pose.position.x, m.pose.pose.position.y) for t, m in data.get('/ground_truth/odom', [])]
     status = data.get('/navigate_through_poses/_action/status', [])
+    if not status:
+        # 도구 수정(2026-10-12 14:20) 전에 녹화한 bag. 전체를 주행 중으로 보고 근사로 분석한다
+        print('주의: Nav2 상태 토픽이 없는 녹화라 전체 시간을 주행 중으로 보고 분석함. '
+              'waypoint 대기(예: D 지점 5초)도 멈춤으로 나오니 위치로 구분할 것')
     active_times = [t for t, m in status]
     active_vals = [any(s.status == 2 for s in m.status_list) for t, m in status]
 
     def nav_active(t):
+        if not status:
+            return True
         i = bisect.bisect_right(active_times, t) - 1
         return i >= 0 and active_vals[i]
 
@@ -79,7 +85,8 @@ def main():
             hint = '명령은 나가는데 안 움직임 (막힘·헛돎)'
         else:
             hint = '제자리 회전 또는 판단 어려움'
-        print(f'  {s:7.1f}~{e:7.1f}s ({e - s:4.1f}초) 위치 ({x:6.2f},{y:5.2f})  속도 명령 MPPI {nav:.2f} → 평활 {smooth:.2f} → 최종 {final:.2f} m/s, '
+        t0 = gt[0][0]
+        print(f'  녹화 {s - t0:6.1f}~{e - t0:6.1f}초 ({e - s:4.1f}초간) 위치 ({x:6.2f},{y:5.2f})  속도 명령 MPPI {nav:.2f} → 평활 {smooth:.2f} → 최종 {final:.2f} m/s, '
               f'회전 {turn:.2f} rad/s  collision monitor: {cm_text}  위치 추정 오차 {err:.2f} m  → {hint}')
 
 
