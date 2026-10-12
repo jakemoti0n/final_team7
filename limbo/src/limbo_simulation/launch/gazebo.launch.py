@@ -37,11 +37,15 @@ def generate_launch_description():
         bookstore_models
     )
 
-    xacro_file = os.path.join(
+    # robot:=legacy면 이전 모델(0.45 m 정사각형, 높이 약 0.7 m), 아니면 v14 (기본)
+    xacro_file = PathJoinSubstitution([
         description_pkg,
         "urdf",
-        "limbo.urdf.xacro"
-    )
+        PythonExpression([
+            "'legacy/limbo_legacy.urdf.xacro' if '", LaunchConfiguration("robot"),
+            "' == 'legacy' else 'limbo.urdf.xacro'"
+        ]),
+    ])
 
     bridge_config = os.path.join(
         simulation_pkg,
@@ -73,6 +77,11 @@ def generate_launch_description():
     )
     # 로봇이 쓰는 센서·물리는 서버가 만들고, GUI는 사람이 보는 3D 창일 뿐이다.
     # 끄면(-s) CPU를 많이 아낀다. 로봇·지도·사람 인식 결과는 RViz로 본다
+    robot_arg = DeclareLaunchArgument(
+        "robot",
+        default_value="v14",
+        description="v14(기본, 쓰레기통 로봇) 또는 legacy(이전 모델)",
+    )
     gui_arg = DeclareLaunchArgument(
         "gui",
         default_value="true",
@@ -140,6 +149,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         world_arg,
+        robot_arg,
         gui_arg,
         set_gz_resource_path,
         bookstore_resource_path,

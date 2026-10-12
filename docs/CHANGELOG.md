@@ -8,6 +8,29 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-12 (22) [lab] 새 로봇 v14 모델, 학원 2층 도면을 문 0.9 m 기준으로 다시 만들기
+
+**할 일**
+- `build_limbo` (새 파일: 모델, self filter 설정)
+- 학원 2층 지도가 바뀌었음. 예전 지도로 만든 waypoint 파일이 있으면 좌표에 1.168을 곱할 것
+
+**변경**
+- 실제 로봇(이동형 쓰레기통 45×45×70 v14)을 기본 모델로 넣었음 (`limbo_description/urdf/limbo.urdf.xacro`). MID-360+IMU는 뚜껑 위 0.926 m, OAK-D Lite는 바닥에서 0.50 m
+- 예전 모델은 `urdf/legacy/`로 옮겼고 `robot:=legacy`로 띄울 수 있음. launch가 Nav2 외곽·팽창·장애물 높이를 예전 값으로 바꿔 넣음
+- Nav2를 v14 크기에 맞췄음: 외곽 0.50 × 0.63 m, 팽창 반지름 0.45 m, 장애물 높이 상한 1.00 m. self filter는 `lid_link`
+- 학원 2층 월드·지도를 문 0.9 m(법정 유효폭) 기준 축척으로 다시 만들었음 (1.168배, 28.8 × 27.5 m). 문 13개 모두 0.90 m. 사용자가 그림판으로 고친 벽(`tools/aischool_2f/walls_edited.png`)을 씀
+- 순찰 waypoint, `nav_route.py` 학원 경로 좌표를 같은 배율로 바꿨음
+- `patrol_analyze.py`가 멈춘 시간을 시뮬레이션 시간으로 재고, Gazebo가 멈춘 구간을 따로 보여 줌
+
+**확인**
+- v14 학원 2층 순찰 OK (234 s). 기록: `experiments/2026-10-12_v14_robot/`
+
+**참고**
+- 벽을 고칠 때는 `walls_edited.png`(검정 = 벽, 1 m = 80 px)를 고치고 `python3 gen_world.py`. 참고 그림은 `python3 export_guide.py`
+- 시험 도중 Gazebo 화면을 붙이면 Gazebo가 몇 초 멈춘다. 볼 거면 처음부터 `gui:=true`
+
+---
+
 ## 2026-10-12 (21) 순찰 정지 지점 방향 수정 정리 (원작자 PR #9)
 
 **할 일**

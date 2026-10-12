@@ -1,10 +1,13 @@
 import os
+import tempfile
+
+import yaml
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution, PythonExpression
 
 from launch_ros.actions import Node
 
@@ -46,17 +49,20 @@ def generate_launch_description():
     # File paths
     # ============================================================
 
-    urdf_file = os.path.join(
+    # robot:=legacy면 이전 모델(0.45 m 정사각형, 높이 약 0.7 m), 아니면 v14 (기본)
+    is_legacy = ["'", LaunchConfiguration('robot'), "' == 'legacy'"]
+
+    urdf_file = PathJoinSubstitution([
         limbo_description_dir,
         'urdf',
-        'limbo.urdf.xacro'
-    )
+        PythonExpression(["'legacy/limbo_legacy.urdf.xacro' if "] + is_legacy + [" else 'limbo.urdf.xacro'"]),
+    ])
 
-    self_filter_config = os.path.join(
+    self_filter_config = PathJoinSubstitution([
         limbo_navigation_dir,
         'config',
-        'self_filter.yaml'
-    )
+        PythonExpression(["'self_filter_legacy.yaml' if "] + is_legacy + [" else 'self_filter.yaml'"]),
+    ])
 
     nav2_params_file = os.path.join(
         limbo_navigation_dir,
@@ -80,6 +86,7 @@ def generate_launch_description():
         launch_arguments={
             'world': LaunchConfiguration('world'),
             'gui': LaunchConfiguration('gui'),
+            'robot': LaunchConfiguration('robot'),
         }.items()
     )
 
@@ -218,20 +225,49 @@ def generate_launch_description():
     # BT Navigator
     # ============================================================
 
-    navigation = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(
-                nav2_bringup_dir,
-                'launch',
-                'navigation_launch.py'
-            )
-        ),
-        launch_arguments={
-            'use_sim_time': 'true',
-            'autostart': 'true',
-            'params_file': nav2_params_file,
-        }.items()
-    )
+    # nav2_params.yaml은 v14 기준이다. 이전 모델이면 로봇 외곽·팽창·장애물 높이만 예전 값으로 바꿔 넣는다
+    def write_legacy_nav2_params():
+        """nav2_params.yaml에서 로봇 크기에 달린 값만 이전 모델 값으로 바꿔 임시 파일로 쓴다."""
+        with open(nav2_params_file) as f:
+            params = yaml.safe_load(f)
+        legacy_footprint = '[[0.225, 0.225], [0.225, -0.225], [-0.225, -0.225], [-0.225, 0.225]]'
+        for costmap, inflation in (('local_costmap', 0.40), ('global_costmap', 0.35)):
+            costmap_params = params[costmap][costmap]['ros__parameters']
+            costmap_params['footprint'] = legacy_footprint
+            costmap_params['inflation_layer']['inflation_radius'] = inflation
+            for layer in costmap_params.values():
+                if isinstance(layer, dict):
+                    for source in layer.values():
+                        if isinstance(source, dict) and 'max_obstacle_height' in source:
+                            source['max_obstacle_height'] = 0.80
+        for source in params['collision_monitor']['ros__parameters'].values():
+            if isinstance(source, dict) and 'max_height' in source:
+                source['max_height'] = 0.80
+        out = tempfile.NamedTemporaryFile('w', prefix='nav2_params_legacy_', suffix='.yaml', delete=False)
+        yaml.safe_dump(params, out)
+        out.close()
+        return out.name
+
+    def make_navigation(context):
+        params_file = nav2_params_file
+        if LaunchConfiguration('robot').perform(context) == 'legacy':
+            params_file = write_legacy_nav2_params()
+        return [IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(
+                    nav2_bringup_dir,
+                    'launch',
+                    'navigation_launch.py'
+                )
+            ),
+            launch_arguments={
+                'use_sim_time': 'true',
+                'autostart': 'true',
+                'params_file': params_file,
+            }.items()
+        )]
+
+    navigation = OpaqueFunction(function=make_navigation)
 
 
     # ============================================================
@@ -304,6 +340,8 @@ def generate_launch_description():
         DeclareLaunchArgument('record', default_value='false'),
         # 사람 인식 모델을 바꿔 시험하려면 person_model:=<.pt 경로> (예: 하반신 모델). 비우면 yaml의 모델
         DeclareLaunchArgument('person_model', default_value=''),
+        # 로봇 모델: v14(기본, 쓰레기통 로봇 45x45x70) 또는 legacy(이전 모델, 비교용)
+        DeclareLaunchArgument('robot', default_value='v14'),
 
         # 바로 Gazebo 실행
         gazebo,

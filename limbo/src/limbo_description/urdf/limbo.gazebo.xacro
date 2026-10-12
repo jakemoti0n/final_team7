@@ -1,25 +1,11 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <gazebo reference="left_wheel_link">
-    <mu1>1.0</mu1>
-    <mu2>1.0</mu2>
-  </gazebo>
-
-  <gazebo reference="right_wheel_link">
-    <mu1>1.0</mu1>
-    <mu2>1.0</mu2>
-  </gazebo>
-
-  <gazebo reference="front_caster_wheel_link">
-    <mu1>0.5</mu1>
-    <mu2>0.5</mu2>
-  </gazebo>
-
-  <gazebo reference="rear_caster_wheel_link">
-    <mu1>0.5</mu1>
-    <mu2>0.5</mu2>
-  </gazebo>
+  <!-- 바퀴는 고무(마찰 1.1), 캐스터는 회전하지 않는 구라 마찰을 거의 없앤다 (원본 trash_robot_sim과 같음) -->
+  <gazebo reference="left_wheel_link"><mu1>1.1</mu1><mu2>1.1</mu2></gazebo>
+  <gazebo reference="right_wheel_link"><mu1>1.1</mu1><mu2>1.1</mu2></gazebo>
+  <gazebo reference="front_caster_link"><mu1>0.01</mu1><mu2>0.01</mu2></gazebo>
+  <gazebo reference="rear_caster_link"><mu1>0.01</mu1><mu2>0.01</mu2></gazebo>
 
   <gazebo>
     <plugin filename="gz-sim-diff-drive-system"
@@ -55,13 +41,7 @@
       <topic>joint_states</topic>
       <joint_name>left_wheel_joint</joint_name>
       <joint_name>right_wheel_joint</joint_name>
-
-      <joint_name>front_caster_swivel_joint</joint_name>
-      <joint_name>front_caster_wheel_joint</joint_name>
-
-      <joint_name>rear_caster_swivel_joint</joint_name>
-      <joint_name>rear_caster_wheel_joint</joint_name>
-
+      <joint_name>lid_hinge_joint</joint_name>
       <update_rate>50</update_rate>
     </plugin>
 
@@ -75,6 +55,19 @@
       <robot_base_frame>base_footprint</robot_base_frame>
       <dimensions>2</dimensions>
       <odom_publish_frequency>20</odom_publish_frequency>
+    </plugin>
+
+    <!-- 뚜껑 열기/닫기: /lid_angle (rad, 0~1.972). 뚜껑 위 MID-360도 같이 기울어서 주행 중에는 열지 않는다 -->
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>lid_hinge_joint</joint_name>
+      <topic>lid_angle</topic>
+      <p_gain>35</p_gain>
+      <i_gain>0</i_gain>
+      <d_gain>4</d_gain>
+      <cmd_max>30</cmd_max>
+      <cmd_min>-30</cmd_min>
+      <initial_position>0</initial_position>
     </plugin>
   </gazebo>
 
@@ -166,8 +159,8 @@
 
       <camera>
 
-        <!-- 약 71.6 deg -->
-        <horizontal_fov>1.25</horizontal_fov>
+        <!-- OAK-D Lite 컬러 가로 69° (320x240 비율이면 세로 약 54°) -->
+        <horizontal_fov>1.204</horizontal_fov>
 
         <image>
           <width>320</width>

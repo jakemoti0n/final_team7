@@ -190,7 +190,9 @@ local_costmap:
       publish_frequency: 2.0
       global_frame: odom
       robot_base_frame: base_link
-      footprint: "[[0.225, 0.225], [0.225, -0.225], [-0.225, -0.225], [-0.225, 0.225]]"
+      # v14: 몸체 0.45 m + 바퀴 폭 0.59 m → 앞뒤 0.50 × 좌우 0.63 m (받은 trash_robot_sim과 같은 값).
+      # 이전 모델(robot:=legacy)은 launch에서 0.45 m 정사각형으로 바꿔 넣는다
+      footprint: "[[0.25, 0.315], [0.25, -0.315], [-0.25, -0.315], [-0.25, 0.315]]"
       footprint_padding: 0.02
       rolling_window: true
       width: 8
@@ -201,7 +203,8 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 5.0
-        inflation_radius: 0.40
+        # 로봇 바깥 반지름(0.43 m, padding 포함)보다 커야 MPPI가 외곽 충돌 검사를 제대로 한다 (v14. 이전 모델은 0.40)
+        inflation_radius: 0.45
 
       human_layer:
         plugin: "limbo_navigation::HumanLayer"
@@ -271,7 +274,7 @@ local_costmap:
           obstacle_range: 4.5
 
           min_obstacle_height: 0.03
-          max_obstacle_height: 0.80
+          max_obstacle_height: 1.00   # v14 높이 0.95 m + 여유 (이전 모델은 0.80)
 
           expected_update_rate: 0.0
           observation_persistence: 0.0
@@ -340,7 +343,7 @@ local_costmap:
           obstacle_range: 4.5
 
           min_obstacle_height: 0.02
-          max_obstacle_height: 0.80
+          max_obstacle_height: 1.00   # v14 높이 0.95 m + 여유 (이전 모델은 0.80)
 
           expected_update_rate: 0.0
           observation_persistence: 0.0
@@ -400,7 +403,9 @@ global_costmap:
       robot_base_frame: base_link
       use_sim_time: true
 
-      footprint: "[[0.225, 0.225], [0.225, -0.225], [-0.225, -0.225], [-0.225, 0.225]]"
+      # v14: 몸체 0.45 m + 바퀴 폭 0.59 m → 앞뒤 0.50 × 좌우 0.63 m (받은 trash_robot_sim과 같은 값).
+      # 이전 모델(robot:=legacy)은 launch에서 0.45 m 정사각형으로 바꿔 넣는다
+      footprint: "[[0.25, 0.315], [0.25, -0.315], [-0.25, -0.315], [-0.25, 0.315]]"
       footprint_padding: 0.02
 
       resolution: 0.05
@@ -479,7 +484,7 @@ global_costmap:
           obstacle_range: 4.5
 
           min_obstacle_height: 0.03
-          max_obstacle_height: 0.80
+          max_obstacle_height: 1.00   # v14 높이 0.95 m + 여유 (이전 모델은 0.80)
 
           expected_update_rate: 0.0
           observation_persistence: 0.0
@@ -548,7 +553,7 @@ global_costmap:
           obstacle_range: 4.5
 
           min_obstacle_height: 0.02
-          max_obstacle_height: 0.80
+          max_obstacle_height: 1.00   # v14 높이 0.95 m + 여유 (이전 모델은 0.80)
 
           expected_update_rate: 0.0
           observation_persistence: 0.0
@@ -594,7 +599,8 @@ global_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         enabled: true
 
-        inflation_radius: 0.35
+        # 경로가 로봇이 못 지나가는 틈으로 나지 않게 바깥 반지름(0.43 m)보다 크게 (v14. 이전 모델은 0.35)
+        inflation_radius: 0.45
         cost_scaling_factor: 4.0
 
 # The yaml_filename does not need to be specified since it going to be set by defaults in launch.
@@ -736,7 +742,7 @@ collision_monitor:
       topic: "/mid360/points_filtered"
 
       min_height: 0.03
-      max_height: 0.80
+      max_height: 1.00   # v14 높이 0.95 m + 여유 (이전 모델은 0.80)
 
       min_range: 0.05
 
@@ -748,7 +754,7 @@ collision_monitor:
       topic: "/rgbd_camera/points"
 
       min_height: 0.02
-      max_height: 0.80
+      max_height: 1.00   # v14 높이 0.95 m + 여유 (이전 모델은 0.80)
 
       min_range: 0.05
 
