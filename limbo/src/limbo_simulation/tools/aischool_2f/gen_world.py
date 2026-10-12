@@ -103,6 +103,15 @@ SCENARIO_PATHS = {
     'fast': (1.6, [(40, 521), (330, 521)]),
 }
 
+# 지도에 없는 낮은 장애물 (이름: (u, v, 가로 m, 세로 m, 높이 m)). 홀 ↔ 왼쪽 복도 경로 위에 둔다.
+# MID-360은 아래쪽 −7°라 가까운 낮은 물체를 못 보고 카메라도 1m 안쪽 바닥은 못 봐서,
+# 멀리서 본 것을 다가가는 동안 기억하는지 시험한다. 이름이 obstacle_로 시작하면 limbo_evaluation이 거리를 잰다
+SCENARIO_OBSTACLES = {
+    'obstacle_low_10cm': (331, 445, 0.3, 0.3, 0.10),
+    'obstacle_low_30cm': (275, 440, 0.3, 0.3, 0.30),
+}
+OBSTACLE_COLOR = '0.85 0.35 0.1 1'
+
 SKIN = 'https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae'
 STAND_LOOP_TIME = 10.0   # sec, 서 있는 사람의 궤적 길이 (Gazebo 궤적에는 점이 두 개 이상 필요)
 import math
@@ -148,12 +157,28 @@ def actor_xml(name, path_px, speed=WALK_SPEED):
     </actor>'''
 
 
-def write_world(world_name, actors):
+def obstacle_xml(name, u, v, size_x, size_y, height):
+    x, y = px_to_world(u, v)
+    box = f'<geometry><box><size>{size_x} {size_y} {height}</size></box></geometry>'
+    return f'''    <model name="{name}">
+      <static>true</static>
+      <pose>{x:.2f} {y:.2f} {height / 2:.3f} 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">{box}</collision>
+        <visual name="visual">{box}
+          <material><ambient>{OBSTACLE_COLOR}</ambient><diffuse>{OBSTACLE_COLOR}</diffuse></material></visual>
+      </link>
+    </model>'''
+
+
+def write_world(world_name, models):
     sdf = re.sub(r'<world name="[^"]+">', f'<world name="{world_name}">', walls_world)
-    sdf = sdf.replace('\n  </world>', '\n' + '\n'.join(actors) + '\n  </world>', 1)
+    sdf = sdf.replace('\n  </world>', '\n' + '\n'.join(models) + '\n  </world>', 1)
     open(os.path.join(WORLD_DIR, f'{world_name}.sdf'), 'w').write(sdf)
-    print(world_name, 'actors', len(actors))
+    print(world_name, 'models', len(models))
 
 
 write_world(NAME, [actor_xml(n, p) for n, p in ACTOR_PATHS.items()])
-write_world(f'{NAME}_scenarios', [actor_xml(n, p, v) for n, (v, p) in SCENARIO_PATHS.items()])
+write_world(f'{NAME}_scenarios',
+            [actor_xml(n, p, v) for n, (v, p) in SCENARIO_PATHS.items()]
+            + [obstacle_xml(n, *spec) for n, spec in SCENARIO_OBSTACLES.items()])

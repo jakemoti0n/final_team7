@@ -1,7 +1,9 @@
 # wheel_slip_monitor 튜닝 값. 바꾼 뒤 빌드 없이 노드만 다시 띄우면 적용된다.
 wheel_slip_monitor:
   ros__parameters:
-    cancel_navigation_on_slip: true
+    # 사람이 로봇 가까이 지나가면 스캔 비교가 속아 헛돎으로 잘못 판단해 주행을 취소하는 문제가 있어 임시로 끔.
+    # 감지·/wheel_slip 발행·로그는 그대로 남는다. 오탐을 고친 뒤 다시 켤지 팀에서 정한다 (docs/KNOWN_ISSUES.md)
+    cancel_navigation_on_slip: false
 
     check_period: 0.5        # sec, 이 간격마다 바퀴와 스캔 이동량을 비교
     scan_range_max: 10.0     # m, 먼 점은 노이즈가 커서 뺀다

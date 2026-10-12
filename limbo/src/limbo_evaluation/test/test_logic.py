@@ -3,7 +3,7 @@
 import csv
 import math
 
-from limbo_evaluation import actors, csv_log, goal_metrics
+from limbo_evaluation import actors, csv_log, goal_metrics, obstacles
 import pytest
 
 SDF = """
@@ -35,6 +35,17 @@ SDF = """
       </script>
     </actor>
     <actor name="no_script"><skin><filename>x.dae</filename></skin></actor>
+    <model name="obstacle_box">
+      <static>true</static>
+      <pose>2.00 0.00 0.050 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.4 0.2 0.1</size></box></geometry>
+        </collision>
+      </link>
+    </model>
+    <model name="wall"><pose>9 9 0 0 0 0</pose><link name="l"><collision name="c">
+      <geometry><box><size>1 1 1</size></box></geometry></collision></link></model>
 </world>
 """
 
@@ -109,6 +120,41 @@ def test_nearest_in_time():
     assert goal_metrics.nearest_in_time(times, values, 2.6) == 'c'
     assert goal_metrics.nearest_in_time(times, values, 9.0) == 'c'
     assert goal_metrics.nearest_in_time([], [], 1.0) is None
+
+
+def test_parse_only_obstacle_boxes():
+    boxes = obstacles.parse_boxes(SDF)
+    assert [(b.name, b.x, b.half_x, b.half_y) for b in boxes] == [('obstacle_box', 2.0, 0.2, 0.1)]
+
+
+def test_obstacle_distance_from_robot_edge():
+    boxes = obstacles.parse_boxes(SDF)
+    # 로봇 중심 (1.0, 0), 앞 모서리 1.225 → 상자 앞면 1.8까지 0.575m
+    name, distance = obstacles.nearest_box(boxes, 1.0, 0.0, 0.0, 0.225)
+    assert name == 'obstacle_box'
+    assert distance == pytest.approx(0.575)
+    # 45° 돌면 앞 꼭짓점이 0.318m 나와서 더 가까워진다
+    _, turned = obstacles.nearest_box(boxes, 1.0, 0.0, math.pi / 4, 0.225)
+    assert turned == pytest.approx(0.8 - 0.225 * math.sqrt(2), abs=0.02)
+
+
+def test_obstacle_touching_or_inside_is_zero():
+    boxes = obstacles.parse_boxes(SDF)
+    assert obstacles.nearest_box(boxes, 1.6, 0.0, 0.0, 0.225)[1] == 0.0
+    # 작은 상자가 로봇 아래로 완전히 들어와도 닿은 것
+    assert obstacles.nearest_box(boxes, 2.0, 0.0, 0.0, 0.225)[1] == 0.0
+    assert obstacles.nearest_box([], 0.0, 0.0, 0.0, 0.225) == ('', math.inf)
+
+
+def test_metrics_obstacle_contact_time():
+    m = goal_metrics.GoalMetrics(goal_metrics.MetricsConfig())
+    m.add_obstacle(0.05, 'a', 0.3)
+    m.add_obstacle(0.05, 'a', 0.0)
+    m.add_obstacle(0.05, 'a', 0.0)
+    row = m.row('SUCCEEDED')
+    assert row['min_obstacle_distance_m'] == 0.0
+    assert row['nearest_obstacle'] == 'a'
+    assert row['obstacle_contact_time_s'] == 0.1
 
 
 def test_csv_header_written_once(tmp_path):
