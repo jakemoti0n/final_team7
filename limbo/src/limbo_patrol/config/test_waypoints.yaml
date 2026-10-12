@@ -18,7 +18,7 @@ waypoints:
     type: stop
     x: -1.7223399877548218
     y: 2.034660577774048
-    yaw: 0
+    yaw: -124.0
     wait_sec: 5
 
   - name: D
@@ -46,7 +46,7 @@ waypoints:
     type: stop
     x: -0.06659924983978271
     y: -6.042545318603516
-    yaw: 0
+    yaw: -89.0
     wait_sec: 0
 
   - name: H
@@ -67,7 +67,7 @@ waypoints:
     type: stop
     x: 0.8289951086044312
     y: -0.005552530288696289
-    yaw: 0
+    yaw: -179.0
     wait_sec: 0
 
 
