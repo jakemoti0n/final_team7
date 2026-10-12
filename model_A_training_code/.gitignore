@@ -1,0 +1,25 @@
+# Model checkpoints, generated runs and dataset assets
+runs/
+*.pt
+*.pth
+*.onnx
+*.engine
+images/
+labels/
+datasets/
+*.zip
+*.tar
+*.tar.gz
+
+# Python local artifacts
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+.env
+.env.*
+
+# Generated audit artifacts
+previews/
+results.csv
+cases.csv

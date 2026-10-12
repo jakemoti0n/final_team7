@@ -1,0 +1,35 @@
+A-2 후보 검색. 자체 IoU 매칭으로 얻은 검수 후보이며 Ultralytics 혼동행렬 정확 재현이 아님.
+오염 가시성/라벨 일관성/촬영 지름길은 자동 판정하지 않았음. cases.csv에 수동 기록.
+원본은 읽기 전용, 출력 이미지에만 오버레이. conf=0.25, IoU=0.45.
+paper_contaminated correct_dirty: 393
+paper_contaminated missed: 6
+paper_contaminated other_dirty: 16
+paper_contaminated other_material_clean: 6
+paper_contaminated same_material_clean: 133
+can_contaminated correct_dirty: 625
+can_contaminated missed: 8
+can_contaminated other_dirty: 5
+can_contaminated other_material_clean: 14
+can_contaminated same_material_clean: 103
+pet_contaminated correct_dirty: 421
+pet_contaminated missed: 3
+pet_contaminated other_dirty: 21
+pet_contaminated other_material_clean: 10
+pet_contaminated same_material_clean: 96
+glass_contaminated correct_dirty: 390
+glass_contaminated other_dirty: 3
+glass_contaminated other_material_clean: 1
+glass_contaminated same_material_clean: 13
+plastic_contaminated correct_dirty: 461
+plastic_contaminated missed: 7
+plastic_contaminated other_dirty: 32
+plastic_contaminated other_material_clean: 28
+plastic_contaminated same_material_clean: 68
+vinyl_contaminated correct_dirty: 458
+vinyl_contaminated missed: 2
+vinyl_contaminated other_dirty: 18
+vinyl_contaminated other_material_clean: 7
+vinyl_contaminated same_material_clean: 58
+styrofoam_contaminated correct_dirty: 261
+styrofoam_contaminated other_dirty: 9
+styrofoam_contaminated same_material_clean: 6
