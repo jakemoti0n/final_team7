@@ -27,8 +27,8 @@ ros2 launch limbo_bringup start_simulation.launch.py world:=aischool_2f map:=ais
 | 질량 | 약 22.6 kg. **원본 작성자의 임시 가정값** (몸체 20 kg, 바퀴 토크 4 N·m) |
 
 Nav2 쪽 로봇 크기 값(`limbo_navigation/config/nav2_params.yaml`)은 v14 기준이다.
-- 로봇 외곽 0.50 × 0.63 m (+ padding 0.02), 팽창 반지름 0.45 m, 장애물 높이 상한 1.00 m
-- `robot:=legacy`면 launch가 외곽 0.45 m 정사각형, 팽창 0.40/0.35 m, 높이 상한 0.80 m로 바꿔 넣는다
+- 로봇 외곽 0.50 × 0.59 m (실제 크기, padding 0), 팽창 반지름 0.45 m, 장애물 높이 상한 1.00 m
+- `robot:=legacy`면 launch가 외곽 0.45 m 정사각형(padding 0.02), 팽창 0.40/0.35 m, 높이 상한 0.80 m로 바꿔 넣는다
 - self filter: v14는 `self_filter.yaml` (`lid_link`), legacy는 `self_filter_legacy.yaml` (`roof_link`)
 
 ## 모델 바꿀 때

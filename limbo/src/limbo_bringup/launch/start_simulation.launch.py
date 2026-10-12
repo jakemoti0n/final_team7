@@ -234,6 +234,7 @@ def generate_launch_description():
         for costmap, inflation in (('local_costmap', 0.40), ('global_costmap', 0.35)):
             costmap_params = params[costmap][costmap]['ros__parameters']
             costmap_params['footprint'] = legacy_footprint
+            costmap_params['footprint_padding'] = 0.02
             costmap_params['inflation_layer']['inflation_radius'] = inflation
             for layer in costmap_params.values():
                 if isinstance(layer, dict):
