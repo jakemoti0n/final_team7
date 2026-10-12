@@ -6,7 +6,14 @@
 - 월드 `human_test_world`(걷는 사람 10명), 지도 `human_test_map`, waypoint `test_waypoints.yaml`(A~J, 정지 지점 C·G·J, C에서 5초 대기)
 - 명령: `WORLD=human_test_world MAP=human_test_map tools/sim_trials/patrol_trial.sh room<k> test_waypoints.yaml`
 
-## 결론
+## 정정 (2026-10-12, 원작자 PR #9 이후)
+**아래 "원인"은 틀렸다.** 멈춘 동안 사람이 근처에 있었다는 상관관계만 보고 판단했고, 사람을 뺀 대조 실험을 하지 않았다.
+원작자가 사람 없는 빈 복도에서도 같은 정지를 재현했다 (yaw 0° 5/5 실패, 목표 방향만 바꾸면 3/3 성공).
+진짜 원인은 **정지 waypoint의 방향(yaw 0°)이 로봇이 이미 향한 방향과 같고, 목표가 로봇 옆·뒤에 남았을 때 후진이 꺼진 MPPI가 돌아서 다가가는 대신 멈추는 것**이다. 사람은 로봇이 목표를 지나치게 만드는 계기였다.
+해결: C·G·J yaw를 들어가는 방향으로 (dev `test_waypoints.yaml`). 자세히: [`docs/TROUBLESHOOTING.md`](../../docs/TROUBLESHOOTING.md), [`docs/NAV2_NEAR_GOAL_FAILURE_2026-10-12.md`](../../docs/NAV2_NEAR_GOAL_FAILURE_2026-10-12.md).
+아래 대책 후보 2(도착 판정 0.45 m)는 못 간 상태를 도착으로 착각하게 해서 쓰지 않는다 (시험도 중단함).
+
+## 결론 (정정 전 기록)
 - **재현됨. 10회 중 3회 실패, 그중 2회가 팀원과 같은 현상** (C 앞 0.3~0.4 m에서 멈춘 뒤 중단)
 - **원인: waypoint C가 걷는 사람의 경로 위에 있다.** 한 사람이 C에서 0.2 m 이내를 반복해서 지나가고, 멈춘 동안 목표 1.5 m 안에 사람이 있던 시간이 51~63%
   - 사람이 오면 사람 예측(human_layer)과 장애물 지도가 목표 주변에 cost를 깔고, MPPI가 0.3~0.4 m 앞에서 속도를 0으로 내고 기다린다 (MPPI 출력부터 0, collision monitor 개입 없음, 위치 추정 오차 0.01~0.04 m)
