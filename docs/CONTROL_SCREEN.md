@@ -1,6 +1,6 @@
 # 관제 화면 설계 (사용자용)
 
-작성: 2026-10-12 (ktj) · 상태: **설계 검토 중** (구현 전)
+작성: 2026-10-12 (ktj) · 상태: **A-1단계(순찰 노드) 구현·시험 중**, 나머지는 설계
 
 관제 화면은 사실상 **사용자(관리자)가 보는 화면**이다. 사용자가 할 일은 "지금 로봇이 어디서 무엇을 보고 있는지 보고, 필요하면 멈추고 다시 보내는 것"뿐이라 기능을 그만큼으로 줄인다.
 대시보드 PRD(`dashboard/docs/PRD.md`)에서 범위가 바뀌는 부분이 있어 담당(itkwon)과 맞춘 뒤 PRD에 반영한다 (아래 "PRD와 달라지는 것").
@@ -126,6 +126,27 @@ ros2 service call /patrol/resume std_srvs/srv/Trigger
 | 끝까지 | 상태 `completed`, 이후 pause는 `not patrolling` |
 | 순찰 노드 없이 서비스 호출 | 호출 쪽 제한 시간 후 실패 (2단계 Bridge의 "응답 없음") |
 | **정지까지 걸린 시간** | 서비스 호출 시각 → 정답 위치(`/ground_truth/odom`) 속도가 0.05 m/s 미만이 된 시각. 10번 재서 최대·평균을 기록. 느리면 정지 즉시 속도를 0으로 막는 방법을 검토 |
+
+### 시험 결과 (2026-10-12, 서브 PC, `human_test_world`)
+
+구현: `limbo_patrol/patrol_node.py`, `limbo_interfaces/msg/PatrolState.msg` (CHANGELOG (21))
+
+| 확인 | 결과 |
+|---|---|
+| 주행 중 pause | **7/7 성공**. 상태 `pausing` → `paused`, 실제 정지 |
+| **정지까지 걸린 시간** | **평균 0.55초, 최대 0.66초, 최소 0.40초** (7번). 예상(1~2초)보다 빨라 "즉시 속도 0" 장치는 지금은 안 넣음. Bridge·서버를 거치는 시간은 2단계에서 더함 |
+| pause 두 번 | `already paused` 거절 |
+| 정지 유지 | 3초간 속도 0.000 |
+| resume | 7/7 성공, 지난 waypoint로 되돌아가지 않음 |
+| 순찰 중 resume | `already patrolling` 거절 |
+| 동시 pause 5개 / resume 5개 | 매번 접수 1개, 나머지는 `already paused` / `resume already requested` |
+| 0.1~0.5초 간격 섞어 40번 | 응답 없음 0번, 응답 평균 4 ms·최대 31 ms, 마지막 접수 명령대로 정리, 이후 순찰 계속 |
+| `Ctrl+C` 종료 | 처음엔 서비스 스레드가 `RCLError`를 찍음 → 종료 순서를 고쳐 0건 |
+| **끝까지** | **확인 못 함**. 정지·재개 없이도 순찰이 A 앞·C 다음 구간에서 갇혀 실패하는 일이 있음 (2번 중 1번, KNOWN_ISSUES) |
+| **`stop` 대기 중 pause → resume** | **확인 못 함** (시험이 갇혀 멈춘 것을 대기로 잘못 잡음) |
+| 구간 사이 pause (상태가 `patrolling`으로 잠깐 튀는 경우) | 코드에서 막음(`start_navigating`). 그 순간을 직접 맞춘 시험은 아직 |
+
+다음: 15초 간격 정지·재개 5번 vs 정지 없음 5번으로 순찰 실패율 비교 (정지·재개가 갇힘을 늘리는지), stop 지점 도착을 감지한 대기 중 정지 시험.
 
 ## 2단계: Bridge·서버 (`relay_prog`, `dashboard/server`)
 

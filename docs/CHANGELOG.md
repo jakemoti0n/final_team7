@@ -8,6 +8,36 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-12 (21) 순찰 일시정지·재개 서비스와 순찰 상태 토픽
+
+**할 일**
+- **빌드 필요** (메시지가 새로 생김): `build_limbo`. `limbo_interfaces`를 빌드하지 않으면 순찰 노드가 `PatrolState`를 못 찾아 바로 죽음
+
+**변경**
+- 순찰 노드에 서비스 두 개를 추가했음. 관제 화면의 일시정지·순찰 재개 버튼이 쓸 것 (설계: `docs/CONTROL_SCREEN.md` A)
+  - `/patrol/pause`: 순찰 중이면 Nav2 주행을 취소하고 멈춤
+  - `/patrol/resume`: 멈춘 곳부터 이어서 순찰. 이미 지난 waypoint로 되돌아가지 않음
+  - 둘 다 `std_srvs/srv/Trigger`. 안 되는 경우는 사유와 함께 거절함 (`already paused`, `not patrolling`, `already patrolling`, `nothing to resume` 등)
+- 순찰 상태를 `/patrol/state`(`limbo_interfaces/msg/PatrolState`, 새 메시지)로 냄: 상태(`patrolling`·`paused`·`completed`·`failed` 등), 다음 waypoint, 재개 가능 여부, 바뀐 시각·이유. 늦게 붙은 구독자도 마지막 상태를 바로 받음
+- 명령을 안 보내면 동작은 전과 같음 (Nav2가 실패·취소하면 순찰 실패로 끝나는 것도 같음)
+- `Ctrl+C`로 끌 때 나던 오류 메시지를 없앴음
+
+**시험** (시뮬레이션 `human_test_world`)
+- 주행 중 정지 7번 모두 성공. **정지 요청부터 실제로 멈출 때까지 평균 0.55초, 최대 0.66초**
+- 정지·재개 5개 동시, 0.1~0.5초 간격 섞어 40번: 접수는 매번 1개만, 응답 없음 0번, 응답 평균 4 ms. 마지막 명령대로 상태가 정리되고 노드가 멈추지 않음
+
+**참고**
+- 서비스를 직접 시험해 보려면
+  ```bash
+  ros2 topic echo /patrol/state
+  ros2 service call /patrol/pause std_srvs/srv/Trigger
+  ros2 service call /patrol/resume std_srvs/srv/Trigger
+  ```
+- 아직 확인 못 한 것: 정지·재개를 하면서 순찰을 끝까지 도는 것, stop 지점 대기 중 정지. `human_test_world` 순찰이 정지 없이도 막혀 실패하는 일이 있어서(KNOWN_ISSUES) 이어서 확인함
+- 관제 화면 버튼과는 아직 연결 안 됨 (Bridge·서버 작업이 다음 단계)
+
+---
+
 ## 2026-10-12 (20) 헛돎 감시 오탐 방어 수정
 
 **할 일**
