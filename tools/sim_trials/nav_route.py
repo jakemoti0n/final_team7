@@ -1,5 +1,5 @@
 """시나리오 월드에서 정해진 경로를 Nav2로 돈다. 사용법: nav_route.py <box|people>"""
-import sys, time, rclpy
+import os, sys, time, rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from nav2_msgs.action import NavigateToPose
@@ -11,7 +11,10 @@ ROUTES = {
                ('위쪽 복도 동쪽', 3.5, 9.8), ('왼쪽 복도 위쪽 끝', -6.8, 10.0)],
     # human_test_world (15m 방, 사람 10명) 네 모서리 근처를 돈다
     'room': [('북동', 5.0, 5.0), ('남서', -5.0, -5.0), ('남동', 5.0, -5.0), ('북서', -5.0, 5.0), ('가운데', 0.0, 0.0)],
+    # chungjang (200 m 거리) 동쪽 100 m 갔다가 출발점으로. 사람 없음, 속도 실험용. 한 구간 200초 넘으니 GOAL_TIMEOUT=400
+    'street': [('거리 100 m', 100.0, 0.0), ('출발점', 0.0, 0.0)],
 }
+GOAL_TIMEOUT = float(os.environ.get('GOAL_TIMEOUT', 120))   # 초. 구간이 길면 환경변수로 늘린다
 rclpy.init(); n = Node('nav_route'); ac = ActionClient(n, NavigateToPose, '/navigate_to_pose'); ac.wait_for_server()
 for name, x, y in ROUTES[sys.argv[1]]:
     g = NavigateToPose.Goal(); g.pose.header.frame_id = 'map'
@@ -20,6 +23,6 @@ for name, x, y in ROUTES[sys.argv[1]]:
     if not f.result().accepted:
         print(f'{name:12s} → 거부됨', flush=True); continue
     r = f.result().get_result_async()
-    while not r.done() and time.time() - t0 < 120: rclpy.spin_once(n, timeout_sec=0.1)
+    while not r.done() and time.time() - t0 < GOAL_TIMEOUT: rclpy.spin_once(n, timeout_sec=0.1)
     if not r.done(): f.result().cancel_goal_async(); time.sleep(1)
     print(f"{name:12s} → {({4: 'SUCCEEDED', 5: 'CANCELED', 6: 'ABORTED'}.get(r.result().status) if r.done() else 'TIMEOUT')} {time.time() - t0:5.1f}s", flush=True)
