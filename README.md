@@ -126,6 +126,17 @@ ros2 launch limbo_bringup start_simulation.launch.py
 
 - 학원 2층 월드·지도는 문 폭 0.9 m(실제 기준)로 다시 만들었다 (2026-10-13). 월드 물리 스텝은 2 ms (1 ms면 실시간 비율이 0.6에 머묾)
 
+### 생성해서 쓰는 월드 (충장로, 레이싱 트랙 — lab)
+
+건물 메시가 커서(충장로 전체 26 MB) 저장소에는 생성기와 입력 자료만 둔다. 처음 한 번 만들고 `build_limbo`:
+
+```bash
+cd ~/limbo/limbo/src/limbo_simulation/tools
+python3 chungjang/gen_street.py          # 충장로 200 m → worlds/chungjang.sdf, maps/chungjang_map
+python3 chungjang/gen_street.py --all    # 번화가 전체 → chungjang_all (6초, 메모리 1.4 GB)
+python3 race_track/gen_track.py          # 레이싱 트랙 → race_track
+```
+
 ### 사람 인식 모델 바꿔 시험하기 (`person_model:=`)
 
 기본은 `person_detector.yaml`의 `yolo.model`(yolo11n)이다. yaml을 고치지 않고 다른 모델로 시험하려면 경로를 넘긴다. 예: 팀원이 학습 중인 하반신 모델

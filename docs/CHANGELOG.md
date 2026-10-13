@@ -8,6 +8,15 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-13 (42) [lab] 충장로·레이싱 트랙의 생성 산출물(메시·월드·지도)을 저장소에서 뺌, 생성기만 남김
+
+**할 일**
+- 충장로·레이싱 트랙 월드를 쓰려면 생성기를 한 번 돌린다 (README "생성해서 쓰는 월드"). 학원 월드는 그대로
+
+**변경**
+- `git rm --cached`로 53개 파일 추적 해제 + `.gitignore`: `models/chungjang_terrain`, `models/chungjang_all_terrain`, `models/race_track_terrain`, `worlds/chungjang*.sdf`, `worlds/race_track.sdf`, `maps/chungjang*`, `maps/race_track_map.*`. 메시 26 MB가 월드를 다시 만들 때마다 쌓여 `.git`이 311 MB가 됐기 때문. 남긴 것: `tools/chungjang/gen_street.py`와 OSM 자료 2개, `tools/race_track/gen_track.py`, `*_movers.json`
+- 이미 들어간 이력은 그대로라 `.git` 크기는 줄지 않음 (이력 정리는 force push가 필요해서 하지 않음)
+
 ## 2026-10-13 (41) [lab] ktj를 lab으로 병합 (관제·순찰 일시정지·재개를 lab 실험 기반으로)
 
 **할 일**
