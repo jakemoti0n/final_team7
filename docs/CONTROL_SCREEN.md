@@ -173,7 +173,13 @@ ros2 service call /patrol/resume std_srvs/srv/Trigger
 | 실제 ROS 연결 (시뮬레이션 → 순찰 노드 → Bridge → Mock 서버) | 정지 명령 `accepted` 서비스 응답 12 ms → 2.5초 뒤 `paused`·속도 0.00, 수신 횟수 2 → 4 (명령 이후 상태 판정 가능). 두 번째 정지 `rejected`(`already paused`), 재개 `accepted`(11 ms) → `patrolling` |
 | 찾아서 고친 것 | rclpy `Node`에 이미 `services` 속성이 있어 Bridge가 시작하자마자 죽음 → `patrol_clients`로 이름 바꿈 (단위 시험으론 안 잡힘) |
 
-### 서버 — 진행 중
+### 서버 — 구현·시험 완료 (2026-10-13, CHANGELOG (24))
+
+| 확인 | 결과 |
+|---|---|
+| 단위 시험 | 54/54 (기존 38 + 새 16). v2 규칙, 명령 접수 조건(연결·한 번에 하나), 현재 세션에 한 번만 전달, 판정 전 단계와 끝 상태 7종, 늦은 보고 무시, 지도·PNG |
+| 실제 연결 (시뮬레이션 → 순찰 노드 → Bridge → 서버) | **정지 요청 → `confirmed` 1.13초** (명령 뒤 `paused` + 속도 정지까지), 재개 → `confirmed` 0.88초, 중복 정지 `rejected`. 알림에 결과가 한 번씩 남음 |
+| 기존 실패 시험 4개 | 시험 데이터의 odom·motion 경과 시간을 맞춰 고침 |
 
 ## 3단계: 관제 화면 (`dashboard/ui`)
 
@@ -266,7 +272,7 @@ ros2 service call /patrol/resume std_srvs/srv/Trigger
 |---|---|---|---|
 | 1 | A-1단계 순찰 노드 정지·재개 | 가능 (`ros2 service call`) | 완료 (2026-10-12) |
 | 2 | 계약 정리 (명령 API, 위치·순찰 상태 전달) | — | 초안 완료 ([`CONTROL_API_DRAFT.md`](CONTROL_API_DRAFT.md)). PRD 반영은 마지막에 |
-| 3 | A-2단계 Bridge·서버 명령 + B 위치·지도 | 가능 (`curl`) | Bridge 완료 (2026-10-13), 서버 진행 중 |
+| 3 | A-2단계 Bridge·서버 명령 + B 위치·지도 | 가능 (`curl`) | 완료 (2026-10-13) |
 | 4 | A-3단계·B·D 화면 | — | |
 | 5 | C 카메라 | — | |
 | 6 | PRD 두 개·README 정리 (실제 동작 기준, 경로를 `~/limbo` 기준으로) | — | |
