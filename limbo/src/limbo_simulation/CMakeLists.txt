@@ -17,6 +17,7 @@ install(
     config
     launch
     models
+    scripts
   DESTINATION share/${PROJECT_NAME}
 )
 

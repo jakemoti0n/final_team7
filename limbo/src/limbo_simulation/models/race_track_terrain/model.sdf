@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <!-- gen_track.py가 만든다. 직접 고치지 말 것 -->
+  <model name="race_track_terrain">
+    <static>true</static>
+    <link name="link">
+      <collision name="barrier_red_c"><geometry><mesh><uri>model://race_track_terrain/meshes/barrier_red.obj</uri></mesh></geometry></collision><visual name="barrier_red_v"><geometry><mesh><uri>model://race_track_terrain/meshes/barrier_red.obj</uri></mesh></geometry><material><ambient>0.85 0.15 0.15 1</ambient><diffuse>0.85 0.15 0.15 1</diffuse></material></visual>
+      <collision name="barrier_white_c"><geometry><mesh><uri>model://race_track_terrain/meshes/barrier_white.obj</uri></mesh></geometry></collision><visual name="barrier_white_v"><geometry><mesh><uri>model://race_track_terrain/meshes/barrier_white.obj</uri></mesh></geometry><material><ambient>0.95 0.95 0.95 1</ambient><diffuse>0.95 0.95 0.95 1</diffuse></material></visual>
+      <visual name="asphalt_v"><geometry><mesh><uri>model://race_track_terrain/meshes/asphalt.obj</uri></mesh></geometry><material><ambient>0.25 0.25 0.27 1</ambient><diffuse>0.25 0.25 0.27 1</diffuse></material></visual>
+      <visual name="start_line_v"><geometry><mesh><uri>model://race_track_terrain/meshes/start_line.obj</uri></mesh></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse></material></visual>
+      <visual name="grass_v"><pose>2.92 5.80 0.001 0 0 0</pose><geometry><box><size>18.25 15.55 0.002</size></box></geometry><material><ambient>0.35 0.55 0.3 1</ambient><diffuse>0.35 0.55 0.3 1</diffuse></material></visual>
+    </link>
+  </model>
+</sdf>
