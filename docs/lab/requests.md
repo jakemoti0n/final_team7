@@ -18,6 +18,17 @@
 
 ## 요청
 
+### R2. 사람 있는 복도 속도 설정 A·B·C 각 1회 (2026-10-13 16:40, 대기)
+
+노트북이 `people_side` 경로로 A·B·C를 2회씩 돌리는 중. 서브 PC가 3회차(조건당 1회)를 맡는다. 여유가 있으면 충장로 거리 200 m 왕복도 조건당 1회 (R2-b).
+
+자세한 지시: [`experiments/orders/2026-10-13_sub_people_side.md`](../experiments/orders/2026-10-13_sub_people_side.md)
+(준비 `build_limbo` 필수 — 월드 물리 스텝이 바뀜, 실행 스크립트 `experiments/orders/people_side_one.sh`, 결과는 `experiments/2026-10-13_people_speed_sub/`)
+
+- 조건: A 현재 설정, B `prune_distance` 2.5, C 상한 0.75 + `prune_distance` 3.0. 스크립트가 적용·원복을 다 한다
+- 시작 전에 실시간 비율(RTF)을 한 번 재서 보고에 적는다 (두 PC 결과를 같이 볼 때 필요)
+- 경로 스크립트가 첫 줄만 찍고 멈추면 그 회차는 버리고 라벨 뒤에 `r`을 붙여 다시 (노트북에서 1번 있었음)
+
 ### R1. 학원 2층 순찰 반복 — 목표 앞 정지 재현 (노트북: 결과 받음, 2026-10-12 15:00)
 
 > 결과 확인함 (`experiments/2026-10-12_patrol_repro/`). 목표 앞 정지는 재현 안 됨(10/10), 위쪽 복도 MPPI 머뭇거림 4/9회는 노트북에서 이어서 봄. **서브 PC는 이 작업에서 해제** (다른 작업 예정).

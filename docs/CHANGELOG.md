@@ -8,6 +8,16 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-13 (33) [lab] 사람 복도 목표를 벽 쪽으로 옮긴 `people_side` 경로, 서브 PC 요청 R2
+
+**할 일**
+- 없음 (서브 PC는 R2 지시서대로 `build_limbo` 후 실행)
+
+**변경**
+- `tools/sim_trials/nav_route.py`: `people_side` 경로 추가. `people`과 같은 왕복이지만 목표를 북쪽 벽 쪽(y 11.8)으로 옮겼음. 원래 목표가 걷는 사람 줄(y 9.8) 위라 도착해 있으면 사람이 걸어 들어와 끼였기 때문
+- `docs/lab/requests.md` R2, 지시서 `experiments/orders/2026-10-13_sub_people_side.md`, 실행 스크립트 `experiments/orders/people_side_one.sh`: 서브 PC가 A·B·C 3회차를 맡음 (한 세트가 한 시간 가까워 두 PC로 나눔)
+- `experiments/2026-10-13_people_speed/README.md`, `docs/KNOWN_ISSUES.md`: 목표를 옮긴 건 실험용 분리 조치이고 실물에서는 "사람이 막으면 멈춰 기다렸다 재개" BT 동작·HumanLayer 지연 확인이 본질이라는 논의를 적었음
+
 ## 2026-10-13 (32) [lab] 사람 있는 복도 속도 비교 중단, v14가 두 사람 사이에 끼는 문제를 알려진 문제에 추가 (설정 변경 없음)
 
 **할 일**
