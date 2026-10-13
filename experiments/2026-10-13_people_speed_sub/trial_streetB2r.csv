@@ -1,0 +1,3 @@
+world,start_time_s,status,duration_s,path_length_m,mean_speed_mps,start_x,start_y,end_x,end_y,recoveries,min_person_distance_m,nearest_person,personal_space_time_s,min_obstacle_distance_m,nearest_obstacle,obstacle_contact_time_s,localization_error_mean_m,localization_error_max_m,controller_rate_warnings,wheel_slip_events
+chungjang,32.9,SUCCEEDED,170.2,99.86,0.59,-0.0,0.0,99.76,-0.09,1,0.45,walker_2,0.3,inf,,0.0,0.082,0.456,1,0
+chungjang,203.1,SUCCEEDED,175.3,99.92,0.57,99.77,-0.09,0.17,0.14,0,0.52,walker_2,0.0,inf,,0.0,0.093,0.333,0,0
