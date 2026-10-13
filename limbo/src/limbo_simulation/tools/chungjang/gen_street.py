@@ -1,13 +1,17 @@
-"""광주 충장로 보행자 거리 가운데 200 m를 OpenStreetMap 자료로 재현한 Nav2 지도(chungjang_map)와 Gazebo 월드(chungjang.sdf)를 만든다.
+"""광주 충장로 보행자 거리를 OpenStreetMap 자료로 재현한 Nav2 지도와 Gazebo 월드를 만든다.
 
-사용법: python3 gen_street.py [--preview 그림.png]
-- 자료: osm_chungjang.json (© OpenStreetMap contributors, ODbL 1.0. Overpass로 받은 건물·길). 없으면 다시 받는다
+사용법: python3 gen_street.py [--all] [--preview 그림.png]
+- 기본: 거리 가운데 SEGMENT(200) m, 양옆 HALF_WIDTH(40) m, 5 cm 격자 → chungjang / chungjang_map
+- --all: 큰길(금남로·중앙로·서석로·천변우로) 안쪽 번화가 전체(약 470 x 530 m), 10 cm 격자 → chungjang_all / chungjang_all_map
+  5 cm로 하면 약 1억 4천만 칸(400 x 350 m만 잡아도 5,600만 칸)이라 Nav2 costmap·경로 계획이 너무 무거워서 10 cm로 한다 (약 3,500만 칸)
+  두 월드는 원점·방향이 같아서 200 m 월드의 좌표·waypoint를 그대로 쓸 수 있다
+- 자료: osm_chungjang.json / osm_chungjang_all.json (© OpenStreetMap contributors, ODbL 1.0. Overpass로 받은 건물·길). 없으면 다시 받는다
 - 보행자 길(highway=pedestrian, 충장로) 중심선 가운데 SEGMENT m를 잘라, 구간 시작이 월드 원점·거리 방향이 +x가 되게 돌린다
-- 거리 양옆 HALF_WIDTH m 안의 건물을 세운다. OSM에 층수가 있으면 층수 x 3.2 m, 없으면 3~5층(건물 번호로 정함)
+- 건물은 OSM에 층수가 있으면 층수 x 3.2 m, 없으면 3~5층(건물 번호로 정함). 큰길 너머 건물은 세우지 않는다 (울타리에 가려 안 보이고 메시만 무거워짐)
 - OSM 건물 외곽선 사이에 생긴 좁은 틈(GAP_CLOSE m 미만)은 메운다. 실제로는 붙은 건물을 조금 떨어지게 그린 경우가 많다
 - OSM에 길로 등록된 골목은 폭 ALLEY_WIDTH m까지 넓힌다. 외곽선이 처마·보도 끝까지 그려져 실제보다 좁게 나온다
 - 거리와 이어지지 않은 빈 공간(건물 블록 안 구멍)은 가장 가까운 건물로 채운다. 로봇 출발점과 이어진 빈 칸만 남는다
-- 구간 바깥 경계는 낮은 울타리로 막는다 (옆 골목은 경계에서 끝남). 걷는 사람이 거리를 양방향으로 다닌다
+- 바깥(기본: 구간 경계, --all: 큰길)과 맞닿는 곳은 낮은 울타리로 막는다 (옆 골목은 거기서 끝남). 걷는 사람이 거리를 양방향으로 다닌다
 """
 import json
 import math
@@ -23,16 +27,21 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 SIM = os.path.join(HERE, '..', '..')
 WORLD_DIR = os.path.join(SIM, 'worlds')
-MODEL_DIR = os.path.join(SIM, 'models', 'chungjang_terrain')
 MAP_DIR = os.path.join(SIM, '..', 'limbo_navigation', 'maps')
-NAME = 'chungjang'
-OSM = os.path.join(HERE, 'osm_chungjang.json')
-OSM_QUERY = '[out:json][timeout:90];(way["building"](35.1460,126.9135,35.1505,126.9195);way["highway"](35.1460,126.9135,35.1505,126.9195););out geom;'
+ALL = '--all' in sys.argv
+NAME = 'chungjang_all' if ALL else 'chungjang'
+MODEL_DIR = os.path.join(SIM, 'models', f'{NAME}_terrain')
+OSM = os.path.join(HERE, 'osm_chungjang_all.json' if ALL else 'osm_chungjang.json')
+BBOX = '35.1430,126.9095,35.1515,126.9205' if ALL else '35.1460,126.9135,35.1505,126.9195'    # 남, 서, 북, 동
+OSM_QUERY = f'[out:json][timeout:120];(way["building"]({BBOX});way["highway"]({BBOX}););out geom;'
 
-SEGMENT = 200.0        # 거리 가운데 몇 m를 쓸지
+SEGMENT = 200.0        # 거리 가운데 몇 m를 쓸지 (원점·방향 기준. --all도 같은 원점을 쓴다)
 HALF_WIDTH = 40.0      # 거리 양옆으로 몇 m까지 건물을 세울지
 BEFORE = 5.0           # 구간 앞뒤 여유 (m). 로봇이 구간 시작점 뒤로 조금 빠질 수 있게
-RES = 0.05
+ALL_EXTENT = (-170.0, 400.0, -135.0, 475.0)   # --all 격자 범위 (x0, x1, y0, y1, m). 큰길 네 개가 다 들어가야 안쪽이 막힌다
+BIG_ROADS = ('secondary', 'tertiary')         # 구역 경계로 삼는 큰길의 OSM 등급
+ROAD_HALF = 12.0       # 큰길 중심선에서 울타리까지 (m). 차도 + 보도
+RES = 0.10 if ALL else 0.05
 GAP_CLOSE = 1.2        # 이보다 좁은 건물 사이 틈은 메운다 (m)
 ALLEY_WIDTH = 3.0      # 골목 최소 폭 (m)
 FENCE_HEIGHT = 1.2
@@ -86,17 +95,20 @@ def to_world(p):
     return (x * cos_a - y * sin_a, x * sin_a + y * cos_a)
 
 
-# --- 격자: 구간 앞뒤 BEFORE, 양옆 HALF_WIDTH
-ox, oy = -BEFORE, -HALF_WIDTH
-W, H = int(round((SEGMENT + 2 * BEFORE) / RES)), int(round(2 * HALF_WIDTH / RES))
+# --- 격자: 구간 앞뒤 BEFORE, 양옆 HALF_WIDTH (--all은 ALL_EXTENT)
+x0, x1, y0, y1 = ALL_EXTENT if ALL else (-BEFORE, SEGMENT + BEFORE, -HALF_WIDTH, HALF_WIDTH)
+ox, oy = x0, y0
+W, H = int(round((x1 - x0) / RES)), int(round((y1 - y0) / RES))
 
 
 def px(p):
     return int(round((p[0] - ox) / RES)), int(round(H - (p[1] - oy) / RES))
 
 
-buildings = []          # (높이, 색 번호, 격자 마스크)
-heights = {}
+# 건물은 번호 라벨 이미지 하나(owner: 0 = 건물 아님, n = n번째 건물)로 다룬다.
+# 건물마다 격자 크기 마스크를 들면 --all(건물 500채 x 3,500만 칸)에서 메모리가 30 GB를 넘는다
+buildings = []          # (높이, 색 번호). 번호 = 목록 순서 + 1
+owner = np.zeros((H, W), np.int32)
 for e in elements:
     tags = e.get('tags', {})
     if 'building' not in tags or len(e.get('geometry', [])) < 3:
@@ -106,34 +118,23 @@ for e in elements:
         continue
     levels = tags.get('building:levels')
     floors = int(float(levels)) if levels and levels.replace('.', '').isdigit() else 3 + e['id'] % 3
-    mask = np.zeros((H, W), np.uint8)
-    cv2.fillPoly(mask, [poly], 1)
-    if mask.any():
-        buildings.append((floors * LEVEL_HEIGHT, e['id'] % len(COLORS), mask > 0))
-
-walls = np.zeros((H, W), bool)
-for _, _, m in buildings:
-    walls |= m
-
+    buildings.append((floors * LEVEL_HEIGHT, e['id'] % len(COLORS)))
+    cv2.fillPoly(owner, [poly], len(buildings))
 
 
 def attach_to_nearest_building(cells):
     """빈 칸(cells)을 가장 가까운 건물에 붙여 그 건물의 높이·색을 따르게 한다"""
-    owner = np.zeros((H, W), np.int32)
-    for i, (_, _, m) in enumerate(buildings):
-        owner[m] = i + 1
     # 건물 칸(0)마다 번호를 매겨 두고, 빈 칸에는 가장 가까운 건물 칸의 번호가 적힌다
     _, nearest = cv2.distanceTransformWithLabels((owner == 0).astype(np.uint8), cv2.DIST_L2, 5, labelType=cv2.DIST_LABEL_PIXEL)
     owner_of_pixel = np.concatenate(([0], owner[owner > 0]))
-    nearest_owner = owner_of_pixel[nearest]
-    return [(h, c, m | (cells & (nearest_owner == i + 1))) for i, (h, c, m) in enumerate(buildings)]
+    owner[cells] = owner_of_pixel[nearest[cells]]
 
 
 # 좁은 틈 메우기: 닫힘 연산으로 메운 칸을 가장 가까운 건물에 붙인다 (높이·색을 따라감)
 k = int(round(GAP_CLOSE / RES)) | 1
-filled = cv2.morphologyEx(walls.astype(np.uint8), cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))) > 0
-filler = filled & ~walls
-buildings = attach_to_nearest_building(filler)
+filled = cv2.morphologyEx((owner > 0).astype(np.uint8), cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))) > 0
+filler = filled & (owner == 0)
+attach_to_nearest_building(filler)
 
 # 골목 넓히기: OSM 길(거리 자체 빼고) 가운데 선 양옆 ALLEY_WIDTH/2 안의 건물을 깎는다
 alleys = np.zeros((H, W), np.uint8)
@@ -146,46 +147,73 @@ for e in elements:
         continue
     cv2.polylines(alleys, [pts], False, 1, int(round(ALLEY_WIDTH / RES)))
     alley_count += 1
-alleys = alleys > 0
-buildings = [(h, c, m & ~alleys) for h, c, m in buildings]
-walls = np.zeros((H, W), bool)
-for _, _, m in buildings:
-    walls |= m
-fence = np.zeros((H, W), bool)
-t = int(round(FENCE_THICK / RES))
-fence[:t, :] = fence[-t:, :] = True
-fence[:, :t] = fence[:, -t:] = True
-fence &= ~walls
+owner[alleys > 0] = 0
+walls = owner > 0
 
-# 거리와 이어지지 않은 빈 공간(건물 블록 안 구멍) 채우기: 로봇 출발점과 이어진 빈 칸만 남긴다.
-# 실제로는 건물 안마당·지붕이라 로봇이 갈 수 없는데, 비워 두면 경로 계획이 그쪽을 후보로 보고 지도도 헷갈린다
-_, region = cv2.connectedComponents((~(walls | fence)).astype(np.uint8), connectivity=4)
-pocket = (region > 0) & (region != region[px((0, 0))[1], px((0, 0))[0]])
-buildings = attach_to_nearest_building(pocket)
-walls = np.zeros((H, W), bool)
-for _, _, m in buildings:
-    walls |= m
-print(f'메운 틈 {int(filler.sum() * RES * RES)} m², 넓힌 골목 {alley_count}개, 채운 막힌 공간 {int(pocket.sum() * RES * RES)} m²')
-grid = walls | fence
+# --- 바깥: 기본은 격자 가장자리 띠, --all은 큰길(중심선 양옆 ROAD_HALF)과 그 너머
+t = int(round(FENCE_THICK / RES))
+outside = np.zeros((H, W), np.uint8)
+if ALL:
+    for e in elements:
+        if e.get('tags', {}).get('highway') in BIG_ROADS:
+            pts = np.array([px(to_world(to_m(p))) for p in e['geometry']], np.int32)
+            cv2.polylines(outside, [pts], False, 1, int(round(2 * ROAD_HALF / RES)))
+else:
+    outside[:t, :] = outside[-t:, :] = outside[:, :t] = outside[:, -t:] = 1
+outside = (outside > 0) & ~walls
+
+# 로봇 출발점과 이어진 빈 칸만 "구역"이다. 격자 가장자리와 이어진 빈 칸은 큰길 너머라 바깥에 넣고,
+# 둘 다 아닌 빈 칸(건물 블록 안 구멍)은 실제로는 안마당·지붕이라 가장 가까운 건물로 채운다 (비워 두면 경로 계획이 후보로 본다)
+_, region_id = cv2.connectedComponents((~(walls | outside)).astype(np.uint8), connectivity=4)
+region = region_id == region_id[px((0, 0))[1], px((0, 0))[0]]
+edge_ids = np.unique(np.concatenate([region_id[0], region_id[-1], region_id[:, 0], region_id[:, -1]]))
+if region_id[px((0, 0))[1], px((0, 0))[0]] in edge_ids:
+    raise SystemExit('큰길이 격자를 다 막지 못해 구역이 가장자리까지 샌다. ALL_EXTENT를 줄이거나 ROAD_HALF를 키울 것')
+outside |= np.isin(region_id, edge_ids[edge_ids > 0])
+pocket = ~(walls | outside | region)
+attach_to_nearest_building(pocket)
+walls = owner > 0
+
+# 큰길 너머 건물은 뺀다: 서로 붙은 건물 덩어리가 구역과 맞닿지 않으면 바깥 건물
+_, cluster = cv2.connectedComponents(walls.astype(np.uint8), connectivity=8)
+near_region = cv2.dilate(region.astype(np.uint8), np.ones((2 * t + 3, 2 * t + 3), np.uint8)) > 0
+beyond = walls & ~np.isin(cluster, np.unique(cluster[near_region & walls]))
+owner[beyond] = 0
+outside |= beyond
+walls = owner > 0
+building_count = len(np.unique(owner)) - 1
+
+# 울타리: 구역이 바깥과 맞닿는 곳
+fence = (cv2.dilate(outside.astype(np.uint8), np.ones((2 * t + 1, 2 * t + 1), np.uint8)) > 0) & region
+region &= ~fence
+print(f'메운 틈 {int(filler.sum() * RES * RES)} m², 넓힌 골목 {alley_count}개, 채운 막힌 공간 {int(pocket.sum() * RES * RES)} m², '
+      f'구역 {int(region.sum() * RES * RES)} m², 울타리 {int(fence.sum() * RES * RES / FENCE_THICK)} m')
+grid = walls | fence | outside
 
 # --- 검사: 거리 가운데 선의 폭 (로봇 출발점이 비어 있는지 포함)
 dist = cv2.distanceTransform((~grid).astype(np.uint8), cv2.DIST_L2, 5) * RES
-centre = [to_world(along(s_start + s)) for s in np.arange(0, SEGMENT + 0.1, 1.0)]
-widths = [2 * dist[px(p)[1], px(p)[0]] for p in centre if 0 <= px(p)[1] < H and 0 <= px(p)[0] < W]
-print(f'구간: 거리 중심선 {s_start:.0f}~{s_start + SEGMENT:.0f} m (전체 {acc[-1]:.0f} m), 방향 {math.degrees(angle):.0f}°, '
-      f'건물 {len(buildings)}채, 거리 폭(벽 사이) 최소 {min(widths):.1f} m · 중간 {sorted(widths)[len(widths) // 2]:.1f} m')
+centre = [to_world(along(s)) for s in np.arange(0, acc[-1], 1.0)] if ALL else [to_world(along(s_start + s)) for s in np.arange(0, SEGMENT + 0.1, 1.0)]
+centre = [p for p in centre if 0 <= px(p)[1] < H and 0 <= px(p)[0] < W and region[px(p)[1], px(p)[0]]]   # 큰길 위는 뺀다
+widths = [2 * dist[px(p)[1], px(p)[0]] for p in centre[3:-3]]     # 양 끝은 울타리 바로 앞이라 뺀다
+print(f'구간: 거리 중심선 {"전체" if ALL else f"{s_start:.0f}~{s_start + SEGMENT:.0f} m"} (전체 {acc[-1]:.0f} m), 방향 {math.degrees(angle):.0f}°, '
+      f'건물 {building_count}채, 거리 폭(벽 사이) 최소 {min(widths):.1f} m · 중간 {sorted(widths)[len(widths) // 2]:.1f} m')
 if dist[px((0, 0))[1], px((0, 0))[0]] < 1.0:
     raise SystemExit('로봇 출발점(원점)이 벽에 너무 가깝다')
 
 if '--preview' in sys.argv:
     img = np.full((H, W, 3), (200, 200, 195), np.uint8)
     img[walls] = (150, 170, 200)
+    img[outside] = (120, 120, 120)
     img[fence] = (60, 60, 60)
     cv2.polylines(img, [np.array([px(p) for p in centre], np.int32)], False, (0, 0, 220), 3)
     cv2.circle(img, px((0, 0)), 12, (0, 160, 0), -1)
-    for gx in range(0, int(SEGMENT) + 1, 10):
-        cv2.line(img, px((gx, -HALF_WIDTH)), px((gx, HALF_WIDTH)), (180, 180, 180), 1)
+    step = 50 if ALL else 10
+    for gx in range(int(math.ceil(x0 / step)) * step, int(x1) + 1, step):
+        cv2.line(img, px((gx, y0)), px((gx, y1)), (180, 180, 180), 1)
         cv2.putText(img, str(gx), (px((gx, 0))[0] + 3, H - 8), 0, 0.8, (0, 0, 0), 2)
+    for gy in range(int(math.ceil(y0 / step)) * step, int(y1) + 1, step):
+        cv2.line(img, px((x0, gy)), px((x1, gy)), (180, 180, 180), 1)
+        cv2.putText(img, str(gy), (3, px((0, gy))[1] - 3), 0, 0.8, (0, 0, 0), 2)
     path = sys.argv[sys.argv.index('--preview') + 1]
     cv2.imwrite(path, cv2.resize(img, (W // 2, H // 2), interpolation=cv2.INTER_AREA))
     print(path)
@@ -236,34 +264,33 @@ def write_obj(path, mask, z1):
 
 
 links = []
-groups = {}
-for height, color, mask in buildings:
-    key = (height, color)
-    groups[key] = groups.get(key, np.zeros((H, W), bool)) | mask
-taken = np.zeros((H, W), bool)
-for (height, color), mask in sorted(groups.items(), reverse=True):    # 높은 건물부터 (겹치는 칸은 높은 쪽에)
-    mask = mask & ~taken
-    taken |= mask
+groups = {}             # (높이, 색) → 건물 번호 목록
+for number, key in enumerate(buildings, 1):
+    groups.setdefault(key, []).append(number)
+for (height, color), numbers in sorted(groups.items(), reverse=True):
+    mask = np.isin(owner, numbers)
+    if not mask.any():
+        continue
     name = f'bldg_{int(height * 10)}_{color}'
     write_obj(os.path.join(MODEL_DIR, 'meshes', f'{name}.obj'), mask, height)
-    geom = f'<geometry><mesh><uri>model://chungjang_terrain/meshes/{name}.obj</uri></mesh></geometry>'
+    geom = f'<geometry><mesh><uri>model://{NAME}_terrain/meshes/{name}.obj</uri></mesh></geometry>'
     links.append(f'      <collision name="{name}_c">{geom}</collision><visual name="{name}_v">{geom}'
                  f'<material><ambient>{COLORS[color]}</ambient><diffuse>{COLORS[color]}</diffuse></material></visual>')
 write_obj(os.path.join(MODEL_DIR, 'meshes', 'fence.obj'), fence, FENCE_HEIGHT)
-geom = '<geometry><mesh><uri>model://chungjang_terrain/meshes/fence.obj</uri></mesh></geometry>'
+geom = f'<geometry><mesh><uri>model://{NAME}_terrain/meshes/fence.obj</uri></mesh></geometry>'
 links.append(f'      <collision name="fence_c">{geom}</collision><visual name="fence_v">{geom}'
              f'<material><ambient>{FENCE}</ambient><diffuse>{FENCE}</diffuse></material></visual>')
 cx, cy = ox + W * RES / 2, oy + H * RES / 2
 links.append(f'      <visual name="ground_v"><pose>{cx:.2f} {cy:.2f} 0.001 0 0 0</pose><geometry><box><size>{W * RES:.2f} {H * RES:.2f} 0.002'
              f'</size></box></geometry><material><ambient>{GROUND}</ambient><diffuse>{GROUND}</diffuse></material></visual>')
 open(os.path.join(MODEL_DIR, 'model.config'), 'w').write(
-    '<?xml version="1.0"?>\n<model><name>chungjang_terrain</name><version>1.0</version><sdf version="1.9">model.sdf</sdf>\n'
+    f'<?xml version="1.0"?>\n<model><name>{NAME}_terrain</name><version>1.0</version><sdf version="1.9">model.sdf</sdf>\n'
     '  <author><name>limbo team</name></author>\n'
-    '  <description>광주 충장로 보행자 거리 가운데 200 m. 건물 자료 © OpenStreetMap contributors (ODbL 1.0)</description></model>\n')
+    f'  <description>광주 충장로 {"번화가 전체 (큰길 안쪽)" if ALL else "보행자 거리 가운데 200 m"}. 건물 자료 © OpenStreetMap contributors (ODbL 1.0)</description></model>\n')
 open(os.path.join(MODEL_DIR, 'model.sdf'), 'w').write(f'''<?xml version="1.0"?>
 <sdf version="1.9">
   <!-- gen_street.py가 만든다. 직접 고치지 말 것. 건물 자료 © OpenStreetMap contributors (ODbL 1.0) -->
-  <model name="chungjang_terrain">
+  <model name="{NAME}_terrain">
     <static>true</static>
     <link name="link">
 {chr(10).join(links)}
@@ -307,7 +334,7 @@ base = re.sub(r'<world name="[^"]+">', f'<world name="{NAME}">', base)
 head, tail = base.split('</world>')[0], '</world>' + base.split('</world>')[1]
 head = re.sub(r'\s*<model name="(?!ground_plane)[^"]*">.*?</model>', '', head, flags=re.S)
 head = re.sub(r'\s*<actor .*?</actor>', '', head, flags=re.S)
-models = [f'    <include><uri>model://chungjang_terrain</uri><name>{NAME}_terrain</name></include>']
+models = [f'    <include><uri>model://{NAME}_terrain</uri><name>{NAME}_terrain</name></include>']
 models += [actor_xml(*p) for p in PEOPLE]
 open(os.path.join(WORLD_DIR, f'{NAME}.sdf'), 'w').write(
     head + '\n    <!-- 건물 자료 © OpenStreetMap contributors (ODbL 1.0) -->\n' + '\n'.join(models) + '\n  ' + tail)
