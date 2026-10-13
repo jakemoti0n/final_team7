@@ -8,6 +8,26 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-13 (29) [lab] 시연 스크립트 `tools/demo_patrol.sh`, 가구 월드 순찰 통로 끝을 stop으로
+
+**할 일**
+- 없음 (스크립트·waypoint yaml만. 설치 폴더가 symlink가 아니면 `build_limbo`)
+
+**변경**
+- `tools/demo_patrol.sh [월드] [지도] [waypoint]`: 시뮬레이션을 띄우고 Nav2·위치 추정이 준비되면 순찰을 자동으로 시작함. Ctrl+C 한 번이면 전부 내려감. 기본은 `aischool_2f` + `aischool_waypoints.yaml`
+  - 그냥 launch 뒤에 순찰 노드를 이어서 치면 안 됨: 순찰 노드는 위치 추정을 30초만 기다리는데 시뮬레이션은 뜨는 데 1~2분 걸림
+- `aischool_furnished_waypoints.yaml`: 왼쪽 책상 통로 끝 G를 `pass` → `stop`(0초 대기)으로 바꿨음
+  - pass로 두면 F→G→H→I→J가 경로 하나로 묶여 통로를 올라가는 경로와 내려오는 경로가 겹침. MPPI가 그 사이에서 갈피를 못 잡아 G 0.8 m 앞에서 "진전 없음" 6번·회전·후진 반복 (어제 "통로 끝 돌아 나오기 150초"와 같은 현상). 같은 좌표를 단독 목표로 주면 3/3 성공했던 곳이라 좌표 문제가 아님. 닫힌 고리 경로 때와 같은 원인
+
+**확인** (`demo_patrol.sh`, 화면 없이)
+- `aischool_2f` 순찰 4구간 성공 ("Patrol mission completed")
+- `aischool_2f_furnished` 순찰: 수정 전 G 앞에서 막힘 → 수정 후 E·G·J 모두 도착, 진전 없음 0번, 복구 0번. 문 들어가기(A→E)도 통과 (순찰 경로는 문 앞 지점을 거쳐 들어가서 됨)
+
+**참고**
+- 막다른 곳에서 되돌아오는 waypoint는 항상 `stop`으로 둘 것 (NavigateThroughPoses에 되돌아오는 경로를 넣지 않기)
+
+---
+
 ## 2026-10-13 (28) [lab] 충장로 번화가 전체 월드 `chungjang_all` (10 cm 격자)
 
 **할 일**

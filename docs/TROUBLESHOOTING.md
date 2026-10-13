@@ -268,3 +268,10 @@
 ### MPPI가 낸 회전 명령이 Gazebo에서 잘림 (2026-09-23)
 - **원인**: Nav2 쪽 각속도 한계는 1.8인데 Gazebo diff-drive는 0.8로 남아 있었음
 - **해결**: Gazebo 한계를 Nav2 값에 맞췄음 (`1628b5a`, 이후 PR #5에서 각가속도 4.0으로 다시 조정됨)
+
+## 순찰이 막다른 통로 끝 0.8 m 앞에서 "Failed to make progress"를 반복함
+
+- **증상**: 가구 월드 순찰에서 왼쪽 책상 통로 끝(G) 직전에 멈춰 회전·후진 복구를 반복. 같은 좌표를 단독 목표로 주면 성공
+- **원인**: 통로 끝 waypoint가 `pass`라 올라가는 경로와 내려오는 경로가 NavigateThroughPoses 경로 하나에 겹침. MPPI가 겹친 두 경로 사이에서 갈피를 못 잡음 (닫힌 고리 경로를 한 번에 줄 때와 같은 원인)
+- **해결**: 되돌아오는 지점을 `stop`(wait_sec 0)으로 두어 구간을 나눔 (`aischool_furnished_waypoints.yaml`, 2026-10-13)
+- **확인**: `tools/demo_patrol.sh aischool_2f_furnished aischool_2f_furnished_map aischool_furnished_waypoints.yaml` → 진전 없음 0번, 복구 0번으로 완주
