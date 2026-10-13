@@ -8,7 +8,7 @@
 ## 준비
 ```bash
 cd ~/limbo && git pull --rebase origin lab && git rev-parse --short HEAD   # 이 해시를 결과에 적는다
-build_limbo          # 월드 물리 스텝이 2 ms로 바뀌어 install에 다시 복사해야 함 (CHANGELOG (30))
+build_limbo          # 월드 물리 스텝이 2 ms로 바뀌어 install에 다시 복사해야 함 (변경 기록 (39))
 export ROS_DOMAIN_ID=98 GZ_PARTITION=desk
 ```
 - 실험 도중에는 pull하지 않는다
