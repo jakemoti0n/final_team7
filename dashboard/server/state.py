@@ -19,7 +19,7 @@ RESULT_TEXT = {  # (알림 중요도, 문구)
     "rejected": ("error", "{c} 요청 실패: {m}"),
     "service_unavailable": ("error", "{c} 요청 실패: 순찰 노드가 응답할 수 없음"),
     "no_response": ("warning", "{c} 여부 확인 불가: 로봇 응답 없음"),
-    "expired": ("warning", "{c} 여부 확인 불가: 요청이 로봇에 전달되지 않음"),
+    "expired": ("warning", "{c} 요청 실패: 로봇에 제때 전달되지 않아 실행 안 함"),
     "unconfirmed": ("warning", "{c} 여부 확인 불가: 응답 후 상태 확인 없음"),
     "connection_lost": ("warning", "{c} 여부 확인 불가: 처리 중 연결 끊김"),
 }
@@ -163,7 +163,9 @@ class Store:
         c = self.command
         if not c:
             return None
-        return {k: c[k] for k in ("request_id", "command", "stage", "message", "issued_at", "updated_at")}
+        view = {k: c[k] for k in ("request_id", "command", "stage", "message", "issued_at", "updated_at")}
+        view["age_s"] = max(0., self.monotonic() - c["issued_mono"])  # 화면이 브라우저 시계와 비교하지 않게
+        return view
 
     def accept(self, payload: Telemetry):
         session, sequence = payload.bridge_session_id, payload.sequence
@@ -216,11 +218,11 @@ class Store:
         self.tick(now)
         if connection in ("delayed", "disconnected"):
             self.problem("bridge", "error" if connection == "disconnected" else "warning",
-                         "상태 전달 프로그램 연결 끊김" if connection == "disconnected" else "상태 전달 정보 수신 지연")
+                         "로봇 연결 끊김" if connection == "disconnected" else "로봇 상태 수신 지연")
         elif connection == "connected":
-            self.close("bridge", "상태 전달 프로그램 연결 복구")
+            self.close("bridge", "로봇 연결 복구")
             if not self.was_connected:
-                self.add("connected", "info", "상태 전달 프로그램 연결됨", "connection")
+                self.add("connected", "info", "로봇 연결됨", "connection")
                 self.was_connected = True
         uncertain = connection in ("delayed", "disconnected")
         topics = {}

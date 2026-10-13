@@ -162,7 +162,7 @@ def test_resume_confirmed_by_state_not_speed(rig):
     ('rejected', 'rejected', '정지 요청 실패: already paused'),
     ('service_unavailable', 'service_unavailable', '정지 요청 실패: 순찰 노드가 응답할 수 없음'),
     ('no_response', 'no_response', '정지 여부 확인 불가: 로봇 응답 없음'),
-    ('expired', 'expired', '정지 여부 확인 불가: 요청이 로봇에 전달되지 않음'),
+    ('expired', 'expired', '정지 요청 실패: 로봇에 제때 전달되지 않아 실행 안 함'),
 ])
 def test_bridge_reported_failures(rig, outcome, expected, text):
     clock, store, client, robot = rig

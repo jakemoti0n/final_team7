@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { LiveControl, fromServer, lockReason, resumeReason, stageShapes } from './control'
+import { LiveControl, fromServer, lockReason, pauseReason, resumeReason, stageShapes } from './control'
 import { headingDeg, isMapInfo, toPixel, uncertaintyPx } from './map'
 import { MockProvider } from './demo'
 import { overall } from './App'
@@ -14,7 +14,7 @@ function view(change: (s: Snapshot) => void = () => {}, serverProblem = false): 
 const command = (stage: ServerStage, message = ''): ServerCommand => ({ request_id: 'r1', command: 'pause', stage, message, issued_at: '2026-10-13T00:00:00.000Z', updated_at: '2026-10-13T00:00:01.000Z' })
 
 it('only confirmed is success; explicit failures are failed; the rest cannot be confirmed', () => {
-  const expected: Record<ServerStage, string> = { queued: 'pending', delivered: 'pending', accepted: 'pending', confirmed: 'success', rejected: 'failed', service_unavailable: 'failed', no_response: 'unknown', expired: 'unknown', unconfirmed: 'unknown', connection_lost: 'unknown' }
+  const expected: Record<ServerStage, string> = { queued: 'pending', delivered: 'pending', accepted: 'pending', confirmed: 'success', rejected: 'failed', service_unavailable: 'failed', no_response: 'unknown', expired: 'failed', unconfirmed: 'unknown', connection_lost: 'unknown' }
   for (const stage of Object.keys(stageShapes) as ServerStage[]) expect(fromServer(command(stage)).result).toBe(expected[stage])
   expect(fromServer(command('queued')).stages).toEqual(['running', 'waiting', 'waiting'])
   expect(fromServer(command('accepted')).stages).toEqual(['done', 'done', 'running'])
@@ -26,6 +26,13 @@ it('controls lock without a connection or while a request is pending', () => {
   expect(lockReason(view(undefined, true), null)).toContain('연결')
   expect(lockReason(view(), fromServer(command('delivered')))).toBe('요청을 처리하고 있습니다')
   expect(lockReason(view(), fromServer(command('no_response')))).toBe('')
+})
+it('pause locks only when the patrol node says it is already paused', () => {
+  expect(pauseReason(view(), '')).toBe('이미 일시정지 상태입니다')
+  expect(pauseReason(view(s => { s.patrol!.state = 'pausing' }), '')).toBe('이미 일시정지 상태입니다')
+  expect(pauseReason(view(s => { s.patrol!.state = 'patrolling' }), '')).toBe('')
+  expect(pauseReason(view(s => { s.patrol = null }), '')).toBe('')            // 모르면 누를 수 있음
+  expect(pauseReason(view(s => { s.patrol!.state = 'patrolling' }), '잠김')).toBe('잠김')
 })
 it('resume is allowed only by has_resumable_task, never by speed', () => {
   expect(resumeReason(view(), '')).toBe('')
@@ -39,7 +46,8 @@ it('live control: sending, then the server snapshot takes over; refusals are sho
   const changed = vi.fn()
   const post = vi.fn().mockResolvedValue(new Response(JSON.stringify({ request_id: 'r1', command: 'pause', stage: 'queued', issued_at: '2026-10-13T00:00:00.000Z' }), { status: 202 }))
   const control = new LiveControl(changed, post as unknown as typeof fetch)
-  const before = view()
+  const before = view(s => { s.patrol!.state = 'patrolling' })   // 일시정지 보낼 수 있는 상태
+  const paused = view()
   const sending = control.send(before, 'pause')
   expect(control.current(before)?.detail).toContain('보내고 있습니다')
   await sending
@@ -54,10 +62,11 @@ it('live control: sending, then the server snapshot takes over; refusals are sho
   expect(fresh.current(before)?.detail).toContain('연결되어 있지 않아')
   post.mockRejectedValueOnce(new Error('offline'))
   const offline = new LiveControl(changed, post as unknown as typeof fetch)
-  await offline.send(before, 'resume')
-  expect(offline.current(before)?.result).toBe('failed')
+  await offline.send(paused, 'resume')
+  expect(offline.current(paused)?.result).toBe('failed')
   expect(post).toHaveBeenCalledTimes(3)
-  await new LiveControl(changed, post as unknown as typeof fetch).send(view(s => { s.patrol!.state = 'patrolling' }), 'resume')
+  await new LiveControl(changed, post as unknown as typeof fetch).send(before, 'resume')
+  await new LiveControl(changed, post as unknown as typeof fetch).send(paused, 'pause')
   expect(post).toHaveBeenCalledTimes(3) // 잠긴 버튼은 서버를 부르지 않는다
 })
 it('map pixels: origin is bottom-left, y grows up; heading and uncertainty', () => {

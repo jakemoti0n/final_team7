@@ -8,7 +8,7 @@ export type PatrolStateName = 'waiting_localization' | 'patrolling' | 'pausing' 
 export interface PatrolInfo { state: PatrolStateName | null; waypoint_index: number; waypoint_count: number; waypoint_name: string; has_resumable_task: boolean; reason: string; update_count: number; last_received_at: string | null; age_s: number | null }
 export interface PoseInfo { frame_id: string | null; x: number | null; y: number | null; yaw: number | null; position_std_m: number | null; last_received_at: string | null; age_s: number | null; stale: boolean }
 export type ServerStage = 'queued' | 'delivered' | 'accepted' | 'confirmed' | 'rejected' | 'service_unavailable' | 'no_response' | 'expired' | 'unconfirmed' | 'connection_lost'
-export interface ServerCommand { request_id: string; command: 'pause' | 'resume'; stage: ServerStage; message: string; issued_at: string; updated_at: string }
+export interface ServerCommand { request_id: string; command: 'pause' | 'resume'; stage: ServerStage; message: string; issued_at: string; updated_at: string; age_s?: number }
 export interface Alert { id: string; key: string; at: string; severity: 'info' | 'warning' | 'error'; message: string; kind: string; active: boolean }
 export interface Snapshot {
   server_run_id: string; revision: number; server_utc: string; robot_id: string

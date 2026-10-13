@@ -3,7 +3,7 @@ import { topicKeys, type Snapshot, type Provider, type View, type Alert, type Pa
 import type { MapInfo } from './map'
 
 export type Scenario = 'normal' | 'partial' | 'delayed' | 'disconnected' | 'initial' | 'server'
-export const scenarios: Record<Scenario, string> = { normal: '정상 수신', partial: '일부 토픽 지연', delayed: 'Bridge 수신 지연', disconnected: '연결 끊김', initial: '최초 접속', server: '서버 연결 문제' }
+export const scenarios: Record<Scenario, string> = { normal: '정상 수신', partial: '일부 토픽 지연', delayed: '로봇 상태 수신 지연', disconnected: '로봇 연결 끊김', initial: '최초 접속', server: '서버 연결 문제' }
 export type Patrol = 'paused' | 'patrolling' | 'empty' | 'unknown'
 // 데모 지도: 그림 없이 순찰 지점만 (값은 test_waypoints.yaml과 같은 배치). 서버를 부르지 않는다
 export const demoMap: MapInfo = { resolution: .05, origin: [-7.546, -7.524, 0], width: 302, height: 302, image: null, waypoints: [
@@ -14,7 +14,7 @@ const settings: Snapshot['settings'] = { robot_id: 'LIMBO-01', bridge_delay_s: 3
 export class MockProvider implements Provider {
   current: View = { snapshot: null, serverProblem: false, receivedMono: performance.now() }
   scenario: Scenario = 'normal'
-  patrol: Patrol = 'paused'
+  patrol: Patrol = 'patrolling'
   outcomes: Record<Command, Outcome> = { pause: 'success', resume: 'success' }
   private target = 2
   private x = -.2
@@ -32,10 +32,10 @@ export class MockProvider implements Provider {
   start = () => { this.update(); this.timer = setInterval(() => this.update(), 1000) }
   dispose = () => { clearInterval(this.timer); this.machine.dispose() }
   reset(scenario: Scenario = this.scenario) {
-    this.scenario = scenario; this.patrol = 'paused'; this.alerts = []; this.run = crypto.randomUUID(); this.scenarioAt = new Date().toISOString()
+    this.scenario = scenario; this.patrol = 'patrolling'; this.alerts = []; this.run = crypto.randomUUID(); this.scenarioAt = new Date().toISOString()
     this.machine.reset()
     if (scenario === 'partial') this.alerts.push(this.alert('LiDAR 필터 결과 수신 지연', 'warning', true))
-    if (scenario === 'delayed' || scenario === 'disconnected') this.alerts.push(this.alert(`상태 전달 프로그램 ${scenarios[scenario]}`, scenario === 'delayed' ? 'warning' : 'error', true))
+    if (scenario === 'delayed' || scenario === 'disconnected') this.alerts.push(this.alert(scenarios[scenario], scenario === 'delayed' ? 'warning' : 'error', true))
     this.update()
   }
   // This preserves the current request to exercise connection loss mid-flight.
@@ -57,8 +57,9 @@ export class MockProvider implements Provider {
     if (this.machine.current?.result === 'pending') return '요청을 처리하고 있습니다'
     return ''
   }
+  get pauseReason() { return this.lockReason || (this.patrol === 'paused' ? '이미 일시정지 상태입니다' : '') }
   get resumeReason() { return this.lockReason || ({ paused: '', patrolling: '이미 순찰 중입니다', empty: '재개할 작업이 없습니다', unknown: '순찰 상태를 확인할 수 없습니다' }[this.patrol]) }
-  request(command: Command) { if (this.lockReason || (command === 'resume' && this.resumeReason)) return; this.machine.start(command, this.outcomes[command]) }
+  request(command: Command) { if (command === 'pause' ? this.pauseReason : this.resumeReason) return; this.machine.start(command, this.outcomes[command]) }
   // 순찰 중이면 1초에 0.5 m씩 다음 지점으로 (끝까지 가면 처음부터)
   private move() {
     if (this.patrol !== 'patrolling') return

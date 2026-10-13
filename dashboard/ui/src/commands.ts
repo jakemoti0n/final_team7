@@ -2,7 +2,7 @@ export type Command = 'pause' | 'resume'
 export type Outcome = 'success' | 'reject' | 'no_response' | 'no_confirmation' | 'late'
 export type Stage = 'waiting' | 'running' | 'done' | 'failed' | 'unknown'
 export type Result = 'pending' | 'success' | 'failed' | 'unknown'
-export interface RequestResult { id: string; command: Command; at: string; stages: [Stage, Stage, Stage]; result: Result; detail: string }
+export interface RequestResult { id: string; command: Command; at: string; age_s?: number | null; stages: [Stage, Stage, Stage]; result: Result; detail: string }
 export const commandNames: Record<Command, string> = { pause: '일시정지', resume: '순찰 재개' }
 export const resultLabels: Record<Command, Record<Result, string>> = {
   pause: { pending: '정지 요청 중', success: '정지 상태 확인됨', failed: '정지 요청 실패', unknown: '정지 여부 확인 불가' },

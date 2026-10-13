@@ -70,7 +70,8 @@ it('mock isolation, patrol gating independent of speed, and reset', () => {
   for (const patrol of ['patrolling', 'empty', 'unknown'] as const) {
     first.setPatrol(patrol); first.request('resume'); expect(first.machine.current).toBeNull()
   }
-  first.setPatrol('paused'); first.request('pause'); vi.advanceTimersByTime(1600)
+  first.setPatrol('paused'); first.request('pause'); expect(first.machine.current).toBeNull() // 이미 일시정지면 잠김
+  first.setPatrol('patrolling'); first.request('pause'); vi.advanceTimersByTime(1600)
   expect(first.current.snapshot?.motion.current?.linear_speed_mps).toBe(.25)
   expect(first.machine.current?.result).toBe('success') // explicit event; speed did not change
   expect(first.current.snapshot?.alerts).toHaveLength(1)

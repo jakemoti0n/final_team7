@@ -12,13 +12,14 @@ export const stageShapes: Record<ServerStage, Shape> = {
   rejected: { stages: ['done', 'failed', 'unknown'], result: 'failed', detail: m => `로봇이 요청을 거절했습니다. 사유: ${m || '없음'}` },
   service_unavailable: { stages: ['done', 'failed', 'unknown'], result: 'failed', detail: () => '순찰 프로그램이 꺼져 있어 요청을 실행하지 않았습니다.' },
   no_response: { stages: ['done', 'unknown', 'unknown'], result: 'unknown', detail: () => '제한 시간 안에 로봇 응답이 없습니다. 자동 재전송하지 않습니다.' },
-  expired: { stages: ['failed', 'unknown', 'unknown'], result: 'unknown', detail: () => '제한 시간 안에 요청이 로봇에 전달되지 않았습니다.' },
+  // Bridge가 실행 직전 서버에 확인(claim)하므로 expired는 "실행 안 함"이 확실하다 (CHANGELOG (28))
+  expired: { stages: ['failed', 'unknown', 'unknown'], result: 'failed', detail: () => '로봇에 제때 전달되지 않아 실행하지 않았습니다. 필요하면 다시 눌러 주세요.' },
   unconfirmed: { stages: ['done', 'done', 'unknown'], result: 'unknown', detail: () => '로봇은 응답했지만 이후 상태 보고로 확인하지 못했습니다.' },
   connection_lost: { stages: ['done', 'unknown', 'unknown'], result: 'unknown', detail: () => '처리 중 연결이 끊겨 결과를 확인할 수 없습니다. 자동 재전송하지 않습니다.' },
 }
 export function fromServer(c: ServerCommand): RequestResult {
   const shape = stageShapes[c.stage] ?? stageShapes.connection_lost
-  return { id: c.request_id, command: c.command, at: c.issued_at, stages: [...shape.stages], result: shape.result, detail: shape.detail(c.message) }
+  return { id: c.request_id, command: c.command, at: c.issued_at, age_s: c.age_s ?? null, stages: [...shape.stages], result: shape.result, detail: shape.detail(c.message) }
 }
 
 const postErrors: Record<string, string> = {
@@ -33,6 +34,12 @@ export function lockReason(view: View, request: RequestResult | null) {
   if (view.serverProblem || view.snapshot?.bridge.status !== 'connected') return '연결을 확인한 후 사용할 수 있습니다'
   if (request?.result === 'pending') return '요청을 처리하고 있습니다'
   return ''
+}
+/** 이미 멈췄다고 순찰 노드가 알려 준 경우만 잠근다. 모르면 누를 수 있게 둔다 (멈추는 쪽은 막지 않음) */
+export function pauseReason(view: View, lock: string) {
+  if (lock) return lock
+  const state = view.snapshot?.patrol?.state
+  return state === 'paused' || state === 'pausing' ? '이미 일시정지 상태입니다' : ''
 }
 /** 재개 허용은 순찰 노드의 has_resumable_task로만 판단한다 (속도로 추정하지 않음) */
 export function resumeReason(view: View, lock: string) {
@@ -55,7 +62,7 @@ export class LiveControl {
   }
   async send(view: View, command: Command) {
     const lock = lockReason(view, this.current(view))
-    if (lock || (command === 'resume' && resumeReason(view, lock))) return
+    if (command === 'pause' ? pauseReason(view, lock) : resumeReason(view, lock)) return
     const base = view.snapshot?.command?.request_id ?? null
     this.local = { base, result: { id: '—', command, at: new Date().toISOString(), stages: ['running', 'waiting', 'waiting'], result: 'pending', detail: '서버에 요청을 보내고 있습니다.' } }
     this.changed()

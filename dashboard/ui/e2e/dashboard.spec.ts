@@ -10,7 +10,7 @@ test('actual screen sends pause to the server, never shows success without confi
   await request.post('/api/v1/telemetry', { data: telemetry() })
   await page.goto('/')
   await expect(page.locator('.speed strong')).toHaveText('0.00')
-  await expect(page.locator('.movement').first()).toContainText('정지 상태')
+  await expect(page.locator('.movement:not(.patrol-state)')).toContainText('정지 상태')
   await expect(page.locator('.map-card svg image')).toHaveCount(1)
   await expect(page.getByRole('button', { name: '프로그램 재시작' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '순찰 재개', exact: true })).toBeDisabled() // v1 텔레메트리: 순찰 상태 모름
@@ -21,8 +21,9 @@ test('actual screen sends pause to the server, never shows success without confi
   await expect(page.locator('.result')).toContainText('정지 요청 중')
   const state = await (await request.get('/api/v1/state')).json()
   expect(state.command).toMatchObject({ command: 'pause', stage: 'queued' })
-  // 로봇이 가져가지 않으면 5초 뒤 확인 불가. 성공으로 바뀌지 않는다
-  await expect(page.locator('.result')).toContainText('정지 여부 확인 불가', { timeout: 8000 })
+  // 로봇이 가져가지 않으면 5초 뒤 "실행 안 함" 실패 (expired). 성공으로 바뀌지 않는다
+  await expect(page.locator('.result')).toContainText('정지 요청 실패', { timeout: 8000 })
+  await expect(page.locator('.result')).toContainText('실행하지 않았습니다')
   await expect(page.locator('.result')).not.toContainText('정지 상태 확인됨')
   const before = await (await request.get('/api/v1/state')).json()
   const requests: string[] = []
@@ -80,6 +81,8 @@ test('resume reasons follow the patrol state; sensor details stay folded', async
   }
   await page.getByLabel('가상 순찰 상태').selectOption('paused')
   await expect(page.getByRole('button', { name: '순찰 재개', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '일시정지', exact: true })).toBeDisabled()     // 이미 일시정지
+  await expect(page.locator('#control-reason')).toContainText('이미 일시정지 상태입니다')
   await expect(page.locator('details.reception table')).toBeHidden()
   await page.getByText('센서 수신 상세').click()
   await expect(page.locator('details.reception table')).toBeVisible()
@@ -113,6 +116,7 @@ for (const command of ['pause', 'resume'] as Command[]) {
       await page.getByLabel('응답 제한 시간(초)', { exact: true }).fill('1')
       await page.getByLabel('상태 확인 제한 시간(초)', { exact: true }).fill('1.5')
       await page.getByLabel(`${commandNames[command]} 결과`, { exact: true }).selectOption(outcome)
+      if (command === 'resume') await page.getByLabel('가상 순찰 상태').selectOption('paused')
       await page.getByRole('button', { name: commandNames[command], exact: true }).click()
       const result = outcome === 'success' ? 'success' : outcome === 'reject' ? 'failed' : 'unknown'
       await expect(page.locator('.result')).toContainText(resultLabels[command][result])
