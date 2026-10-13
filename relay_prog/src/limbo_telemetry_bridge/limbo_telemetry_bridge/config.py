@@ -7,7 +7,8 @@ from .state import TOPICS
 def load_config(path):
     with open(path, encoding='utf-8') as stream:
         config = yaml.safe_load(stream)
-    expected = {'robot_id', 'server_url', 'send_interval_s', 'request_timeout_s', 'source_clock', 'topics'}
+    expected = {'robot_id', 'server_url', 'send_interval_s', 'request_timeout_s', 'source_clock', 'topics',
+                'control'}
     if not isinstance(config, dict) or set(config) != expected:
         raise ValueError('configuration fields must be: ' + ', '.join(sorted(expected)))
     if not isinstance(config['robot_id'], str) or not 1 <= len(config['robot_id'].encode()) <= 256:
@@ -38,4 +39,15 @@ def load_config(path):
             raise ValueError('invalid durability')
         if type(topic['depth']) is not int or not 1 <= topic['depth'] <= 100:
             raise ValueError('depth must be an integer in 1..100')
+    control = config['control']
+    names = ('patrol_state_topic', 'pose_topic', 'pause_service', 'resume_service')
+    if not isinstance(control, dict) or set(control) != {*names, 'command_wait_s', 'service_timeout_s'}:
+        raise ValueError('invalid control configuration fields')
+    for key in names:
+        if not isinstance(control[key], str) or not control[key].startswith('/'):
+            raise ValueError(key + ' must be an absolute ROS name')
+    for key, upper in (('command_wait_s', 30), ('service_timeout_s', 10)):
+        value = control[key]
+        if type(value) not in (int, float) or not math.isfinite(value) or not 0 < value <= upper:
+            raise ValueError(f'{key} must be a finite number in (0, {upper}]')
     return config
