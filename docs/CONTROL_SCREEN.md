@@ -3,7 +3,7 @@
 작성: 2026-10-12 (ktj) · 상태: **A-1단계(순찰 노드) 구현·시험 완료**, 나머지는 설계
 
 관제 화면은 사실상 **사용자(관리자)가 보는 화면**이다. 사용자가 할 일은 "지금 로봇이 어디서 무엇을 보고 있는지 보고, 필요하면 멈추고 다시 보내는 것"뿐이라 기능을 그만큼으로 줄인다.
-대시보드 PRD(`dashboard/docs/PRD.md`)에서 범위가 바뀌는 부분이 있어 담당(itkwon)과 맞춘 뒤 PRD에 반영한다 (아래 "PRD와 달라지는 것").
+대시보드·Bridge는 itkwon에게서 넘겨받아 ktj가 마무리한다 (2026-10-13). 범위가 바뀌는 부분은 구현하면서 PRD(`dashboard/docs/PRD.md`, `relay_prog/docs/PRD.md`)에 반영한다 (아래 "PRD와 달라지는 것").
 
 ## 화면 구성
 
@@ -163,16 +163,17 @@ ros2 service call /patrol/resume std_srvs/srv/Trigger
 
 ## 2단계: Bridge·서버 (`relay_prog`, `dashboard/server`)
 
-1단계 검증 후 상세 설계. 지금 정할 큰 방향만 적는다.
+계약: [`CONTROL_API_DRAFT.md`](CONTROL_API_DRAFT.md) (텔레메트리 v2 + 명령 API + 지도). 처음 안("v1은 바꾸지 않는다", 상태 별도 전달)은 계약 초안에서 v2로 바꿨다 — v1은 모르는 필드를 거부해서 어떻게 넣어도 호환이 깨지고, 1초 heartbeat·세션 규칙을 그대로 쓰는 편이 단순해서.
 
-- **텔레메트리 계약 v1은 바꾸지 않는다.** 지금 Bridge와 서버는 응답 필드를 정확히 검사하므로(`set(reply) != {...}`) 필드를 덧붙이면 기존 검증이 깨진다
-- 명령은 **별도 API**로 주고받는다 (안)
-  - Bridge → 서버 `GET /api/v1/commands/next` (몇 초 기다렸다 응답하는 long poll). Bridge가 먼저 연결하므로 로봇이 NAT 뒤에 있어도 됨
-  - Bridge → 서버 `POST /api/v1/commands/{request_id}/response` (서비스 응답)
-  - Bridge → 서버 순찰 상태 전달 (상태가 바뀔 때 + 주기적으로)
-- 명령에는 **유효 시각**(발급 후 5초)을 둔다. Bridge가 끊겼다 붙었을 때 오래된 정지·재개가 뒤늦게 실행되지 않게 한다
-- Bridge는 서비스를 **비동기**로 부르고 3초 제한을 둔다. 기다리는 동안 텔레메트리 전송이 멈추면 서버가 "연결 지연"으로 착각한다
-- 대시보드 담당(itkwon)과 계약을 먼저 맞춘다. `relay_prog/docs/PRD.md`에 명령 계약을 추가하는 방식
+### Bridge — 구현·시험 완료 (2026-10-13, CHANGELOG (23))
+
+| 확인 | 결과 |
+|---|---|
+| 단위 시험 | 58/58 (기존 40 + 새 18). 명령 결과 5종, 서비스·전달 한 번만, 만료 명령은 안 부름, 서비스가 멈춰도 텔레메트리 계속, long poll 중 종료 0.5초 안 |
+| 실제 ROS 연결 (시뮬레이션 → 순찰 노드 → Bridge → Mock 서버) | 정지 명령 `accepted` 서비스 응답 12 ms → 2.5초 뒤 `paused`·속도 0.00, 수신 횟수 2 → 4 (명령 이후 상태 판정 가능). 두 번째 정지 `rejected`(`already paused`), 재개 `accepted`(11 ms) → `patrolling` |
+| 찾아서 고친 것 | rclpy `Node`에 이미 `services` 속성이 있어 Bridge가 시작하자마자 죽음 → `patrol_clients`로 이름 바꿈 (단위 시험으론 안 잡힘) |
+
+### 서버 — 진행 중
 
 ## 3단계: 관제 화면 (`dashboard/ui`)
 
@@ -261,13 +262,14 @@ ros2 service call /patrol/resume std_srvs/srv/Trigger
 
 ## 구현 순서
 
-| 순서 | 내용 | 대시보드 없이 시험 |
-|---|---|---|
-| 1 | A-1단계 순찰 노드 정지·재개 | 가능 (`ros2 service call`) |
-| 2 | itkwon과 계약 맞추기 (명령 API, 위치·순찰 상태 전달, 카메라 통로) + PRD 수정 | — |
-| 3 | A-2단계 Bridge·서버 명령 + B 위치·지도 | 가능 (`curl`) |
-| 4 | A-3단계·B·D 화면 | — |
-| 5 | C 카메라 | — |
+| 순서 | 내용 | 대시보드 없이 시험 | 상태 |
+|---|---|---|---|
+| 1 | A-1단계 순찰 노드 정지·재개 | 가능 (`ros2 service call`) | 완료 (2026-10-12) |
+| 2 | 계약 정리 (명령 API, 위치·순찰 상태 전달) | — | 초안 완료 ([`CONTROL_API_DRAFT.md`](CONTROL_API_DRAFT.md)). PRD 반영은 마지막에 |
+| 3 | A-2단계 Bridge·서버 명령 + B 위치·지도 | 가능 (`curl`) | Bridge 완료 (2026-10-13), 서버 진행 중 |
+| 4 | A-3단계·B·D 화면 | — | |
+| 5 | C 카메라 | — | |
+| 6 | PRD 두 개·README 정리 (실제 동작 기준, 경로를 `~/limbo` 기준으로) | — | |
 
 각 단계는 시작 전에 허락을 받고, 끝나면 이 문서와 `docs/CHANGELOG.md`에 결과를 남긴다.
 
@@ -275,9 +277,9 @@ ros2 service call /patrol/resume std_srvs/srv/Trigger
 
 | 항목 | 질문 |
 |---|---|
-| 상태 메시지 | `limbo_interfaces`에 `PatrolState.msg`를 새로 넣을지 (추천) |
+| ~~상태 메시지~~ | `PatrolState.msg` 추가함 |
 | 정지 확인 기준 | "정지 상태 확인"에 주행 정보 정지(0.05 m/s 미만)까지 요구할지 (PRD 기준으로는 요구) |
-| 계약 | 명령·위치·카메라를 itkwon과 언제 맞출지 |
+| ~~계약~~ | itkwon과 맞출 필요 없음 (넘겨받음). 초안 값으로 진행, 인증만 실배치 전 결정 |
 | 범위 | 대시보드에서 순찰 **시작**까지 할지 (하면 액션으로 다시 검토) |
 
 ## 하지 않는 것
