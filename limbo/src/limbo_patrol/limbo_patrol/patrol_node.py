@@ -247,7 +247,15 @@ def patrol(navigator, control, waypoint_configs):
     """위치 추정·Nav2 준비를 기다린 뒤 waypoint를 끝까지 돈다."""
 
     print('Waiting for AMCL pose and TF...')
-    wait_for_localization(navigator)
+    try:
+        wait_for_localization(navigator)
+    except TimeoutError as exc:
+        # 상태가 waiting_localization에 멈춰 있으면 관제 화면이 이유를 알 수 없다
+        print(exc)
+        control.set(PatrolState.FAILED, 'localization not ready (30 s)', resumable=False)
+        print('Patrol mission failed')
+        time.sleep(0.5)  # 마지막 상태가 구독자에게 전달될 시간
+        return False
 
     print('Waiting for Nav2...')
     # AMCL의 set_initial_pose가 이미 초기 위치를 지정한다.
@@ -430,8 +438,9 @@ def main(args=None):
     threading.Thread(target=spin_control, args=(executor,), daemon=True).start()
 
 
+    ready = True
     try:
-        patrol(navigator, control, waypoint_configs)
+        ready = patrol(navigator, control, waypoint_configs) is not False
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
@@ -439,6 +448,10 @@ def main(args=None):
         control.destroy_node()
         navigator.destroyNode()
         rclpy.try_shutdown()
+
+    # 위치 추정 준비 실패는 전처럼 0이 아닌 종료 코드로 끝낸다 (스크립트가 알 수 있게)
+    if not ready:
+        raise SystemExit(1)
 
 
 
