@@ -18,6 +18,14 @@
 
 ## 요청
 
+### R3. 전역 costmap STVL 기억 시간 15 → 3초 시험 (2026-10-13 19:10, 대기)
+
+`docs/KNOWN_ISSUES.md` 맨 위 0번(사람 꼬리로 전역 경로 흔들림·복도 복구 반복)의 첫 시험. 3초와 15초로 각각 한 명 복도 + 상자 구간 1회씩, 약 30분.
+
+자세한 지시: [`experiments/orders/2026-10-13_sub_stvl_decay.md`](../experiments/orders/2026-10-13_sub_stvl_decay.md), 실행 스크립트 `experiments/orders/stvl_decay_one.sh`
+- 준비: pull 후 **`build_limbo` 필수** (ktj 병합으로 순찰 노드·메시지가 바뀜)
+- 결과는 `experiments/2026-10-13_stvl_decay_sub/`와 `reports.md`에. 설정 파일은 바꾼 채로 커밋하지 않음
+
 ### R2. 사람 있는 복도 속도 설정 A·B·C 각 1회 (2026-10-13 16:40 → **16:55 범위 축소**)
 
 > **16:55 변경: 복도(`people_side`) 회차는 그만두고 R2-b(충장로 거리 2회차)만 해 주세요.** 노트북에서 목표를 벽 쪽으로 옮겨도 지금 설정부터 복도 4구간 중 2구간밖에 못 지나가서(두 사람 사이를 못 지나감) 속도 설정 비교가 의미 없다고 판단함. 이미 돌린 복도 회차가 있으면 CSV만 `experiments/2026-10-13_people_speed_sub/`에 넣고 요약 한 줄이면 충분. 지시서의 "실행" 절은 건너뛰고 "여유가 있으면 (R2-b)" 절을 본 작업으로.

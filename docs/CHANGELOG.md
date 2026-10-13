@@ -10,6 +10,14 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-13 (54) 서브 PC 요청 R3: 전역 STVL 기억 15 → 3초 시험
+
+**할 일**
+- 서브 PC: 지시서대로 pull → `build_limbo` → 실행
+
+**변경**
+- `docs/lab/requests.md` R3, `experiments/orders/2026-10-13_sub_stvl_decay.md`, `experiments/orders/stvl_decay_one.sh`: 전역 `voxel_decay`를 인자로 바꿔 한 명 복도(`people2`)와 상자 구간(`box`)을 1회씩 돌리고 설정을 원복하는 스크립트. 3초·15초를 같은 날 같은 PC에서 비교하도록 둘 다 돌림
+
 ## 2026-10-13 (53) 문서 점검: 부작용이 묻히지 않게 알려진 문제·PROJECT·변경 기록을 손봄
 
 **할 일**
