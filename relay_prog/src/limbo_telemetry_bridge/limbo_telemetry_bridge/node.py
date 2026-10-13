@@ -6,15 +6,26 @@ import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.parameter import Parameter
+from rclpy.time import Time
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from limbo_interfaces.msg import PatrolState
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, PointCloud2
 from std_srvs.srv import Trigger
+from tf2_ros import Buffer, TransformException, TransformListener
 from .config import load_config
 from .state import State
 from .transport import Sender
+
+# 위치는 TF(map → base)로 읽는다. /amcl_pose는 로봇이 움직일 때만 나와서 멈춰 있으면 끊기기 때문
+# (docs/CONTROL_SCREEN.md B). /amcl_pose는 위치 불확실성(공분산)만 쓴다
+POSE_PERIOD_S = 0.5
+POSE_MAX_AGE_S = 1.0   # 이보다 오래된 TF(오도메트리 끊김)면 위치를 갱신하지 않는다 → 서버가 stale로 봄
+
+
+def yaw_of(q):
+    return math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
 
 
 class BridgeNode(Node):
@@ -40,14 +51,20 @@ class BridgeNode(Node):
         patrol_qos = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1,
                                 reliability=ReliabilityPolicy.RELIABLE,
                                 durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        # volatile 구독은 volatile·transient_local 발행자 모두와 연결된다
+        # AMCL(Nav2)은 /amcl_pose를 transient_local로 낸다. 맞춰야 Bridge를 나중에 켜도 마지막 불확실성을 받음
+        # (volatile이면 로봇이 움직여 AMCL이 다시 낼 때까지 위치를 못 보냄)
         pose_qos = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1,
                               reliability=ReliabilityPolicy.RELIABLE,
-                              durability=DurabilityPolicy.VOLATILE)
+                              durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.topic_subscriptions.append(self.create_subscription(
             PatrolState, control['patrol_state_topic'], self._patrol_callback, patrol_qos))
         self.topic_subscriptions.append(self.create_subscription(
             PoseWithCovarianceStamped, control['pose_topic'], self._pose_callback, pose_qos))
+        self.map_frame, self.base_frame = control['map_frame'], control['base_frame']
+        self.position_std = None
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+        self.pose_timer = self.create_timer(POSE_PERIOD_S, self._read_pose)
         self.patrol_clients = {'pause': self.create_client(Trigger, control['pause_service']),
                          'resume': self.create_client(Trigger, control['resume_service'])}
         self.sender.start()
@@ -64,13 +81,25 @@ class BridgeNode(Node):
                                   message.waypoint_name, message.has_resumable_task, message.reason)
 
     def _pose_callback(self, message):
-        pose = message.pose.pose
-        q = pose.orientation
-        yaw = math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
         covariance = message.pose.covariance
         variance = max(covariance[0], covariance[7])
-        std = math.sqrt(variance) if math.isfinite(variance) and variance >= 0 else math.nan
-        self.state.receive_pose(message.header.frame_id, pose.position.x, pose.position.y, yaw, std)
+        self.position_std = math.sqrt(variance) if math.isfinite(variance) and variance >= 0 else None
+
+    def _read_pose(self):
+        """불확실성을 한 번이라도 받은 뒤(AMCL이 위치를 잡은 뒤)부터, 최신 TF가 1초 안 것일 때만 보낸다."""
+        if self.position_std is None:
+            return
+        try:
+            transform = self.tf_buffer.lookup_transform(self.map_frame, self.base_frame, Time())
+        except TransformException:
+            return
+        now = self.get_clock().now()
+        age = (now - Time.from_msg(transform.header.stamp, clock_type=now.clock_type)).nanoseconds / 1e9
+        if age > POSE_MAX_AGE_S:
+            return
+        t = transform.transform
+        self.state.receive_pose(self.map_frame, t.translation.x, t.translation.y, yaw_of(t.rotation),
+                                self.position_std)
 
     def _callback(self, key):
         def callback(message):

@@ -41,11 +41,15 @@ def load_config(path):
             raise ValueError('depth must be an integer in 1..100')
     control = config['control']
     names = ('patrol_state_topic', 'pose_topic', 'pause_service', 'resume_service')
-    if not isinstance(control, dict) or set(control) != {*names, 'command_wait_s', 'service_timeout_s'}:
+    frames = ('map_frame', 'base_frame')
+    if not isinstance(control, dict) or set(control) != {*names, *frames, 'command_wait_s', 'service_timeout_s'}:
         raise ValueError('invalid control configuration fields')
     for key in names:
         if not isinstance(control[key], str) or not control[key].startswith('/'):
             raise ValueError(key + ' must be an absolute ROS name')
+    for key in frames:
+        if not isinstance(control[key], str) or not control[key] or control[key].startswith('/'):
+            raise ValueError(key + ' must be a TF frame name without a leading slash')
     for key, upper in (('command_wait_s', 30), ('service_timeout_s', 10)):
         value = control[key]
         if type(value) not in (int, float) or not math.isfinite(value) or not 0 < value <= upper:

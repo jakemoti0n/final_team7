@@ -81,7 +81,8 @@ def test_v1_payload_still_valid_and_v2_rules_enforced():
 
 @pytest.mark.parametrize('key,value', [
     ('pause_service', 'patrol/pause'), ('command_wait_s', 0), ('command_wait_s', 31),
-    ('service_timeout_s', math.nan), ('service_timeout_s', 11), ('extra', 1)])
+    ('service_timeout_s', math.nan), ('service_timeout_s', 11), ('extra', 1),
+    ('map_frame', '/map'), ('base_frame', ''), ('base_frame', 3)])
 def test_invalid_control_configuration(tmp_path, key, value):
     config = yaml.safe_load(DEFAULT.read_text())
     config['control'][key] = value
@@ -252,3 +253,43 @@ def test_late_or_duplicate_result_is_closed(server):
                                      headers={'Content-Type': 'application/json'})
     with urllib.request.urlopen(request, timeout=1) as response:
         assert json.loads(response.read()) == {'accepted': False, 'reason': 'command_closed'}
+
+
+def test_pose_from_tf_needs_amcl_uncertainty_and_fresh_transform():
+    """위치는 TF로 읽어 멈춰 있어도 계속 나간다. AMCL 불확실성 전·오래된 TF·TF 없음이면 보내지 않는다"""
+    from types import SimpleNamespace
+    from builtin_interfaces.msg import Time as TimeMsg
+    from geometry_msgs.msg import TransformStamped
+    from rclpy.time import Time
+    from tf2_ros import LookupException
+    from limbo_telemetry_bridge.node import BridgeNode
+
+    transform = TransformStamped()
+    transform.header.stamp = TimeMsg(sec=100)
+    transform.transform.translation.x, transform.transform.translation.y = 1.5, -2.0
+    transform.transform.rotation.z, transform.transform.rotation.w = math.sin(0.25), math.cos(0.25)
+    lookups = []
+
+    def lookup(target, source, at):
+        lookups.append((target, source))
+        if fake.missing:
+            raise LookupException('no transform')
+        return transform
+    clock = SimpleNamespace(now=lambda: Time(seconds=fake.now))
+    fake = SimpleNamespace(state=State('LIMBO-01', 'ros_sim'), map_frame='map', base_frame='base_footprint',
+                           position_std=None, tf_buffer=SimpleNamespace(lookup_transform=lookup),
+                           get_clock=lambda: clock, now=100.5, missing=False)
+    read = lambda: BridgeNode._read_pose(fake)
+    read()
+    assert lookups == [] and fake.state.pose is None          # AMCL이 위치를 잡기 전
+    fake.position_std = 0.03
+    read()
+    frame, x, y, yaw, std = fake.state.pose[:5]
+    assert (frame, x, y, std) == ('map', 1.5, -2.0, 0.03) and yaw == pytest.approx(0.5)
+    assert lookups == [('map', 'base_footprint')]
+    fake.state.pose, fake.now = None, 101.2                   # TF가 1.2초 묵음 (오도메트리 끊김)
+    read()
+    assert fake.state.pose is None
+    fake.now, fake.missing = 100.5, True                      # TF 없음
+    read()
+    assert fake.state.pose is None
