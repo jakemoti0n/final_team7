@@ -1,5 +1,6 @@
-"""Strict v1 wire models. Contract authority: relay_prog/docs/PRD.md §3."""
+"""Strict wire models: 텔레메트리 v1·v2, 관제 명령. Contract: relay_prog/docs/PRD.md §3, docs/CONTROL_API_DRAFT.md."""
 from datetime import datetime, timedelta
+import math
 from typing import Annotated, Literal
 from uuid import UUID
 import re
@@ -73,8 +74,57 @@ class Motion(StrictModel):
         return self
 
 
+PatrolStateName = Literal["waiting_localization", "patrolling", "pausing", "paused", "completed", "failed"]
+ShortText = Annotated[str, Field(max_length=200)]
+
+
+class Patrol(StrictModel):
+    """v2: 순찰 노드 상태(/patrol/state). update_count는 Bridge 세션에서 받은 횟수"""
+    state: PatrolStateName | None
+    waypoint_index: Count | None
+    waypoint_count: Count | None
+    waypoint_name: ShortText | None
+    has_resumable_task: bool | None
+    reason: ShortText | None
+    update_count: Count
+    last_received_at: UTC | None
+    age_ms: Nonnegative | None
+
+    @model_validator(mode="after")
+    def coherent(self):
+        content = (self.state, self.waypoint_index, self.waypoint_count, self.waypoint_name,
+                   self.has_resumable_task, self.reason)
+        if self.update_count == 0:
+            if any(x is not None for x in (*content, self.last_received_at, self.age_ms)):
+                raise ValueError("unreceived patrol must be null")
+        else:
+            if self.last_received_at is None or self.age_ms is None:
+                raise ValueError("received patrol requires UTC and age")
+            if any(x is None for x in content) and not all(x is None for x in content):
+                raise ValueError("patrol state must be entirely populated or entirely null")
+        return self
+
+
+class Pose(StrictModel):
+    """v2: 로봇 위치(/amcl_pose, 지도 좌표)"""
+    frame_id: Annotated[str, Field(min_length=1)] | None
+    x: Finite | None
+    y: Finite | None
+    yaw: Annotated[float, Field(ge=-math.pi - 1e-9, le=math.pi + 1e-9, allow_inf_nan=False)] | None
+    position_std_m: Nonnegative | None
+    last_received_at: UTC | None
+    age_ms: Nonnegative | None
+
+    @model_validator(mode="after")
+    def coherent(self):
+        fields = tuple(self.model_dump().values())
+        if any(x is None for x in fields) and not all(x is None for x in fields):
+            raise ValueError("pose must be entirely populated or entirely null")
+        return self
+
+
 class Telemetry(StrictModel):
-    schema_version: Annotated[int, Field(ge=1, le=1)]
+    schema_version: Annotated[int, Field(ge=1, le=2)]
     robot_id: Annotated[str, Field(min_length=1)]
     bridge_session_id: Annotated[str, AfterValidator(uuid_string)]
     sequence: Annotated[int, Field(gt=0)]
@@ -82,9 +132,16 @@ class Telemetry(StrictModel):
     source_clock: Literal["ros_sim", "ros_system"]
     topics: Topics
     motion: Motion
+    patrol: Patrol | None = None   # v2에만 있음
+    pose: Pose | None = None       # v2에만 있음
 
     @model_validator(mode="after")
     def coherent(self):
+        v2 = {"patrol", "pose"} & self.model_fields_set
+        if self.schema_version == 2 and (len(v2) != 2 or self.patrol is None or self.pose is None):
+            raise ValueError("v2 requires patrol and pose")
+        if self.schema_version == 1 and v2:
+            raise ValueError("v1 must not include patrol or pose")
         if self.motion.age_ms is not None:
             odom = self.topics.odom
             if odom.received_count == 0:
@@ -92,6 +149,38 @@ class Telemetry(StrictModel):
             if (self.motion.last_received_at != odom.last_received_at
                     or self.motion.age_ms != odom.age_ms):
                 raise ValueError("motion must refer to latest odom")
+        return self
+
+
+CommandName = Literal["pause", "resume"]
+
+
+class CommandRequest(StrictModel):
+    """화면 → 서버 POST /api/v1/commands"""
+    command: CommandName
+
+
+class CommandClaim(StrictModel):
+    """Bridge → 서버 POST /api/v1/commands/{request_id}/claim: 서비스를 부르기 직전 "아직 유효한가" """
+    robot_id: Annotated[str, Field(min_length=1)]
+    bridge_session_id: Annotated[str, AfterValidator(uuid_string)]
+
+
+class CommandResult(StrictModel):
+    """Bridge → 서버 POST /api/v1/commands/{request_id}/result"""
+    robot_id: Annotated[str, Field(min_length=1)]
+    bridge_session_id: Annotated[str, AfterValidator(uuid_string)]
+    request_id: Annotated[str, AfterValidator(uuid_string)]
+    outcome: Literal["accepted", "rejected", "no_response", "service_unavailable", "expired"]
+    message: ShortText
+    service_latency_ms: Nonnegative | None
+    patrol_update_count_at_call: Count
+
+    @model_validator(mode="after")
+    def coherent(self):
+        answered = self.outcome in ("accepted", "rejected")
+        if answered != (self.service_latency_ms is not None):
+            raise ValueError("latency only for answered calls")
         return self
 
 
@@ -111,6 +200,13 @@ class Settings(StrictModel):
     linear_threshold_mps: Annotated[float, Field(gt=0)] = 0.05
     angular_threshold_radps: Annotated[float, Field(gt=0)] = 0.05
     alert_limit: Annotated[int, Field(gt=0, le=100)] = 100
+    # 관제 명령 (Dashboard PRD §5.3 데모 기본값과 같음)
+    command_ttl_s: Annotated[float, Field(gt=0)] = 5.0
+    command_response_timeout_s: Annotated[float, Field(gt=0)] = 5.0
+    command_confirm_timeout_s: Annotated[float, Field(gt=0)] = 5.0
+    # 지도·waypoint 파일 (저장소 루트 기준 상대경로 또는 절대경로). 없으면 지도 API가 404
+    map_yaml: str | None = None
+    waypoints_yaml: str | None = None
 
     @model_validator(mode="after")
     def ordered(self):

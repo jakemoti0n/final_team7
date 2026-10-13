@@ -4,7 +4,7 @@ import readline from 'node:readline'
 const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {})
 const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } })
 await page.goto(process.argv[2])
-await page.locator('.connection .badge').filter({ hasText: '연결됨' }).waitFor()
+await page.locator('.connection').filter({ hasText: '로봇 연결됨' }).waitFor()
 console.log(JSON.stringify({ ready: true }))
 try {
   for await (const line of readline.createInterface({ input: process.stdin })) {
@@ -13,7 +13,7 @@ try {
     try {
       await page.waitForFunction(expected => {
         const speed = document.querySelector('.speed strong')?.textContent
-        const movement = document.querySelector('.movement')?.textContent
+        const movement = document.querySelector('.movement:not(.patrol-state)')?.textContent
         const retained = document.querySelector('.speed')?.textContent?.includes('마지막 수신 값')
         return speed === expected.speed && movement?.includes(expected.movement) && retained === expected.retained
       }, input, { timeout: 2000, polling: 20 })

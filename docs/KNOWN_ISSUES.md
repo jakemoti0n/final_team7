@@ -3,7 +3,7 @@
 시뮬레이션과 코드 점검 중에 발견했지만 아직 고치지 않은 문제를 모은다.
 고치면 이 표에서 지우고 커밋 메시지에 남긴다.
 
-마지막 갱신: 2026-10-13 (폭 1.8 m 복도에서 두 사람 나란히는 통과 불가, 사람을 뚫는 성공 문제)
+마지막 갱신: 2026-10-13 (ktj 병합: 이동 실패 시 순찰 종료 추가 / lab: 폭 1.8 m 복도에서 두 사람 나란히는 통과 불가, 사람을 뚫는 성공 문제)
 
 ## 주행·위치 추정
 
@@ -18,6 +18,7 @@
 | 좁은 복도(1.54m)에서 제자리 회전 실패 | `aischool_2f` 왼쪽 복도에서 `behavior_server: Collision Ahead - Exiting Spin`. 로봇이 정사각형(0.45m)이라 돌 때 모서리가 그리는 원(반지름 0.32m)이 벽 inflation에 걸림 | 좁은 곳에서 방향을 돌려야 하는 Goal이 실패 | 복구 동작 순서(후진 먼저), footprint·inflation 조정, 실제 복도 폭 실측 |
 | 사람이 많아 LiDAR 시야 대부분이 가려지는 상황 | AMCL beamskip은 안 맞는 빔이 90%를 넘으면 꺼지고 원래 방식으로 계산함 | 혼잡한 곳에서 위치 추정이 다시 불안정해질 수 있음 | 실제 환경에서 확인 |
 | 시작 직후 `collision_monitor` 응답 끊김 → Nav2 전체 재시작 (약 5초), 또는 **configure 단계에서 멈춤** | `CRITICAL FAILURE: SERVER collision_monitor IS DOWN after not receiving a heartbeat for 4000 ms`. 2026-10-13: `failed to send response to /collision_monitor/change_state (timeout)` 뒤 lifecycle manager가 더 진행하지 않아 Nav2가 inactive인 채로 남음(AMCL·TF는 정상이라 겉으로는 준비된 것처럼 보임) | 그 사이 보낸 Goal은 거절되거나, 멈춘 경우엔 응답 없이 영영 대기 | 시작 순서·CPU 부하 확인, bond timeout 조정. 시험 도구는 `bt_navigator` active를 확인하고 아니면 다시 띄움 (`sim_ctl.sh`, 2026-10-13) |
+| Nav2가 목표를 한 번 실패하면 순찰 노드가 순찰 전체를 끝냄 (일시정지 후 재개해도 이어서 못 감) | 2026-10-13 관제 화면 시험 중 3번: 재개 직후 controller TF 시각 10 ms 차이(`extrapolation into the future`), 순찰 중 MPPI `Controller patience exceeded` 2번 | 순찰 노드가 `failed`로 끝나 재개 버튼이 잠기고 다시 띄워야 함 | 몇 번 다시 시도하고, 그래도 안 되면 끝내지 말고 멈춘 채 사람의 재개를 기다림 (`CONTROL_SCREEN.md` A 4단계 계획, lab 성능 시험 뒤 구현) |
 
 ## 바퀴 헛돎 감시
 

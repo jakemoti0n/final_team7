@@ -6,26 +6,37 @@ function telemetry() {
   const at = new Date().toISOString()
   return { schema_version: 1, robot_id: 'LIMBO-01', bridge_session_id: randomUUID(), sequence: 1, sent_at: at, source_clock: 'ros_sim', topics: Object.fromEntries(['odom', 'lidar_raw', 'lidar_filtered', 'camera_raw'].map(key => [key, { header_stamp: { sec: 0, nanosec: 0 }, last_received_at: at, age_ms: 0, received_count: 1, receive_hz: 10 }])), motion: { linear_speed_mps: 0, angular_velocity_radps: 0, last_received_at: at, age_ms: 0 } }
 }
-test('actual controls stay disabled, zero is a measured value, and demo never talks to actual APIs', async ({ page, request }) => {
+test('actual screen sends pause to the server, never shows success without confirmation, and demo never talks to actual APIs', async ({ page, request }) => {
   await request.post('/api/v1/telemetry', { data: telemetry() })
   await page.goto('/')
   await expect(page.locator('.speed strong')).toHaveText('0.00')
-  await expect(page.locator('.movement')).toContainText('정지 상태')
-  for (const name of ['원격 정지', '순찰 재개', '프로그램 재시작']) await expect(page.getByRole('button', { name, exact: true })).toBeDisabled()
+  await expect(page.locator('.movement:not(.patrol-state)')).toContainText('정지 상태')
+  await expect(page.locator('.map-card svg image')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: '프로그램 재시작' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '순찰 재개', exact: true })).toBeDisabled() // v1 텔레메트리: 순찰 상태 모름
+  await expect(page.locator('#resume-reason')).toContainText('순찰 상태를 확인할 수 없습니다')
+  const pause = page.getByRole('button', { name: '일시정지', exact: true })
+  await expect(pause).toBeEnabled()
+  await pause.click()
+  await expect(page.locator('.result')).toContainText('정지 요청 중')
+  const state = await (await request.get('/api/v1/state')).json()
+  expect(state.command).toMatchObject({ command: 'pause', stage: 'queued' })
+  // 로봇이 가져가지 않으면 5초 뒤 "실행 안 함" 실패 (expired). 성공으로 바뀌지 않는다
+  await expect(page.locator('.result')).toContainText('정지 요청 실패', { timeout: 8000 })
+  await expect(page.locator('.result')).toContainText('실행하지 않았습니다')
+  await expect(page.locator('.result')).not.toContainText('정지 상태 확인됨')
   const before = await (await request.get('/api/v1/state')).json()
   const requests: string[] = []
   page.on('request', req => { if (req.url().includes('/api/')) requests.push(req.url()) })
   page.on('websocket', socket => requests.push(socket.url()))
   await page.goto('/demo')
   await expect(page.getByText('데모 데이터 · 실제 로봇을 제어하지 않습니다')).toBeVisible()
-  await page.getByRole('button', { name: '원격 정지', exact: true }).click()
+  await page.getByRole('button', { name: '일시정지', exact: true }).click()
   await expect(page.locator('.result')).toContainText('정지 상태 확인됨')
   expect(requests).toEqual([])
   const after = await (await request.get('/api/v1/state')).json()
   expect(after.bridge.sequence).toBe(before.bridge.sequence)
-  expect(after.alerts.some((a: { kind: string }) => a.kind === 'control')).toBe(false)
-  await page.goto('/')
-  await expect(page.locator('.result')).toHaveCount(0)
+  expect(after.command.request_id).toBe(before.command.request_id)
 })
 test('browser connection loss masks old current status and recovers full state', async ({ page, request }) => {
   const p = telemetry()
@@ -45,8 +56,8 @@ test('browser connection loss masks old current status and recovers full state',
 test('demo timeout, late results, reset and mid-request disconnect', async ({ page }) => {
   await page.goto('/demo')
   await page.getByLabel('응답 제한 시간(초)', { exact: true }).fill('0.2')
-  await page.getByLabel('원격 정지 결과', { exact: true }).selectOption('late')
-  await page.getByRole('button', { name: '원격 정지', exact: true }).click()
+  await page.getByLabel('일시정지 결과', { exact: true }).selectOption('late')
+  await page.getByRole('button', { name: '일시정지', exact: true }).click()
   await expect(page.getByRole('button', { name: '순찰 재개', exact: true })).toBeDisabled()
   await expect(page.locator('.result')).toContainText('정지 여부 확인 불가')
   await page.waitForTimeout(2000)
@@ -54,7 +65,7 @@ test('demo timeout, late results, reset and mid-request disconnect', async ({ pa
   await expect(page.locator('.alert-row')).toHaveCount(1)
   await page.getByRole('button', { name: '시나리오 초기화' }).click()
   await expect(page.locator('.result')).toHaveCount(0)
-  await page.getByRole('button', { name: '원격 정지', exact: true }).click()
+  await page.getByRole('button', { name: '일시정지', exact: true }).click()
   await page.getByRole('button', { name: '진행 중 연결 끊기' }).click()
   await expect(page.locator('.result')).toContainText('정지 여부 확인 불가')
   await page.getByLabel('화면 상태', { exact: true }).selectOption('normal')
@@ -62,22 +73,22 @@ test('demo timeout, late results, reset and mid-request disconnect', async ({ pa
   await expect(page.locator('.result')).toHaveCount(0)
   await expect(page.locator('.alert-row')).toHaveCount(0)
 })
-test('restart modal keyboard focus trap, Escape and return; resume reasons', async ({ page }) => {
+test('resume reasons follow the patrol state; sensor details stay folded', async ({ page }) => {
   await page.goto('/demo')
-  const restart = page.getByRole('button', { name: '프로그램 재시작', exact: true })
-  await restart.click()
-  await expect(page.getByRole('button', { name: '취소', exact: true })).toBeFocused()
-  await page.keyboard.press('Shift+Tab')
-  await expect(page.getByRole('button', { name: '재시작', exact: true })).toBeFocused()
-  await page.keyboard.press('Tab')
-  await expect(page.getByRole('button', { name: '취소', exact: true })).toBeFocused()
-  await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog')).toHaveCount(0)
-  await expect(restart).toBeFocused()
   for (const state of ['patrolling', 'empty', 'unknown']) {
     await page.getByLabel('가상 순찰 상태').selectOption(state)
     await expect(page.getByRole('button', { name: '순찰 재개', exact: true })).toBeDisabled()
   }
+  await page.getByLabel('가상 순찰 상태').selectOption('paused')
+  await expect(page.getByRole('button', { name: '순찰 재개', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '일시정지', exact: true })).toBeDisabled()     // 이미 일시정지
+  await expect(page.locator('#control-reason')).toContainText('이미 일시정지 상태입니다')
+  await expect(page.locator('details.reception table')).toBeHidden()
+  await page.getByText('센서 수신 상세').click()
+  await expect(page.locator('details.reception table')).toBeVisible()
+  await page.getByLabel('화면 상태', { exact: true }).selectOption('partial')
+  await expect(page.locator('.overall')).toContainText('확인 필요')
+  await expect(page.locator('.overall')).toContainText('LiDAR 필터 결과 수신 지연')
 })
 for (const width of [1440, 1024, 768, 390]) {
   test(`layout at ${width}px and all scenarios`, async ({ page }) => {
@@ -98,15 +109,15 @@ for (const width of [1440, 1024, 768, 390]) {
   })
 }
 
-for (const command of ['stop', 'resume', 'restart'] as Command[]) {
+for (const command of ['pause', 'resume'] as Command[]) {
   for (const outcome of ['success', 'reject', 'no_response', 'no_confirmation'] as Outcome[]) {
     test(`command ${command} outcome ${outcome}`, async ({ page }) => {
       await page.goto('/demo')
       await page.getByLabel('응답 제한 시간(초)', { exact: true }).fill('1')
       await page.getByLabel('상태 확인 제한 시간(초)', { exact: true }).fill('1.5')
       await page.getByLabel(`${commandNames[command]} 결과`, { exact: true }).selectOption(outcome)
+      if (command === 'resume') await page.getByLabel('가상 순찰 상태').selectOption('paused')
       await page.getByRole('button', { name: commandNames[command], exact: true }).click()
-      if (command === 'restart') await page.getByRole('button', { name: '재시작', exact: true }).click()
       const result = outcome === 'success' ? 'success' : outcome === 'reject' ? 'failed' : 'unknown'
       await expect(page.locator('.result')).toContainText(resultLabels[command][result])
       await expect(page.locator('.result .steps')).toContainText('요청 전송')

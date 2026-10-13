@@ -57,6 +57,8 @@ def test_topic_and_motion_boundaries(rig, age, expected):
     _, store, client = rig
     payload = sample()
     payload['topics']['lidar_filtered']['age_ms'] = age
+    # motion은 최신 odom에서 나오므로 odom과 같은 경과 시간이어야 함 (Telemetry.coherent)
+    payload['topics']['odom']['age_ms'] = age
     payload['motion']['age_ms'] = age
     client.post('/api/v1/telemetry', json=payload)
     state = store.snapshot()
@@ -235,6 +237,7 @@ def test_custom_thresholds_and_restart_clear_state():
     store = Store(cfg, clock)
     p = sample()
     for t in p['topics'].values(): t['age_ms'] = 2000.
+    p['topics']['odom']['age_ms'] = 4000.   # motion은 odom과 같은 경과 시간
     p['motion']['age_ms'] = 4000.
     store.accept(Telemetry.model_validate(p))
     state = store.snapshot()

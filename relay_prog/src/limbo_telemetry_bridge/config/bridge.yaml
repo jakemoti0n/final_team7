@@ -25,3 +25,13 @@ topics:
     reliability: best_effort
     durability: volatile
     depth: 1
+# 관제 화면 제어·순찰 상태 (docs/CONTROL_API_DRAFT.md). 텔레메트리 v2와 명령 처리에 씀
+control:
+  patrol_state_topic: /patrol/state   # limbo_interfaces/msg/PatrolState, reliable + transient_local
+  pose_topic: /amcl_pose              # geometry_msgs/msg/PoseWithCovarianceStamped. 위치 불확실성만 씀
+  map_frame: map                      # 위치는 TF map_frame → base_frame으로 0.5초마다 읽음
+  base_frame: base_footprint
+  pause_service: /patrol/pause        # std_srvs/srv/Trigger
+  resume_service: /patrol/resume
+  command_wait_s: 10                  # commands/next long poll 최대 대기
+  service_timeout_s: 3                # 서비스 응답 제한. 넘으면 no_response

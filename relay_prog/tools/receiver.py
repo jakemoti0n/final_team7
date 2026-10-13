@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent stdlib-only v1 test receiver. No ROS or bridge imports."""
+"""Independent stdlib-only test receiver (텔레메트리 v1·v2, 관제 명령 API). No ROS or bridge imports."""
 import argparse
 from collections import deque
 from datetime import datetime, timezone
@@ -8,9 +8,12 @@ import json
 import math
 import threading
 import time
+from urllib.parse import parse_qs, urlsplit
 import uuid
 
 KEYS = {'odom', 'lidar_raw', 'lidar_filtered', 'camera_raw'}
+PATROL_STATES = {'waiting_localization', 'patrolling', 'pausing', 'paused', 'completed', 'failed'}
+OUTCOMES = {'accepted', 'rejected', 'no_response', 'service_unavailable', 'expired'}
 
 
 def utc():
@@ -38,9 +41,13 @@ def timestamp(value):
 
 
 def validate(payload):
-    fields(payload, 'schema_version robot_id bridge_session_id sequence sent_at source_clock topics motion')
-    if type(payload['schema_version']) is not int or payload['schema_version'] != 1:
+    if not isinstance(payload, dict) or type(payload.get('schema_version')) is not int:
         raise ValueError('unsupported schema_version')
+    version = payload['schema_version']
+    if version not in (1, 2):
+        raise ValueError('unsupported schema_version')
+    base = 'schema_version robot_id bridge_session_id sequence sent_at source_clock topics motion'
+    fields(payload, base + (' patrol pose' if version == 2 else ''))
     if not isinstance(payload['robot_id'], str) or not payload['robot_id']:
         raise ValueError('invalid robot_id')
     if not isinstance(payload['bridge_session_id'], str):
@@ -68,6 +75,9 @@ def validate(payload):
         number(topic['age_ms'], 0)
         if topic['receive_hz'] is not None:
             number(topic['receive_hz'], 0)
+    if version == 2:
+        validate_patrol(payload['patrol'])
+        validate_pose(payload['pose'])
     motion = payload['motion']
     fields(motion, 'linear_speed_mps angular_velocity_radps last_received_at age_ms')
     if all(v is None for v in motion.values()):
@@ -82,6 +92,59 @@ def validate(payload):
         raise ValueError('motion must refer to latest odom')
 
 
+def validate_patrol(patrol):
+    fields(patrol, 'state waypoint_index waypoint_count waypoint_name has_resumable_task reason '
+                   'update_count last_received_at age_ms')
+    number(patrol['update_count'], 0, True)
+    content = ('state', 'waypoint_index', 'waypoint_count', 'waypoint_name', 'has_resumable_task', 'reason')
+    if patrol['update_count'] == 0:
+        if any(patrol[k] is not None for k in (*content, 'last_received_at', 'age_ms')):
+            raise ValueError('unreceived patrol must be null')
+        return
+    timestamp(patrol['last_received_at'])
+    number(patrol['age_ms'], 0)
+    if all(patrol[k] is None for k in content):
+        return  # 받았지만 알 수 없는 상태
+    if patrol['state'] not in PATROL_STATES:
+        raise ValueError('invalid patrol state')
+    number(patrol['waypoint_index'], 0, True)
+    number(patrol['waypoint_count'], 0, True)
+    if type(patrol['has_resumable_task']) is not bool:
+        raise ValueError('invalid has_resumable_task')
+    for key in ('waypoint_name', 'reason'):
+        if not isinstance(patrol[key], str) or len(patrol[key]) > 200:
+            raise ValueError('invalid ' + key)
+
+
+def validate_pose(pose):
+    fields(pose, 'frame_id x y yaw position_std_m last_received_at age_ms')
+    if all(v is None for v in pose.values()):
+        return
+    if not isinstance(pose['frame_id'], str) or not pose['frame_id']:
+        raise ValueError('invalid frame_id')
+    for key in ('x', 'y', 'yaw'):
+        number(pose[key])
+    if abs(pose['yaw']) > math.pi + 1e-9:
+        raise ValueError('yaw out of range')
+    number(pose['position_std_m'], 0)
+    timestamp(pose['last_received_at'])
+    number(pose['age_ms'], 0)
+
+
+def validate_result(result, request_id):
+    fields(result, 'robot_id bridge_session_id request_id outcome message service_latency_ms '
+                   'patrol_update_count_at_call')
+    if result['request_id'] != request_id or result['outcome'] not in OUTCOMES:
+        raise ValueError('invalid result')
+    if not isinstance(result['message'], str) or len(result['message']) > 200:
+        raise ValueError('invalid message')
+    number(result['patrol_update_count_at_call'], 0, True)
+    if result['outcome'] in ('accepted', 'rejected'):
+        number(result['service_latency_ms'], 0)
+    elif result['service_latency_ms'] is not None:
+        raise ValueError('latency only for answered calls')
+
+
 class Receiver(ThreadingHTTPServer):
     daemon_threads = True
 
@@ -94,6 +157,35 @@ class Receiver(ThreadingHTTPServer):
         self.received_at = self.received_mono = None
         self.requests = self.accepted = self.bytes_received = self.max_body = 0
         self.history = deque(maxlen=100)
+        # 관제 명령 흉내: 대기열 길이 1, 한 번만 내줌, 결과는 한 번만 받음
+        self.command_ready = threading.Condition(self.lock)
+        self.pending = None          # (request_id, command, 발급 단조 시각, ttl 초)
+        self.delivered = {}          # request_id -> 명령
+        self.results = {}            # request_id -> 결과
+        self.command_mode = 'ok'     # ok | error (commands/next가 503)
+        self.claim_mode = 'ok'       # ok | refuse (409) | slow (1.5초 뒤 허락)
+        self.claimed = set()
+
+    def enqueue(self, command, ttl_s=5.0):
+        with self.lock:
+            request_id = str(uuid.uuid4())
+            self.pending = (request_id, command, time.monotonic(), ttl_s)
+            self.command_ready.notify_all()
+            return request_id
+
+    def next_command(self, wait_s):
+        deadline = time.monotonic() + wait_s
+        with self.lock:
+            while self.pending is None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return None
+                self.command_ready.wait(remaining)
+            request_id, command, issued, ttl = self.pending
+            self.pending = None
+            self.delivered[request_id] = command
+            ttl_ms = max(0.0, (issued + ttl - time.monotonic()) * 1000)
+            return dict(request_id=request_id, command=command, ttl_ms=ttl_ms)
 
     def accept(self, payload, size):
         with self.lock:
@@ -135,15 +227,84 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(status, {'error': {'code': code, 'message': message}})
 
     def do_GET(self):
+        if self.path.startswith('/api/v1/commands/next'):
+            return self.commands_next()
         if self.path != '/status':
             return self.error(404, 'not_found', 'unknown path')
         with self.server.lock:
             self.reply(200, dict(latest=self.server.latest, accepted=self.server.accepted,
                                  bytes_received=self.server.bytes_received, max_body=self.server.max_body,
-                                 received_at=self.server.received_at, history=list(self.server.history)))
+                                 received_at=self.server.received_at, history=list(self.server.history),
+                                 results=self.server.results))
+
+    def commands_next(self):
+        query = parse_qs(urlsplit(self.path).query)
+        if query.get('robot_id', [''])[0] != self.server.robot_id:
+            return self.error(409, 'robot_id_mismatch', 'robot_id does not match')
+        if self.server.command_mode == 'error':
+            return self.error(503, 'server_error', 'injected error')
+        try:
+            wait_s = min(10.0, max(0.0, float(query.get('wait_s', ['0'])[0])))
+        except ValueError:
+            return self.error(422, 'invalid_payload', 'wait_s')
+        command = self.server.next_command(wait_s)
+        if command is None:
+            try:
+                self.send_response(204)
+                self.end_headers()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
+        self.reply(200, command)
+
+    def read_json(self):
+        size = int(self.headers.get('Content-Length', '-1'))
+        if not 0 <= size <= 8192:
+            raise ValueError('invalid size')
+        return json.loads(self.rfile.read(size))
+
+    def commands_claim(self):
+        request_id = self.path[len('/api/v1/commands/'):-len('/claim')]
+        body = self.read_json()
+        if not isinstance(body, dict) or set(body) != {'robot_id', 'bridge_session_id'}:
+            return self.error(422, 'invalid_payload', 'robot_id and bridge_session_id')
+        if self.server.claim_mode == 'slow':
+            time.sleep(1.5)
+        with self.server.lock:
+            ok = (self.server.claim_mode != 'refuse' and request_id in self.server.delivered
+                  and request_id not in self.server.claimed and request_id not in self.server.results)
+            if ok:
+                self.server.claimed.add(request_id)
+        if not ok:
+            return self.error(409, 'command_closed', 'command is no longer valid')
+        return self.reply(200, {'claimed': True})
+
+    def commands_post(self):
+        if self.path.endswith('/claim'):
+            return self.commands_claim()
+        if self.path == '/api/v1/commands':
+            body = self.read_json()
+            if not isinstance(body, dict) or set(body) != {'command'} or body['command'] not in ('pause', 'resume'):
+                return self.error(422, 'invalid_command', 'pause or resume')
+            return self.reply(202, dict(request_id=self.server.enqueue(body['command']),
+                                        command=body['command'], stage='queued'))
+        request_id = self.path[len('/api/v1/commands/'):-len('/result')]
+        result = self.read_json()
+        with self.server.lock:
+            if request_id not in self.server.delivered or request_id in self.server.results:
+                return self.reply(200, {'accepted': False, 'reason': 'command_closed'})
+            validate_result(result, request_id)
+            self.server.results[request_id] = result
+        return self.reply(200, {'accepted': True})
 
     def do_POST(self):
         self.connection.settimeout(2)
+        if self.path == '/api/v1/commands' or (self.path.startswith('/api/v1/commands/')
+                                              and self.path.endswith(('/result', '/claim'))):
+            try:
+                return self.commands_post()
+            except (ValueError, TypeError, KeyError, AttributeError) as exc:
+                return self.error(422, 'invalid_payload', str(exc))
         if self.path != '/api/v1/telemetry':
             return self.error(404, 'not_found', 'unknown path')
         if self.headers.get_content_type() != 'application/json':

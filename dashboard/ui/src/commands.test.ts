@@ -5,7 +5,7 @@ import { ageText, timeText } from './App'
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
 describe('three independent stages and explicit outcomes', () => {
-  for (const command of ['stop', 'resume', 'restart'] as Command[]) {
+  for (const command of ['pause', 'resume'] as Command[]) {
     for (const outcome of ['success', 'reject', 'no_response', 'no_confirmation'] as Outcome[]) {
       it(`${command} / ${outcome}`, () => {
         const finished = vi.fn()
@@ -31,7 +31,7 @@ describe('three independent stages and explicit outcomes', () => {
 it('late/foreign/out-of-order events cannot silently promote a terminal result', () => {
   const finished = vi.fn()
   const m = new CommandMachine(vi.fn(), finished)
-  const id = m.start('stop', 'late')!
+  const id = m.start('pause', 'late')!
   m.event(id, 'confirmed')
   expect(m.current?.result).toBe('pending')
   vi.advanceTimersByTime(5100)
@@ -46,7 +46,7 @@ it('late/foreign/out-of-order events cannot silently promote a terminal result',
 })
 it('confirmation timeout exact boundary and late confirmation', () => {
   const m = new CommandMachine(vi.fn(), vi.fn())
-  const id = m.start('restart', 'no_confirmation')!
+  const id = m.start('resume', 'no_confirmation')!
   vi.advanceTimersByTime(5599)
   expect(m.current?.result).toBe('pending')
   vi.advanceTimersByTime(1)
@@ -57,10 +57,10 @@ it('confirmation timeout exact boundary and late confirmation', () => {
 it('reset cancels every timer and result; disconnect is terminal at every stage', () => {
   for (const elapsed of [0, 100, 600]) {
     const finished = vi.fn(), m = new CommandMachine(vi.fn(), finished)
-    m.start('restart', 'success'); vi.advanceTimersByTime(elapsed); m.disconnect()
+    m.start('resume', 'success'); vi.advanceTimersByTime(elapsed); m.disconnect()
     vi.advanceTimersByTime(10000)
     expect(m.current?.result).toBe('unknown'); expect(finished).toHaveBeenCalledTimes(1)
-    m.start('stop', 'success'); m.reset(); vi.advanceTimersByTime(10000)
+    m.start('pause', 'success'); m.reset(); vi.advanceTimersByTime(10000)
     expect(m.current).toBeNull(); expect(finished).toHaveBeenCalledTimes(1)
   }
 })
@@ -70,7 +70,8 @@ it('mock isolation, patrol gating independent of speed, and reset', () => {
   for (const patrol of ['patrolling', 'empty', 'unknown'] as const) {
     first.setPatrol(patrol); first.request('resume'); expect(first.machine.current).toBeNull()
   }
-  first.setPatrol('paused'); first.request('stop'); vi.advanceTimersByTime(1600)
+  first.setPatrol('paused'); first.request('pause'); expect(first.machine.current).toBeNull() // 이미 일시정지면 잠김
+  first.setPatrol('patrolling'); first.request('pause'); vi.advanceTimersByTime(1600)
   expect(first.current.snapshot?.motion.current?.linear_speed_mps).toBe(.25)
   expect(first.machine.current?.result).toBe('success') // explicit event; speed did not change
   expect(first.current.snapshot?.alerts).toHaveLength(1)
