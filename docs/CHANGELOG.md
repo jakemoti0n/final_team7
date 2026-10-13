@@ -8,6 +8,22 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-13 (30) [lab] 월드 물리 스텝 1 ms → 2 ms (시뮬레이션 실시간 비율 0.6 → 0.95)
+
+**할 일**
+- `build_limbo` (월드 sdf는 install에 복사되므로 다시 빌드해야 적용됨)
+
+**변경**
+- 월드 7개(`aischool_2f`, `aischool_2f_furnished`, `aischool_2f_scenarios`, `human_test_world`, `race_track`, `chungjang`, `chungjang_all`)의 `max_step_size`를 0.001 → 0.002로 바꿨음. `bookstore_world`는 원래 0.003이라 그대로
+  - 시연 화면에서 로봇이 너무 느려 보여서 재 보니 Gazebo 실시간 비율이 0.6이었음(MPPI 실속 0.4 m/s가 화면에서는 0.24 m/s). 병목은 gz 서버의 물리 스레드가 한 코어를 다 쓰는 것이라(1 ms = 시뮬 1초에 1,000번 계산) 코어 수·GPU로는 해결이 안 됨. 2 ms면 계산이 반으로 줄어 실시간을 따라옴
+  - 정확도 확인: 같은 순찰(가구 학원 E→G→J 65 m)과 통제 시험(직진 6 m·제자리 5바퀴)을 1 ms·2 ms로 비교. 직진 6 m에 8 mm, 제자리 5바퀴 회전 오차는 둘 다 +150°로 같음. 속도 추종·최고 속도도 같음. 기록 `experiments/2026-10-13_physics_step/`
+- 실험 기록과 측정 스크립트 추가: `experiments/2026-10-13_physics_step/` (`speed_probe.py` 실시간 비율·속도, `phys_record.py` 정답 대 odom, `drive_test.py` 통제 주행)
+
+**확인**
+- 가구 학원 월드, 화면 켠 상태: 실시간 비율 정지 0.92~0.98, 주행 0.95 (전 0.60). 화면 없이 0.96. 주행 최고 속도 0.44 m/s로 전과 같음
+- 따로 알게 된 것: 바퀴 odom이 제자리 회전 때 실제보다 9 % 더 돈 것으로 셈(스텝과 무관, 실린더 바퀴 옆미끄러짐으로 보임). 순찰 중 바퀴 odom이 3~4 m 틀어지는 원인. EKF(IMU)가 1 m, AMCL이 보정하므로 주행엔 영향 없음
+- Gazebo 화면(gz gui) 프로세스만 PID로 끄면 서버까지 같이 종료됨. 화면은 처음부터 `gui:=false`로 띄울 것
+
 ## 2026-10-13 (29) [lab] 시연 스크립트 `tools/demo_patrol.sh`, 가구 월드 순찰 통로 끝을 stop으로
 
 **할 일**
