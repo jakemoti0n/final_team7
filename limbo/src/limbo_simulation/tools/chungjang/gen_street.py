@@ -6,6 +6,7 @@
 - 거리 양옆 HALF_WIDTH m 안의 건물을 세운다. OSM에 층수가 있으면 층수 x 3.2 m, 없으면 3~5층(건물 번호로 정함)
 - OSM 건물 외곽선 사이에 생긴 좁은 틈(GAP_CLOSE m 미만)은 메운다. 실제로는 붙은 건물을 조금 떨어지게 그린 경우가 많다
 - OSM에 길로 등록된 골목은 폭 ALLEY_WIDTH m까지 넓힌다. 외곽선이 처마·보도 끝까지 그려져 실제보다 좁게 나온다
+- 거리와 이어지지 않은 빈 공간(건물 블록 안 구멍)은 가장 가까운 건물로 채운다. 로봇 출발점과 이어진 빈 칸만 남는다
 - 구간 바깥 경계는 낮은 울타리로 막는다 (옆 골목은 경계에서 끝남). 걷는 사람이 거리를 양방향으로 다닌다
 """
 import json
@@ -114,17 +115,25 @@ walls = np.zeros((H, W), bool)
 for _, _, m in buildings:
     walls |= m
 
+
+
+def attach_to_nearest_building(cells):
+    """빈 칸(cells)을 가장 가까운 건물에 붙여 그 건물의 높이·색을 따르게 한다"""
+    owner = np.zeros((H, W), np.int32)
+    for i, (_, _, m) in enumerate(buildings):
+        owner[m] = i + 1
+    # 건물 칸(0)마다 번호를 매겨 두고, 빈 칸에는 가장 가까운 건물 칸의 번호가 적힌다
+    _, nearest = cv2.distanceTransformWithLabels((owner == 0).astype(np.uint8), cv2.DIST_L2, 5, labelType=cv2.DIST_LABEL_PIXEL)
+    owner_of_pixel = np.concatenate(([0], owner[owner > 0]))
+    nearest_owner = owner_of_pixel[nearest]
+    return [(h, c, m | (cells & (nearest_owner == i + 1))) for i, (h, c, m) in enumerate(buildings)]
+
+
 # 좁은 틈 메우기: 닫힘 연산으로 메운 칸을 가장 가까운 건물에 붙인다 (높이·색을 따라감)
 k = int(round(GAP_CLOSE / RES)) | 1
 filled = cv2.morphologyEx(walls.astype(np.uint8), cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))) > 0
 filler = filled & ~walls
-label = np.zeros((H, W), np.float32)
-for i, (_, _, m) in enumerate(buildings):
-    label[m] = i + 1
-grown = label.copy()
-for _ in range(k):
-    grown = np.where(grown > 0, grown, cv2.dilate(grown, np.ones((3, 3), np.uint8)))
-buildings = [(h, c, m | (filler & (grown == i + 1))) for i, (h, c, m) in enumerate(buildings)]
+buildings = attach_to_nearest_building(filler)
 
 # 골목 넓히기: OSM 길(거리 자체 빼고) 가운데 선 양옆 ALLEY_WIDTH/2 안의 건물을 깎는다
 alleys = np.zeros((H, W), np.uint8)
@@ -142,12 +151,21 @@ buildings = [(h, c, m & ~alleys) for h, c, m in buildings]
 walls = np.zeros((H, W), bool)
 for _, _, m in buildings:
     walls |= m
-print(f'메운 틈 {int(filler.sum() * RES * RES)} m², 넓힌 골목 {alley_count}개')
 fence = np.zeros((H, W), bool)
 t = int(round(FENCE_THICK / RES))
 fence[:t, :] = fence[-t:, :] = True
 fence[:, :t] = fence[:, -t:] = True
 fence &= ~walls
+
+# 거리와 이어지지 않은 빈 공간(건물 블록 안 구멍) 채우기: 로봇 출발점과 이어진 빈 칸만 남긴다.
+# 실제로는 건물 안마당·지붕이라 로봇이 갈 수 없는데, 비워 두면 경로 계획이 그쪽을 후보로 보고 지도도 헷갈린다
+_, region = cv2.connectedComponents((~(walls | fence)).astype(np.uint8), connectivity=4)
+pocket = (region > 0) & (region != region[px((0, 0))[1], px((0, 0))[0]])
+buildings = attach_to_nearest_building(pocket)
+walls = np.zeros((H, W), bool)
+for _, _, m in buildings:
+    walls |= m
+print(f'메운 틈 {int(filler.sum() * RES * RES)} m², 넓힌 골목 {alley_count}개, 채운 막힌 공간 {int(pocket.sum() * RES * RES)} m²')
 grid = walls | fence
 
 # --- 검사: 거리 가운데 선의 폭 (로봇 출발점이 비어 있는지 포함)
