@@ -2,447 +2,197 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="Limbo">
 
   <!--
-    Limbo mobile robot - ROS 2 Jazzy / Gazebo Harmonic
-    Coordinate convention:
-      +X = forward
-      +Y = left
-      +Z = up
+    Limbo v14 - 이동형 2분할 쓰레기통 (ROS 2 Jazzy / Gazebo Harmonic)
+    +X 앞, +Y 왼쪽, +Z 위. base_link 원점은 바닥, 몸체 중심.
 
-    Updated exterior:
-      - plate.stl : main outer skeleton
-      - roof.stl  : low roof / MID-360 mounting structure
-
-    Mesh envelope (scale = 0.005):
-      plate: 0.45 x 0.45 m, approx. floor Z 0.0476 ~ 0.6105 m
-      roof : 0.45 x 0.45 m, approx. floor Z 0.6096 ~ 0.7103 m
-      MID-360 is centered at X=0, Y=0 on top of the roof.
-
-    Nominal total simulated mass remains 21.0 kg.
+    출처: 45x45x70_v14_ROS2_Jazzy_Gazebo.zip의 trash_robot_sim (메시, 크기, 충돌 형상, 질량, 뚜껑 관절).
+    센서는 실제 장착 예정인 것으로 바꿨다: LiDAR 자리에 MID-360(+IMU), 카메라 자리에 OAK-D Lite(RGB-D).
+    질량·관성·바퀴 토크는 원본 작성자의 임시 가정값이다. 명세: ~/trash_ws/ROBOT_SPEC.md
+    이전 모델(0.45 m 정사각형, 높이 약 0.7 m)은 urdf/legacy/ (launch에서 robot:=legacy)
   -->
 
   <!-- ================================ -->
-  <!-- Geometry parameters              -->
+  <!-- 크기                              -->
   <!-- ================================ -->
+  <xacro:property name="body_size" value="0.45"/>
+  <xacro:property name="body_top" value="0.835"/>
+  <xacro:property name="body_clearance" value="0.06"/>
 
-  <!-- New CAD STL files are exported in the same coordinate system. -->
-  <xacro:property name="mesh_scale" value="0.005"/>
+  <xacro:property name="wheel_radius" value="0.075"/>
+  <xacro:property name="wheel_width" value="0.05"/>
+  <xacro:property name="wheel_separation" value="0.54"/>
 
-  <xacro:property name="wheel_radius" value="0.050"/>
-  <xacro:property name="wheel_width" value="0.030"/>
-  <xacro:property name="wheel_separation" value="0.3009130859375"/>
-  <xacro:property name="wheel_y" value="${wheel_separation / 2.0}"/>
+  <xacro:property name="caster_radius" value="0.0625"/>
+  <xacro:property name="caster_x" value="0.115"/>
 
-  <!-- base_link is placed at drive-wheel axle height -->
-  <xacro:property name="base_link_height" value="0.050"/>
+  <!-- 뚜껑 경첩: 몸체 앞-왼쪽 윗모서리. 뚜껑을 열면 위에 달린 MID-360도 같이 기운다 -->
+  <xacro:property name="lid_hinge_x" value="0.225"/>
+  <xacro:property name="lid_hinge_y" value="0.23"/>
+  <xacro:property name="lid_thickness" value="0.07"/>
+  <xacro:property name="lid_open_max" value="1.9722220547535925"/>
 
-  <xacro:property name="caster_separation" value="0.38"/>
-  <xacro:property name="front_caster_x" value="${caster_separation / 2.0}"/>
-  <xacro:property name="rear_caster_x" value="${-caster_separation / 2.0}"/>
-  <xacro:property name="caster_origin_z_global" value="0.04483131"/>
-  <xacro:property name="caster_joint_z" value="${caster_origin_z_global - base_link_height}"/>
+  <!-- MID-360: 뚜껑 위, 몸체 중심 위 바닥에서 약 0.926 m (경첩 높이 + 0.09094) -->
+  <xacro:property name="mid360_above_hinge" value="0.09094"/>
 
-  <xacro:property name="caster_wheel_radius" value="0.025"/>
-  <xacro:property name="caster_wheel_width" value="0.020"/>
+  <!-- OAK-D Lite: 앞면, 바닥에서 0.50 m, 중심에서 왼쪽 0.1575 m, 수평 (2026-10-12 결정) -->
+  <xacro:property name="camera_x" value="0.235"/>
+  <xacro:property name="camera_y" value="0.1575"/>
+  <xacro:property name="camera_z" value="0.50"/>
 
-  <!-- Distance between swivel axis and wheel center -->
-  <xacro:property name="caster_trail" value="0.025"/>
-
-  <!-- Wheel center Z relative to caster swivel link -->
-  <xacro:property name="caster_wheel_z"
-                  value="${caster_wheel_radius - caster_origin_z_global}"/>
-
-  <!-- Caster mass: 0.4 kg each -->
-  <xacro:property name="caster_swivel_mass" value="0.10"/>
-  <xacro:property name="caster_wheel_mass" value="0.30"/>
-
-  <!--
-    Nominal masses: total = 21.0 kg
-      plate/body 18.6 + roof 0.2 + drive wheels 1.4 + casters 0.8 = 21.0 kg
-    roof_mass is provisional; replace it with the measured value later.
-  -->
-  <xacro:property name="body_mass" value="18.6"/>
-  <xacro:property name="roof_mass" value="0.2"/>
-  <xacro:property name="wheel_mass" value="0.7"/>
-
-  <!-- Simplified collision / inertia dimensions for plate -->
-  <xacro:property name="body_collision_x" value="0.45"/>
-  <xacro:property name="body_collision_y" value="0.45"/>
-  <xacro:property name="body_collision_z" value="0.563"/>
-  <xacro:property name="body_com_z" value="0.279"/>
-
-  <!-- Simplified collision dimensions for the complete roof envelope. -->
-  <xacro:property name="roof_collision_x" value="0.45"/>
-  <xacro:property name="roof_collision_y" value="0.45"/>
-  <xacro:property name="roof_collision_z" value="0.101"/>
-  <!-- roof.stl bounds center, expressed relative to base_link/roof_link -->
-  <xacro:property name="roof_collision_center_z" value="0.60996"/>
-
-  <!--
-    roof.stl highest point is approx. 0.710301 m above the floor.
-    MID-360 measurement origin is placed 14.3 mm above the mounting surface.
-    Since base_link is 0.05 m above the floor:
-      0.710301 + 0.0143 - 0.05 = 0.674601 m
-
-    If you want the simulated ray origin exactly on the roof surface instead,
-    set mid360_measurement_origin_offset to 0.0.
-  -->
-  <xacro:property name="roof_top_z_global" value="0.710301"/>
-  <xacro:property name="mid360_measurement_origin_offset" value="0.0143"/>
-  <xacro:property name="mid360_z"
-                  value="${roof_top_z_global + mid360_measurement_origin_offset - base_link_height}"/>
+  <material name="body_gray"><color rgba="0.55 0.60 0.65 1.0"/></material>
+  <material name="lid_gray"><color rgba="0.45 0.50 0.55 1.0"/></material>
+  <material name="black"><color rgba="0.15 0.15 0.15 1.0"/></material>
 
   <!-- ================================ -->
-  <!-- Inertia macros                   -->
+  <!-- 몸체                              -->
   <!-- ================================ -->
-
-  <xacro:macro name="box_inertial" params="mass x y z origin_xyz">
-    <inertial>
-      <origin xyz="${origin_xyz}" rpy="0 0 0"/>
-      <mass value="${mass}"/>
-      <inertia
-        ixx="${mass * (y*y + z*z) / 12.0}"
-        ixy="0.0"
-        ixz="0.0"
-        iyy="${mass * (x*x + z*z) / 12.0}"
-        iyz="0.0"
-        izz="${mass * (x*x + y*y) / 12.0}"/>
-    </inertial>
-  </xacro:macro>
-
-  <!-- Cylinder axis is Y. -->
-  <xacro:macro name="wheel_inertial" params="mass radius width">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="${mass}"/>
-      <inertia
-        ixx="${mass * (3.0*radius*radius + width*width) / 12.0}"
-        ixy="0.0"
-        ixz="0.0"
-        iyy="${0.5 * mass * radius*radius}"
-        iyz="0.0"
-        izz="${mass * (3.0*radius*radius + width*width) / 12.0}"/>
-    </inertial>
-  </xacro:macro>
-
-  <xacro:macro name="sphere_inertial" params="mass radius">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="${mass}"/>
-      <inertia
-        ixx="${0.4 * mass * radius*radius}"
-        ixy="0.0"
-        ixz="0.0"
-        iyy="${0.4 * mass * radius*radius}"
-        iyz="0.0"
-        izz="${0.4 * mass * radius*radius}"/>
-    </inertial>
-  </xacro:macro>
-
-  <!-- ================================ -->
-  <!-- Materials                        -->
-  <!-- ================================ -->
-
-  <material name="limbo_body_color">
-    <color rgba="0.70 0.70 0.72 1.0"/>
-  </material>
-
-  <material name="limbo_wheel_color">
-    <color rgba="0.08 0.08 0.08 1.0"/>
-  </material>
-
-  <!-- ================================ -->
-  <!-- Base frames / plate              -->
-  <!-- ================================ -->
-
   <link name="base_footprint"/>
 
   <joint name="base_footprint_joint" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link"/>
-    <origin xyz="0 0 ${base_link_height}" rpy="0 0 0"/>
-  </joint>
-
-  <link name="base_link">
-    <!--
-      Keep the existing 180-degree yaw correction so the CAD model's
-      intended front remains ROS +X.
-      plate.stl and roof.stl share the same CAD/world coordinate system.
-    -->
-    <visual name="plate_visual">
-      <origin xyz="0 0 ${-base_link_height}" rpy="0 0 ${pi}"/>
-      <geometry>
-        <mesh filename="package://limbo_description/meshes/plate.stl"
-              scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
-      </geometry>
-      <material name="limbo_body_color"/>
-    </visual>
-
-    <collision name="body_collision">
-      <origin xyz="0 0 ${body_com_z}" rpy="0 0 0"/>
-      <geometry>
-        <box size="${body_collision_x} ${body_collision_y} ${body_collision_z}"/>
-      </geometry>
-    </collision>
-
-    <xacro:box_inertial
-      mass="${body_mass}"
-      x="${body_collision_x}"
-      y="${body_collision_y}"
-      z="${body_collision_z}"
-      origin_xyz="0 0 ${body_com_z}"/>
-  </link>
-
-  <!-- ================================ -->
-  <!-- Roof                             -->
-  <!-- ================================ -->
-
-  <!--
-    roof.stl contains its CAD Z offset already, so roof_link shares the
-    same origin as base_link. The visual applies the same floor offset and
-    180-degree CAD yaw correction as plate.stl.
-  -->
-  <link name="roof_link">
-    <visual name="roof_visual">
-      <origin xyz="0 0 ${-base_link_height}" rpy="0 0 ${pi}"/>
-      <geometry>
-        <mesh filename="package://limbo_description/meshes/roof.stl"
-              scale="${mesh_scale} ${mesh_scale} ${mesh_scale}"/>
-      </geometry>
-      <material name="limbo_body_color"/>
-    </visual>
-
-    <!-- Conservative, low-cost collision approximation for simulation/self-filtering. -->
-    <collision name="roof_collision">
-      <origin xyz="0 0 ${roof_collision_center_z}" rpy="0 0 0"/>
-      <geometry>
-        <box size="${roof_collision_x} ${roof_collision_y} ${roof_collision_z}"/>
-      </geometry>
-    </collision>
-
-    <xacro:box_inertial
-      mass="${roof_mass}"
-      x="${roof_collision_x}"
-      y="${roof_collision_y}"
-      z="${roof_collision_z}"
-      origin_xyz="0 0 ${roof_collision_center_z}"/>
-  </link>
-
-  <joint name="roof_joint" type="fixed">
-    <parent link="base_link"/>
-    <child link="roof_link"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
 
-  <!-- ================================ -->
-  <!-- Drive wheels                     -->
-  <!-- ================================ -->
-
-  <link name="left_wheel_link">
-    <visual name="left_wheel_visual">
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 0.42" rpy="0 0 0"/>
+      <mass value="20.0"/>
+      <inertia ixx="1.35" iyy="1.35" izz="0.675" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+    <visual>
       <geometry>
-        <mesh filename="package://limbo_description/meshes/left_wheel.stl"/>
+        <mesh filename="package://limbo_description/meshes/v14/body.stl" scale="1 1 1"/>
       </geometry>
-      <material name="limbo_wheel_color"/>
+      <material name="body_gray"/>
     </visual>
-    <collision name="left_wheel_collision">
-      <origin xyz="0 0 0" rpy="${pi/2.0} 0 0"/>
+    <!-- 충돌은 단순한 상자 (메시는 삼각형 15만 개라 물리 계산에 쓰지 않는다) -->
+    <collision>
+      <origin xyz="0 0 ${(body_clearance + body_top) / 2}" rpy="0 0 0"/>
       <geometry>
-        <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        <box size="${body_size} ${body_size} ${body_top - body_clearance}"/>
       </geometry>
     </collision>
-    <xacro:wheel_inertial
-      mass="${wheel_mass}"
-      radius="${wheel_radius}"
-      width="${wheel_width}"/>
   </link>
 
-  <joint name="left_wheel_joint" type="continuous">
-    <parent link="base_link"/>
-    <child link="left_wheel_link"/>
-    <origin xyz="0 ${wheel_y} 0" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
-    <dynamics damping="0.05" friction="0.0"/>
-  </joint>
+  <!-- ================================ -->
+  <!-- 구동 바퀴                         -->
+  <!-- ================================ -->
+  <xacro:macro name="drive_wheel" params="side y">
+    <link name="${side}_wheel_link">
+      <inertial>
+        <mass value="0.5"/>
+        <inertia ixx="0.000807" iyy="0.001406" izz="0.000807" ixy="0" ixz="0" iyz="0"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi / 2} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        <material name="black"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi / 2} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+      </collision>
+    </link>
+    <joint name="${side}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${side}_wheel_link"/>
+      <origin xyz="0 ${y} ${wheel_radius}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit effort="4.0" velocity="20.0"/>
+    </joint>
+  </xacro:macro>
+  <xacro:drive_wheel side="left" y="${wheel_separation / 2}"/>
+  <xacro:drive_wheel side="right" y="${-wheel_separation / 2}"/>
 
-  <link name="right_wheel_link">
-    <visual name="right_wheel_visual">
+  <!-- ================================ -->
+  <!-- 캐스터: 원본처럼 회전하지 않는 저마찰 구로 대체 (스위블은 시뮬레이션하지 않음) -->
+  <!-- ================================ -->
+  <xacro:macro name="caster" params="name x">
+    <link name="${name}_caster_link">
+      <inertial>
+        <mass value="0.25"/>
+        <inertia ixx="0.00039" iyy="0.00039" izz="0.00039" ixy="0" ixz="0" iyz="0"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi / 2} 0 0"/>
+        <geometry><cylinder radius="${caster_radius}" length="0.032"/></geometry>
+        <material name="black"/>
+      </visual>
+      <collision>
+        <geometry><sphere radius="${caster_radius}"/></geometry>
+      </collision>
+    </link>
+    <joint name="${name}_caster_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="${name}_caster_link"/>
+      <origin xyz="${x} 0 ${caster_radius}" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+  <xacro:caster name="front" x="${caster_x}"/>
+  <xacro:caster name="rear" x="${-caster_x}"/>
+
+  <!-- ================================ -->
+  <!-- 뚜껑 (경첩, 0~113°)               -->
+  <!-- ================================ -->
+  <link name="lid_link">
+    <inertial>
+      <origin xyz="${-lid_hinge_x} ${-lid_hinge_y} 0.04" rpy="0 0 0"/>
+      <mass value="0.8"/>
+      <inertia ixx="0.016" iyy="0.016" izz="0.028" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+    <visual>
       <geometry>
-        <mesh filename="package://limbo_description/meshes/right_wheel.stl"/>
+        <mesh filename="package://limbo_description/meshes/v14/lid.stl" scale="1 1 1"/>
       </geometry>
-      <material name="limbo_wheel_color"/>
+      <material name="lid_gray"/>
     </visual>
-    <collision name="right_wheel_collision">
-      <origin xyz="0 0 0" rpy="${pi/2.0} 0 0"/>
-      <geometry>
-        <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
-      </geometry>
+    <collision>
+      <origin xyz="${-lid_hinge_x} ${-lid_hinge_y} ${lid_thickness / 2}" rpy="0 0 0"/>
+      <geometry><box size="${body_size} ${body_size} ${lid_thickness}"/></geometry>
     </collision>
-    <xacro:wheel_inertial
-      mass="${wheel_mass}"
-      radius="${wheel_radius}"
-      width="${wheel_width}"/>
   </link>
 
-  <joint name="right_wheel_joint" type="continuous">
+  <joint name="lid_hinge_joint" type="revolute">
     <parent link="base_link"/>
-    <child link="right_wheel_link"/>
-    <origin xyz="0 ${-wheel_y} 0" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
-    <dynamics damping="0.05" friction="0.0"/>
+    <child link="lid_link"/>
+    <origin xyz="${lid_hinge_x} ${lid_hinge_y} ${body_top}" rpy="0 0 0"/>
+    <axis xyz="-1 0 0"/>
+    <limit lower="0" upper="${lid_open_max}" effort="30" velocity="0.4"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <!-- ================================ -->
-  <!-- Front caster                     -->
+  <!-- Livox MID-360 (+ 내장 IMU): 뚜껑 위 -->
   <!-- ================================ -->
-
-  <link name="front_caster_swivel_link">
-    <visual name="front_caster_visual">
-      <geometry>
-        <mesh filename="package://limbo_description/meshes/front_caster.stl"/>
-      </geometry>
-    </visual>
-
-    <xacro:box_inertial
-      mass="${caster_swivel_mass}"
-      x="0.03"
-      y="0.03"
-      z="0.03"
-      origin_xyz="0 0 0"/>
-  </link>
-
-  <joint name="front_caster_swivel_joint" type="continuous">
-    <parent link="base_link"/>
-    <child link="front_caster_swivel_link"/>
-    <origin xyz="${front_caster_x} 0 ${caster_joint_z}" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/>
-    <dynamics damping="0.10" friction="0.01"/>
-  </joint>
-
-  <link name="front_caster_wheel_link">
-    <collision name="front_caster_wheel_collision">
-      <origin xyz="0 0 0" rpy="${pi/2.0} 0 0"/>
-      <geometry>
-        <cylinder radius="${caster_wheel_radius}" length="${caster_wheel_width}"/>
-      </geometry>
-    </collision>
-
-    <xacro:wheel_inertial
-      mass="${caster_wheel_mass}"
-      radius="${caster_wheel_radius}"
-      width="${caster_wheel_width}"/>
-  </link>
-
-  <joint name="front_caster_wheel_joint" type="continuous">
-    <parent link="front_caster_swivel_link"/>
-    <child link="front_caster_wheel_link"/>
-    <origin xyz="${-caster_trail} 0 ${caster_wheel_z}" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
-    <dynamics damping="0.02" friction="0.0"/>
-  </joint>
-
-  <!-- ================================ -->
-  <!-- Rear caster                      -->
-  <!-- ================================ -->
-
-  <link name="rear_caster_swivel_link">
-    <visual name="rear_caster_visual">
-      <geometry>
-        <mesh filename="package://limbo_description/meshes/rear_caster.stl"/>
-      </geometry>
-    </visual>
-
-    <xacro:box_inertial
-      mass="${caster_swivel_mass}"
-      x="0.03"
-      y="0.03"
-      z="0.03"
-      origin_xyz="0 0 0"/>
-  </link>
-
-  <joint name="rear_caster_swivel_joint" type="continuous">
-    <parent link="base_link"/>
-    <child link="rear_caster_swivel_link"/>
-    <origin xyz="${rear_caster_x} 0 ${caster_joint_z}" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/>
-    <dynamics damping="0.10" friction="0.01"/>
-  </joint>
-
-  <link name="rear_caster_wheel_link">
-    <collision name="rear_caster_wheel_collision">
-      <origin xyz="0 0 0" rpy="${pi/2.0} 0 0"/>
-      <geometry>
-        <cylinder radius="${caster_wheel_radius}" length="${caster_wheel_width}"/>
-      </geometry>
-    </collision>
-
-    <xacro:wheel_inertial
-      mass="${caster_wheel_mass}"
-      radius="${caster_wheel_radius}"
-      width="${caster_wheel_width}"/>
-  </link>
-
-  <joint name="rear_caster_wheel_joint" type="continuous">
-    <parent link="rear_caster_swivel_link"/>
-    <child link="rear_caster_wheel_link"/>
-    <origin xyz="${-caster_trail} 0 ${caster_wheel_z}" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
-    <dynamics damping="0.02" friction="0.0"/>
-  </joint>
-
-  <!-- ================================ -->
-  <!-- Livox MID-360                    -->
-  <!-- ================================ -->
-
-  <!--
-    The MID-360 frame is no longer embedded in body.stl.
-    It is centered on the roof: X=0, Y=0.
-    Z is the sensor measurement origin above the roof mounting surface.
-  -->
   <link name="mid360_link"/>
 
   <joint name="mid360_joint" type="fixed">
-    <parent link="roof_link"/>
+    <parent link="lid_link"/>
     <child link="mid360_link"/>
-    <origin xyz="0 0 ${mid360_z}" rpy="0 0 0"/>
+    <origin xyz="${-lid_hinge_x} ${-lid_hinge_y} ${mid360_above_hinge}" rpy="0 0 0"/>
   </joint>
 
   <!-- ================================ -->
-  <!-- RGB-D Camera                     -->
+  <!-- OAK-D Lite (RGB-D)               -->
   <!-- ================================ -->
-
   <link name="rgbd_camera_link"/>
-
 
   <joint name="rgbd_camera_joint" type="fixed">
     <parent link="base_link"/>
     <child link="rgbd_camera_link"/>
-
-    <!--
-      base_link는 바닥에서 0.05 m, camera는 base_link 위 0.45 m (바닥에서 0.50 m), 전방 0.22 m, 수평.
-      높이·기울기는 아직 정하지 않았다 (docs/KNOWN_ISSUES.md "센서 배치")
-    -->
-    <origin
-      xyz="0.22 0 0.45"
-      rpy="0 0 0"/>
+    <origin xyz="${camera_x} ${camera_y} ${camera_z}" rpy="0 0 0"/>
   </joint>
 
-
-  <!-- ROS optical frame convention
-       X = right
-       Y = down
-       Z = forward
-  -->
+  <!-- ROS optical frame: X 오른쪽, Y 아래, Z 앞 -->
   <link name="rgbd_camera_optical_link"/>
 
   <joint name="rgbd_camera_optical_joint" type="fixed">
     <parent link="rgbd_camera_link"/>
     <child link="rgbd_camera_optical_link"/>
-    <origin
-      xyz="0 0 0"
-      rpy="-1.570796 0 -1.570796"/>
+    <origin xyz="0 0 0" rpy="-1.570796 0 -1.570796"/>
   </joint>
 
-  <xacro:include
-    filename="$(find limbo_description)/urdf/limbo.gazebo.xacro"/>
+  <xacro:include filename="$(find limbo_description)/urdf/limbo.gazebo.xacro"/>
 
 </robot>

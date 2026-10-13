@@ -1,0 +1,83 @@
+# 가구 월드(aischool_2f_furnished)용 순찰. 가구 없는 월드는 aischool_waypoints.yaml
+# 208 교실: 위쪽 문으로 들어와 오른쪽 통로로 내려가고, 뒤쪽 서쪽 구석에서 5초 멈춘 뒤,
+# 왼쪽 통로를 올라갔다 내려와 아래쪽 문으로 나간다. 교탁이 앞쪽을 막아 왼쪽 통로 위 끝은 막다른 곳이다.
+# 가구는 Nav2 지도에 없어서, 통로를 따라가도록 꺾이는 곳마다 pass 지점을 둔다. yaw는 도 단위, 정지 지점은 들어가는 방향
+waypoints:
+
+  - name: A
+    type: pass
+    x: -6.84
+    y: -0.24
+    yaw: 0.0
+    wait_sec: 0
+
+  - name: B
+    type: pass
+    x: -6.83
+    y: 8.00
+    yaw: 0.0
+    wait_sec: 0
+
+  # 208 위쪽 문 안쪽, 오른쪽 통로 위
+  - name: C
+    type: pass
+    x: -10.04
+    y: 8.30
+    yaw: 0.0
+    wait_sec: 0
+
+  # 오른쪽 통로 아래 끝
+  - name: D
+    type: pass
+    x: -10.04
+    y: 0.75
+    yaw: 0.0
+    wait_sec: 0
+
+  # 뒤쪽 서쪽 구석에서 5초 멈춤 (서쪽으로 들어감)
+  - name: E
+    type: stop
+    x: -13.90
+    y: 0.75
+    yaw: 180.0
+    wait_sec: 5
+
+  # 왼쪽 통로 아래 끝
+  - name: F
+    type: pass
+    x: -12.64
+    y: 0.75
+    yaw: 0.0
+    wait_sec: 0
+
+  # 왼쪽 통로 위쪽 (교탁 때문에 막다른 곳)
+  - name: G
+    type: stop  # 막다른 통로 끝. pass로 두면 올라가는 경로와 내려오는 경로가 한 경로에 겹쳐 MPPI가 통로 끝에서 멈춘다 (2026-10-13)
+    x: -12.64
+    y: 6.80
+    yaw: 0.0
+    wait_sec: 0
+
+  # 왼쪽 통로를 다시 내려옴
+  - name: H
+    type: pass
+    x: -12.64
+    y: 1.10
+    yaw: 0.0
+    wait_sec: 0
+
+  # 아래쪽 문 안쪽
+  - name: I
+    type: pass
+    x: -8.75
+    y: 0.75
+    yaw: 0.0
+    wait_sec: 0
+
+  # 위쪽 복도 동쪽에서 정지 (동쪽으로 들어감)
+  - name: J
+    type: stop
+    x: 3.73
+    y: 10.28
+    yaw: 0.0
+    wait_sec: 0

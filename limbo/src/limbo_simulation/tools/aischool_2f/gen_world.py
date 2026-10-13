@@ -5,7 +5,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 WORLD_DIR = os.path.join(HERE, '..', '..', 'worlds')
 MAP_DIR = os.path.join(HERE, '..', '..', '..', 'limbo_navigation', 'maps')
 
-METERS_PER_PX = 6.1 / 190      # 교실 깊이 실측 6.1m = 도면 190px
+# 축척: 도면의 교실 문 여닫이 호 반지름 약 24 px = 실제 문 0.9 m (법정 유효폭).
+# 예전에는 교실 깊이 6.1 m(대충 잰 값) = 190 px로 맞췄는데, 그러면 문이 0.75~0.8 m로 좁게 나왔다
+METERS_PER_PX = 0.9 / 24
 MAP_RESOLUTION = 0.05           # m/cell
 WALL_HEIGHT = 2.5               # m
 SPAWN_PX = (400, 490)           # 로봇 시작 위치 = 월드 원점 (홀 201 아래쪽)
@@ -20,6 +22,53 @@ def px_to_world(u, v):
 # --- Nav2 지도: 0.05m 격자로 줄인다 (아래가 +y 이므로 그대로 저장하면 map_server가 맞게 읽음)
 cells_w = int(round(W * METERS_PER_PX / MAP_RESOLUTION)); cells_h = int(round(H * METERS_PER_PX / MAP_RESOLUTION))
 grid = cv2.resize(walls.astype(np.uint8) * 255, (cells_w, cells_h), interpolation=cv2.INTER_AREA) > 60
+
+# 사람이 그림판으로 고친 벽 그림이 있으면 그걸 쓴다 (검정 = 벽, 1 m = 80 px, 지도 격자의 4배 크기).
+# 도면 사진에서 자동으로 딴 벽보다 우선한다. 다시 고칠 때도 이 파일을 고친다
+EDITED = os.path.join(HERE, 'walls_edited.png')
+if os.path.exists(EDITED):
+    edited = cv2.imread(EDITED, 0)
+    if edited.shape != (cells_h * 4, cells_w * 4):
+        raise SystemExit(f'walls_edited.png 크기가 {edited.shape[::-1]}인데 {(cells_w * 4, cells_h * 4)}여야 한다 (자르거나 늘리지 말 것)')
+    grid = cv2.resize(edited, (cells_w, cells_h), interpolation=cv2.INTER_AREA) < 128
+    print('walls_edited.png 사용')
+
+# --- 문 폭을 정확히 0.9 m로 맞춘다. 사진에서 딴 벽 선과 격자 반올림 때문에 문마다 0.85~1.05 m로 달라져서,
+# 최종 격자에서 문 가운데 0.9 m만 비우고 그 옆 남는 틈은 벽으로 채운다
+DOOR_WIDTH = 0.9
+# (이름, 월드 x, y m, 벽 방향) — 'h': 가로 벽(문 폭이 x 방향), 'v': 세로 벽(문 폭이 y 방향)
+DOOR_CENTERS = [
+    ('207 교실-6', -4.72, 11.14, 'h'), ('206 교실-5', 3.60, 11.14, 'h'),
+    ('211 화장실(남)', -2.65, 11.14, 'h'), ('212 화장실(여)', 1.36, 11.14, 'h'),
+    ('202 교실-1', -5.33, -1.99, 'h'), ('209 상담실', -0.59, -1.99, 'h'), ('203 휴게실', 4.05, -1.99, 'h'), ('204 교실-3', 12.41, -1.99, 'h'),
+    ('209 안쪽 통로', -1.95, -2.55, 'v'),
+    ('208 교실-7 위', -7.84, 8.17, 'v'), ('205 교실-4 위', 6.56, 8.10, 'v'),
+    ('208 교실-7 아래', -7.72, 0.22, 'v'), ('205 교실-4 아래', 6.56, 0.22, 'v'),
+]
+DOOR_CELLS = int(round(DOOR_WIDTH / MAP_RESOLUTION))
+SEARCH = int(round(1.0 / MAP_RESOLUTION))       # 문 양옆 1 m 안에서 벽 줄을 찾는다
+for name, x, y, wall_dir in DOOR_CENTERS:
+    col = int(round((x / METERS_PER_PX + SPAWN_PX[0]) * METERS_PER_PX / MAP_RESOLUTION))
+    row = int(round((SPAWN_PX[1] - y / METERS_PER_PX) * METERS_PER_PX / MAP_RESOLUTION))
+    # 가로 벽이면 그대로, 세로 벽이면 격자를 뒤집어 같은 코드로 처리한다
+    g = grid if wall_dir == 'h' else grid.T
+    if wall_dir == 'v':
+        col, row = row, col
+    left, right = col - DOOR_CELLS // 2, col - DOOR_CELLS // 2 + DOOR_CELLS
+    # 벽 두께 = 문 양쪽 1 m 떨어진 곳에서 벽인 줄들
+    band = [r for r in range(row - SEARCH // 2, row + SEARCH // 2)
+            if g[r, left - SEARCH:left].any() and g[r, right:right + SEARCH].any()]
+    if not band:
+        raise SystemExit(f'{name}: 문 양옆에서 벽을 못 찾음 (좌표 확인)')
+    for r in range(min(band), max(band) + 1):
+        g[r, left:right] = False
+        # 문 바깥으로 벽이 시작될 때까지 남는 틈을 벽으로 채운다
+        c = left - 1
+        while c > left - SEARCH and not g[r, c]:
+            g[r, c] = True; c -= 1
+        c = right
+        while c < right + SEARCH and not g[r, c]:
+            g[r, c] = True; c += 1
 pgm = np.where(grid, 0, 254).astype(np.uint8)
 cv2.imwrite(os.path.join(MAP_DIR, f'{NAME}_map.pgm'), pgm)
 ox, oy = px_to_world(0, H)      # 지도 왼쪽 아래 모서리
@@ -182,3 +231,29 @@ write_world(NAME, [actor_xml(n, p) for n, p in ACTOR_PATHS.items()])
 write_world(f'{NAME}_scenarios',
             [actor_xml(n, p, v) for n, (v, p) in SCENARIO_PATHS.items()]
             + [obstacle_xml(n, *spec) for n, spec in SCENARIO_OBSTACLES.items()])
+
+# --- 가구 월드: 기본 월드 + 걷는 사람 + 실제 가구 모델 (furniture.py, 모델은 limbo_simulation/models).
+# 지도는 따로 두고 고정 가구(정수기)만 더한다. 가구는 모두 static (로봇이 밀어도 안 움직임)
+import furniture
+
+
+def include_xml(name, model, x, y, yaw):
+    return (f'    <include><uri>model://{model}</uri><name>{name}</name><static>true</static>'
+            f'<pose>{x:.3f} {y:.3f} 0 0 0 {yaw:.4f}</pose></include>')
+
+
+furniture_models = [include_xml(f'{model.lower()}_{i}', model, x, y, yaw)
+                    for i, (model, x, y, yaw) in enumerate(furniture.place())]
+write_world(f'{NAME}_furnished', [actor_xml(n, p) for n, p in ACTOR_PATHS.items()] + furniture_models)
+
+furnished_grid = grid.copy()
+for *_, in_map in furniture.AGAINST_WALL:
+    if in_map:
+        x0, y0, x1, y1 = in_map
+        c0, c1 = int((x0 - ox) / MAP_RESOLUTION), int(np.ceil((x1 - ox) / MAP_RESOLUTION))
+        r0, r1 = int(cells_h - np.ceil((y1 - oy) / MAP_RESOLUTION)), int(cells_h - (y0 - oy) / MAP_RESOLUTION)
+        furnished_grid[r0:r1, c0:c1] = True
+cv2.imwrite(os.path.join(MAP_DIR, f'{NAME}_furnished_map.pgm'), np.where(furnished_grid, 0, 254).astype(np.uint8))
+open(os.path.join(MAP_DIR, f'{NAME}_furnished_map.yaml'), 'w').write(
+    open(os.path.join(MAP_DIR, f'{NAME}_map.yaml')).read().replace(f'{NAME}_map.pgm', f'{NAME}_furnished_map.pgm'))
+print(f'{NAME}_furnished: 가구 {len(furniture_models)}개, 지도에 고정 가구 {sum(1 for f in furniture.AGAINST_WALL if f[-1])}개')

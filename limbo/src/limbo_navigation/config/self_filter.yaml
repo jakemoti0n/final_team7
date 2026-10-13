@@ -16,8 +16,9 @@ self_filter:
     default_cylinder_scale: [1.0, 1.0]
     default_cylinder_padding: [0.01, 0.01]
 
-    # roof_link was added because the new roof can also appear in MID-360 returns.
+    # v14: MID-360이 뚜껑 바로 위(약 9 cm)라 아래 −7° 광선이 뚜껑 가장자리에 닿는다.
+    # 이전 모델은 self_filter_legacy.yaml (roof_link)
     self_see_links:
       names:
         - base_link
-        - roof_link
+        - lid_link

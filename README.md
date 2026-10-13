@@ -109,6 +109,7 @@ ros2 launch limbo_bringup start_simulation.launch.py
 
 - **Gazebo 3D 창이 필요 없으면 `gui:=false`.** 센서·물리·사람은 그대로 돌고 창만 안 뜬다. Gazebo CPU가 약 285% → 110%로 준다. 로봇·지도·사람 인식 결과는 RViz로 본다
 - **2D Pose Estimate 없이 바로 Goal을 찍어도 된다.** AMCL이 스폰 위치(0, 0, 0°)에서 시작한다
+- **로봇 모델은 실제 로봇 v14가 기본**이다. 이전 모델(0.45 m 정사각형)로 돌리려면 `robot:=legacy` (Nav2 로봇 외곽·팽창 값도 예전 값으로 바뀜). 자세한 내용은 `limbo_description/README.md`
 - 다른 곳에서 시작했거나 위치가 틀어지면 RViz의 2D Pose Estimate로 다시 맞춘다
 
 ### 월드 바꾸기
@@ -120,7 +121,10 @@ ros2 launch limbo_bringup start_simulation.launch.py
 | `human_test_world` (기본) | 없음 | 15m 정사각형 방, 걷는 사람 10명 |
 | `aischool_2f` | `world:=aischool_2f map:=aischool_2f_map` | 학원 2층 (피난안내도로 만든 실제 구조), 걷는 사람 3명 |
 | `aischool_2f_scenarios` | `world:=aischool_2f_scenarios map:=aischool_2f_map` | 같은 학원 2층에 시험용 사람 6명과 지도에 없는 낮은 상자 2개(홀 서쪽, 0.1m·0.3m). 모두 정해진 시간표대로 움직이고 로봇에 반응하지 않는다. 장소마다 상황이 하나씩: 로봇 시작 위치 1.6m 앞에 와서 4초 멈춤(로봇이 시작 위치에 있을 때 접근 판단 시험), 홀→오른쪽 복도로 꺾음, 왼쪽 복도에 서 있음, 위쪽 복도에 둘이 나란히 천천히, 왼쪽 아래 복도에 빨리 걸음. 경로는 `tools/aischool_2f/gen_world.py`의 `SCENARIO_PATHS` |
+| `aischool_2f_furnished` | `world:=aischool_2f_furnished map:=aischool_2f_furnished_map` | 같은 학원 2층에 실제 가구(교실 책상 줄, 접이식 의자·탁자, 소파, 정수기)를 놓은 월드. 가구 사이 좁은 통로 시험용. 가구 배치는 `tools/aischool_2f/furniture.py` |
 | `bookstore_world` | `world:=bookstore_world map:=bookstore_map` | 서점, 걷는 사람 2명. 초기 위치가 맞는지 아직 확인 안 함 (틀리면 2D Pose Estimate) |
+
+- 학원 2층 월드·지도는 문 폭 0.9 m(실제 기준)로 다시 만들었다 (2026-10-13). 월드 물리 스텝은 2 ms (1 ms면 실시간 비율이 0.6에 머묾)
 
 ### 사람 인식 모델 바꿔 시험하기 (`person_model:=`)
 
@@ -149,10 +153,30 @@ launch에 `record:=true`를 붙이면 Nav2 Goal이 끝날 때마다 `~/limbo_res
 - 지도 원점과 Gazebo 월드 원점이 같다고 가정한다 (`human_test_world`, `aischool_2f*`는 같음)
 - 사람은 정해진 시간표대로 움직이므로 같은 시각에 같은 Goal을 보내면 같은 상황이 재현된다
 
+### 순찰 (`limbo_patrol`)
+
+월드마다 waypoint 파일을 따로 두고, 실행할 때 `waypoints` 파라미터로 고른다. 좌표·순서·대기 시간은 그 yaml 파일에서 정한다.
+
+| 월드 | waypoint 파일 (`limbo_patrol/config/`) |
+|---|---|
+| `human_test_world` | `test_waypoints.yaml` (기본값) |
+| `aischool_2f`, `aischool_2f_scenarios` | `aischool_waypoints.yaml` |
+| `aischool_2f_furnished` | `aischool_furnished_waypoints.yaml` |
+| `bookstore_world` | `waypoints.yaml` |
+
+```bash
+ros2 run limbo_patrol patrol_node --ros-args -p use_sim_time:=true                                    # human_test_world
+ros2 run limbo_patrol patrol_node --ros-args -p use_sim_time:=true -p waypoints:=aischool_waypoints.yaml   # 학원 2층
+```
+
+- 새 월드용 파일은 `limbo_patrol/config/`에 yaml을 추가하고 `build_limbo`를 한 번 한 뒤 `-p waypoints:=새파일.yaml`
+- 마지막 waypoint는 `type: stop`이어야 한다. 파일 이름이 틀리면 Nav2를 기다리기 전에 바로 오류가 난다
+- **시연용 한 줄 실행**: `tools/demo_patrol.sh [월드] [지도] [waypoint 파일]` (기본: 학원 2층). 시뮬레이션을 띄우고 Nav2·위치 추정이 준비되면 순찰을 시작한다. Ctrl+C 한 번이면 전부 내려간다. 순찰 노드는 위치 추정을 30초만 기다려서, 시뮬레이션 실행과 순찰 노드를 손으로 이어 치면 시간 초과로 끝날 수 있다
+- 순찰은 관제 화면에서 **일시정지·재개**할 수 있다 (`/patrol/pause`, `/patrol/resume`, 상태 `/patrol/state`). 설계: `docs/CONTROL_SCREEN.md`
+
 ### 자주 쓰는 명령
 
 ```bash
-ros2 run limbo_patrol patrol_node --ros-args -p use_sim_time:=true  # waypoint 순찰 (limbo_patrol/config/test_waypoints.yaml)
 ros2 topic echo /clicked_point           # RViz Publish Point로 찍은 좌표 (waypoint 만들 때)
 
 # Collision Monitor 켜기/끄기 (끌 때는 false)
@@ -178,12 +202,12 @@ ros2 launch slam_toolbox online_async_launch.py use_sim_time:=true \
 | 패키지 | 내용 |
 |---|---|
 | `limbo_bringup` | 통합 실행 `start_simulation.launch.py` |
-| `limbo_description` | 로봇 모델 (URDF), Gazebo 센서(MID-360 LiDAR·IMU, RGB-D 카메라) |
+| `limbo_description` | 로봇 모델 (URDF): 실제 로봇 v14(기본), 이전 모델 `urdf/legacy/`. Gazebo 센서(MID-360 LiDAR·IMU, RGB-D 카메라) |
 | `limbo_simulation` | Gazebo 월드, ros_gz 브리지 설정, `tools/aischool_2f/`(도면 사진 → 월드·지도 생성 스크립트) |
 | `limbo_navigation` | Nav2 설정(`nav2_params.yaml`), AMCL, EKF, 지도, 사람 cost 플러그인 `human_layer` |
 | `limbo_perception` | `person_detector`: YOLO 사람 인식·추적·경로 예측 |
-| `limbo_interfaces` | 사람 예측 메시지 `PersonPrediction(Array)` |
-| `limbo_patrol` | waypoint 순찰 |
+| `limbo_interfaces` | 사람 예측 메시지 `PersonPrediction(Array)`, 순찰 상태 `PatrolState` |
+| `limbo_patrol` | waypoint 순찰. 일시정지·재개 서비스 |
 | `limbo_monitor` | `wheel_slip_monitor`: 바퀴 헛돎을 감지하면 Nav2 Goal을 취소 |
 | `limbo_evaluation` | `nav_recorder`: Goal마다 주행 평가 지표를 CSV로 기록 (시뮬레이션 전용, `record:=true`) |
 | `robot_self_filter` | (서브모듈) LiDAR에서 로봇 몸체 점을 걸러 냄 |

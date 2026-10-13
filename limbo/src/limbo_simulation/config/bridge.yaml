@@ -12,6 +12,13 @@
   gz_type_name: "gz.msgs.Twist"
   direction: ROS_TO_GZ
 
+# 뚜껑 열기/닫기 (rad, 0 닫힘 ~ 1.972 최대). v14 모델만 쓴다. MID-360이 뚜껑 위라 주행 중에는 열지 않는다
+- ros_topic_name: "lid_angle"
+  gz_topic_name: "lid_angle"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: ROS_TO_GZ
+
 - ros_topic_name: "odom"
   gz_topic_name: "odom"
   ros_type_name: "nav_msgs/msg/Odometry"
