@@ -8,6 +8,16 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-13 (34) [lab] `sim_ctl.sh`가 Nav2가 active가 아니면 준비됨으로 넘기지 않게 고침
+
+**할 일**
+- 없음 (서브 PC: R2 시작 전에 pull 받으면 좋음)
+
+**변경**
+- `tools/sim_trials/sim_ctl.sh`: `bt_navigator`가 3분 안에 active가 안 되면 실패로 보고 다시 띄움. 전에는 그 뒤 TF만 확인하고 "준비됨"을 냈음
+  - 2026-10-13 16:18 회차: collision_monitor의 `change_state` 응답이 시간 초과로 끊겨 lifecycle manager가 configure 단계에서 멈춤. AMCL·TF는 정상이라 도구는 준비됐다고 보고 목표를 보냈고, Nav2가 inactive라 응답 없이 12분 대기함
+- `docs/KNOWN_ISSUES.md`: collision_monitor 항목에 "configure 단계에서 멈춤" 경우 추가
+
 ## 2026-10-13 (33) [lab] 사람 복도 목표를 벽 쪽으로 옮긴 `people_side` 경로, 서브 PC 요청 R2
 
 **할 일**
