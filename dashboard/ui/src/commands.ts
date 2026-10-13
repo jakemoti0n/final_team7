@@ -1,13 +1,12 @@
-export type Command = 'stop' | 'resume' | 'restart'
+export type Command = 'pause' | 'resume'
 export type Outcome = 'success' | 'reject' | 'no_response' | 'no_confirmation' | 'late'
 export type Stage = 'waiting' | 'running' | 'done' | 'failed' | 'unknown'
 export type Result = 'pending' | 'success' | 'failed' | 'unknown'
 export interface RequestResult { id: string; command: Command; at: string; stages: [Stage, Stage, Stage]; result: Result; detail: string }
-export const commandNames: Record<Command, string> = { stop: '원격 정지', resume: '순찰 재개', restart: '프로그램 재시작' }
+export const commandNames: Record<Command, string> = { pause: '일시정지', resume: '순찰 재개' }
 export const resultLabels: Record<Command, Record<Result, string>> = {
-  stop: { pending: '정지 요청 중', success: '정지 상태 확인됨', failed: '정지 요청 실패', unknown: '정지 여부 확인 불가' },
+  pause: { pending: '정지 요청 중', success: '정지 상태 확인됨', failed: '정지 요청 실패', unknown: '정지 여부 확인 불가' },
   resume: { pending: '재개 요청 중', success: '재개 확인됨', failed: '재개 실패', unknown: '재개 여부 확인 불가' },
-  restart: { pending: '재시작 중', success: '재시작 확인됨', failed: '재시작 실패', unknown: '재시작 여부 확인 불가' },
 }
 
 /** Only correlated explicit mock events can finish a request. Telemetry never enters this machine. */

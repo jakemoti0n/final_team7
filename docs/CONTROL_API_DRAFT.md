@@ -17,7 +17,7 @@
 ```
 [화면] ──POST /api/v1/commands──► [서버] ◄──GET /api/v1/commands/next (long poll)── [Bridge] ──/patrol/pause, /patrol/resume──► [순찰 노드]
                                     ▲     ◄──POST /api/v1/commands/{id}/result────
-[화면] ◄──WS /api/v1/stream──────── │     ◄──POST /api/v1/telemetry (v2: 순찰 상태·위치 추가)── [Bridge] ◄── /patrol/state, /amcl_pose
+[화면] ◄──WS /api/v1/stream──────── │     ◄──POST /api/v1/telemetry (v2: 순찰 상태·위치 추가)── [Bridge] ◄── /patrol/state, TF map→base_footprint, /amcl_pose
 [화면] ◄──GET /api/v1/map(.png)──── [서버] (지도 파일은 서버 설정에서 읽음)
 ```
 
@@ -49,17 +49,18 @@ v1 필드는 전부 그대로, `schema_version: 2`와 아래 두 객체만 추�
 - 한 번도 못 받았으면 `update_count: 0`, 나머지 `null`
 - `/patrol/state`는 상태가 바뀔 때만 오므로 `age_ms`가 커도 이상이 아니다. 순찰 노드가 살아 있는지는 판단하지 않는다 (화면은 "마지막 상태"로 표시)
 
-### `pose` (원본 `/amcl_pose`)
+### `pose` (원본: 위치·방향은 TF `map → base_footprint`, 불확실성은 `/amcl_pose`)
 
 | 필드 | 형식 | 의미 |
 |---|---|---|
 | `frame_id` | 문자열 또는 `null` | `map`이어야 함 |
 | `x`, `y` | 유한 숫자 또는 `null` | 지도 좌표 (m) |
 | `yaw` | 유한 숫자 또는 `null` | 방향 (rad, −π~π) |
-| `position_std_m` | 0 이상 유한 숫자 또는 `null` | 위치 불확실성. 공분산 xx·yy 중 큰 값의 제곱근 |
+| `position_std_m` | 0 이상 유한 숫자 또는 `null` | 위치 불확실성. 마지막 `/amcl_pose` 공분산 xx·yy 중 큰 값의 제곱근 |
 | `last_received_at` / `age_ms` | v1 토픽과 같음 | |
 
 - 미수신·무효(NaN 등)면 위치 필드 전부 `null` (v1 `motion`과 같은 규칙)
+- Bridge가 0.5초마다 TF를 읽어 갱신한다. `/amcl_pose`는 로봇이 움직일 때만 나와서, 그것만 쓰면 멈춰 있는 동안 위치가 끊긴다 (2026-10-13 바꿈). `/amcl_pose`를 한 번도 못 받았거나(위치를 잡기 전) 최신 TF가 1초보다 오래됐으면(오도메트리 끊김) 갱신하지 않는다
 - 화면: `age_ms` + 서버 경과 시간이 3초를 넘으면 "위치 확인 불가"로 흐리게
 
 추가 크기는 약 400바이트로 8 KiB 안에 들어간다.
@@ -188,7 +189,7 @@ queued → delivered → accepted → confirmed        (성공)
 |---|---|
 | 텔레메트리 (기존) | v2로 `patrol`, `pose` 추가. 1초 주기·재시도 규칙 그대로 |
 | 명령 (새로) | 별도 비동기 작업: `commands/next` long poll → 받으면 서비스 비동기 호출(제한 3초) → 결과 보고. 실패 시 1·2·4·8·10초 재시도는 **가져오기에만** 적용, 결과 보고는 한 번 (유실되면 서버가 `no_response`로 처리) |
-| 구독 추가 | `/patrol/state` (reliable + transient_local, 순찰 노드와 맞춤), `/amcl_pose` |
+| 구독 추가 | `/patrol/state` (reliable + transient_local, 순찰 노드와 맞춤), `/amcl_pose` (reliable + transient_local, AMCL과 맞춤), TF |
 | 서비스 대기 | 호출 전에 서비스가 없으면 기다리지 않고 바로 `service_unavailable` |
 
 ---
