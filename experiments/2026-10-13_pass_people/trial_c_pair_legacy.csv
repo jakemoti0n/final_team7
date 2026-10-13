@@ -1,0 +1,4 @@
+world,start_time_s,status,duration_s,path_length_m,mean_speed_mps,start_x,start_y,end_x,end_y,recoveries,min_person_distance_m,nearest_person,personal_space_time_s,min_obstacle_distance_m,nearest_obstacle,obstacle_contact_time_s,localization_error_mean_m,localization_error_max_m,controller_rate_warnings,wheel_slip_events
+aischool_2f_scenarios,19.5,SUCCEEDED,41.0,14.48,0.35,0.0,0.0,-6.55,9.98,0,0.91,standing,0.0,0.16,obstacle_low_30cm,0.0,0.059,0.103,0,0
+aischool_2f_scenarios,60.5,CANCELED,59.9,3.87,0.06,-6.55,9.98,-3.77,10.23,14,0.11,pair_right,7.6,7.5,obstacle_low_30cm,0.0,0.054,0.092,5,0
+aischool_2f_scenarios,121.4,SUCCEEDED,11.7,3.02,0.26,-3.78,10.21,-6.66,9.87,1,2.29,pair_left,0.0,7.73,obstacle_low_30cm,0.0,0.04,0.065,0,0
