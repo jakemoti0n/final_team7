@@ -1,5 +1,7 @@
 # MPPI 속도 튜닝 — 2026-10-12
 
+> **주의 (2026-10-13 추가):** 이 결과는 이전 로봇 모델(0.45 m 정사각형)과 이전 시나리오 월드 기준이다. 그날 저녁 로봇이 v14로, 월드가 문 0.9 m 기준으로 바뀌어 지금 수치와 직접 비교할 수 없다 ([people_speed](../2026-10-13_people_speed/README.md)). `prune_distance`의 속도 효과 자체는 v14에서도 확인됨 ([chungjang_speed](../2026-10-13_chungjang_speed/README.md)).
+
 ## 배경
 같은 속도 한계(0.6 m/s)에서 사람 없는 구간을 RPP는 평균 0.48 m/s, MPPI는 0.34 m/s로 달렸다 ([MPPI vs RPP](../2026-10-12_controller_mppi_vs_rpp/README.md)). MPPI를 빠르게 만들 수 있는지 본다.
 
