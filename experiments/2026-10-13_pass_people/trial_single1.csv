@@ -1,4 +1,0 @@
-world,start_time_s,status,duration_s,path_length_m,mean_speed_mps,start_x,start_y,end_x,end_y,recoveries,min_person_distance_m,nearest_person,personal_space_time_s,min_obstacle_distance_m,nearest_obstacle,obstacle_contact_time_s,localization_error_mean_m,localization_error_max_m,controller_rate_warnings,wheel_slip_events
-zz_single,23.2,SUCCEEDED,54.6,19.23,0.35,-0.0,0.0,-6.64,11.88,1,0.81,pair_right,0.0,0.3,obstacle_low_30cm,0.0,0.06,0.101,0,0
-zz_single,77.9,CANCELED,59.8,12.2,0.2,-6.64,11.88,3.68,11.32,3,0.53,pair_right,0.0,8.16,obstacle_low_30cm,0.0,0.05,0.079,1,0
-zz_single,138.7,CANCELED,59.8,12.35,0.21,3.69,11.35,-5.79,12.04,3,0.58,pair_right,0.0,8.11,obstacle_low_30cm,0.0,0.053,0.09,1,0
