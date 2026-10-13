@@ -32,6 +32,7 @@ it('resume is allowed only by has_resumable_task, never by speed', () => {
   expect(resumeReason(view(s => { s.patrol!.state = 'patrolling' }), '')).toBe('이미 순찰 중입니다')
   expect(resumeReason(view(s => { s.patrol!.has_resumable_task = false; s.motion.status = 'stopped' }), '')).toBe('재개할 작업이 없습니다')
   expect(resumeReason(view(s => { s.patrol = null }), '')).toBe('순찰 상태를 확인할 수 없습니다')
+  expect(resumeReason(view(s => { s.patrol!.state = null; s.patrol!.has_resumable_task = false as never }), '')).toBe('순찰 프로그램 상태를 확인할 수 없습니다')
   expect(resumeReason(view(), '잠김')).toBe('잠김')
 })
 it('live control: sending, then the server snapshot takes over; refusals are shown and never resent', async () => {

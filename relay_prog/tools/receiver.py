@@ -163,6 +163,8 @@ class Receiver(ThreadingHTTPServer):
         self.delivered = {}          # request_id -> 명령
         self.results = {}            # request_id -> 결과
         self.command_mode = 'ok'     # ok | error (commands/next가 503)
+        self.claim_mode = 'ok'       # ok | refuse (409) | slow (1.5초 뒤 허락)
+        self.claimed = set()
 
     def enqueue(self, command, ttl_s=5.0):
         with self.lock:
@@ -261,7 +263,25 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError('invalid size')
         return json.loads(self.rfile.read(size))
 
+    def commands_claim(self):
+        request_id = self.path[len('/api/v1/commands/'):-len('/claim')]
+        body = self.read_json()
+        if not isinstance(body, dict) or set(body) != {'robot_id', 'bridge_session_id'}:
+            return self.error(422, 'invalid_payload', 'robot_id and bridge_session_id')
+        if self.server.claim_mode == 'slow':
+            time.sleep(1.5)
+        with self.server.lock:
+            ok = (self.server.claim_mode != 'refuse' and request_id in self.server.delivered
+                  and request_id not in self.server.claimed and request_id not in self.server.results)
+            if ok:
+                self.server.claimed.add(request_id)
+        if not ok:
+            return self.error(409, 'command_closed', 'command is no longer valid')
+        return self.reply(200, {'claimed': True})
+
     def commands_post(self):
+        if self.path.endswith('/claim'):
+            return self.commands_claim()
         if self.path == '/api/v1/commands':
             body = self.read_json()
             if not isinstance(body, dict) or set(body) != {'command'} or body['command'] not in ('pause', 'resume'):
@@ -280,7 +300,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         self.connection.settimeout(2)
         if self.path == '/api/v1/commands' or (self.path.startswith('/api/v1/commands/')
-                                              and self.path.endswith('/result')):
+                                              and self.path.endswith(('/result', '/claim'))):
             try:
                 return self.commands_post()
             except (ValueError, TypeError, KeyError, AttributeError) as exc:

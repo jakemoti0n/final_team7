@@ -198,6 +198,41 @@ def test_timeouts_and_late_result_does_not_change_outcome(rig):
     assert stage(store) == 'unconfirmed'
 
 
+def claim(client, request_id, session=SESSION):
+    return client.post(f"/api/v1/commands/{request_id}/claim",
+                       json=dict(robot_id='LIMBO-01', bridge_session_id=session))
+
+
+def test_claim_once_before_service_call_and_refused_after_response_timeout(rig):
+    """Bridge가 늦게 읽은 명령은 '응답 없음' 뒤에 실행되지 않는다 (2026-10-13 실패 시험 문제 1)"""
+    clock, store, client, robot = rig
+    robot.send()
+    command = deliver(client)
+    clock.now = 4.0
+    robot.send()
+    assert claim(client, command['request_id'], str(uuid.uuid4())).status_code == 409   # 다른 세션
+    assert claim(client, command['request_id']).json() == {'claimed': True}
+    assert claim(client, command['request_id']).status_code == 409                      # 한 번만
+    clock.now = 8.999                                       # 응답 제한을 허락한 시각부터 다시 셈
+    robot.send()
+    assert stage(store) == 'delivered'
+    client.post(f"/api/v1/commands/{command['request_id']}/result", json=result(command['request_id']))
+    assert stage(store) == 'accepted'
+    clock.now = 14.5                                        # 앞 명령은 상태 확인 없이 끝남
+    robot.send()
+    assert stage(store) == 'unconfirmed'
+    # 응답 제한이 지난 뒤 늦게 묻는 Bridge는 거절 → 서비스를 부르지 않음
+    late = deliver(client)
+    clock.now = 20.0
+    robot.send()
+    refused = claim(client, late['request_id'])
+    assert refused.status_code == 409 and refused.json()['error']['code'] == 'command_closed'
+    assert stage(store) == 'no_response'
+    assert claim(client, str(uuid.uuid4())).status_code == 409                           # 모르는 명령
+    bad = client.post(f"/api/v1/commands/{late['request_id']}/claim", json={'robot_id': 'LIMBO-01'})
+    assert bad.status_code == 422
+
+
 def test_queued_command_expires_if_not_fetched(rig):
     clock, store, client, robot = rig
     robot.send()

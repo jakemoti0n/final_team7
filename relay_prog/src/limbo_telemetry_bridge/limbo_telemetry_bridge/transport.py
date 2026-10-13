@@ -17,6 +17,9 @@ LOG = logging.getLogger(__name__)
 MAX_BYTES = 8192
 COMMANDS = ('pause', 'resume')
 MESSAGE_LIMIT = 200
+# 서비스를 부르기 직전 서버에 "아직 유효한가"를 묻는 왕복 시간 한도. 넘으면 부르지 않는다.
+# ttl_ms만으로는 서버가 넘긴 뒤 Bridge가 읽기까지 걸린 시간을 알 수 없다 (2026-10-13 실패 시험 문제 1)
+CLAIM_MAX_RTT_S = 1.0
 
 
 def command_from(body):
@@ -204,14 +207,33 @@ class Sender:
         except (aiohttp.ClientError, TimeoutError, OSError) as exc:
             return (type(exc).__name__, 'failure')
 
-    async def execute(self, command, received):
-        """서비스를 한 번 부르고 결과 보고 본문을 만든다. 다시 부르지 않는다."""
+    async def claim(self, client, command):
+        """('claimed'|'refused'|오류 이름, 왕복 초). 왕복은 Bridge 단조 시계로만 잰다."""
+        url = self.config['server_url'].rstrip('/') + '/api/v1/commands/' + command['request_id'] + '/claim'
+        body = json.dumps(dict(robot_id=self.state.robot_id, bridge_session_id=self.state.session_id)).encode()
+        started = self.monotonic()
+        try:
+            async with asyncio.timeout(CLAIM_MAX_RTT_S):
+                async with client.post(url, data=body, headers={'Content-Type': 'application/json'},
+                                       allow_redirects=False) as response:
+                    status = 'claimed' if response.status == 200 else 'refused'
+        except (aiohttp.ClientError, TimeoutError, OSError) as exc:
+            status = type(exc).__name__
+        return status, self.monotonic() - started
+
+    async def execute(self, command, received, client=None):
+        """서버에 유효한지 확인한 뒤 서비스를 한 번 부르고 결과 보고 본문을 만든다. 다시 부르지 않는다."""
         result = dict(robot_id=self.state.robot_id, bridge_session_id=self.state.session_id,
                       request_id=command['request_id'], outcome=None, message='',
                       service_latency_ms=None,
                       patrol_update_count_at_call=self.state.patrol_update_count())
         if self.monotonic() - received >= command['ttl_ms'] / 1000:
             return {**result, 'outcome': 'expired', 'message': 'command expired before service call'}
+        claimed, rtt = await self.claim(client, command)
+        if claimed != 'claimed':
+            return {**result, 'outcome': 'expired', 'message': f'claim {claimed}'}
+        if rtt > CLAIM_MAX_RTT_S:
+            return {**result, 'outcome': 'expired', 'message': f'claim too slow ({rtt:.2f} s)'}
         started = self.monotonic()
         future = self.controller.call(command['command'])
         if future is None:
@@ -256,7 +278,7 @@ class Sender:
                     _, command, received = fetched
                     retry.delay('success')
                     LOG.info('command %s %s', command['command'], command['request_id'])
-                    result = await self.execute(command, received)
+                    result = await self.execute(command, received, client)
                     reported = await self.stoppable(self.report(client, result))
                     LOG.info('command %s outcome=%s message=%s report=%s', command['request_id'],
                              result['outcome'], result['message'], reported)

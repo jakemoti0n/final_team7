@@ -29,8 +29,14 @@ class State:
         self.topics = {key: dict(count=0, stamp=None, at=None, mono=None,
                                  buckets=deque(maxlen=51)) for key in TOPICS}
         # v2: 순찰 상태(/patrol/state)와 위치(/amcl_pose). 숫자·짧은 문자열만 보관한다
-        self.patrol = dict(count=0, fields=None, at=None, mono=None)
+        self.patrol = dict(count=0, fields=None, at=None, mono=None, alive=True)
         self.pose = None
+
+    def patrol_publisher(self, alive):
+        """/patrol/state 발행자(순찰 노드)가 있는지. 없으면 마지막 상태 대신 "알 수 없음"으로 보낸다
+        (순찰 노드가 꺼졌는데 화면이 "순찰 중"으로 남지 않게, 2026-10-13 실패 시험 문제 2)."""
+        with self.lock:
+            self.patrol['alive'] = bool(alive)
 
     def receive_patrol(self, state, waypoint_index, waypoint_count, waypoint_name,
                        has_resumable_task, reason):
@@ -103,7 +109,7 @@ class State:
                 receive_hz=None if not topic['count'] or now-self.started < 5 else
                 sum(n for b, n in topic['buckets'] if bucket-50 < b <= bucket)/5.0,
             )
-        patrol_fields = patrol['fields'] or dict.fromkeys(
+        patrol_fields = (patrol['alive'] and patrol['fields']) or dict.fromkeys(
             ('state', 'waypoint_index', 'waypoint_count', 'waypoint_name', 'has_resumable_task', 'reason'))
         return dict(
             schema_version=SCHEMA_VERSION, robot_id=self.robot_id, bridge_session_id=self.session_id,

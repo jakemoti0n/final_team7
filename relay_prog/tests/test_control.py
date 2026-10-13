@@ -200,6 +200,34 @@ def test_expired_command_is_not_called(server):
     assert result['outcome'] == 'expired' and controller.calls == []
 
 
+@pytest.mark.parametrize('mode,message', [('refuse', 'claim refused'), ('slow', 'claim TimeoutError')])
+def test_service_not_called_unless_server_claims_in_time(server, mode, message):
+    """서버가 유효하다고 1초 안에 답하지 않으면 부르지 않는다 (늦게 읽은 명령이 '응답 없음' 뒤에 실행되지 않게)"""
+    server.claim_mode = mode
+    controller = Controller('accept')
+    result, _ = run_command(server, controller)
+    assert result['outcome'] == 'expired' and result['message'] == message
+    assert controller.calls == []
+
+
+def test_claim_happens_once_before_the_call(server):
+    controller = Controller('accept')
+    result, _ = run_command(server, controller)
+    assert result['outcome'] == 'accepted' and server.claimed == {result['request_id']}
+
+
+def test_patrol_unknown_while_publisher_is_gone():
+    state = State()
+    state.receive_patrol('patrolling', 2, 10, 'C', True, 'navigating')
+    state.patrol_publisher(False)
+    patrol = state.snapshot()['patrol']
+    assert patrol['state'] is None and patrol['has_resumable_task'] is None
+    assert patrol['update_count'] == 1 and patrol['last_received_at'] is not None   # 받은 기록은 유지
+    validate(state.snapshot())                                                         # 계약 안 ("받았지만 알 수 없음")
+    state.patrol_publisher(True)
+    assert state.snapshot()['patrol']['state'] == 'patrolling'
+
+
 def test_telemetry_keeps_flowing_while_service_hangs(server):
     controller = Controller('hang')
     state = State()

@@ -38,7 +38,7 @@ export function lockReason(view: View, request: RequestResult | null) {
 export function resumeReason(view: View, lock: string) {
   if (lock) return lock
   const patrol = view.snapshot?.patrol
-  if (!patrol?.state) return '순찰 상태를 확인할 수 없습니다'
+  if (!patrol?.state) return patrol?.update_count ? '순찰 프로그램 상태를 확인할 수 없습니다' : '순찰 상태를 확인할 수 없습니다'
   if (patrol.state === 'patrolling') return '이미 순찰 중입니다'
   return patrol.has_resumable_task ? '' : '재개할 작업이 없습니다'
 }

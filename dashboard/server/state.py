@@ -73,7 +73,7 @@ class Store:
         now = self.monotonic()
         self.command = dict(request_id=str(uuid.uuid4()), command=command, stage="queued", message="",
                             issued_at=self.utc(), updated_at=self.utc(), issued_mono=now,
-                            delivered_mono=None, accepted_mono=None, session=self.session,
+                            delivered_mono=None, claimed_mono=None, accepted_mono=None, session=self.session,
                             count_at_call=None)
         return 202, self.command_view()
 
@@ -90,6 +90,17 @@ class Store:
             return None
         c.update(stage="delivered", delivered_mono=now, updated_at=self.utc())
         return dict(request_id=c["request_id"], command=c["command"], ttl_ms=remaining * 1000)
+
+    def claim(self, request_id, session):
+        """Bridge가 서비스를 부르기 직전에 묻는다. 아직 전달됨 단계이고 응답 제한 안이면 허락.
+        허락하면 응답 제한을 이 시각부터 다시 센다 (늦게 읽은 명령이 '응답 없음' 뒤에 실행되지 않게)."""
+        self.tick()
+        c = self.command
+        if (not c or c["request_id"] != request_id or c["stage"] != "delivered"
+                or c["claimed_mono"] is not None or session != c["session"]):
+            return False
+        c["claimed_mono"] = self.monotonic()
+        return True
 
     def apply_result(self, result):
         """Bridge의 결과 보고. 끝난 명령·모르는 명령의 늦은 보고는 결과를 바꾸지 않는다."""
@@ -136,7 +147,7 @@ class Store:
             self.finish("connection_lost")
         elif c["stage"] == "queued" and now - c["issued_mono"] >= cfg.command_ttl_s:
             self.finish("expired")
-        elif c["stage"] == "delivered" and now - c["delivered_mono"] >= cfg.command_response_timeout_s:
+        elif c["stage"] == "delivered" and now - (c["claimed_mono"] or c["delivered_mono"]) >= cfg.command_response_timeout_s:
             self.finish("no_response")
         elif c["stage"] == "accepted" and now - c["accepted_mono"] >= cfg.command_confirm_timeout_s:
             self.finish("unconfirmed")

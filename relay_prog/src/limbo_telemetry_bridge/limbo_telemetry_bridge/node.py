@@ -65,6 +65,8 @@ class BridgeNode(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.pose_timer = self.create_timer(POSE_PERIOD_S, self._read_pose)
+        self.patrol_topic = control['patrol_state_topic']
+        self.patrol_timer = self.create_timer(POSE_PERIOD_S, self._check_patrol_publisher)
         self.patrol_clients = {'pause': self.create_client(Trigger, control['pause_service']),
                          'resume': self.create_client(Trigger, control['resume_service'])}
         self.sender.start()
@@ -75,6 +77,9 @@ class BridgeNode(Node):
         if not client.service_is_ready():
             return None
         return client.call_async(Trigger.Request())
+
+    def _check_patrol_publisher(self):
+        self.state.patrol_publisher(self.count_publishers(self.patrol_topic) > 0)
 
     def _patrol_callback(self, message):
         self.state.receive_patrol(message.state, message.waypoint_index, message.waypoint_count,

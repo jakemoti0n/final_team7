@@ -160,6 +160,12 @@ class CommandRequest(StrictModel):
     command: CommandName
 
 
+class CommandClaim(StrictModel):
+    """Bridge → 서버 POST /api/v1/commands/{request_id}/claim: 서비스를 부르기 직전 "아직 유효한가" """
+    robot_id: Annotated[str, Field(min_length=1)]
+    bridge_session_id: Annotated[str, AfterValidator(uuid_string)]
+
+
 class CommandResult(StrictModel):
     """Bridge → 서버 POST /api/v1/commands/{request_id}/result"""
     robot_id: Annotated[str, Field(min_length=1)]

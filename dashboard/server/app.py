@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from . import mapdata
-from .models import CommandRequest, CommandResult, Settings, Telemetry, uuid_string
+from .models import CommandClaim, CommandRequest, CommandResult, Settings, Telemetry, uuid_string
 from .state import Store
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -136,6 +136,22 @@ def create_app(settings=None, store=None):
                 return Response(status_code=204)
             with suppress(TimeoutError):
                 await asyncio.wait_for(command_signal.wait(), timeout=min(remaining, 0.2))
+
+    @app.post("/api/v1/commands/{request_id}/claim")
+    async def command_claim(request_id: str, request: Request):
+        raw, problem = await read_json(request)
+        if problem:
+            return problem
+        try:
+            claim = CommandClaim.model_validate(raw)
+        except (ValidationError, ValueError):
+            return error(422, "invalid_payload", "Claim does not match the command contract")
+        if claim.robot_id != settings.robot_id:
+            return error(409, "robot_id_mismatch", "Unexpected robot_id")
+        if not store.claim(request_id, claim.bridge_session_id):
+            publish()
+            return error(409, "command_closed", "Command is no longer valid")
+        return {"claimed": True}
 
     @app.post("/api/v1/commands/{request_id}/result")
     async def command_result(request_id: str, request: Request):

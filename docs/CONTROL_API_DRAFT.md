@@ -124,6 +124,20 @@ v1 필드는 전부 그대로, `schema_version: 2`와 아래 두 객체만 추�
 - `patrol_update_count_at_call`: 서비스를 부르기 직전까지 받은 `/patrol/state` 수 (텔레메트리 `patrol.update_count`와 같은 카운터)
 - 서버 응답: 200 `{"accepted": true}`. 이미 끝난 명령에 대한 늦은 보고는 200 `{"accepted": false, "reason": "command_closed"}` (결과를 바꾸지 않음, PRD §5.3)
 
+### 2.4 Bridge → 서버: 실행 직전 확인 `POST /api/v1/commands/{request_id}/claim` (2026-10-13 추가)
+
+```json
+{"robot_id": "LIMBO-01", "bridge_session_id": "4c829302-..."}
+```
+
+| 응답 | 경우 |
+|---|---|
+| 200 `{"claimed": true}` | 아직 `delivered`이고 응답 제한 안, 처음 묻는 것. 서버는 **이 시각부터 응답 제한을 다시 셈** |
+| 409 `command_closed` | 이미 끝남(`no_response` 등), 다른 세션, 이미 물어봄, 모르는 명령 |
+
+- Bridge는 `ttl_ms` 확인 뒤, 서비스를 부르기 **직전**에 묻는다. 거절되거나 **왕복이 1초를 넘으면** 부르지 않고 `expired`로 보고
+- 이유: `ttl_ms`는 서버가 넘긴 뒤 Bridge가 실제로 읽기까지 걸린 시간을 모른다. 그래서 늦게 읽은 명령이 화면에서 "응답 없음"으로 끝난 뒤에 실행될 수 있었다 (2026-10-13 실패 시험). 왕복 시간은 Bridge 혼자 재므로 두 시계를 비교하지 않는다
+
 ---
 
 ## 3. 서버의 명령 판정
