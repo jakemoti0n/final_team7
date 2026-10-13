@@ -1,0 +1,181 @@
+[bt_navigator-19] [INFO] [1791878904.646753226] [bt_navigator]: Begin navigating from current location (3.65, 11.32) to (-6.80, 11.80)
+[nav_recorder-6] [INFO] [1791878904.647328513] [nav_recorder]: Goal started
+[controller_server-14] [INFO] [1791878904.668104004] [controller_server]: Received a goal, begin computing control effort.
+[controller_server-14] [INFO] [1791878904.755631336] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878905.718366290] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878906.768525297] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878906.817535020] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[collision_monitor-22] [INFO] [1791878907.613352697] [collision_monitor]: Robot to approach for 1.200000 seconds away from collision
+[collision_monitor-22] [INFO] [1791878907.713367359] [collision_monitor]: Robot to continue normal operation
+[controller_server-14] [INFO] [1791878907.768360918] [controller_server]: Passing new path to controller.
+[collision_monitor-22] [INFO] [1791878907.783746874] [collision_monitor]: Robot to approach for 1.200000 seconds away from collision
+[collision_monitor-22] [INFO] [1791878907.813287422] [collision_monitor]: Robot to continue normal operation
+[collision_monitor-22] [INFO] [1791878907.883166647] [collision_monitor]: Robot to approach for 1.200000 seconds away from collision
+[collision_monitor-22] [INFO] [1791878907.913272218] [collision_monitor]: Robot to continue normal operation
+[person_detector-5] WARNING ⚠️ not enough matching points
+[collision_monitor-22] [INFO] [1791878908.213562583] [collision_monitor]: Robot to approach for 1.200000 seconds away from collision
+[person_detector-5] WARNING ⚠️ not enough matching points
+[collision_monitor-22] [INFO] [1791878908.323122557] [collision_monitor]: Robot to continue normal operation
+[person_detector-5] WARNING ⚠️ not enough matching points
+[controller_server-14] [INFO] [1791878908.818357932] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878908.941966915] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[person_detector-5] WARNING ⚠️ not enough matching points
+[person_detector-5] WARNING ⚠️ not enough matching points
+[collision_monitor-22] [INFO] [1791878909.283090683] [collision_monitor]: Robot to approach for 1.200000 seconds away from collision
+[collision_monitor-22] [INFO] [1791878909.323051308] [collision_monitor]: Robot to continue normal operation
+[collision_monitor-22] [INFO] [1791878909.384242518] [collision_monitor]: Robot to approach for 1.200000 seconds away from collision
+[person_detector-5] WARNING ⚠️ not enough matching points
+[collision_monitor-22] [INFO] [1791878909.523202620] [collision_monitor]: Robot to continue normal operation
+[controller_server-14] [INFO] [1791878909.818364169] [controller_server]: Passing new path to controller.
+[collision_monitor-22] [INFO] [1791878910.484120665] [collision_monitor]: Robot to approach for 1.200000 seconds away from collision
+[collision_monitor-22] [INFO] [1791878910.523610350] [collision_monitor]: Robot to continue normal operation
+[controller_server-14] [INFO] [1791878910.868364296] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878911.036031632] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878911.868521422] [controller_server]: Passing new path to controller.
+[person_detector-5] WARNING ⚠️ not enough matching points
+[person_detector-5] WARNING ⚠️ not enough matching points
+[person_detector-5] WARNING ⚠️ not enough matching points
+[person_detector-5] [WARN] [1791878912.821988025] [person_detector]: TF transform failed base_link -> odom: Lookup would require extrapolation into the future.  Requested time 146.652000 but the latest data is at time 146.650000, when looking up transform from frame [base_link] to frame [odom]
+[controller_server-14] [INFO] [1791878912.918361964] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878913.168764701] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[person_detector-5] WARNING ⚠️ not enough matching points
+[controller_server-14] [INFO] [1791878913.918365177] [controller_server]: Passing new path to controller.
+[controller_server-14] [ERROR] [1791878914.718403001] [controller_server]: Failed to make progress
+[controller_server-14] [INFO] [1791878914.719352888] [controller_server]: Optimizer reset
+[controller_server-14] [WARN] [1791878914.719383799] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[controller_server-14] [INFO] [1791878914.737203481] [local_costmap.local_costmap]: Received request to clear entirely the local_costmap
+[controller_server-14] [INFO] [1791878914.738172427] [controller_server]: Received a goal, begin computing control effort.
+[controller_server-14] [WARN] [1791878914.816736486] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 12.8205 Hz.
+[controller_server-14] [INFO] [1791878914.966852504] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878915.197950080] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[person_detector-5] [WARN] [1791878915.658992955] [person_detector]: TF transform failed base_link -> odom: Lookup would require extrapolation into the future.  Requested time 149.492000 but the latest data is at time 149.482000, when looking up transform from frame [base_link] to frame [odom]
+[person_detector-5] WARNING ⚠️ not enough matching points
+[controller_server-14] [INFO] [1791878915.966854937] [controller_server]: Passing new path to controller.
+[person_detector-5] WARNING ⚠️ not enough matching points
+[person_detector-5] WARNING ⚠️ not enough matching points
+[person_detector-5] WARNING ⚠️ not enough matching points
+[person_detector-5] WARNING ⚠️ not enough matching points
+[person_detector-5] WARNING ⚠️ not enough matching points
+[controller_server-14] [INFO] [1791878917.016880246] [controller_server]: Passing new path to controller.
+[person_detector-5] WARNING ⚠️ not enough matching points
+[person_detector-5] WARNING ⚠️ not enough matching points
+[person_detector-5] WARNING ⚠️ not enough matching points
+[controller_server-14] [INFO] [1791878917.226203601] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[person_detector-5] WARNING ⚠️ not enough matching points
+[person_detector-5] WARNING ⚠️ not enough matching points
+[person_detector-5] WARNING ⚠️ not enough matching points
+[person_detector-5] WARNING ⚠️ not enough matching points
+[controller_server-14] [INFO] [1791878918.016874224] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878919.066853300] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878919.409464146] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878920.066873571] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878921.116855554] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878921.420256256] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878922.116852112] [controller_server]: Passing new path to controller.
+[person_detector-5] [WARN] [1791878922.439037736] [person_detector]: TF transform failed base_link -> odom: Lookup would require extrapolation into the future.  Requested time 156.222000 but the latest data is at time 156.216000, when looking up transform from frame [base_link] to frame [odom]
+[controller_server-14] [INFO] [1791878923.166853166] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878923.442108663] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878924.166855966] [controller_server]: Passing new path to controller.
+[controller_server-14] [ERROR] [1791878924.866900530] [controller_server]: Failed to make progress
+[controller_server-14] [INFO] [1791878924.868687708] [controller_server]: Optimizer reset
+[controller_server-14] [WARN] [1791878924.868732952] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[controller_server-14] [INFO] [1791878924.887276723] [local_costmap.local_costmap]: Received request to clear entirely the local_costmap
+[planner_server-16] [INFO] [1791878924.888078392] [global_costmap.global_costmap]: Received request to clear entirely the global_costmap
+[controller_server-14] [INFO] [1791878925.107887938] [controller_server]: Received a goal, begin computing control effort.
+[controller_server-14] [INFO] [1791878925.579888516] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878926.158100735] [controller_server]: Passing new path to controller.
+[person_detector-5] [WARN] [1791878927.142403325] [person_detector]: TF transform failed base_link -> odom: Lookup would require extrapolation into the future.  Requested time 160.908000 but the latest data is at time 160.882000, when looking up transform from frame [base_link] to frame [odom]
+[controller_server-14] [INFO] [1791878927.158098656] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878927.704805088] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878928.208120964] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878929.258100684] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878929.841750055] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878930.258098598] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878931.308095960] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878931.875298491] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878932.308100517] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878933.358097244] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878934.016528518] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878934.358095964] [controller_server]: Passing new path to controller.
+[person_detector-5] [INFO] [1791878935.159720435] [person_detector]: [TRACK MANAGER] New person_id=12, raw_track_id=37
+[controller_server-14] [INFO] [1791878935.408103127] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878935.604094314] [local_costmap.local_costmap]: HumanLayer: people=1, points=8, checked=1800, modified=653
+[controller_server-14] [INFO] [1791878936.035917802] [local_costmap.local_costmap]: HumanLayer received 1 person predictions
+[controller_server-14] [INFO] [1791878936.408101485] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878937.458100236] [controller_server]: Passing new path to controller.
+[person_detector-5] [INFO] [1791878937.662747209] [person_detector]: [TRACK MANAGER] New person_id=13, raw_track_id=37
+[controller_server-14] [INFO] [1791878938.041088411] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878938.458096980] [controller_server]: Passing new path to controller.
+[collision_monitor-22] [INFO] [1791878938.484055971] [collision_monitor]: Robot to approach for 1.200000 seconds away from collision
+[collision_monitor-22] [INFO] [1791878938.587174477] [collision_monitor]: Robot to continue normal operation
+[controller_server-14] [INFO] [1791878939.508101946] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878940.059475881] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878940.508100222] [controller_server]: Passing new path to controller.
+[person_detector-5] [INFO] [1791878941.253445790] [person_detector]: [TRACK MANAGER] New person_id=14, raw_track_id=40
+[controller_server-14] [INFO] [1791878941.558096064] [controller_server]: Passing new path to controller.
+[person_detector-5] [INFO] [1791878941.992750834] [person_detector]: [TRACK MANAGER] BoT-SORT ID 40 -> 43, keep person_id=14, distance=0.43m
+[controller_server-14] [INFO] [1791878942.099278842] [local_costmap.local_costmap]: HumanLayer received 1 person predictions
+[controller_server-14] [INFO] [1791878942.203800321] [local_costmap.local_costmap]: HumanLayer: people=1, points=8, checked=1800, modified=775
+[controller_server-14] [INFO] [1791878942.558100077] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878943.608103355] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878944.140032216] [local_costmap.local_costmap]: HumanLayer received 1 person predictions
+[controller_server-14] [INFO] [1791878944.204317073] [local_costmap.local_costmap]: HumanLayer: people=1, points=7, checked=1515, modified=698
+[controller_server-14] [INFO] [1791878944.608096264] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878945.658097475] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878946.166583811] [local_costmap.local_costmap]: HumanLayer received 1 person predictions
+[controller_server-14] [INFO] [1791878946.404200138] [local_costmap.local_costmap]: HumanLayer: people=1, points=2, checked=330, modified=159
+[controller_server-14] [INFO] [1791878946.658103566] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878947.708100856] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878948.177379084] [local_costmap.local_costmap]: HumanLayer received 1 person predictions
+[controller_server-14] [INFO] [1791878948.604481596] [local_costmap.local_costmap]: HumanLayer: people=1, points=0, checked=0, modified=0
+[controller_server-14] [INFO] [1791878948.708102491] [controller_server]: Passing new path to controller.
+[person_detector-5] [WARN] [1791878949.296969634] [person_detector]: TF transform failed base_link -> odom: Lookup would require extrapolation into the future.  Requested time 183.086000 but the latest data is at time 183.082000, when looking up transform from frame [base_link] to frame [odom]
+[controller_server-14] [INFO] [1791878949.758098433] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878950.308986784] [local_costmap.local_costmap]: HumanLayer received 1 person predictions
+[controller_server-14] [INFO] [1791878950.758132933] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878950.804713945] [local_costmap.local_costmap]: HumanLayer: people=1, points=8, checked=1800, modified=135
+[controller_server-14] [INFO] [1791878951.808202217] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878952.349673225] [local_costmap.local_costmap]: HumanLayer received 1 person predictions
+[controller_server-14] [INFO] [1791878952.803871052] [local_costmap.local_costmap]: HumanLayer: people=1, points=8, checked=1800, modified=762
+[controller_server-14] [INFO] [1791878952.808151917] [controller_server]: Passing new path to controller.
+[collision_monitor-22] [INFO] [1791878953.296200457] [collision_monitor]: Robot to approach for 1.200000 seconds away from collision
+[collision_monitor-22] [INFO] [1791878953.597327785] [collision_monitor]: Robot to continue normal operation
+[controller_server-14] [INFO] [1791878953.858123281] [controller_server]: Passing new path to controller.
+[collision_monitor-22] [INFO] [1791878954.024812368] [collision_monitor]: Robot to approach for 1.200000 seconds away from collision
+[controller_server-14] [INFO] [1791878954.216176588] [controller_server]: Optimizer reset
+[controller_server-14] [INFO] [1791878954.225677061] [controller_server]: Optimizer reset
+[controller_server-14] [WARN] [1791878954.225765691] [controller_server]: Optimizer fail to compute path
+[collision_monitor-22] [INFO] [1791878954.297001806] [collision_monitor]: Robot to continue normal operation
+[collision_monitor-22] [INFO] [1791878954.323154493] [collision_monitor]: Robot to approach for 1.200000 seconds away from collision
+[controller_server-14] [INFO] [1791878954.396386795] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[collision_monitor-22] [INFO] [1791878954.496835223] [collision_monitor]: Robot to continue normal operation
+[controller_server-14] [INFO] [1791878954.719468672] [controller_server]: Optimizer reset
+[controller_server-14] [INFO] [1791878954.730388127] [controller_server]: Optimizer reset
+[controller_server-14] [WARN] [1791878954.730538503] [controller_server]: Optimizer fail to compute path
+[controller_server-14] [INFO] [1791878954.858108705] [controller_server]: Passing new path to controller.
+[person_detector-5] [WARN] [1791878955.462646469] [person_detector]: TF transform failed base_link -> odom: Lookup would require extrapolation into the future.  Requested time 189.156000 but the latest data is at time 189.150000, when looking up transform from frame [base_link] to frame [odom]
+[controller_server-14] [INFO] [1791878955.908115428] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878956.399723658] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878956.908124670] [controller_server]: Passing new path to controller.
+[person_detector-5] WARNING ⚠️ not enough matching points
+[person_detector-5] WARNING ⚠️ not enough matching points
+[person_detector-5] WARNING ⚠️ not enough matching points
+[controller_server-14] [INFO] [1791878957.908094920] [controller_server]: Passing new path to controller.
+[person_detector-5] WARNING ⚠️ not enough matching points
+[controller_server-14] [INFO] [1791878958.415923539] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878958.958097558] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878960.008130027] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878960.525336790] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878961.008094207] [controller_server]: Passing new path to controller.
+[person_detector-5] WARNING ⚠️ not enough matching points
+[controller_server-14] [INFO] [1791878962.058100078] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878962.567398069] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[person_detector-5] WARNING ⚠️ not enough matching points
+[controller_server-14] [INFO] [1791878963.058097946] [controller_server]: Passing new path to controller.
+[person_detector-5] [WARN] [1791878963.275157151] [person_detector]: TF transform failed base_link -> odom: Lookup would require extrapolation into the future.  Requested time 197.010000 but the latest data is at time 196.982000, when looking up transform from frame [base_link] to frame [odom]
+[controller_server-14] [INFO] [1791878964.108095906] [controller_server]: Passing new path to controller.
+[controller_server-14] [INFO] [1791878964.577996576] [local_costmap.local_costmap]: HumanLayer received 0 person predictions
+[controller_server-14] [INFO] [1791878964.658098091] [controller_server]: Cancellation was successful. Stopping the robot.
+[controller_server-14] [INFO] [1791878964.658151617] [controller_server]: [follow_path] [ActionServer] Client requested to cancel the goal. Cancelling.
+[bt_navigator-19] [INFO] [1791878964.658319539] [bt_navigator]: [navigate_to_pose] [ActionServer] Client requested to cancel the goal. Cancelling.
+[bt_navigator-19] [INFO] [1791878964.658523823] [bt_navigator]: Goal canceled

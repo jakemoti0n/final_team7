@@ -9,6 +9,9 @@ stop_sim() {
   [ -n "$G" ] && kill -INT -- -$G 2>/dev/null
   for i in $(seq 1 20); do pgrep -g "$G" >/dev/null 2>&1 || break; sleep 1; done
   [ -n "$G" ] && kill -9 -- -$G 2>/dev/null
+  # 프로세스 그룹 kill로 안 죽고 남은 launch·gz가 있으면 PID로 끝낸다 (2026-10-13: 남은 launch가 쌓여 다음 회차의 map_server까지 실패함).
+  # 자기 셸은 이 패턴과 일치하지 않는다 (sim_ctl.sh stop)
+  for p in $(ps -eo pid,args | awk '/[s]tart_simulation.launch|[g]z sim -r|[g]z sim server/{print $1}'); do kill -9 $p 2>/dev/null; done
   sleep 1
 }
 
