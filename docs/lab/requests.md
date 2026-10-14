@@ -1,13 +1,13 @@
-# lab 요청 (노트북 → 서브 PC)
+# lab 요청 (메인 PC → 서브 PC)
 
-**이 파일은 노트북만 쓴다.** 서브 PC는 읽기만 하고, 진행 상황·결과·질문은 [`reports.md`](reports.md)에 쓴다.
+**이 파일은 메인 PC(노트북 `kim-laptop`)만 쓴다.** 서브 PC는 읽기만 하고, 진행 상황·결과·질문은 [`reports.md`](reports.md)에 쓴다.
 
-- **노트북** (`kim-laptop`, 메인): 실험을 정하고 요청을 적는다
+- **메인 PC** (`kim-laptop`, 노트북): 실험을 정하고 요청을 적는다. ktj 반영도 여기서 한다
 - **서브 PC** (`automaton-desk`, RTX 3070, RAM 16GB): 요청을 받아 돌리고 결과를 적는다
 
 ## 규칙 (두 파일 공통)
 
-- **파일 주인**: `requests.md`는 노트북만, `reports.md`는 서브 PC만 쓴다. 상대 파일은 읽기만 한다 (같은 파일을 두 PC가 고치면 커밋이 충돌한다)
+- **파일 주인**: `requests.md`는 메인 PC만, `reports.md`는 서브 PC만 쓴다. 상대 파일은 읽기만 한다 (같은 파일을 두 PC가 고치면 커밋이 충돌한다)
 - 실험 결과 폴더 `experiments/<날짜>_<주제>/`는 그 실험을 한 PC만 쓴다
 - push 전에 항상 `git pull --rebase origin lab`. **`git push --force` 금지** (상대 커밋이 사라진다)
 - 실험 묶음(예: 10회 반복) 도중에는 pull하지 않는다. 시작할 때 `git rev-parse --short HEAD`를 결과에 적고, 끝난 뒤 pull한다

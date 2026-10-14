@@ -1,13 +1,13 @@
 # lab 브랜치 (실험실)
 
-이 브랜치는 설정·알고리즘 실험용이다. 채택한 변경만 학원 컴퓨터(메인)가 `ktj`/`dev`로 옮긴다.
+이 브랜치는 설정·알고리즘 실험용이다. 채택한 변경만 **메인 PC**(이 노트북 `kim-laptop`)가 `ktj`/`dev`로 옮긴다. 컴퓨터는 둘뿐이다: 메인 PC(노트북)와 서브 PC(`automaton-desk`).
 
 **먼저 `docs/PROJECT.md`를 읽는다.** 무엇을 만드는지, 바꾸면 안 되는 설계 전제, 무엇을 어디에 기록하는지가 거기 있다. 아래는 lab 브랜치에만 해당하는 규칙이다.
 
 - **`dev`, `ktj`에 push하지 않는다.** 이 브랜치는 `git push origin lab`만
 - 사용자는 한국어를 쓴다. 보고도 한국어로
 - 두 컴퓨터의 소통 창구는 `docs/lab/` (예전 `docs/LAB_BOARD.md`는 쓰지 않음)
-  - `docs/lab/requests.md`: 요청·답변. **노트북만 쓴다**
+  - `docs/lab/requests.md`: 요청·답변. **메인 PC만 쓴다**
   - `docs/lab/reports.md`: 진행 상태·결과·질문. **서브 PC만 쓴다**
   - 상대 파일은 읽기만 한다. 같은 파일을 두 PC가 고치면 커밋이 충돌한다
 - 서브 PC: `requests.md`에서 `reports.md` 진행 상태가 아직 없거나 `대기`인 요청을 수행한다. 긴 지시는 `experiments/orders/`에 있다

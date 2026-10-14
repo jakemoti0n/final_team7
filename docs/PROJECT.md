@@ -93,7 +93,7 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 |---|---|---|
 | `dev` | 팀 기준. 항상 동작하는 상태 | 원작자(david)와 팀원이 PR로 합친다. 기본 브랜치 |
 | `ktj` | 주행·관제 통합 작업 | dev를 받아 작업하고, 안정된 것만 dev로 올린다 |
-| `lab` | 실험실 | **실험 코드와 기록은 lab에만 존재한다.** 채택한 변경만 학원 PC가 ktj로 **파일 단위**로 옮긴다. lab에서는 `git push origin lab`만 하고 dev·ktj에 push하지 않는다. force push 금지 |
+| `lab` | 실험실 | **실험 코드와 기록은 lab에만 존재한다.** 채택한 변경만 메인 PC가 ktj로 **파일 단위**로 옮긴다. lab에서는 `git push origin lab`만 하고 dev·ktj에 push하지 않는다. force push 금지 |
 | 개인 브랜치 (`kkh`, `itkwon`, `sgh`, `bgj`, `feat/human-leg`) | 각자 작업 | dev에 PR |
 
 받는 방향 `dev → ktj → lab`, 올리는 방향 `lab → ktj → dev`(채택된 것만). ktj를 lab에 합칠 때는 병합 커밋을 쓰고, 병합 직후 `git pull --rebase`를 치지 않는다(병합이 평탄화돼 상대 커밋이 재생되며 충돌한다). `git fetch` 후 원격에 새 커밋이 없으면 바로 push.
@@ -115,7 +115,7 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 | `docs/KNOWN_ISSUES.md` | 아직 못 고친 문제 | 문제를 찾았을 때. 고치면 지우고 TROUBLESHOOTING으로 | 표 한 행: 문제 · 근거(언제 어디서 몇 번) · 영향 · 대책 후보 |
 | `docs/TROUBLESHOOTING.md` | 해결한 문제 | 고쳤을 때. **기술적으로 고생한 것은 빠짐없이**(원인을 찾는 데 시간이 든 것, 우회한 것, 포기한 대안) | `### 증상 — 날짜` 아래 원인 → 해결 → 확인. 로그 한 줄·숫자·커밋을 넣어 같은 증상을 검색으로 찾게. 단순 실수는 안 적음 |
 | `experiments/날짜_주제/` (lab) | 실험 하나의 조건·결과·결론 | 실험이 끝났을 때 | `README.md`(왜 했나 / 조건 / 결과 표 / 결론 / 다음) + 그 실험의 CSV·스크립트. 여러 실험이 다시 쓰는 도구는 `tools/sim_trials/`로 |
-| `docs/lab/requests.md`, `reports.md` (lab) | 두 PC 소통 | 상대 PC에 전할 때 | requests는 노트북만, reports는 서브 PC만 쓴다. 상대 파일은 읽기만. 긴 지시는 `experiments/orders/` |
+| `docs/lab/requests.md`, `reports.md` (lab) | 두 PC 소통 | 상대 PC에 전할 때 | requests는 메인 PC만, reports는 서브 PC만 쓴다. 상대 파일은 읽기만. 긴 지시는 `experiments/orders/` |
 
 ### 변경 기록 항목 양식
 
@@ -183,7 +183,7 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 ### 설정값을 채택할 때
 
 - 두 곳 이상의 다른 환경(예: 학원 복도와 충장로)에서 같은 방향의 결과가 나와야 "채택 후보"다.
-- 채택 후보는 변경 기록에 "dev 반영 후보"로 적고, ktj 반영은 학원 PC에서 한다. lab에서 임의로 ktj·dev를 고치지 않는다.
+- 채택 후보는 변경 기록에 "dev 반영 후보"로 적고, ktj 반영은 메인 PC에서 한다. lab에서 임의로 ktj·dev를 고치지 않는다.
 - 지금 채택 후보: MPPI `prune_distance` 1.7 → 2.5 (0.42 → 0.58 m/s, 안전 지표 변화 없음).
 
 ### push 전 점검

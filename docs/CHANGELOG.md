@@ -10,6 +10,14 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (82) 컴퓨터 이름 정리: 메인 PC(노트북)·서브 PC 둘뿐, "학원 PC" 표현 삭제
+
+**할 일**
+- 없음
+
+**변경**
+- `CLAUDE.md`, `docs/PROJECT.md` 3·4·6절, `docs/lab/requests.md` 머리: "학원 PC/학원 컴퓨터/노트북"을 **메인 PC**(이 노트북 `kim-laptop`)로 통일. ktj 반영도 메인 PC 몫. 서브 PC는 `automaton-desk`. 그동안 변경 기록 "할 일"에 적은 "학원 PC 몫"은 모두 메인 PC 몫
+
 ## 2026-10-14 (81) `nav_recorder` 순찰(NavigateThroughPoses) 기록, 사람 접근 속도 열, DDS 공유 메모리 잠금 정리
 
 **할 일**
