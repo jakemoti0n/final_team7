@@ -10,6 +10,20 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (95) ToF 점군을 local costmap에(카메라 0°의 낮은 장애물 약점 해소), 돌아가기 시뮬 확인
+
+**할 일**
+- pull 후 빌드 불필요(yaml·셸). 서브 PC: 상자·복도 벤치에 ToF 표시가 들어가므로 R5 재확인은 pull 뒤에
+
+**변경**
+- `nav2_params.yaml` local costmap STVL `tof_mark` 관측원(`/tof/points`, 마킹만, 2.0 m, 바닥 0.03 m 거름). 상자 3회 12/12·접촉 0(전 11/12·64.8 s 접촉). KNOWN_ISSUES "0° 낮은 장애물" 내림, TROUBLESHOOTING에 기록
+- 돌아가기(93) 시뮬 확인: 비켜 주는 사람 복도 2회에서 `로봇에 막혀 … 돌아감` 3번, 서로 기다림 0, 충돌 0. 1회 목표 코앞 정체(미재현, KNOWN_ISSUES)
+- `experiments/2026-10-14_planner_compare/stop_run.sh`: `sim_ctl.sh start` 셸도 끝냄(남아서 launch를 두 벌 띄우던 문제, TROUBLESHOOTING)
+- `experiments/2026-10-14_tof_costmap/` 기록
+
+**확인**
+- 상자 tof0 ×3 12/12, 복도 diag 3/3(31.0·26.5·35.4 s)
+
 ## 2026-10-14 (94) R5 Q6 ②: 사람 때문에 기다리는 동안 경로 계획이 실패해도 목표를 끝내지 않음. 복도 재확인은 1/3이라 트리는 꺼 둠
 
 **할 일**

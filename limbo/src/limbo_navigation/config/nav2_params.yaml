@@ -266,7 +266,7 @@ local_costmap:
         # Observation Sources
         # ==================================================
 
-        observation_sources: "mid360_mark mid360_clear rgbd_mark rgbd_clear"
+        observation_sources: "mid360_mark mid360_clear rgbd_mark rgbd_clear tof_mark"
 
 
         # ==================================================
@@ -356,6 +356,38 @@ local_costmap:
 
           min_obstacle_height: 0.02
           max_obstacle_height: 1.00   # v14 높이 0.95 m + 여유 (이전 모델은 0.80)
+
+          expected_update_rate: 0.0
+          observation_persistence: 0.0
+
+          inf_is_valid: false
+
+          filter: "voxel"
+
+          voxel_min_points: 0
+
+          clear_after_reading: true
+
+
+        # ==================================================
+        # ToF MARK (범퍼 높이 0.10 m, 8x8 63°, 4 m)
+        # 카메라(0.7 m·0°)는 30 cm 상자 윗면을 0.78 m 안에서 놓쳐 STVL이 지우면 로봇이 파고든다
+        # (2026-10-14 상자 벤치 접촉 64.8 s). 코앞 낮은 장애물은 ToF가 계속 표시한다. 지우기는 안 함(시간 감쇠로)
+        # ==================================================
+
+        tof_mark:
+
+          data_type: PointCloud2
+
+          topic: /tof/points
+
+          marking: true
+          clearing: false
+
+          obstacle_range: 2.0         # 8x8라 멀면 점이 성기다. 코앞용
+
+          min_obstacle_height: 0.03   # 바닥 반사 거름 (tof.yaml과 같음)
+          max_obstacle_height: 1.00
 
           expected_update_rate: 0.0
           observation_persistence: 0.0

@@ -207,6 +207,18 @@
 - **해결**: slam 전용 lifecycle manager에 `bond_timeout: 0.0`(lifecycle 전이는 그대로, 감시만 끔). 포즈그래프는 설치 폴더에 복사(`experiments/2026-10-14_localization_compare/run.sh`가 함). 지도 작성 모드는 Nav2가 slam_toolbox의 작은 지도로는 멀리 못 가서(목표가 지도 밖 → 0초 포기) 정적 지도를 `/map`으로 따로 띄우고 slam 지도는 `/slam_map`으로
 - **확인**: 고친 뒤 slam 복도·홀 1번에 시작, 완주. 비교 결과는 `experiments/2026-10-14_localization_compare/`
 
+### 카메라 0°에서 30 cm 상자에 붙어 64.8 s 정체 → ToF 점군을 local costmap에 — 2026-10-14
+- **증상**: 카메라 0.7 m·0° 채택 뒤 상자 벤치 12구간 중 1회, 홀로 돌아오는 구간에서 30 cm 상자(-4.69, 1.88)에 붙은 채 `Failed to make progress` 6번·복구 7, 90 s 중단. 다른 구간도 0.11 m까지 접근
+- **원인**: 0° 카메라(세로 시야 ±27°)는 30 cm 상자 윗면이 0.78 m 안에서 시야를 벗어난다(15°는 0.44 m). local STVL `voxel_decay` 1 s 뒤 지워지면 MPPI가 그 자리로 간다. 라이다는 높이 띠라 30 cm를 못 본다
+- **해결**: `/tof/points`(범퍼 높이 0.10 m, 8×8 63°)를 local costmap STVL `tof_mark` 관측원으로(마킹만, obstacle_range 2.0, min_obstacle_height 0.03으로 바닥 거름). 설계상 코앞 낮은 장애물은 ToF 몫
+- **확인**: 상자 3회 12/12, 접촉 0, 진전 없음 경고 0 (전 11/12, 64.8 s). `experiments/2026-10-14_tof_costmap/`
+
+### 실행 스크립트를 멈춘 뒤 launch가 두 벌 뜸 — 2026-10-14
+- **증상**: 실험 스크립트를 PID로 끝내고 `sim_ctl.sh stop` 뒤 새로 띄웠는데 `ros2 launch`·`gz sim`이 두 벌(부모가 다른 `sim_ctl.sh start` 둘). ToF 토픽 "published yet 아님", 결과 섞임
+- **원인**: `stop_run.sh`가 `run.sh`·`trial.sh` 셸만 끝내고 **`sim_ctl.sh start` 셸은 남김**. start는 "실패하면 최대 3번 다시 띄움"이라 stop이 launch를 죽이자 살아남은 start가 다시 launch를 띄웠다
+- **해결**: `stop_run.sh`의 awk에 `sim_ctl.sh start` 셸 추가(`$3 ~ /sim_ctl\.sh$/ && $4=="start"`). 순서는 셸 먼저, 그다음 `sim_ctl.sh stop`
+- **확인**: 정리 뒤 `ps`에 launch·gz 0, 재시작 뒤 한 벌
+
 ## 인지(person_detector)
 
 ### person_detector가 CPU를 8코어(775%)나 씀 — 2026-10-02
