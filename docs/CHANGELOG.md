@@ -10,6 +10,19 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (58) ktj 점검 3: 학원 2층 시연 순찰 완주 확인 (전역 STVL 3초로 첫 완주)
+
+**할 일**
+- 없음. ktj 점검 1(문서)·2(네모 화면)·3(학원 2층)이 끝남. 관제 일시정지·재개 확인은 학원 PC 몫
+
+**변경**
+- `tools/demo_patrol.sh`: 주석 한 줄. 백그라운드로 띄우면 launch가 SIGINT를 무시해 Ctrl+C 방식으로는 안 내려가니 `kill -TERM`으로
+
+**확인**
+- `tools/demo_patrol.sh` 기본값(`aischool_2f`, `aischool_waypoints.yaml`)으로 1회: "Patrol mission completed". A→B→C→D 82 s, D 5초 정지, E→F→G 69 s, 복구 0. 띄운 뒤 준비까지 약 2분
+- 위쪽 복도에서 전역 계획기가 한 번 계획 실패를 냈지만 다음 주기에 다시 계획해 통과. 복구 동작 없음
+- 시연 스크립트는 `record`를 켜지 않아 nav_recorder 수치(사람 거리 등)는 없음. 시연 용도라 그대로 둠
+
 ## 2026-10-14 (57) 전역 costmap STVL 기억 15 → 3초 채택
 
 **할 일**

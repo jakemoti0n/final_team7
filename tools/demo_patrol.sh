@@ -11,7 +11,7 @@ export __NV_PRIME_RENDER_OFFLOAD=${__NV_PRIME_RENDER_OFFLOAD:-1} __GLX_VENDOR_LI
 [ -n "$XAUTHORITY" ] || export XAUTHORITY=/run/user/$(id -u)/gdm/Xauthority
 cd ~/limbo/limbo
 ros2 launch limbo_bringup start_simulation.launch.py world:=$WORLD map:=$MAP gui:=${GUI:-true} > /tmp/demo_sim.log 2>&1 &
-LAUNCH=$!; echo $LAUNCH > /tmp/demo_sim.pid    # 다른 터미널에서 내리려면 kill -INT $(cat /tmp/demo_sim.pid)
+LAUNCH=$!; echo $LAUNCH > /tmp/demo_sim.pid    # 다른 터미널에서 내리려면 kill -INT $(cat /tmp/demo_sim.pid). 이 스크립트를 백그라운드로 띄웠으면 launch가 INT를 무시하니 kill -TERM
 trap 'echo; echo "끝내는 중"; kill -INT $LAUNCH 2>/dev/null; wait $LAUNCH 2>/dev/null; exit' INT TERM
 
 echo "시뮬레이션 띄우는 중 ($WORLD). 로그: /tmp/demo_sim.log"
