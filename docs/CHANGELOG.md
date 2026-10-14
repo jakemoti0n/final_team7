@@ -10,6 +10,15 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (68) 서브 PC 요청 R5: ToF 근접 센서 + 기다리기 조건 입력(카메라 기억 + ToF)
+
+**할 일**
+- 서브 PC: 지시서대로. 노트북은 소셜 포스 사람(PROJECT 다음 4번) 시작
+
+**변경**
+- `docs/lab/requests.md` R5·R4 답, `experiments/orders/2026-10-14_sub_tof_wait.md`: 실물 ToF 결정(VL53L5CX 1개, 범퍼 높이 10 cm 전면 수평, 젯슨 오린 나노 I2C 직결)에 맞춘 시뮬레이션 센서(gpu_lidar 8×8, 63°)와 노드 인터페이스(`/tof/obstacle_ahead` Bool 연속 3프레임 확정, `/tof/nearest`), `IsPersonAhead` 조건을 "최근 5 s 카메라가 0.8~3 m에서 다가오는 사람을 봤음 AND ToF 0.3 m 안 물체"로. 받아들이는 기준은 R4와 같되 상자 앞 기다림 0
+- `docs/PROJECT.md` 8절 3번: R4 결과와 R5 방향
+
 ## 2026-10-14 (67) 카메라 높이·피치 비교(0.5 m 수평 vs 0.7 m 12·15·18°): 네 조건 같음, URDF·launch에 카메라 인자
 
 **할 일**
