@@ -52,6 +52,7 @@
 > - 기존 `ClearLocalCostmap` 문맥 복구는 이 RecoveryNode의 복구 자식을 `Fallback(WaitWhileBlocked, 기존 Sequence)`로 두면 유지됨
 > - **R6도 같은 자리**: 복구 자식을 `Fallback(PullOverAndWait(IsPersonOncoming), WaitWhileBlocked)`로 확장. 그러니 R5는 이 구조로 켜고, R6은 그 Fallback에 한 가지를 더하는 일이 된다
 > - 시험: 소셜 포스 손님(`hall`)에서 "손님 앞 정지 → 손님이 떠난 뒤 재개"가 로그(`WaitWhileBlocked`)와 `stopped_near_person_s`로 보이면 통과. 돌아서 지나가면 안 됨
+> - 참고(14:55): `tof_node`가 launch 종료 때 `rclpy.spin`에서 Traceback을 내며 죽는다(주행엔 영향 없음). `except (KeyboardInterrupt, ExternalShutdownException)`로 감싸면 됨(`nav_recorder.py` main 참고)
 
 R4 Q1의 답: **(다) + ToF**. 실물에 VL53L5CX(8×8, 63°, 4 m) 하나를 범퍼 높이 10 cm 전면 수평으로 달아 젯슨 오린 나노 I2C에 직결하기로 함. 시뮬레이션 센서·노드(`/tof/obstacle_ahead` Bool, `/tof/nearest`)를 만들고, 조건 노드를 "최근 5 s 안 카메라가 0.8~3 m에서 다가오는 사람을 봤음 AND 지금 ToF 0.3 m 안 물체"로 바꿔 한 명 복도·상자 구간으로 시험. 통과하면 켠 채로 커밋.
 

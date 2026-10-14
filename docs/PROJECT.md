@@ -253,7 +253,7 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 2. **비켜선 뒤 기다리기 (R6, 서브 PC, R5 뒤)**: `IsPersonOncoming`(1.5~4 m 진로 위 다가옴) + `ComputePullOverPose`(costmap으로 비울 쪽) + BT. 시험: `run_scenarios.sh` no_yield.
 3. **소셜 포스 사람 다듬기 (노트북)**: ~~눈으로 확인~~(10-14 끝, 사용자 "95 % 리얼"), ~~`nav_recorder` 순찰 지원·사람 접근 속도 열~~(10-14 끝, `action`·`person_approach_speed_mps`·`robot_speed_at_min_mps`). 남은 것: 힘 숫자의 근거(실물 관찰), 걷는 애니메이션 속도.
 4. **실물 준비**: 카메라 마운트 0.70 m·15° 실측(기울인 깊이 카메라는 1° 오차에 3 m 앞 바닥이 5 cm 떠 보임), ToF(VL53L5CX, 범퍼 높이 10 cm, 젯슨 I2C) 드라이버, 하반신 모델이 오면 `run_angles.sh`로 1.5 m 안 검출 재측정.
-5. 그 뒤: 속도 설정(0.6 vs 0.75, `prune_distance` 2.5)을 사람 있는 조건에서 재비교, 경로 계획기 비교(NavFn·Smac 2D·Theta*).
+5. ~~속도 설정 재비교~~(10-14 끝: 사람 있는 조건에서도 B `prune_distance` 2.5가 충돌 0·사람 거리 동일에 시간 22~27 % 단축, C 0.75는 MPPI 경고 9배라 보류, `experiments/2026-10-14_speed_social/`) → **B 채택 여부 결정 대기**. 그 뒤 경로 계획기 비교(NavFn·Smac 2D·Theta*).
 
 ### 10-14에 끝낸 것 (근거는 experiments/ 와 변경 기록 56~75)
 
