@@ -49,6 +49,14 @@ MAX_SPEED_RATIO = 1.3    # 원하는 속도의 몇 배까지 허용
 GOAL_REACHED = 0.3       # m, 이 안이면 다음 waypoint
 APPROACH_DISTANCE = 3.0  # m, approach형이 로봇을 알아보는 거리
 STOP_DISTANCE = 0.8      # m, approach형이 로봇 앞에서 멈추는 거리 (중심 사이)
+# 돌아가기: 로봇이 멈춰 길을 막으면 목표 힘(앞으로)과 로봇 반발(뒤로)이 상쇄돼 yield 사람도 로봇 앞에 서 버린다(소셜 포스 국소 최소점).
+# 그러면 로봇은 "1 m 안에 1 s 넘게 선 사람 = 손님"으로 보고 기다려 서로 기다린다 (2026-10-14 서브 PC 회귀, 60 s). 실제 사람은 옆으로 돌아간다
+SIDESTEP_AHEAD = 1.5     # m, 로봇이 이 거리 안
+SIDESTEP_ANGLE = math.radians(35)   # 목표 방향에서 이 각 안에 로봇이 있으면 "정면을 막음"
+STUCK_SPEED = 0.2        # m/s, 이보다 느리게
+STUCK_TIME = 1.0         # s, 이 시간 넘게 막혀 있으면 돌아가기 시작
+SIDESTEP_FORCE = 3.0     # m/s², 옆으로 미는 힘 (로봇 반발·벽 힘을 이길 만큼)
+SIDESTEP_PROBE = 0.8     # m, 어느 쪽 벽 여유가 큰지 재는 거리
 
 
 class Loop:
@@ -126,6 +134,8 @@ class Person:
         self.goal_index = 1 if len(self.waypoints) > 1 else 0
         self.waiting_until = None    # approach형이 로봇 앞에 멈춘 뒤 떠나는 시각
         self.served = False          # 한 로봇 방문에 한 번만 다가간다
+        self.blocked_since = None    # yield형이 로봇 정면에 막혀 느려진 시각
+        self.sidestep = None         # 돌아가는 중이면 옆 방향 단위 벡터
 
     def goal(self, robot, t):
         """지금 향할 점. approach형은 로봇이 가까우면 로봇이 목표"""
@@ -155,6 +165,7 @@ class Person:
             ax, ay = self._add_repulsion(ax, ay, (p.x, p.y), PERSON_RADIUS + PERSON_RADIUS, PERSON_FORCE)
         if robot is not None and self.type == 'yield':
             ax, ay = self._add_repulsion(ax, ay, robot, PERSON_RADIUS + ROBOT_RADIUS, ROBOT_FORCE)
+            ax, ay = self._add_sidestep(ax, ay, goal, robot, walls, t)
         if walls is not None:
             d, (nx, ny) = walls.nearest(self.x, self.y)
             f = exp_force(WALL_FORCE, d - PERSON_RADIUS)
@@ -185,6 +196,35 @@ class Person:
             return -self.vx / RELAX_TIME, -self.vy / RELAX_TIME
         return ((self.speed * dx / d - self.vx) / RELAX_TIME,
                 (self.speed * dy / d - self.vy) / RELAX_TIME)
+
+    def _add_sidestep(self, ax, ay, goal, robot, walls, t):
+        """로봇이 정면을 막아 STUCK_TIME 넘게 느려지면 벽 여유가 큰 쪽으로 옆 힘을 더한다. 로봇을 지나치면 끝"""
+        dx, dy = robot[0] - self.x, robot[1] - self.y
+        d = math.hypot(dx, dy)
+        gx, gy = goal[0] - self.x, goal[1] - self.y
+        g = math.hypot(gx, gy)
+        if d < 1e-6 or g < 1e-6:
+            return ax, ay
+        toward = (dx * gx + dy * gy) / (d * g)        # 목표 방향과 로봇 방향의 cos
+        ahead = d < SIDESTEP_AHEAD and toward > math.cos(SIDESTEP_ANGLE)
+        if self.sidestep is None:
+            if ahead and math.hypot(self.vx, self.vy) < STUCK_SPEED:
+                if self.blocked_since is None:
+                    self.blocked_since = t
+                elif t - self.blocked_since > STUCK_TIME:
+                    lx, ly = -dy / d, dx / d                   # 로봇 방향의 왼쪽
+                    left = walls.nearest(self.x + lx * SIDESTEP_PROBE, self.y + ly * SIDESTEP_PROBE)[0] if walls else 1.0
+                    right = walls.nearest(self.x - lx * SIDESTEP_PROBE, self.y - ly * SIDESTEP_PROBE)[0] if walls else 1.0
+                    self.sidestep = (lx, ly) if left >= right else (-lx, -ly)
+                    self.blocked_since = None
+                    print(f'{self.name}: 로봇에 막혀 {"왼쪽" if left >= right else "오른쪽"}으로 돌아감 (t={t:.1f})', flush=True)
+            else:
+                self.blocked_since = None
+            return ax, ay
+        if toward < 0.0 or d > SIDESTEP_AHEAD + 1.0:   # 로봇이 뒤로 갔거나 멀어짐
+            self.sidestep = None
+            return ax, ay
+        return ax + SIDESTEP_FORCE * self.sidestep[0], ay + SIDESTEP_FORCE * self.sidestep[1]
 
     def _add_repulsion(self, ax, ay, other, radii, params):
         dx, dy = self.x - other[0], self.y - other[1]
