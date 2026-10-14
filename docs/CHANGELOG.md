@@ -10,6 +10,17 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (107) R6 비켜서 기다리기 설계 (구현 전)
+
+**할 일**
+- 없음 (문서만)
+
+**변경**
+- `docs/lab/reports.md` R6 설계·Q12: 판단은 지금 `IsPersonApproaching`, 새 동작 노드 `ComputePullOverPose`(local costmap으로 옆 0.5·0.4·0.3 m·앞 0.3 m 후보 중 외곽이 inscribed 미만이고 벽에서 반폭+0.1 m 이상인 자리, 한 사람에 한 번), R5 트리 `WaitForPerson` 맨 앞에 "비켜서기 한 번" 단계. 자리가 없으면 지금처럼 그 자리 정지
+
+**확인**
+- 없음 (설계)
+
 ## 2026-10-14 (106) 네모 10명 AMCL vs slam(AMCL 유지 확정), 복도 코앞 정체 미재현, nav_route 수락 대기 제한
 
 **할 일**
