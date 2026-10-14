@@ -120,6 +120,41 @@
   </gazebo>
 
   <!-- ================================ -->
+  <!-- ToF 근접 센서 (VL53L5CX)          -->
+  <!-- ================================ -->
+  <!-- 실물: 8x8 구역, 대각 63° → 가로·세로 각 63°로 근사, 0.02~4 m, 10 Hz. 구역 하나를 광선 하나로 본다 -->
+  <gazebo reference="tof_link">
+    <sensor name="tof_sensor" type="gpu_lidar">
+      <topic>tof</topic>
+      <gz_frame_id>tof_link</gz_frame_id>
+      <update_rate>10</update_rate>
+      <lidar>
+        <scan>
+          <horizontal>
+            <samples>8</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.5497787144</min_angle>
+            <max_angle>0.5497787144</max_angle>
+          </horizontal>
+          <vertical>
+            <samples>8</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.5497787144</min_angle>
+            <max_angle>0.5497787144</max_angle>
+          </vertical>
+        </scan>
+        <range>
+          <min>0.02</min>
+          <max>4.0</max>
+          <resolution>0.001</resolution>
+        </range>
+      </lidar>
+      <always_on>true</always_on>
+      <visualize>false</visualize>
+    </sensor>
+  </gazebo>
+
+  <!-- ================================ -->
   <!-- MID-360 내장 IMU                  -->
   <!-- ================================ -->
 

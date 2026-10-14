@@ -4,6 +4,8 @@ from launch.actions import (
     IncludeLaunchDescription,
     TimerAction,
     AppendEnvironmentVariable,
+    ExecuteProcess,
+    OpaqueFunction,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
@@ -65,7 +67,13 @@ def generate_launch_description():
         gz_resource_path
     )
 
-    # 카메라 높이·피치 (limbo.urdf.xacro의 xacro:arg). 기본값은 URDF와 같다
+    # 시스템 플러그인(plugins/actor_pose_control.cpp → lib/libactor_pose_control.so)을 월드 SDF에서 찾게 한다
+    set_gz_plugin_path = AppendEnvironmentVariable(
+        "GZ_SIM_SYSTEM_PLUGIN_PATH",
+        os.path.join(get_package_prefix("limbo_simulation"), "lib")
+    )
+
+    # 카메라 높이·피치는 센서 배치 실험용 (limbo.urdf.xacro의 xacro:arg). 기본값은 URDF와 같다
     xacro_args = [
         " camera_z:=", LaunchConfiguration("camera_z"),
         " camera_pitch_deg:=", LaunchConfiguration("camera_pitch_deg"),
@@ -75,7 +83,7 @@ def generate_launch_description():
         value_type=str,
     )
     camera_z_arg = DeclareLaunchArgument("camera_z", default_value="0.70")
-    camera_pitch_arg = DeclareLaunchArgument("camera_pitch_deg", default_value="15")
+    camera_pitch_arg = DeclareLaunchArgument("camera_pitch_deg", default_value="0")
 
     world_arg = DeclareLaunchArgument(
         "world",
@@ -154,6 +162,17 @@ def generate_launch_description():
         ],
     )
 
+    def start_movers(context):
+        """worlds/<world>_movers.json이 있으면 그 물체들(예: rift 미니언)을 움직이는 스크립트를 띄운다"""
+        world = LaunchConfiguration("world").perform(context)
+        movers = os.path.join(simulation_pkg, "worlds", f"{world}_movers.json")
+        if not os.path.exists(movers):
+            return []
+        return [ExecuteProcess(
+            cmd=["python3", os.path.join(simulation_pkg, "scripts", "moving_obstacles.py"), movers],
+            output="screen",
+        )]
+
     return LaunchDescription([
         world_arg,
         robot_arg,
@@ -162,8 +181,10 @@ def generate_launch_description():
         camera_pitch_arg,
         set_gz_resource_path,
         bookstore_resource_path,
+        set_gz_plugin_path,
         gz_sim,
         robot_state_publisher,
         bridge,
         spawn_robot,
+        OpaqueFunction(function=start_movers),
     ])  

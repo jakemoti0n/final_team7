@@ -113,13 +113,16 @@ def create_waypoint(
 
 
 def wait_for_localization(navigator, timeout_sec=30.0):
-    """AMCL pose와 TF를 기다리되 초기 위치를 다시 발행하지 않는다."""
+    """map -> base_footprint TF를 기다리되 초기 위치를 다시 발행하지 않는다.
+
+    AMCL은 위치를 잡아야 map -> odom TF를 내므로 TF가 있으면 준비된 것이다. /amcl_pose까지 요구하면
+    slam_toolbox(위치 추정·지도 작성 모드)처럼 AMCL이 없는 구성에서 순찰을 못 시작한다 (2026-10-14).
+    """
     tf_buffer = Buffer()
     tf_listener = TransformListener(tf_buffer, navigator)
     deadline = time.monotonic() + timeout_sec
     while time.monotonic() < deadline:
-        if (navigator.initial_pose_received and
-                tf_buffer.can_transform('map', 'base_footprint', Time())):
+        if tf_buffer.can_transform('map', 'base_footprint', Time()):
             return
         rclpy.spin_once(navigator, timeout_sec=0.2)
     raise TimeoutError(
@@ -154,9 +157,10 @@ class PatrolControl(Node):
         self.create_service(Trigger, '/patrol/resume', self.on_resume)
         self.publish('starting')
 
-    def set(self, state, reason, index=None, resumable=None):
+    def set(self, state, reason, index=None, resumable=None, force=False):
+        """상태·다음 waypoint가 바뀌면 알린다. force면 같아도 알린다(사유만 바뀐 경우)."""
         with self.lock:
-            changed = (state != self.state or
+            changed = (force or state != self.state or
                        (index is not None and index != self.index))
             self.state = state
             if index is not None:
@@ -209,7 +213,7 @@ class PatrolControl(Node):
             response.success, response.message = False, 'nothing to resume'
         return response
 
-    def start_navigating(self, index):
+    def start_navigating(self, index, reason='navigating'):
         """새 구간 주행을 보낸 직후 호출한다.
 
         그 사이에 정지 요청이 들어와 이미 pausing이면 patrolling으로 되돌리지 않는다.
@@ -219,7 +223,7 @@ class PatrolControl(Node):
             if self.pause_requested:
                 self.index = index
                 return
-        self.set(PatrolState.PATROLLING, 'navigating', index=index, resumable=True)
+        self.set(PatrolState.PATROLLING, reason, index=index, resumable=True)
 
     def take_pause_request(self):
         with self.lock:
@@ -227,10 +231,10 @@ class PatrolControl(Node):
         return requested
 
 
-def wait_while_paused(control, index):
+def wait_while_paused(control, index, reason='paused by request'):
     """정지 상태로 바꾸고 재개 요청이 올 때까지 기다린다."""
     control.resume_requested.clear()
-    control.set(PatrolState.PAUSED, 'paused by request', index=index, resumable=True)
+    control.set(PatrolState.PAUSED, reason, index=index, resumable=True)
     while not control.resume_requested.wait(timeout=0.2):
         if not rclpy.ok():
             return False
@@ -247,9 +251,34 @@ def spin_control(executor):
 
 
 
-def patrol(navigator, control, waypoint_configs):
-    """위치 추정·Nav2 준비를 기다린 뒤 waypoint를 끝까지 돈다."""
+def segment_order(segments, loop):
+    """(바퀴, 구간) 순서. loop면 마지막 구간 뒤에 첫 구간부터 다시 돈다 (멈추는 건 일시정지로만)."""
+    lap = 1
+    while True:
+        for segment in segments:
+            yield lap, segment
+        if not loop:
+            return
+        lap += 1
 
+
+def wait_before_retry(control, delay_sec):
+    """다시 보내기 전에 기다린다. 그 사이 정지 요청이 오면 True (남은 대기는 버린다)."""
+    deadline = time.monotonic() + delay_sec
+    while time.monotonic() < deadline:
+        if control.take_pause_request():
+            return True
+        time.sleep(0.1)
+    return False
+
+
+def patrol(navigator, control, waypoint_configs, loop=False, retries=2, retry_delay_sec=3.0):
+    """위치 추정·Nav2 준비를 기다린 뒤 waypoint를 끝까지 돈다. loop면 계속 반복한다.
+
+    이동이 실패하면 retry_delay_sec 기다렸다 남은 지점으로 retries번까지 다시 보낸다.
+    그래도 안 되면 순찰을 끝내지 않고 paused(사유 navigation failed)로 사람의 재개를 기다린다
+    (docs/CONTROL_SCREEN.md A 4단계).
+    """
     print('Waiting for AMCL pose and TF...')
     try:
         wait_for_localization(navigator)
@@ -286,12 +315,21 @@ def patrol(navigator, control, waypoint_configs):
 
     mission_succeeded = True
     failure_reason = ''
+    count = len(waypoint_configs)
 
-    for segment in segments:
+    for lap, segment in segment_order(segments, loop):
+
+        # 이 구간 다음 waypoint 번호. 반복하면 마지막 다음은 첫 번째
+        after = (segment[-1] + 1) % count if loop else segment[-1] + 1
+        reason = 'navigating'
+        if lap > 1 and segment is segments[0]:
+            print(f'Lap {lap} started')
+            reason = f'lap {lap} started'
 
         # 이번 구간에서 아직 지나지 않은 waypoint 번호
         remaining = list(segment)
         stop_config = waypoint_configs[segment[-1]]
+        failures = 0
 
         while remaining:
 
@@ -319,7 +357,8 @@ def patrol(navigator, control, waypoint_configs):
                 mission_succeeded = False
                 break
 
-            control.start_navigating(remaining[0])
+            control.start_navigating(remaining[0], reason)
+            reason = 'navigating'
 
             # 주행 완료까지 기다린다. 정지 요청이 오면 주행을 취소한다.
             pausing = False
@@ -351,6 +390,7 @@ def patrol(navigator, control, waypoint_configs):
 
                 print(f"Arrived at {stop_config['name']}")
                 remaining = []
+                failures = 0
 
             elif result == TaskResult.CANCELED and pausing:
 
@@ -366,10 +406,28 @@ def patrol(navigator, control, waypoint_configs):
 
             elif result == TaskResult.FAILED:
 
-                print('Navigation failed')
-                failure_reason = 'Navigation failed'
-                mission_succeeded = False
-                break
+                # 이미 지난 waypoint로 되돌아가지 않게 남은 것만 다시 보낸다
+                remaining = remaining[-poses_left:]
+                failures += 1
+
+                if pausing:
+                    pass  # 실패와 정지 요청이 겹치면 정지 요청대로 멈춘다
+
+                elif failures <= retries:
+                    retry = f'retry {failures}/{retries}'
+                    print(f'Navigation failed, {retry} in {retry_delay_sec:g} s')
+                    control.set(PatrolState.PATROLLING, f'navigation failed, {retry}',
+                                index=remaining[0], force=True)
+                    pausing = wait_before_retry(control, retry_delay_sec)
+
+                else:
+                    # 혼자 계속 들이받지 않는다. 사람이 확인하고 재개하면 남은 지점부터 다시 간다
+                    print('Navigation failed, waiting for resume')
+                    if not wait_while_paused(control, remaining[0], 'navigation failed'):
+                        mission_succeeded = False
+                        failure_reason = 'shutdown while paused'
+                        break
+                    failures = 0
 
             else:
                 print(f'Navigation {result}')
@@ -378,11 +436,12 @@ def patrol(navigator, control, waypoint_configs):
                 break
 
             if pausing:
-                next_index = remaining[0] if remaining else segment[-1] + 1
+                next_index = remaining[0] if remaining else after
                 if not wait_while_paused(control, next_index):
                     mission_succeeded = False
                     failure_reason = 'shutdown while paused'
                     break
+                failures = 0  # 사람이 재개했으니 다시 시도 횟수는 처음부터
                 # stop 지점에 도착한 뒤 정지했다면 대기 없이 다음 구간으로 간다
                 if not remaining:
                     stop_config = dict(stop_config, wait_sec=0)
@@ -403,7 +462,7 @@ def patrol(navigator, control, waypoint_configs):
             deadline = time.monotonic() + wait_sec
             while time.monotonic() < deadline:
                 if control.take_pause_request():
-                    if not wait_while_paused(control, segment[-1] + 1):
+                    if not wait_while_paused(control, after):
                         mission_succeeded = False
                         failure_reason = 'shutdown while paused'
                     break
@@ -433,7 +492,11 @@ def main(args=None):
 
     # 파일 이름이 틀렸으면 Nav2를 기다리기 전에 바로 알 수 있게 먼저 읽는다
     waypoints_name = navigator.declare_parameter('waypoints', DEFAULT_WAYPOINTS).value
-    print(f'Waypoints: {waypoints_name}')
+    loop = navigator.declare_parameter('loop', False).value
+    # 이동 실패 시 다시 보내는 횟수와 그 전 대기. 3초는 TF 시각 오류가 풀리고 사람이 지나갈 시간
+    retries = navigator.declare_parameter('retries', 2).value
+    retry_delay_sec = navigator.declare_parameter('retry_delay_sec', 3.0).value
+    print(f'Waypoints: {waypoints_name}' + (' (loop)' if loop else ''))
     waypoint_configs = load_waypoints(waypoints_name)
 
     if not waypoint_configs or waypoint_configs[-1]['type'] != 'stop':
@@ -447,7 +510,8 @@ def main(args=None):
 
     ready = True
     try:
-        ready = patrol(navigator, control, waypoint_configs) is not False
+        ready = patrol(navigator, control, waypoint_configs,
+                       loop, retries, retry_delay_sec) is not False
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:

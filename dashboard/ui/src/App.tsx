@@ -67,6 +67,13 @@ function Controls({ demo, live, view, delta }: { demo: MockProvider | null; live
 }
 const patrolLabels: Record<string, string> = { waiting_localization: '위치 확인 중', patrolling: '순찰 중', pausing: '멈추는 중', paused: '일시정지', completed: '순찰 완료', failed: '순찰 실패' }
 const patrolTones: Record<string, Tone> = { patrolling: 'good', pausing: 'warn', paused: 'warn', failed: 'bad' }
+/** 순찰 노드가 이동 실패를 사유로 알린 경우 (상태는 그대로 patrolling·paused, docs/CONTROL_SCREEN.md A 4단계 A안) */
+export function patrolLabel(state: string, reason: string): { label: string; tone: Tone; note: string } {
+  const retry = /^navigation failed, retry (\d+\/\d+)$/.exec(reason)
+  if (state === 'patrolling' && retry) return { label: `순찰 중 · 이동 다시 시도 (${retry[1]})`, tone: 'warn', note: '이동이 막혀 잠시 뒤 다시 갑니다.' }
+  if (state === 'paused' && reason === 'navigation failed') return { label: '이동 실패 · 확인 후 재개', tone: 'warn', note: '여러 번 다시 가 봐도 막혀서 멈췄습니다. 주변을 확인한 뒤 재개를 눌러 주세요.' }
+  return { label: patrolLabels[state] ?? state, tone: patrolTones[state] ?? 'neutral', note: '' }
+}
 function PatrolCard({ view }: { view: View }) {
   const patrol = view.serverProblem ? null : view.snapshot?.patrol
   const state = patrol?.state
@@ -74,8 +81,9 @@ function PatrolCard({ view }: { view: View }) {
   const target = !patrol || !state ? '' : state === 'completed' ? `${patrol.waypoint_count}개 지점 모두 지남` : `다음 목표 ${patrol.waypoint_name || '—'} (${Math.min(patrol.waypoint_index + 1, patrol.waypoint_count)}/${patrol.waypoint_count})`
   // 받은 적은 있는데 상태가 없음 = 순찰 노드가 꺼졌거나 모르는 상태 (Bridge가 발행자가 없으면 비움)
   const lost = !!patrol && !state && patrol.update_count > 0
-  return <Card title="순찰"><div className="movement patrol-state" role="status">{state ? <Badge status={state} tone={old ? 'neutral' : patrolTones[state] ?? 'neutral'}>{patrolLabels[state] ?? state}{old && ' (마지막 상태)'}</Badge> : lost ? <Badge status="lost" tone="warn">순찰 상태 확인 불가</Badge> : <Badge status="unknown">{view.serverProblem ? '현재 확인 불가' : '확인 전'}</Badge>}<span className="patrol-target">{target}</span></div>
-    <p className="muted">{!patrol ? '순찰 상태 수신 대기' : old ? '로봇과 연결이 원활하지 않아 지금 상태는 알 수 없습니다' : lost ? '순찰 프로그램이 꺼져 있거나 상태를 알 수 없습니다' : state === 'failed' && patrol.reason ? `사유: ${patrol.reason}` : `마지막 상태 변경 ${timeText(patrol.last_received_at)}`}</p></Card>
+  const shown = state ? patrolLabel(state, patrol!.reason) : null
+  return <Card title="순찰"><div className="movement patrol-state" role="status">{shown ? <Badge status={state!} tone={old ? 'neutral' : shown.tone}>{shown.label}{old && ' (마지막 상태)'}</Badge> : lost ? <Badge status="lost" tone="warn">순찰 상태 확인 불가</Badge> : <Badge status="unknown">{view.serverProblem ? '현재 확인 불가' : '확인 전'}</Badge>}<span className="patrol-target">{target}</span></div>
+    <p className="muted">{!patrol ? '순찰 상태 수신 대기' : old ? '로봇과 연결이 원활하지 않아 지금 상태는 알 수 없습니다' : lost ? '순찰 프로그램이 꺼져 있거나 상태를 알 수 없습니다' : state === 'failed' && patrol.reason ? `사유: ${patrol.reason}` : shown?.note ? shown.note : `마지막 상태 변경 ${timeText(patrol.last_received_at)}`}</p></Card>
 }
 const FOLLOW_SPAN_M = 10   // 로봇 따라가기: 로봇 중심 가로세로 10 m
 function MapCard({ map, view, delta }: { map: MapInfo | null; view: View; delta: number }) {

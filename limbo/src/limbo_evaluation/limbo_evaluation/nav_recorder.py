@@ -17,14 +17,15 @@ import time
 from action_msgs.msg import GoalStatus, GoalStatusArray
 from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
 from geometry_msgs.msg import PoseArray
-from limbo_evaluation import actors, csv_log, goal_metrics, obstacles
+from limbo_evaluation import actors, csv_log, goal_metrics, obstacles, walls
 from nav2_msgs.action import NavigateThroughPoses, NavigateToPose
-from nav_msgs.msg import Odometry, Path
+from nav_msgs.msg import OccupancyGrid, Odometry, Path
 from rcl_interfaces.msg import Log
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from rclpy.qos import qos_profile_action_status_default
+from rclpy.qos import DurabilityPolicy, qos_profile_action_status_default
+from rclpy.qos import QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from std_msgs.msg import Bool, String
 from tf2_ros import Buffer, TransformException, TransformListener
@@ -33,7 +34,7 @@ QUEUE = 10
 # TF는 정답보다 늦게 도착할 수 있어 TF 시각의 정답 위치와 비교한다. 그만큼 지난 정답을 들고 있는다
 TRUTH_HISTORY_SEC = 5.0
 MAX_TRUTH_GAP_SEC = 0.1   # 이보다 시각 차이가 큰 정답과는 비교하지 않는다
-# 시뮬레이션이 /sim/people(PoseArray)로 사람 위치를 주면 월드 SDF 시간표 대신 그것을 쓴다. 이보다 오래되면 안 쓴다
+# 소셜 포스로 움직이는 시뮬레이션 사람은 시간표가 없어 /sim/people로 위치를 받는다. 이보다 오래되면 안 쓴다
 LIVE_PEOPLE_MAX_AGE_SEC = 0.5
 FINISHED = {
     GoalStatus.STATUS_SUCCEEDED: 'SUCCEEDED',
@@ -62,6 +63,7 @@ class NavRecorder(Node):
         self.slipping = False
         self.live_people = None        # (시각, [(이름, x, y), ...]) — /sim/people이 오면 SDF 시간표 대신 쓴다
         self.live_people_names = []
+        self.wall_distance = None      # /map이 오면 지도 벽까지 거리 (경로가 벽에 붙는 정도)
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.csv_path = os.path.join(
@@ -84,6 +86,10 @@ class NavRecorder(Node):
         self.create_subscription(Path, self.plan_topic, self.plan_callback, QUEUE)
         self.create_subscription(PoseArray, '/sim/people', self.people_callback, QUEUE)
         self.create_subscription(String, '/sim/people_names', self.people_names_callback, QUEUE)
+        self.create_subscription(
+            OccupancyGrid, '/map', self.map_callback,
+            QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                       durability=DurabilityPolicy.TRANSIENT_LOCAL))
 
         self.get_logger().info(
             f'Nav recorder started: {len(self.trajectories)} people, '
@@ -144,6 +150,8 @@ class NavRecorder(Node):
             self.metrics.add_truth(t, x, y, name, distance, person_xy)
             name, distance = obstacles.nearest_box(self.boxes, x, y, yaw, self.robot_half_size)
             self.metrics.add_obstacle(dt, name, distance)
+            if self.wall_distance is not None:
+                self.metrics.add_wall_distance(self.wall_distance.at(x, y))
             self._add_localization_error()
 
     def _nearest_person(self, t, x, y):
@@ -165,6 +173,13 @@ class NavRecorder(Node):
         people = [(names[i] if i < len(names) else f'p{i}', p.position.x, p.position.y)
                   for i, p in enumerate(msg.poses)]
         self.live_people = (stamp_sec(msg.header.stamp), people)
+
+    def map_callback(self, msg):
+        info = msg.info
+        self.wall_distance = walls.WallDistance(
+            info.width, info.height, info.resolution,
+            info.origin.position.x, info.origin.position.y, msg.data)
+        self.get_logger().info('map received: wall distance ready')
 
     def people_names_callback(self, msg):
         self.live_people_names = msg.data.split(',') if msg.data else []

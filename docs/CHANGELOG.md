@@ -8,6 +8,25 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-14 (32) 저녁 채택분 반영: 사람이면 기다리기 BT, ToF costmap, 카메라 0°, MPPI 되돌이 처리, 순찰 반복·TF 출발, 관제 일시정지
+
+**할 일**
+- pull 후 `colcon build --packages-select limbo_navigation limbo_perception limbo_description limbo_patrol limbo_evaluation` (BT 조건 플러그인·ToF 노드·URDF·순찰)
+- 학원 2층 순찰을 한 번 돌려 A 지점 맴돎이 사라졌는지 확인
+
+**변경**
+- **사람이면 기다리기 BT 켬** (`nav2_params.yaml`의 `limbo_navigate_*_w_replanning_and_recovery.xml`): 진로 폭 띠(범퍼 앞 0~1.5 m, 좌우 0.55 m)에 다가오는 사람이면 정지·기다림, 코앞을 막은 사람(ToF 0.5 m)은 카메라 기억 래치로 유지, 떠나거나 1 s 비면 재개(상한 60 s). 경로 계획 실패도 사람 때문이면 기다림. 조건 노드 `IsPersonBlocking`(`limbo_navigation`), 판단 노드 `tof_node`(`limbo_perception`, `/tof/points` → `/tof/obstacle_ahead`·`/person_blocking`·`/person_approaching`)
+- **ToF 근접 센서**: URDF `tof_link`(범퍼 앞 0.25 m, 높이 0.10 m, 수평), 시뮬레이션 8×8 63° 4 m(`limbo.gazebo.xacro`, `bridge.yaml`). 점군을 local costmap STVL `tof_mark` 관측원으로도 넣음(0° 카메라가 0.78 m 안에서 놓치는 30 cm 상자, 상자 벤치 12/12·접촉 0)
+- **카메라 0.7 m·0°**(전 15°): 기울이면 비스듬히 다가오는 손님의 상체가 잘려 검출 19 % → 3 %. launch 인자 `camera_z`·`camera_pitch_deg`
+- **MPPI `enforce_path_inversion: true`**: 순찰 통과 지점에서 경로가 되돌아 꺾일 때 `prune_distance` 2.5가 그 앞 1.2 m 정체를 만들던 문제(A 지점 맴돎) 해결
+- 순찰 노드: `loop` 파라미터(끝없이 반복, `aischool_loop_waypoints.yaml`), 이동 실패 시 2번 재시도 뒤 paused로 사람의 재개 대기, `/amcl_pose` 없이 TF만으로 출발. 관제 화면 일시정지·재개(`dashboard`, `docs/CONTROL_SCREEN.md`)
+- `nav_recorder`: 순찰(`navigate_through_poses`) 지원, 벽 거리·사람 접근 속도·위치 추정 오차 열
+- `start_simulation.launch.py`: `localization:=amcl|slam|mapping` 인자(slam_toolbox 비교용, 기본 amcl), ToF 노드
+
+**확인**
+- 비켜 주는 사람 복도 3회 9/9(사람 앞 기다림 4~5 s, 60 s 정지 0), 손님 4/4, 상자 4/4. 사람 10명 네모 순찰 AMCL 3묶음 완주 145.7 s(위치 오차 0.035 m)
+- 열린 문제: ToF 시야 밖 코너의 30 cm 상자 정체 13회 중 1회, 복도 목표 코앞 정체 5회 중 1회 (`docs/KNOWN_ISSUES.md`)
+
 ## 2026-10-14 (31) 시뮬레이션에서 채택된 설정·코드 반영: 전역 STVL 3초, HumanLayer 치명 비용, prune_distance 2.5, 카메라 0.7 m 15°, nav_recorder 지표
 
 **할 일**

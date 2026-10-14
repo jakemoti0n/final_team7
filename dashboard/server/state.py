@@ -2,6 +2,7 @@
 from collections import deque
 from copy import deepcopy
 from datetime import datetime, timezone
+import re
 import time
 import uuid
 
@@ -45,6 +46,7 @@ class Store:
         self.active = {}
         self.revision = 0
         self.was_connected = False
+        self.patrol_seen = None      # 마지막으로 알림을 판단한 (상태, 사유)
         self.command = None          # 마지막 명령 하나 (다음 명령 전까지 유지)
         self.map_available = False   # 앱이 지도 파일을 읽으면 True
 
@@ -189,7 +191,31 @@ class Store:
             self.last_motion = self.payload["motion"].copy()
             self.last_motion_mono = self.received_mono
         self.check_confirmation()
+        self.check_patrol()
         return {**reply, "accepted": True, "server_received_at": self.received_at}
+
+    def check_patrol(self):
+        """순찰 노드가 사유로 알리는 이동 실패를 알림으로 (docs/CONTROL_SCREEN.md A 4단계).
+
+        순찰 카드 문구만 바뀌면 알림만 보는 사람은 로봇이 멈춘 걸 모른다.
+        """
+        patrol = (self.payload or {}).get("patrol") or {}
+        state, reason = patrol.get("state"), patrol.get("reason") or ""
+        if (state, reason) == self.patrol_seen:
+            return
+        self.patrol_seen = (state, reason)
+        target = patrol.get("waypoint_name") or "—"
+        retry = re.fullmatch(r"navigation failed, retry (\d+/\d+)", reason)
+        if state == "patrolling" and retry:
+            self.add("patrol:retry", "info", f"이동이 막혀 다시 시도합니다 ({retry[1]}, 다음 목표 {target})", "patrol")
+        elif state == "paused" and reason == "navigation failed":
+            self.problem("patrol:stopped", "warning",
+                         f"순찰이 멈췄습니다: 이동 실패 (다음 목표 {target}). 확인 후 재개해 주세요")
+        elif state == "failed":
+            self.problem("patrol:failed", "error", f"순찰 실패: {reason or '사유 없음'}")
+        elif state == "patrolling":
+            self.close("patrol:stopped", "이동 실패로 멈췄던 순찰을 다시 진행합니다")
+            self.close("patrol:failed", "순찰을 다시 시작했습니다")
 
     def add(self, key, severity, message, kind, active=False):
         alert = dict(id=str(uuid.uuid4()), key=key, at=self.utc(), severity=severity,

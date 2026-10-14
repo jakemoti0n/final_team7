@@ -52,14 +52,11 @@ bt_navigator:
       plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
     navigate_through_poses:
       plugin: "nav2_bt_navigator::NavigateThroughPosesNavigator"
-    # 'default_nav_through_poses_bt_xml' and 'default_nav_to_pose_bt_xml' are use defaults:
-    # nav2_bt_navigator/navigate_to_pose_w_replanning_and_recovery.xml
-    # nav2_bt_navigator/navigate_through_poses_w_replanning_and_recovery.xml
-    # They can be set here or via a RewrittenYaml remap from a parent launch file to Nav2.
-
-    # plugin_lib_names is used to add custom BT plugins to the executor (vector of strings).
-    # Built-in plugins are added automatically
-    # plugin_lib_names: []
+    # Nav2 기본 트리 사본: 진로 위로 다가오는 사람이나 사람 때문에 코앞이 막혔으면 경로 추종·계획 실패에도 멈춰 기다린다
+    # (behavior_trees/, 판단은 tof_node /person_approaching·/person_blocking, PROJECT.md 2-1·2-2, R5)
+    default_nav_to_pose_bt_xml: $(find-pkg-share limbo_navigation)/behavior_trees/limbo_navigate_to_pose_w_replanning_and_recovery.xml
+    default_nav_through_poses_bt_xml: $(find-pkg-share limbo_navigation)/behavior_trees/limbo_navigate_through_poses_w_replanning_and_recovery.xml
+    plugin_lib_names: ["limbo_is_person_blocking_condition_bt_node"]
 
     error_code_names:
       - compute_path_error_code
@@ -111,8 +108,14 @@ controller_server:
       iteration_count: 1
       # 2026-10-14 1.7 → 2.5: MPPI는 예측 시간(4 s) 안에 갈 수 있는 경로만 보므로 1.7 m면 0.425 m/s가 사실상 상한이 됨.
       # 2.5(= 상한 0.6 × 4 s 이상)로 충장로 직선 0.42 → 0.58 m/s, 사람 있는 복도·홀에서도 충돌 0·사람 거리 동일에 시간 −22~27 %
-      # (2026-10-13 충장로 직선, 2026-10-14 사람 있는 복도·홀 시뮬레이션). 상한 0.75는 MPPI 경고가 늘어 보류
+      # (10-13 충장로·10-14 사람 있는 복도 시뮬레이션 비교). 상한 0.75는 MPPI 경고가 늘어 보류
       prune_distance: 2.5
+      # 경로가 되돌아 꺾이는 곳(순찰 통과 지점 A에서 180° 되돌기)은 꺾이는 점까지만 경로를 자른다.
+      # prune_distance 2.5로 늘린 뒤 되돌이 구간이 잘린 경로 안에 같이 들어와 MPPI가 그 1.2 m 앞에서 서 버림
+      # (2026-10-14 네모 화면 A 지점, 사람 없어도 재현. R7의 'A 맴돎'도 같은 원인)
+      enforce_path_inversion: true
+      inversion_xy_tolerance: 0.2
+      inversion_yaw_tolerance: 0.4
       transform_tolerance: 0.5
       temperature: 0.2
       gamma: 0.015
@@ -195,7 +198,7 @@ local_costmap:
       robot_base_frame: base_link
       # v14: 몸체 0.45 m + 바퀴 폭 0.59 m → 앞뒤 0.50 × 좌우 0.59 m (실제 크기), 여유 없음.
       # 받은 trash_robot_sim 값(0.63 m + 여유 0.02)으로는 0.9 m 문·1.3 m 책상 통로에서 MPPI가 경로를 못 찾았다
-      # (experiments/2026-10-13_tight_spaces). 이전 모델(robot:=legacy)은 launch에서 0.45 m 정사각형 + 여유 0.02로 바꿔 넣는다
+      # (10-13 좁은 통로 시험). 이전 모델(robot:=legacy)은 launch에서 0.45 m 정사각형 + 여유 0.02로 바꿔 넣는다
       footprint: "[[0.25, 0.295], [0.25, -0.295], [-0.25, -0.295], [-0.25, 0.295]]"
       footprint_padding: 0.0
       rolling_window: true
@@ -215,7 +218,7 @@ local_costmap:
         enabled: true
         max_prediction_age: 1.0   # s, 이보다 오래된 예측은 버림 (person_detector는 그 프레임에서 본 사람만 보냄)
         # 사람 중심에서 이 반경 안은 치명(254). 사람 몸 반경(어깨 폭 0.45~0.5 m). MPPI는 치명만 충돌로 보기 때문에
-        # 이게 없으면 사람을 뚫는 궤적을 고른다 (2026-10-13 복도 시뮬레이션). 뒤의 inflation 층이 로봇 반경만큼 부풀림
+        # 이게 없으면 사람을 뚫는 궤적을 고른다 (2026-10-13 복도 실험, KNOWN_ISSUES 2번). 뒤의 inflation 층이 로봇 반경만큼 부풀림
         lethal_radius: 0.25
         lethal_time: 0.5          # s, 현재 위치 + 이 시간 안의 예측점까지 치명. 예측 경로 전부를 치명으로 하면 사람만 보면 우회함 (PROJECT 2-1)
         radius: 0.35              # m, 가우시안 비용을 칠하는 최대 반경
@@ -269,7 +272,7 @@ local_costmap:
         # Observation Sources
         # ==================================================
 
-        observation_sources: "mid360_mark mid360_clear rgbd_mark rgbd_clear"
+        observation_sources: "mid360_mark mid360_clear rgbd_mark rgbd_clear tof_mark"
 
 
         # ==================================================
@@ -373,6 +376,38 @@ local_costmap:
 
 
         # ==================================================
+        # ToF MARK (범퍼 높이 0.10 m, 8x8 63°, 4 m)
+        # 카메라(0.7 m·0°)는 30 cm 상자 윗면을 0.78 m 안에서 놓쳐 STVL이 지우면 로봇이 파고든다
+        # (2026-10-14 상자 벤치 접촉 64.8 s). 코앞 낮은 장애물은 ToF가 계속 표시한다. 지우기는 안 함(시간 감쇠로)
+        # ==================================================
+
+        tof_mark:
+
+          data_type: PointCloud2
+
+          topic: /tof/points
+
+          marking: true
+          clearing: false
+
+          obstacle_range: 2.0         # 8x8라 멀면 점이 성기다. 코앞용
+
+          min_obstacle_height: 0.03   # 바닥 반사 거름 (tof.yaml과 같음)
+          max_obstacle_height: 1.00
+
+          expected_update_rate: 0.0
+          observation_persistence: 0.0
+
+          inf_is_valid: false
+
+          filter: "voxel"
+
+          voxel_min_points: 0
+
+          clear_after_reading: true
+
+
+        # ==================================================
         # RGB-D CLEAR
         # ==================================================
 
@@ -420,7 +455,7 @@ global_costmap:
 
       # v14: 몸체 0.45 m + 바퀴 폭 0.59 m → 앞뒤 0.50 × 좌우 0.59 m (실제 크기), 여유 없음.
       # 받은 trash_robot_sim 값(0.63 m + 여유 0.02)으로는 0.9 m 문·1.3 m 책상 통로에서 MPPI가 경로를 못 찾았다
-      # (experiments/2026-10-13_tight_spaces). 이전 모델(robot:=legacy)은 launch에서 0.45 m 정사각형 + 여유 0.02로 바꿔 넣는다
+      # (10-13 좁은 통로 시험). 이전 모델(robot:=legacy)은 launch에서 0.45 m 정사각형 + 여유 0.02로 바꿔 넣는다
       footprint: "[[0.25, 0.295], [0.25, -0.295], [-0.25, -0.295], [-0.25, 0.295]]"
       footprint_padding: 0.0
 

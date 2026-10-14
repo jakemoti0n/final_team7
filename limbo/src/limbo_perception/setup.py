@@ -10,7 +10,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/config', ['config/person_detector.yaml']),
+        ('share/' + package_name + '/config', ['config/person_detector.yaml', 'config/tof.yaml']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -26,6 +26,7 @@ setup(
     entry_points={
         'console_scripts': [
             'person_detector = limbo_perception.person_detector:main',
+            'tof_node = limbo_perception.tof_node:main',
         ],
     },
 )

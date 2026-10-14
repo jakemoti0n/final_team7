@@ -138,6 +138,24 @@
 - **해결**: ROS·gz 프로세스가 하나도 없을 때 `ros2 daemon stop` 후 `rm -f /dev/shm/fastrtps_*`. 잔존 프로세스는 `ps -eo pid,lstart,args`로 런치 시각별로 보고 **PID로** 끈다(패턴으로 모아 죽이면 자기 셸까지 죽음)
 - **확인**: 정리 뒤 같은 시뮬레이션이 1번에 시작해 완주. 
 
+### 카메라 0°에서 30 cm 상자에 붙어 정체 → ToF 점군을 local costmap에 — 2026-10-14
+- **증상**: 카메라 0.7 m·0° 채택 뒤 상자 벤치 12구간 중 1회, 홀로 돌아오는 구간에서 30 cm 상자에 붙은 채 `Failed to make progress` 6번·복구 7, 90 s 중단. 다른 구간도 0.11 m까지 접근
+- **원인**: 0° 카메라(세로 시야 ±27°)는 30 cm 상자 윗면이 0.78 m 안에서 시야를 벗어난다(15°는 0.44 m). local STVL이 지우면 MPPI가 그 자리로 간다. 라이다는 높이 띠라 30 cm를 못 본다
+- **해결**: `/tof/points`(범퍼 높이 0.10 m, 8×8 63°)를 local costmap STVL `tof_mark` 관측원으로(마킹만, obstacle_range 2.0, min_obstacle_height 0.03으로 바닥 거름)
+- **확인**: 상자 3회 12/12, 접촉 0, 진전 없음 경고 0 (전 11/12). 단 옆으로 스치는 코너는 ToF 시야 밖이라 13회 중 1회 정체가 남음(KNOWN_ISSUES)
+
+### 순찰 통과 지점 A 앞 1.2 m에서 "진전 없음"만 반복 (prune_distance 2.5 뒤) — 2026-10-14
+- **증상**: 사람 10명 네모 화면 순찰 첫 묶음(A→C)이 (4.1, 5.3)에서 멈춰 `Failed to make progress` 39번, 3번 다 ABORTED. 사람을 뺀 회차도 같은 자리 → 사람·ToF 탓 아님. 위치 오차 0.033 m로 정상. 학원 2층 순찰의 "A 지점 맴돎"도 같은 증상
+- **원인**: A 다음 지점이 정반대라 경로가 A에서 180° 되돌아온다. `prune_distance` 2.5로 MPPI가 잘라 쓰는 경로에 A까지 1.2 m + 되돌아오는 구간이 같이 들어와 경로 추종 critic의 기준점이 로봇 뒤를 가리켜 속도 명령 ~0(Optimizer fail은 0). 1.7일 때는 되돌이 구간이 덜 들어와 지나갔음
+- **해결**: MPPI `enforce_path_inversion: true`(되돌이 점까지만 경로 사용, `inversion_xy_tolerance` 0.2·yaw 0.4)
+- **확인**: 네모 순찰 AMCL·slam_toolbox 모두 3묶음 완주(145.7·137.4 s), 진전 없음 0
+
+### 순찰 노드가 AMCL 없는 구성에서 "localization not ready (30 s)"로 실패 — 2026-10-14
+- **증상**: slam_toolbox 위치 추정·지도 작성 구성(`localization:=slam|mapping`)에서 `patrol_node`가 30 s 뒤 실패
+- **원인**: `wait_for_localization`이 `/amcl_pose` 수신(`initial_pose_received`)을 요구. slam_toolbox는 그 토픽이 없다
+- **해결**: `map → base_footprint` TF만 본다. AMCL도 위치를 잡아야 TF를 내므로 판정은 같다
+- **확인**: slam_toolbox 순찰 출발·완주
+
 ## 인지(person_detector)
 
 ### person_detector가 CPU를 8코어(775%)나 씀 — 2026-10-02
