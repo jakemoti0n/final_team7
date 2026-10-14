@@ -219,6 +219,12 @@
 - **해결**: `stop_run.sh`의 awk에 `sim_ctl.sh start` 셸 추가(`$3 ~ /sim_ctl\.sh$/ && $4=="start"`). 순서는 셸 먼저, 그다음 `sim_ctl.sh stop`
 - **확인**: 정리 뒤 `ps`에 launch·gz 0, 재시작 뒤 한 벌
 
+### 순찰 통과 지점 A 앞 1.2 m에서 "진전 없음"만 반복 (prune_distance 2.5 뒤) — 2026-10-14
+- **증상**: 네모 화면 순찰 첫 묶음(A→C)이 (4.1, 5.3)에서 멈춰 `Failed to make progress` 39번, 3번 다 ABORTED. 사람을 뺀 지도 작성 회차도 같은 자리에서 멈춤 → 사람·ToF 탓 아님. 위치 오차 0.033 m로 정상
+- **원인**: A(5.3, 5.4) 다음 B(0.4, 5.3)가 정반대라 경로가 A에서 180° 되돌아옴. `prune_distance` 2.5로 MPPI가 잘라 쓰는 경로에 A까지 1.2 m + 되돌아오는 구간이 같이 들어와 경로 추종 critic의 기준점이 로봇 뒤를 가리켜 속도 명령 ~0(MPPI 출력 0.01 m/s, Optimizer fail은 0). 1.7일 때는 되돌이 구간이 덜 들어와 지나갔음
+- **해결**: MPPI `enforce_path_inversion: true`(되돌이 점까지만 경로 사용, `inversion_xy_tolerance` 0.2·yaw 0.4)
+- **확인**: slam_toolbox 순찰 3묶음 성공(35·55·48 s), 진전 없음 0. `~/limbo_bags/sim_trials/logs/patrol_nemo_amcl_bag`(정체), `trial_nemo_slam.csv`
+
 ## 인지(person_detector)
 
 ### person_detector가 CPU를 8코어(775%)나 씀 — 2026-10-02

@@ -110,6 +110,12 @@ controller_server:
       # 2.5(= 상한 0.6 × 4 s 이상)로 충장로 직선 0.42 → 0.58 m/s, 사람 있는 복도·홀에서도 충돌 0·사람 거리 동일에 시간 −22~27 %
       # (experiments/2026-10-13_chungjang_speed, 2026-10-14_speed_social). 상한 0.75는 MPPI 경고가 늘어 보류
       prune_distance: 2.5
+      # 경로가 되돌아 꺾이는 곳(순찰 통과 지점 A에서 180° 되돌기)은 꺾이는 점까지만 경로를 자른다.
+      # prune_distance 2.5로 늘린 뒤 되돌이 구간이 잘린 경로 안에 같이 들어와 MPPI가 그 1.2 m 앞에서 서 버림
+      # (2026-10-14 네모 화면 A 지점, 사람 없어도 재현. R7의 'A 맴돎'도 같은 원인)
+      enforce_path_inversion: true
+      inversion_xy_tolerance: 0.2
+      inversion_yaw_tolerance: 0.4
       transform_tolerance: 0.5
       temperature: 0.2
       gamma: 0.015

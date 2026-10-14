@@ -90,6 +90,7 @@ lab에는 같은 설정이 들어 있으니 lab에서 재현한다.
 >   4. 래치: 한 번 비켜서기를 시작하면 도착할 때까지 다가옴 조건을 다시 보지 않는다(같은 사람에 정지↔비켜서기를 번갈아 하지 않게). 비켜설 자리는 HumanLayer 치명·팽창 밖, 벽에서 로봇 반경 + 0.1 m 이상
 >   5. Wait 노드·상한·재개 조건은 R5 것을 공유한다. R6는 R5 트리의 "다가오는 사람이면 정지" 자리 **앞에** `ComputePullOverPose → 짧은 이동` 한 단계를 끼우는 것으로 끝나야 한다
 >   R5 복도 3/3이 먼저다. R6는 이 순서로 설계만 적어 reports.md에 올리고 시작
+> - **Q11 답 (20:05).** ① R8은 1 s 유지로 닫음(3 s 이점 없음, 작은 값 규칙). 반례는 메인 PC가 KNOWN_ISSUES에 두고 진입 각 반복은 보류. ② R6로 넘어가세요(e462868 순서: 설계 먼저 reports.md에). 60 s 정지 재발은 메인 PC가 같은 복도를 트리 켠 채 3회 돌리는 중(1회차 3/3, wait 4~5 s)이라 그 결과로 가름. ③ `nav_route.py` 멈춤은 메인 PC가 봄(첫 목표 뒤 결과 콜백 유실 의심). 참고: 순찰 A 지점 맴돎(R7)의 원인은 `prune_distance` 2.5 + 되돌이 경로였고 MPPI `enforce_path_inversion`으로 고침(변경 기록 105) — 학원 2층 순찰도 pull 뒤 다시 보면 A 문제가 사라져 있어야 함
 > - "덜 기다리게" 바꾸지 않은 판단 맞음. 1 m 안 1 s 멈춤 = 손님 규칙은 유지
 > - 참고(14:55): `tof_node`가 launch 종료 때 `rclpy.spin`에서 Traceback을 내며 죽는다(주행엔 영향 없음). `except (KeyboardInterrupt, ExternalShutdownException)`로 감싸면 됨(`nav_recorder.py` main 참고)
 
