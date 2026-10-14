@@ -52,6 +52,11 @@
 > - 기존 `ClearLocalCostmap` 문맥 복구는 이 RecoveryNode의 복구 자식을 `Fallback(WaitWhileBlocked, 기존 Sequence)`로 두면 유지됨
 > - **R6도 같은 자리**: 복구 자식을 `Fallback(PullOverAndWait(IsPersonOncoming), WaitWhileBlocked)`로 확장. 그러니 R5는 이 구조로 켜고, R6은 그 Fallback에 한 가지를 더하는 일이 된다
 > - 시험: 소셜 포스 손님(`hall`)에서 "손님 앞 정지 → 손님이 떠난 뒤 재개"가 로그(`WaitWhileBlocked`)와 `stopped_near_person_s`로 보이면 통과. 돌아서 지나가면 안 됨
+> **Q4 답 (15:10).** 둘 다 예.
+> - **지금 구조(코앞 막히면 기다리기)는 켠다.** 상자 앞 기다림 0, 손님·복도 회귀 없음이 확인됐으니 켠 채로 커밋. 이게 "누가 됐든 코앞에 사람이 있으면 회전·후진 안 함"의 바닥이다
+> - **손님은 카메라 거리에서 판단해 그 자리 정지·기다림.** 전제 2-1 규칙 그대로: ① 사람 속도 방향으로 직선을 그어 로봇 옆을 지나는 최근접점이 0.6 m 안이면(= 진로 위로 다가옴) **감속·정지**(비켜 가지 않음). ② 그 뒤 사람이 1.5 m 안에서 느려지거나 1 m 안에서 1 s 이상 멈추면 **손님 확정 → 기다림**(ToF/래치 불필요). ③ 그냥 지나가면(최근접점이 벌어지거나 멀어지면) **재개**. 상한은 수십 초. 입력은 `/person_detector/predictions`(위치·속도)와 이미 있는 `/person_detector/approach_intent`(person_detector `intent.py`가 ②와 비슷한 판단을 함 — 그걸 그대로 조건으로 써도 됨)
+> - 자리: Q3의 RecoveryNode 복구 자식을 `Fallback(StopAndWaitForApproaching, WaitWhileBlocked)`로. 조건 노드 이름은 `IsPersonApproaching`(R6 지시서의 `IsPersonOncoming`과 같은 계산, 반응만 "정지"). 즉 **R6의 "비켜서기"는 미룬다**: 실제 사람은 멈춘 로봇을 돌아가므로 "그 자리 정지"가 전제에 맞고, 시뮬레이션 no_yield가 멈춘 로봇을 뚫는 것은 사람 탓 충돌(`person_approach_speed_mps` > 0, `robot_speed_at_min_mps` ≈ 0)로 구분해 센다. 비켜서기는 정지·기다림 성적을 본 뒤 복도에서만 필요하면 R6으로
+> - 시험: 손님(`hall`) → 손님 앞 정지 후 손님이 떠나면 재개(돌아서 지나가면 실패). 비켜 주는 사람 복도(`aischool_2f_social` `people2`) → 전처럼 통과(마주 오는 사람이 옆으로 비켜 지나가면 정지했다 재개해도 됨, 시간 +15 s 안). 상자 → 기다림 0
 > - 참고(14:55): `tof_node`가 launch 종료 때 `rclpy.spin`에서 Traceback을 내며 죽는다(주행엔 영향 없음). `except (KeyboardInterrupt, ExternalShutdownException)`로 감싸면 됨(`nav_recorder.py` main 참고)
 
 R4 Q1의 답: **(다) + ToF**. 실물에 VL53L5CX(8×8, 63°, 4 m) 하나를 범퍼 높이 10 cm 전면 수평으로 달아 젯슨 오린 나노 I2C에 직결하기로 함. 시뮬레이션 센서·노드(`/tof/obstacle_ahead` Bool, `/tof/nearest`)를 만들고, 조건 노드를 "최근 5 s 안 카메라가 0.8~3 m에서 다가오는 사람을 봤음 AND 지금 ToF 0.3 m 안 물체"로 바꿔 한 명 복도·상자 구간으로 시험. 통과하면 켠 채로 커밋.
