@@ -10,6 +10,22 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (88) 경로 계획기 비교(NavFn 유지), nav_recorder 벽 거리 열, 시험 도구의 잔존 노드·데몬 문제 수정
+
+**할 일**
+- pull 후 빌드 불필요. 시뮬을 손으로 띄웠다 내릴 때도 `tools/sim_trials/sim_ctl.sh stop`으로 마무리(잔존 노드 정리)
+
+**변경**
+- `experiments/2026-10-14_planner_compare/`: NavFn·Smac 2D·Theta* × 복도·홀 각 1회(`run.sh`, 단건 `one.sh`). 결론 NavFn 유지 — 복도는 셋이 같고(51~56 s, 경로 20.3~20.4 m, 충돌 0), Smac 2D는 전역 경로 변경 13(NavFn 4)·MPPI 경고 11(2), Theta*는 홀에서 복구 6·65.7 s(NavFn 53.5·0). 충장로는 최종 단계라 선별에서 뺌
+- `limbo_evaluation`: `/map` 거리 변환으로 `min_wall_distance_m`·`mean_wall_distance_m` 열(`walls.py`, 테스트)
+- `tools/sim_trials/sim_ctl.sh`: (1) stop이 노드 실행 파일 경로 기준으로 잔존 프로세스를 모두 끝냄(이전 런치의 ekf·bridge가 TF·`/clock`을 또 내서 AMCL이 스캔을 전부 버리던 원인), (2) start가 대기 직전에 ros2 데몬을 재시작(오래된 데몬이 새 노드를 못 봐 멀쩡한 Nav2를 시작 실패로 판정하던 원인), (3) DDS 정리 뒤 데몬 재시작. 해결 기록 2건
+- `docs/lab/requests.md`: R5 회귀 보고(켜 둔 기다리기 BT가 비켜 주는 사람 복도에서 60번 기다리다 포기 → 분기 끄고 커밋 요청), Q5 답, R7
+- `docs/KNOWN_ISSUES.md`: 시작 직후 `follow_path` 액션 응답 20 ms 초과로 첫 Goal 실패(1/7회)
+- 계획기 비교 스크립트는 lab에 켜 둔 기다리기 BT를 끄고(Nav2 기본 BT) 돌림
+
+**확인**
+- 잔존 정리·데몬 재시작 뒤 연속 7회 시뮬 시작 성공(계획기 6회 + 재실행 1회), 시작 실패 0
+
 ## 2026-10-14 (87) R7: 학원 2층 순찰이 채택 설정에서 막히는 원인 둘(A 모서리 지난 지점 검사, B가 사람 길 위)을 찾음
 
 **할 일**
