@@ -184,6 +184,17 @@
 - **확인 방법**: 잔존은 `ps -eo pid,lstart,args | grep moving_obstacles`로 런치 시각별로 보고 **PID로** 끈다. 화면은 복도 안 시점(`gz service -s /gui/move_to/pose`)에서 PIL `ImageGrab`로 초당 30장 찍어 자세 순서가 이어지는지 본다
 - **확인**: 사용자 눈 확인 "확실히 매끄럽다, 움직임의 95 %는 리얼" (`experiments/2026-10-14_social_people/README.md`). 주의: 프로세스를 패턴으로 모아 죽이면 자기 셸까지 죽는다(이날 두 번). 목록을 먼저 출력하고 PID만 넘긴다
 
+### 시뮬레이션 시작이 자꾸 실패하거나 AMCL이 스캔을 전부 버림 — 이전 런치의 잔존 노드 — 2026-10-14
+- **증상**: 새 시뮬에서 AMCL이 `Setting pose (1029.93)`처럼 **이전 시뮬의 시각**으로 초기 위치를 찍고, 이후 모든 스캔을 `Message Filter dropping message ... the timestamp on the message is earlier than all the data in the transform cache`로 버림. local/global costmap도 같은 메시지. RViz에서는 로봇이 안 움직이거나 위치가 엉뚱해 보임. 다른 날엔 heartbeat 끊김·DDS 포트 잠금·사람 actor 깜빡임으로도 나타남
+- **원인**: 이전 런치에서 남은 노드(`ekf_node`, `robot_state_publisher`, `parameter_bridge`, gz transport를 쓰는 파이썬 노드)가 **이전 시뮬 시각의 `/clock`과 odom TF를 계속 냄**. 새 시뮬의 노드가 두 시각을 번갈아 받아 TF 버퍼가 꼬임. 잔존이 생기는 이유: gz transport 파이썬 `Node`가 SIGINT·SIGTERM을 삼키고, launch를 먼저 죽이면 자식이 고아로 남음. 손으로 `kill`하면서 몇 개를 놓치면 그대로 남음
+- **해결**: `tools/sim_trials/sim_ctl.sh stop`이 프로세스 그룹 정리 뒤 **노드 실행 파일 경로로 시작하는 프로세스를 모두 끝내고**(`sweep_nodes`), ROS 프로세스가 없으면 DDS 공유 메모리까지 지움. 손으로 띄운 것(`demo_patrol.sh`)도 내릴 때 이걸로 마무리. **`ps | grep 패턴 | kill`을 셸에서 직접 돌리지 말 것** — 히어독 문자열이 패턴에 걸려 자기 셸이 죽는다(이날 3번)
+- **확인 방법**: `ros2 topic info /clock`의 Publisher count가 1인지, `ps -eo pid,lstart,args`에 15분 전에 시작된 ROS 노드가 없는지
+
+### 시험 도구가 Nav2가 active인데도 "시작 실패"로 3번 다시 띄움 — 오래된 ros2 데몬 — 2026-10-14
+- **증상**: 로그에는 7초 만에 `Managed nodes are active`인데 `ros2 lifecycle get /bt_navigator`가 `Node not found`. `sim_ctl.sh`가 3분 뒤 실패로 판정하고 다시 띄우길 반복
+- **원인**: ros2 CLI는 데몬으로 노드를 찾는데, 시뮬보다 먼저 떠 있던(또는 DDS 공유 메모리를 지우는 동안 뜬) 데몬이 새 노드를 못 봄. `ros2 daemon stop; ros2 daemon start` 뒤에는 바로 27개 노드가 보임
+- **해결**: `sim_ctl.sh start`가 대기 직전에 데몬을 재시작하고 조회 제한을 10초로. `stop`의 DDS 정리 뒤에도 데몬을 다시 띄움
+
 ### 시뮬레이션이 3번 모두 시작 실패: 모든 노드가 `Failed init_port fastrtps_port...: open_and_lock_file failed` — 2026-10-14
 - **증상**: `sim_ctl.sh start`가 3번 다 실패. 로그에 parameter_bridge·person_detector·nav_recorder 등 모든 노드가 `[RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7003: open_and_lock_file failed`
 - **원인**: Fast DDS 공유 메모리 전송의 포트 파일(`/dev/shm/fastrtps_port*`)을 **SIGKILL로 죽은 노드가 잠근 채 남김**. 같은 날 잔존 프로세스(런치를 내려도 남은 `parameter_bridge`·`moving_obstacles.py`·YOLO 파이썬)를 SIGKILL로 정리한 뒤 생김. 잔존 자체는 gz transport가 SIGINT·SIGTERM을 삼켜서(해결 기록 "소셜 포스 사람이 GUI에서 깜빡이며…") 생겼음

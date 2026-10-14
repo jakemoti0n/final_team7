@@ -39,14 +39,17 @@ start_once() {   # 0: 준비됨, 1: 실패
   setsid ros2 launch limbo_bringup start_simulation.launch.py world:=${WORLD:-aischool_2f_scenarios} map:=${MAP:-aischool_2f_map} gui:=false record:=true ${EXTRA_ARGS} \
     > $LOG 2>&1 < /dev/null &
   echo $! > $PIDFILE
+  # ros2 CLI는 데몬으로 노드를 찾는데, 시뮬보다 먼저 떠 있던 데몬이 새 노드를 못 보는 일이 있다(2026-10-14: Nav2는 7초 만에
+  # 전부 active인데 `ros2 lifecycle get`이 Node not found → 3번 다 시작 실패 판정). 대기 직전에 데몬을 새로 띄우고 10초를 준다
+  sleep 10; ros2 daemon stop > /dev/null 2>&1; ros2 daemon start > /dev/null 2>&1; sleep 2
   for i in $(seq 1 90); do
     grep -qE "Failed to bring up|process has died" $LOG && return 1
-    timeout 5 ros2 lifecycle get /bt_navigator 2>/dev/null | grep -q '^active' && break
+    timeout 10 ros2 lifecycle get /bt_navigator 2>/dev/null | grep -q '^active' && break
     sleep 2
   done
   # 3분이 지나도 active가 아니면 실패로 본다. lifecycle 서비스 응답이 끊겨(collision_monitor change_state timeout) Nav2가
   # configure 단계에서 멈춘 채 TF만 나오는 경우가 있어서, TF만 보고 "준비됨"으로 넘기면 Goal이 영영 처리되지 않는다 (2026-10-13)
-  timeout 5 ros2 lifecycle get /bt_navigator 2>/dev/null | grep -q '^active' || return 1
+  timeout 10 ros2 lifecycle get /bt_navigator 2>/dev/null | grep -q '^active' || return 1
   # AMCL이 map → base_footprint를 내야 Nav2가 Goal을 받는다
   for i in $(seq 1 30); do
     timeout 4 ros2 run tf2_ros tf2_echo map base_footprint 2>&1 | grep -q Translation && { sleep 3; return 0; }
@@ -69,6 +72,6 @@ stop)
   # "Failed init_port fastrtps_port...: open_and_lock_file failed"로 통신을 못 해 Nav2가 3번 다 실패한다 (2026-10-14).
   # ROS·gz 프로세스가 하나도 없을 때만 daemon을 멈추고 지운다 (다른 ROS 프로세스가 있으면 건드리지 않는다)
   if [ "$(ps -eo args | grep -E '^(/opt/ros|gz sim|/home/kim/limbo/venvs|/usr/bin/python3 /opt/ros)' | grep -vc 'ros2-daemon')" = "0" ]; then
-    ros2 daemon stop > /dev/null 2>&1; rm -f /dev/shm/fastrtps_* 2>/dev/null; echo "DDS 공유 메모리 정리"
+    ros2 daemon stop > /dev/null 2>&1; rm -f /dev/shm/fastrtps_* 2>/dev/null; ros2 daemon start > /dev/null 2>&1; echo "DDS 공유 메모리 정리"
   fi ;;
 esac
