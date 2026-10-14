@@ -23,10 +23,20 @@ rclpy.init(); n = Node('nav_route'); ac = ActionClient(n, NavigateToPose, '/navi
 for name, x, y in ROUTES[sys.argv[1]]:
     g = NavigateToPose.Goal(); g.pose.header.frame_id = 'map'
     g.pose.pose.position.x, g.pose.pose.position.y, g.pose.pose.orientation.w = x, y, 1.0
-    t0 = time.time(); f = ac.send_goal_async(g); rclpy.spin_until_future_complete(n, f)
+    t0 = time.time(); f = ac.send_goal_async(g)
+    # 수락 응답은 10 s까지만 기다린다. 서버가 응답을 안 주면(이전 목표 정리 중·DDS 지연) 한 번 더 보내고, 그래도 없으면 다음 구간으로
+    # (2026-10-14 서브 PC: 첫 목표 뒤 응답 없이 6분 멈춤 — 제한 없는 spin_until_future_complete 때문)
+    rclpy.spin_until_future_complete(n, f, timeout_sec=10.0)
+    if not f.done():
+        print(f'{name:12s} → 수락 응답 없음, 다시 보냄', flush=True); time.sleep(2)
+        f = ac.send_goal_async(g); rclpy.spin_until_future_complete(n, f, timeout_sec=10.0)
+        if not f.done():
+            print(f'{name:12s} → 수락 응답 없음 {time.time() - t0:5.1f}s', flush=True); continue
     if not f.result().accepted:
         print(f'{name:12s} → 거부됨', flush=True); continue
     r = f.result().get_result_async()
     while not r.done() and time.time() - t0 < GOAL_TIMEOUT: rclpy.spin_once(n, timeout_sec=0.1)
-    if not r.done(): f.result().cancel_goal_async(); time.sleep(1)
+    if not r.done():   # 시간 초과: 취소를 보내고 취소 응답까지 spin해야 다음 목표가 깨끗이 시작된다
+        c = f.result().cancel_goal_async(); rclpy.spin_until_future_complete(n, c, timeout_sec=5.0)
+        rclpy.spin_until_future_complete(n, r, timeout_sec=5.0)
     print(f"{name:12s} → {({4: 'SUCCEEDED', 5: 'CANCELED', 6: 'ABORTED'}.get(r.result().status) if r.done() else 'TIMEOUT')} {time.time() - t0:5.1f}s", flush=True)

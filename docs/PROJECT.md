@@ -226,8 +226,9 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 | 2026-10-13 | 메시·생성 산출물은 저장소 밖, 생성기만 커밋 | 26 MB가 월드 재생성마다 쌓여 `.git` 311 MB |
 | 2026-10-13 | 문서는 여섯 곳만, 실수·무효 실험 기록 안 함 (4절) | 정정 항목이 쌓여 읽기 어려워짐 |
 | 2026-10-14 | 경로 계획기 NavFn 유지 | Smac2D 경로 변경 13·Theta* 홀 복구 6, 복도 셋 같음 (`experiments/2026-10-14_planner_compare/`) |
-| 2026-10-14 | 위치 추정 AMCL 유지 | slam_toolbox는 홀 오차 절반이나 복도 0.16 m 치우침, 주행 같음, 24 MB 포즈그래프 운영 부담 (`experiments/2026-10-14_localization_compare/`) |
+| 2026-10-14 | 위치 추정 AMCL 유지 (확정) | 복도·홀: slam 홀 오차 절반이나 복도 0.16 m 치우침, 주행 같음. 사람 10명 네모 순찰: AMCL 오차 0.035 m < slam 0.050 m, 둘 다 완주 (`experiments/2026-10-14_localization_compare/`) |
 | 2026-10-14 | 컨트롤러 MPPI 유지 재확인 | 채택 설정에서 RPP 완주하나 복도 복구 5·경로 변경 15·상자 0.11 m (`experiments/2026-10-14_controller_rpp/`) |
+| 2026-10-14 | MPPI `enforce_path_inversion` 켬 | 통과 지점 되돌이 경로에서 prune 2.5가 A 앞 1.2 m 정체를 만듦(네모·R7). 켠 뒤 네모 순찰 AMCL·slam 모두 완주 |
 | 2026-10-14 | 카메라 0.7 m·0° + ToF 점군 costmap | 기울이면 손님 검출 19 % → 3 %. 0°가 놓치는 30 cm 상자는 ToF가 표시 (`experiments/2026-10-14_tof_costmap/`) |
 
 ---

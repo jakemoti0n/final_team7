@@ -29,3 +29,17 @@ PROJECT 다음 3번. 같은 LiDAR 스캔(`/scan`, MID-360 → 2D)으로 AMCL(입
 ## 결론
 - **AMCL 유지.** 이 조건에서 바꿀 이유가 없다
 - slam_toolbox를 다시 볼 만한 자리는 AMCL의 약점인 **사람이 많아 LiDAR 시야가 가려지는 곳**(KNOWN_ISSUES "사람이 많아 beamskip이 꺼짐"). 네모 화면(사람 10명) 순찰에서 둘의 오차를 재는 것이 다음 시험. 그때는 포즈그래프의 치우침을 빼고 보려면 정답을 slam 지도 프레임에 맞추거나, 포즈그래프를 정적 지도에서 출발해 짧게 만든다
+
+## 2차: 사람 10명 네모 화면 순찰 (19:30~20:06, 메인 PC) — AMCL 유지 확정
+
+`human_test_world`(15×15 m, 시간표 사람 10명) + `test_waypoints.yaml` 순찰(3묶음 A→C·D→G·H→J), `patrol_trial.sh`, 각 1회. slam 포즈그래프는 사람을 뺀 같은 월드(`zz_human_test_nopeople`, 저장소 밖)에서 순찰 경로를 돌아 만듦. 둘 다 MPPI `enforce_path_inversion`(105) 켠 설정.
+
+| 위치 추정 | 결과 | 3묶음 시간 합 s | 복구 | 위치 오차 평균 / 최대 m | 사람 0.3 m 미만 |
+|---|---|---|---|---|---|
+| AMCL | 3/3 | 145.7 | 4 | **0.035 / 0.084** | 3 |
+| slam_toolbox | 3/3 | 137.4 | 3 | 0.050 / 0.086 | 3 |
+
+- 묶음별 오차 평균: AMCL 0.026·0.044·0.034, slam 0.045·0.054·0.051. 사람 10명 사이에서도 AMCL 오차가 더 작다. "사람이 많으면 AMCL이 약하다"는 가설은 이 밀도(15×15 m에 10명)에서는 확인되지 않았다(beam skip 꺼짐 로그 0)
+- 주행 성적은 같다(둘 다 완주, 시간 차 8 s는 1회 편차). 사람 0.3 m 미만 3번은 시간표 사람이 멈춘 로봇에 걸어 들어온 것
+- 부수 발견: 첫 AMCL 회차(옛 설정)는 A 앞 1.2 m에서 3번 다 ABORTED — 원인은 위치 추정이 아니라 `prune_distance` 2.5 + 통과 지점 되돌이 경로(TROUBLESHOOTING, `enforce_path_inversion`으로 해결, `trial_nemo_amcl_old_prune_stall.csv`)
+- 결론: **AMCL 유지 확정.** slam_toolbox가 나을 자리는 더 붐비는 환경(수십 명)이나 지도 밖 변화가 큰 곳이며, 그건 충장로 단계에서 본다
