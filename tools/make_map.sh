@@ -83,6 +83,8 @@ case "${1:-}" in
     G=$(cat $PID_LAUNCH); kill -INT -- -$G 2>/dev/null
     for i in $(seq 1 20); do kill -0 -- -$G 2>/dev/null || break; sleep 1; done
     kill -9 -- -$G 2>/dev/null; rm -f $PID_LAUNCH $PID_AUTO
+    # launch가 죽은 뒤 남는 노드(self_filter 등)는 시험 도구의 정리 루틴으로 끝낸다
+    $R/tools/sim_trials/sim_ctl.sh stop > /dev/null 2>&1
     echo "내렸다: $name" ;;
   *) sed -n '2,10p' "$0" ;;
 esac

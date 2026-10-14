@@ -10,6 +10,18 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (111) 잔존 노드 정리에 설치 폴더 노드(self_filter·limbo_drive 등) 포함
+
+**할 일**
+- 없음
+
+**변경**
+- `sim_ctl.sh` 정리 패턴에 `limbo/install/(robot_self_filter|limbo_drive|…)/lib/`를 추가. `make_map.sh stop`이 끝에 같은 정리를 부름
+- 왜: 오늘 여러 launch가 끝난 뒤 `self_filter`가 5개(4~6시간) 살아남아 있었다. 정리 패턴이 `/opt/ros` 아래 실행 파일만 봐서 우리 설치 폴더의 노드는 안 잡혔음
+
+**확인**
+- 남은 self_filter 5개를 PID로 끝낸 뒤 패턴 적용, 0개
+
 ## 2026-10-14 (110) 지도 작성 도구 `tools/make_map.sh` (slam_toolbox + 사람 조종, Nav2 없음)
 
 **할 일**
