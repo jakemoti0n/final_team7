@@ -1,0 +1,3 @@
+patrol_r7_1 TIMEOUT 960s
+patrol_r7_2 OK 194s
+patrol_r7_3 OK 171s
