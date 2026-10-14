@@ -10,6 +10,21 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (81) `nav_recorder` 순찰(NavigateThroughPoses) 기록, 사람 접근 속도 열, DDS 공유 메모리 잠금 정리
+
+**할 일**
+- pull 후 빌드 불필요(파이썬·yaml·셸). 순찰 회차도 이제 CSV가 남는다(정지 waypoint 사이 묶음 하나가 한 줄, `action` 열로 구분)
+
+**변경**
+- `limbo_evaluation/nav_recorder.py`: `/navigate_to_pose`와 `/navigate_through_poses` 둘 다 구독(상태·피드백을 액션별로). CSV `action` 열. `/sim/people`·시간표 어느 쪽이든 가장 가까운 사람의 위치를 지표에 넘김
+- `goal_metrics.py`: `person_approach_speed_mps`(사람 최소 거리 순간, 사람이 로봇 쪽으로 다가온 속도, 양수 = 다가옴)·`robot_speed_at_min_mps`(그때 로봇 속도). 0.5 s 전 위치와 비교(`speed_window`). 사람이 멈춘 로봇에 걸어 들어온 충돌(사람 탓)과 로봇이 간 충돌(로봇 탓)을 가른다. 테스트 3개(23개 통과). nan은 CSV에 빈칸
+- `tools/sim_trials/sim_ctl.sh stop`: ROS·gz 프로세스가 없을 때 `ros2 daemon stop` + `/dev/shm/fastrtps_*` 삭제. SIGKILL로 죽은 노드가 포트 파일을 잠근 채 남기면 다음 시작이 3번 다 실패함(해결 기록 항목 추가, 알려진 문제 갱신)
+- `README.md` CSV 열 표 2행, `docs/lab/requests.md` R5 Q3 답(경로 추종 자리의 RecoveryNode), `docs/PROJECT.md` 8절 3번
+
+**확인**
+- 소셜 포스 월드 `aischool_2f_social`에서 학원 2층 순찰 1회(`patrol_trial.sh rec2`): 213 s 완주, 묶음 2개가 `navigate_through_poses` 행으로 기록. 사람 최소 0.88·0.84 m, 접근 속도 −0.05·0.02 m/s, 로봇 0.41·0.0 m/s, 충돌 0
+- 그 전 회차(rec1)는 DDS 포트 잠금으로 3번 다 시작 실패 → 정리 뒤 1번에 시작
+
 ## 2026-10-14 (80) R5 Q2: 기다리기 판단을 막히기 시작한 순간의 래치(/person_blocking)로, ToF 정지 거리 0.5 m. 손님 앞 BT 기다림은 아직 안 돎
 
 **할 일**

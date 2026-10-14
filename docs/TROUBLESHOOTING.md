@@ -184,6 +184,12 @@
 - **확인 방법**: 잔존은 `ps -eo pid,lstart,args | grep moving_obstacles`로 런치 시각별로 보고 **PID로** 끈다. 화면은 복도 안 시점(`gz service -s /gui/move_to/pose`)에서 PIL `ImageGrab`로 초당 30장 찍어 자세 순서가 이어지는지 본다
 - **확인**: 사용자 눈 확인 "확실히 매끄럽다, 움직임의 95 %는 리얼" (`experiments/2026-10-14_social_people/README.md`). 주의: 프로세스를 패턴으로 모아 죽이면 자기 셸까지 죽는다(이날 두 번). 목록을 먼저 출력하고 PID만 넘긴다
 
+### 시뮬레이션이 3번 모두 시작 실패: 모든 노드가 `Failed init_port fastrtps_port...: open_and_lock_file failed` — 2026-10-14
+- **증상**: `sim_ctl.sh start`가 3번 다 실패. 로그에 parameter_bridge·person_detector·nav_recorder 등 모든 노드가 `[RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7003: open_and_lock_file failed`
+- **원인**: Fast DDS 공유 메모리 전송의 포트 파일(`/dev/shm/fastrtps_port*`)을 **SIGKILL로 죽은 노드가 잠근 채 남김**. 같은 날 잔존 프로세스(런치를 내려도 남은 `parameter_bridge`·`moving_obstacles.py`·YOLO 파이썬)를 SIGKILL로 정리한 뒤 생김. 잔존 자체는 gz transport가 SIGINT·SIGTERM을 삼켜서(해결 기록 "소셜 포스 사람이 GUI에서 깜빡이며…") 생겼음
+- **해결**: ROS·gz 프로세스가 하나도 없을 때 `ros2 daemon stop` 후 `rm -f /dev/shm/fastrtps_*`. `sim_ctl.sh stop`이 그 조건에서 자동으로 한다. 잔존 프로세스는 `ps -eo pid,lstart,args`로 런치 시각별로 보고 **PID로** 끈다(패턴으로 모아 죽이면 자기 셸까지 죽음)
+- **확인**: 정리 뒤 같은 회차(`patrol_trial.sh rec2`)가 1번에 시작해 완주. 오전에 "확인할 후보"로 적었던 가설이 이렇게 확정됨
+
 ## 인지(person_detector)
 
 ### person_detector가 CPU를 8코어(775%)나 씀 — 2026-10-02

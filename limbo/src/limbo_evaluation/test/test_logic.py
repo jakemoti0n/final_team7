@@ -217,3 +217,35 @@ def test_metrics_counts_plan_changes_only_when_path_moves():
     m.add_plan([])             # 빈 경로는 세지 않는다
     row = m.row('SUCCEEDED')
     assert (row['plan_updates'], row['plan_changes']) == (4, 1)
+
+
+def test_metrics_approach_speed_person_walks_into_stopped_robot():
+    m = goal_metrics.GoalMetrics(goal_metrics.MetricsConfig(speed_window=0.5))
+    # 로봇은 (0,0)에 서 있고 사람이 x=2.0에서 1.0 m/s로 다가온다
+    for i in range(11):
+        t = i * 0.1
+        px = 2.0 - 1.0 * t
+        m.add_truth(t, 0.0, 0.0, 'a', px, (px, 0.0))
+    row = m.row('SUCCEEDED')
+    assert row['min_person_distance_m'] == 1.0
+    assert row['person_approach_speed_mps'] == pytest.approx(1.0, abs=0.05)
+    assert row['robot_speed_at_min_mps'] == 0.0
+
+
+def test_metrics_approach_speed_robot_drives_into_standing_person():
+    m = goal_metrics.GoalMetrics(goal_metrics.MetricsConfig(speed_window=0.5))
+    for i in range(11):
+        t = i * 0.1
+        rx = 0.5 * t
+        m.add_truth(t, rx, 0.0, 'a', 2.0 - rx, (2.0, 0.0))
+    row = m.row('SUCCEEDED')
+    assert row['person_approach_speed_mps'] == pytest.approx(0.0, abs=0.05)
+    assert row['robot_speed_at_min_mps'] == pytest.approx(0.5, abs=0.05)
+
+
+def test_metrics_approach_speed_empty_without_person_position():
+    m = goal_metrics.GoalMetrics(goal_metrics.MetricsConfig())
+    m.add_truth(0.0, 0.0, 0.0, 'a', 1.0)
+    m.add_truth(1.0, 0.5, 0.0, 'a', 0.5)
+    row = m.row('SUCCEEDED')
+    assert row['person_approach_speed_mps'] == ''

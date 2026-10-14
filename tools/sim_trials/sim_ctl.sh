@@ -51,5 +51,11 @@ start)
   echo "3번 모두 실패"; exit 1 ;;
 stop)
   stop_sim
-  echo "남은 gz: $(ps -eo args | grep -cE '^gz sim|^ruby .*gz sim')  남은 launch: $(ps -eo args | grep -c '[s]tart_simulation.launch')" ;;
+  echo "남은 gz: $(ps -eo args | grep -cE '^gz sim|^ruby .*gz sim')  남은 launch: $(ps -eo args | grep -c '[s]tart_simulation.launch')"
+  # SIGKILL로 끝난 노드가 남긴 Fast DDS 공유 메모리 포트 파일이 잠긴 채 남으면 다음 시작에서 모든 노드가
+  # "Failed init_port fastrtps_port...: open_and_lock_file failed"로 통신을 못 해 Nav2가 3번 다 실패한다 (2026-10-14).
+  # ROS·gz 프로세스가 하나도 없을 때만 daemon을 멈추고 지운다 (다른 ROS 프로세스가 있으면 건드리지 않는다)
+  if [ "$(ps -eo args | grep -E '^(/opt/ros|gz sim|/home/kim/limbo/venvs|/usr/bin/python3 /opt/ros)' | grep -vc 'ros2-daemon')" = "0" ]; then
+    ros2 daemon stop > /dev/null 2>&1; rm -f /dev/shm/fastrtps_* 2>/dev/null; echo "DDS 공유 메모리 정리"
+  fi ;;
 esac

@@ -180,6 +180,8 @@ ros2 launch limbo_bringup start_simulation.launch.py world:=aischool_2f_social m
 | `duration_s`, `path_length_m`, `mean_speed_mps` | 걸린 시간, 실제 주행 거리, 평균 속도 (Gazebo 정답 위치 기준) |
 | `min_person_distance_m`, `nearest_person` | 사람 중심까지 가장 가까웠던 거리와 그 사람 (월드 SDF의 시간표 기준). 0.3 m 미만이면 사람 모델과 겹친 것(충돌) |
 | `personal_space_time_s` | 사람 0.5 m 안에 있던 시간 (`nav_recorder.yaml`의 `personal_space`) |
+| `action` | Goal이 온 액션. `navigate_to_pose`(RViz·`nav_route.py`) 또는 `navigate_through_poses`(순찰 노드, 정지 waypoint 사이 묶음 하나가 한 줄) |
+| `person_approach_speed_mps`, `robot_speed_at_min_mps` | 사람 최소 거리 순간에 사람이 로봇 쪽으로 다가온 속도(양수 = 다가옴)와 그때 로봇 속도. 0.5 s 전 위치와 비교(`speed_window`). 사람이 멈춘 로봇에 걸어 들어온 충돌(사람 탓)과 로봇이 사람에게 간 충돌(로봇 탓)을 가른다 |
 | `person_collision`, `person_collision_time_s` | 사람 중심과 0.3 m 미만으로 겹친 적이 있으면 1, 겹쳐 있던 시간. 시뮬레이션 사람은 충돌이 없어 뚫고 지나가도 `status`는 SUCCEEDED가 되므로 이 열로 거른다 (`collision_distance`) |
 | `stopped_time_s`, `stopped_near_person_s`, `stopped_other_s` | 0.05 m/s 미만으로 멈춰 있던 시간. 그중 사람이 1.5 m 안에 있던 시간(사람 때문에 멈춤)과 그 밖(막혀서 멈춤) (`stop_speed`, `near_person_distance`) |
 | `plan_updates`, `plan_changes` | 전역 경로를 받은 횟수와 그중 직전 경로에서 0.3 m 넘게 벗어난 횟수. 사람 꼬리로 경로가 흔들리는 정도 (`plan_change_distance`) |

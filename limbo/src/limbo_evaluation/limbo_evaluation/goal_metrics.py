@@ -1,6 +1,7 @@
 """Nav2 Goal 하나 동안 모은 값으로 평가 지표(CSV 한 줄)를 만든다."""
 
 import bisect
+from collections import deque
 from dataclasses import dataclass
 import math
 
@@ -17,6 +18,9 @@ class MetricsConfig:
     # m, 새 전역 경로가 직전 경로에서 이보다 멀리 벗어나면 "경로가 바뀜"으로 센다
     plan_change_distance: float = 0.3
     plan_sample_spacing: float = 0.2   # m, 경로 비교는 이 간격으로 점을 골라서 한다 (계산량)
+    # s, 사람 최소 거리 순간의 "사람이 다가온 속도"·"로봇 속도"를 이 시간 전 위치와 비교해 구한다.
+    # 사람이 멈춘 로봇에 걸어 들어온 충돌(사람 탓)과 로봇이 사람에게 간 충돌(로봇 탓)을 가르기 위해
+    speed_window: float = 0.5
 
 
 class GoalMetrics:
@@ -30,6 +34,9 @@ class GoalMetrics:
         self.path_length = 0.0
         self.min_person_distance = math.inf
         self.nearest_person = ''
+        self.person_approach_speed = math.nan   # 최소 거리 순간, 사람이 로봇 쪽으로 다가온 속도 (m/s, 양수 = 다가옴)
+        self.robot_speed_at_min = math.nan       # 최소 거리 순간의 로봇 속도 (m/s)
+        self.history = deque()                   # (시각, 로봇 x, y, 사람 x, y) 최근 speed_window 초
         self.personal_space_time = 0.0
         self.collision_time = 0.0
         self.stopped_time = 0.0
@@ -45,8 +52,8 @@ class GoalMetrics:
         self.controller_warnings = 0
         self.slip_events = 0
 
-    def add_truth(self, sim_time, x, y, person_name, person_distance):
-        """정답 위치 한 번. 사람 거리는 같은 시각에 계산한 가장 가까운 사람까지."""
+    def add_truth(self, sim_time, x, y, person_name, person_distance, person_xy=None):
+        """정답 위치 한 번. 사람 거리는 가장 가까운 사람까지, person_xy는 그 사람 위치(없으면 속도 열은 비움)."""
         if self.last_xy is None:
             self.start_time, self.start_xy = sim_time, (x, y)
         else:
@@ -61,6 +68,32 @@ class GoalMetrics:
         if person_distance < self.min_person_distance:
             self.min_person_distance = person_distance
             self.nearest_person = person_name
+            self.person_approach_speed, self.robot_speed_at_min = \
+                self._speeds_at(sim_time, x, y, person_xy)
+        self._remember(sim_time, x, y, person_xy)
+
+    def _remember(self, t, x, y, person_xy):
+        self.history.append((t, x, y) + (tuple(person_xy) if person_xy else (math.nan, math.nan)))
+        while self.history and t - self.history[0][0] > self.config.speed_window:
+            self.history.popleft()
+
+    def _speeds_at(self, t, x, y, person_xy):
+        """speed_window 초 전 위치와 비교한 (사람이 로봇 쪽으로 다가온 속도, 로봇 속도). 기록이 짧으면 nan."""
+        if not self.history or person_xy is None:
+            return math.nan, math.nan
+        t0, x0, y0, px0, py0 = self.history[0]
+        dt = t - t0
+        if dt <= 0 or math.isnan(px0):
+            return math.nan, math.nan
+        robot_speed = math.dist((x0, y0), (x, y)) / dt
+        # 사람 속도를 "사람 → 로봇" 방향에 투영. 로봇이 움직인 몫은 빼고 사람 몫만 본다
+        px, py = person_xy
+        ux, uy = x - px, y - py
+        norm = math.hypot(ux, uy)
+        if norm < 1e-6:
+            return math.nan, robot_speed
+        approach = ((px - px0) * ux + (py - py0) * uy) / norm / dt
+        return approach, robot_speed
 
     def _add_time_near_person(self, dt, person_distance):
         if person_distance < self.config.personal_space:
@@ -114,6 +147,8 @@ class GoalMetrics:
             'nearest_person': self.nearest_person,
             'personal_space_time_s': _round(self.personal_space_time, 1),
             'person_collision': int(self.min_person_distance < self.config.collision_distance),
+            'person_approach_speed_mps': _round(self.person_approach_speed, 2),
+            'robot_speed_at_min_mps': _round(self.robot_speed_at_min, 2),
             'person_collision_time_s': _round(self.collision_time, 1),
             'stopped_time_s': _round(self.stopped_time, 1),
             'stopped_near_person_s': _round(self.stopped_near_person_time, 1),
@@ -155,4 +190,6 @@ def nearest_in_time(times, values, t):
 
 
 def _round(value, digits):
-    return value if math.isinf(value) or math.isnan(value) else round(value, digits)
+    if math.isnan(value):
+        return ''
+    return value if math.isinf(value) else round(value, digits)
