@@ -356,9 +356,9 @@ def generate_launch_description():
         DeclareLaunchArgument('person_model', default_value=''),
         # 로봇 모델: v14(기본, 쓰레기통 로봇 45x45x70) 또는 legacy(이전 모델, 비교용)
         DeclareLaunchArgument('robot', default_value='v14'),
-        # 카메라 높이(m)와 아래로 기울인 각도(도). 센서 배치 실험용, 기본은 URDF 값 (0.50 m, 0°)
-        DeclareLaunchArgument('camera_z', default_value='0.50'),
-        DeclareLaunchArgument('camera_pitch_deg', default_value='0'),
+        # 카메라 높이(m)와 아래로 기울인 각도(도). 기본은 URDF 값 (0.70 m, 15°, 2026-10-14). 비교 실험 때만 바꾼다
+        DeclareLaunchArgument('camera_z', default_value='0.70'),
+        DeclareLaunchArgument('camera_pitch_deg', default_value='15'),
 
         # 바로 Gazebo 실행
         gazebo,

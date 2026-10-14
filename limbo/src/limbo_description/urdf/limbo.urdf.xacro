@@ -37,10 +37,12 @@
   <!-- OAK-D Lite: 앞면, 바닥에서 0.50 m, 중심에서 왼쪽 0.1575 m, 수평 (2026-10-12 결정) -->
   <xacro:property name="camera_x" value="0.235"/>
   <xacro:property name="camera_y" value="0.1575"/>
-  <!-- 카메라 높이·아래로 기울인 각도(도). launch 인자 camera_z / camera_pitch_deg로 바꿀 수 있다 (센서 배치 실험용).
-       실물 마운트와 같은 값이어야 인식 좌표가 맞는다 -->
-  <xacro:arg name="camera_z" default="0.50"/>
-  <xacro:arg name="camera_pitch_deg" default="0"/>
+  <!-- 카메라 높이·아래로 기울인 각도(도). launch 인자 camera_z / camera_pitch_deg로 바꿀 수 있다.
+       2026-10-14 0.50 m 수평 → 0.70 m 아래 15°: 짧은 치마 밑단보다 높게 두어 올려다보는 구도를 없애고(개인정보),
+       근거리 바닥이 1.0 → 0.78 m 앞부터 보인다. 12·15·18° 비교에서 사람 검출·상자 costmap은 전과 같음 (experiments/2026-10-14_camera_angle).
+       실물 마운트와 같은 값이어야 인식 좌표가 맞는다. 기울인 깊이 카메라는 피치 오차 1°에 3 m 앞 바닥이 5 cm 떠 보이니 각도를 실측할 것 -->
+  <xacro:arg name="camera_z" default="0.70"/>
+  <xacro:arg name="camera_pitch_deg" default="15"/>
   <xacro:property name="camera_z" value="$(arg camera_z)"/>
   <xacro:property name="camera_pitch" value="${radians($(arg camera_pitch_deg))}"/>
 
