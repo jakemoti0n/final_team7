@@ -4,4 +4,9 @@ nav_recorder:
   ros__parameters:
     output_dir: ~/limbo_results   # 실행할 때마다 nav_<월드>_<날짜_시각>.csv 파일이 생긴다
     personal_space: 0.5           # m, 사람 중심에서 이 거리 안에 들어간 시간을 센다
+    collision_distance: 0.3       # m, 로봇 중심~사람 중심이 이보다 가까우면 충돌로 센다 (시뮬레이션 사람은 충돌이 없어 뚫고 지나가도 "성공"이 되기 때문)
+    near_person_distance: 1.5     # m, 멈춰 있을 때 사람이 이 안에 있으면 "사람 때문에 멈춤", 아니면 "막혀서 멈춤"
+    stop_speed: 0.05              # m/s, 이보다 느리면 멈춘 것으로 본다
+    plan_change_distance: 0.3     # m, 새 전역 경로가 직전 경로에서 이보다 벗어나면 "경로 바뀜"으로 센다 (사람 꼬리로 흔들리는 정도)
+    speed_window: 0.5             # s, 사람 최소 거리 순간의 사람 접근 속도·로봇 속도를 이 시간 전 위치와 비교해 구한다 (사람 탓 충돌 구분)
     robot_half_size: 0.225        # m, 로봇 외곽 정사각형 한 변의 절반 (nav2_params.yaml footprint와 같게)

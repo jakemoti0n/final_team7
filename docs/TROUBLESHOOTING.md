@@ -82,6 +82,24 @@
 - **다른 waypoint 파일을 만들 때**: 정지 지점의 yaw를 직전 지점에서 들어오는 방향으로 둔다. 도착 판정 범위를 넓히는 방법은 못 간 상태를 도착으로 착각하게 해서 쓰지 않는다
 - **자세한 기록**: [원인 조사(통제 실험)](NAV2_NEAR_GOAL_FAILURE_2026-10-12.md), [수정 후 10회 검증](NAV2_YAW_10_RUN_VALIDATION_2026-10-12.md) (원작자 작성)
 
+### 순찰이 막다른 통로 끝 0.8 m 앞에서 "Failed to make progress"를 반복함 — 2026-10-13
+- **증상**: 가구 월드 순찰에서 왼쪽 책상 통로 끝(G) 직전에 멈춰 회전·후진 복구를 반복. 같은 좌표를 단독 목표로 주면 성공
+- **원인**: 통로 끝 waypoint가 `pass`라 올라가는 경로와 내려오는 경로가 NavigateThroughPoses 경로 하나에 겹침. MPPI가 겹친 두 경로 사이에서 갈피를 못 잡음 (닫힌 고리 경로를 한 번에 줄 때와 같은 원인)
+- **해결**: 되돌아오는 지점을 `stop`(wait_sec 0)으로 두어 구간을 나눔 (`aischool_furnished_waypoints.yaml`, 2026-10-13)
+- **확인**: `tools/demo_patrol.sh aischool_2f_furnished aischool_2f_furnished_map aischool_furnished_waypoints.yaml` → 진전 없음 0번, 복구 0번으로 완주
+
+### 장애물 없는 직선에서도 0.42 m/s밖에 안 남 (상한은 0.6) — 2026-10-13
+- **증상**: 충장로 200 m 직선 왕복에서 평균 0.42 m/s. 속도 평활기·collision monitor·Gazebo 구동 상한은 모두 0.6 이상인데 MPPI가 그 이상을 안 냄
+- **원인**: MPPI `prune_distance` 1.7 m. MPPI는 예측 시간(4초) 동안 갈 수 있는 경로만 보고 궤적을 고르는데, 1.7 m는 4초 × 0.425 m/s라 그보다 빠른 궤적은 경로 끝을 넘어가 점수가 낮아짐. 즉 `prune_distance`가 사실상 속도 상한이 됨
+- **해결(후보)**: `prune_distance` 2.5(= 상한 0.6 × 4초 이상)면 평균 0.58 m/s, 왕복 500 → 351 s. 계산량은 거의 안 늚(batch 2000 × 80이 지배). 두 컴퓨터에서 1~6초 차이로 재현. **아직 어느 브랜치 설정에도 반영 안 함**(사람 있는 조건 재비교 뒤 결정, `PROJECT.md` 다음 5번)
+- **확인**: . 상한 0.75 + 3.0이면 0.72 m/s까지 나오지만 실물은 평지에서만 0.8 m/s라 0.6~0.7이 안전
+
+### launch 뒤에 순찰 노드를 이어서 치면 위치 추정 시간 초과로 끝남 — 2026-10-13
+- **증상**: `ros2 launch ... && ros2 run limbo_patrol patrol_node`처럼 이어 치면 순찰 노드가 "위치 추정 없음"으로 바로 끝남
+- **원인**: 순찰 노드는 `map → base_footprint` TF를 30초만 기다리는데, 시뮬레이션은 뜨는 데 1~2분 걸림(Gazebo + Nav2 lifecycle + AMCL)
+- **해결**: `tools/demo_patrol.sh`가 `bt_navigator`가 active가 되고 TF가 나올 때까지 기다렸다가 순찰 노드를 띄움. 30초를 늘리는 대신 이렇게 한 이유: 실제 로봇에서는 30초면 충분하고, 기다림은 시뮬레이션 쪽 사정이라 스크립트가 맡는 게 맞음
+- **확인**: `aischool_2f`·`aischool_2f_furnished`·`human_test_world` 순찰 완주. 참고: 이 스크립트를 백그라운드로 띄우면 launch가 SIGINT를 무시해 Ctrl+C 방식이 안 먹음 → `kill -TERM $(cat /tmp/demo_sim.pid)`
+
 ## 시뮬레이션
 
 ### Gazebo가 일시정지로 시작함 — 2026-10-02
@@ -107,6 +125,18 @@
 - **해결**: launch에 `world`, `map` 인자 추가 (`c4fb638`). 예: `world:=aischool_2f map:=aischool_2f_map`
 
 ---
+
+### 시뮬레이션이 실시간의 0.6배로 돌아 로봇이 느려 보임 — 2026-10-13
+- **증상**: 시연 화면에서 로봇이 너무 느려 보임. MPPI 실속 0.4 m/s가 화면에서는 0.24 m/s. Gazebo 실시간 비율(RTF) 0.60
+- **원인**: gz 서버의 물리 스레드(1 ms 스텝 = 시뮬 1초에 1,000번 계산)가 한 코어를 포화함(서버 CPU 150%, 그중 메인 스레드 88%). 코어가 16개라도 물리는 한 스레드라 더 못 씀. gz gui가 210%를 더 씀
+- **해결**: 월드 7개의 `max_step_size` 0.001 → 0.002 (`815bab9`). 계산이 반으로 줄어 RTF 0.60 → 0.95(화면 켬), 0.96(화면 끔). `build_limbo` 필요(월드 sdf는 install에 복사됨)
+- **확인**: 정확도는 같음 — 직진 6 m에서 8 mm 차이, 제자리 5바퀴 회전 오차는 1 ms·2 ms 모두 +150°, 최고 속도 0.44 m/s 동일. . 따로 알게 된 것: 바퀴 odom이 제자리 회전 때 9% 더 돈 것으로 세는 건 스텝과 무관(실린더 바퀴 옆미끄러짐으로 추정, EKF·AMCL이 보정)
+
+### 시뮬레이션이 3번 모두 시작 실패: 모든 노드가 `Failed init_port fastrtps_port...: open_and_lock_file failed` — 2026-10-14
+- **증상**: `sim_ctl.sh start`가 3번 다 실패. 로그에 parameter_bridge·person_detector·nav_recorder 등 모든 노드가 `[RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7003: open_and_lock_file failed`
+- **원인**: Fast DDS 공유 메모리 전송의 포트 파일(`/dev/shm/fastrtps_port*`)을 **SIGKILL로 죽은 노드가 잠근 채 남김**. 같은 날 잔존 프로세스(런치를 내려도 남은 `parameter_bridge`·파이썬 노드)를 SIGKILL로 정리한 뒤 생김. 잔존 자체는 gz transport 파이썬 노드가 SIGINT·SIGTERM을 삼켜서 생겼음
+- **해결**: ROS·gz 프로세스가 하나도 없을 때 `ros2 daemon stop` 후 `rm -f /dev/shm/fastrtps_*`. 잔존 프로세스는 `ps -eo pid,lstart,args`로 런치 시각별로 보고 **PID로** 끈다(패턴으로 모아 죽이면 자기 셸까지 죽음)
+- **확인**: 정리 뒤 같은 시뮬레이션이 1번에 시작해 완주. 
 
 ## 인지(person_detector)
 
@@ -144,10 +174,9 @@
   - 사각지대: MID-360은 아래쪽 −7°라 0.1m 상자를 5.1m 안쪽에서 못 보고, 카메라는 가로 72°라 옆으로 빠지면 못 봄. 상자는 가까이 가면 어느 센서에도 안 보임
   - 장애물 층(STVL)이 로컬 costmap에만 있어서 **전역 경로가 상자를 관통**함. MPPI가 상자 앞에서 10초 넘게 머뭇거리다 상자가 기억(`voxel_decay`)에서 지워지는 순간 부딪힘
   - 로컬 기억 시간만 늘리는 건 효과 없음: 5초 1/2, 10초 2/2 부딪힘 (머뭇거리는 시간이 더 김)
-- **해결**: 전역 costmap에도 STVL 층 추가 (기억 15초, `nav2_params.yaml`). 경로 계획기가 상자를 알고 처음부터 돌아감
+- **해결**: 전역 costmap에도 STVL 층 추가 (기억 15초, 2026-10-14부터 3초, `nav2_params.yaml`). 경로 계획기가 상자를 알고 처음부터 돌아감
 - **확인**: 기억 5초·15초 각 3회 (상자 통과 + 위쪽 복도 사람 왕복). 상자 6/6 회피 (최소 0.16~0.23m), 위쪽 복도 24/24 성공
-- **대가**: 좁은 복도를 사람이 막으면 경로 계획이 실패하고 재시도함 → `KNOWN_ISSUES.md`
-- **시험 도구**: `~/limbo_bags/sim_tools/` (`sim_ctl.sh`로 시뮬레이션 띄우고 끄기, `trial.sh`로 경로 주행 후 측정 CSV 저장)
+- **대가**: 좁은 복도를 사람이 막으면 경로 계획이 실패하고 재시도함 → `KNOWN_ISSUES.md`. **2026-10-13 추가**: 5초와 15초가 같은 성적이었는데 15초를 택한 근거가 없었고, 이 대가를 할 일에 올리지 않아 v14(더 크고 inflation 0.45)에서 복도 통과 실패로 악화된 뒤에야 다시 찾음. 재검토는 `PROJECT.md` 다음 0번
 
 ### 멈춘 사람에게 예측 경로가 계속 뻗고, 다시 잡히면 다른 사람이 됨 — 2026-10-07
 - **증상**: `aischool_2f_scenarios`에서 걷다가 4초 멈추는 사람의 추정 속도가 멈춘 뒤 2초가 지나도 약 0.4m/s (정지 판단 기준 0.05m/s 미만은 80개 중 1개). 예측 경로가 사람 앞으로 약 0.8m 더 뻗음. 검출이 잠깐 끊긴 뒤 같은 YOLO 추적 ID인데 새 person ID가 붙음
@@ -210,6 +239,12 @@
   cd ~/limbo/limbo && rm -rf build install log && build_limbo
   ```
 
+### 브랜치를 바꾸면 `person_detector`가 시작하자마자 죽어 시뮬레이션 시작이 계속 실패 — 2026-10-13
+- **증상**: 브랜치를 바꾸고 `build_limbo` 없이 띄우면 `person_detector`가 바로 종료되고 launch가 `process has died`로 실패를 반복
+- **원인**: `limbo_interfaces`의 메시지 집합이 브랜치마다 다름(ktj에 `PatrolState` 추가). 파이썬 노드는 심볼릭 링크라 소스가 바로 바뀌지만, 메시지 패키지는 빌드 산출물이라 옛 것이 남아 import가 실패함
+- **해결**: 브랜치를 바꾸면 `build_limbo`(최소한 `colcon build --packages-select limbo_interfaces`). 병합 뒤 pull 받는 쪽도 같음 — 변경 기록 "할 일"에 `build_limbo`가 있으면 건너뛰지 말 것
+- **확인**: 2026-10-13 재현·해결
+
 ### `git stash` 후 `limbo_monitor` 패키지가 없다는 에러 — 2026-10-06
 - **원인**: stash로 소스는 치웠는데 빌드 결과물(`install/limbo_monitor`)은 남아 서로 맞지 않았음
 - **해결**: `git stash pop` 후 해당 패키지 다시 빌드. 새 패키지가 있는 작업을 stash할 때는 빌드 결과물도 같이 정리해야 함
@@ -268,10 +303,3 @@
 ### MPPI가 낸 회전 명령이 Gazebo에서 잘림 (2026-09-23)
 - **원인**: Nav2 쪽 각속도 한계는 1.8인데 Gazebo diff-drive는 0.8로 남아 있었음
 - **해결**: Gazebo 한계를 Nav2 값에 맞췄음 (`1628b5a`, 이후 PR #5에서 각가속도 4.0으로 다시 조정됨)
-
-## 순찰이 막다른 통로 끝 0.8 m 앞에서 "Failed to make progress"를 반복함
-
-- **증상**: 가구 월드 순찰에서 왼쪽 책상 통로 끝(G) 직전에 멈춰 회전·후진 복구를 반복. 같은 좌표를 단독 목표로 주면 성공
-- **원인**: 통로 끝 waypoint가 `pass`라 올라가는 경로와 내려오는 경로가 NavigateThroughPoses 경로 하나에 겹침. MPPI가 겹친 두 경로 사이에서 갈피를 못 잡음 (닫힌 고리 경로를 한 번에 줄 때와 같은 원인)
-- **해결**: 되돌아오는 지점을 `stop`(wait_sec 0)으로 두어 구간을 나눔 (`aischool_furnished_waypoints.yaml`, 2026-10-13)
-- **확인**: `tools/demo_patrol.sh aischool_2f_furnished aischool_2f_furnished_map aischool_furnished_waypoints.yaml` → 진전 없음 0번, 복구 0번으로 완주

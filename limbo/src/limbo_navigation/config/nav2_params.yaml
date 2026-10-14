@@ -109,7 +109,10 @@ controller_server:
       wz_std: 0.8
       wz_max: 1.8
       iteration_count: 1
-      prune_distance: 1.7
+      # 2026-10-14 1.7 → 2.5: MPPI는 예측 시간(4 s) 안에 갈 수 있는 경로만 보므로 1.7 m면 0.425 m/s가 사실상 상한이 됨.
+      # 2.5(= 상한 0.6 × 4 s 이상)로 충장로 직선 0.42 → 0.58 m/s, 사람 있는 복도·홀에서도 충돌 0·사람 거리 동일에 시간 −22~27 %
+      # (2026-10-13 충장로 직선, 2026-10-14 사람 있는 복도·홀 시뮬레이션). 상한 0.75는 MPPI 경고가 늘어 보류
+      prune_distance: 2.5
       transform_tolerance: 0.5
       temperature: 0.2
       gamma: 0.015
@@ -210,7 +213,18 @@ local_costmap:
       human_layer:
         plugin: "limbo_navigation::HumanLayer"
         enabled: true
-        max_prediction_age : 1.0
+        max_prediction_age: 1.0   # s, 이보다 오래된 예측은 버림 (person_detector는 그 프레임에서 본 사람만 보냄)
+        # 사람 중심에서 이 반경 안은 치명(254). 사람 몸 반경(어깨 폭 0.45~0.5 m). MPPI는 치명만 충돌로 보기 때문에
+        # 이게 없으면 사람을 뚫는 궤적을 고른다 (2026-10-13 복도 시뮬레이션). 뒤의 inflation 층이 로봇 반경만큼 부풀림
+        lethal_radius: 0.25
+        lethal_time: 0.5          # s, 현재 위치 + 이 시간 안의 예측점까지 치명. 예측 경로 전부를 치명으로 하면 사람만 보면 우회함 (PROJECT 2-1)
+        radius: 0.35              # m, 가우시안 비용을 칠하는 최대 반경
+        sigma: 0.15               # m, 가우시안 퍼짐
+        near_peak_cost: 220.0     # 가까운 미래(min_prediction_time) 예측점의 중심 비용
+        far_peak_cost: 110.0      # 먼 미래(max_prediction_time) 예측점의 중심 비용. 사이는 선형
+        min_prediction_time: 0.25 # s, person_detector 예측 간격과 같게
+        max_prediction_time: 2.0  # s, person_detector 예측 길이(horizon)와 같게
+        min_cost: 10.0            # 이보다 작은 가우시안 꼬리는 안 칠함
 
       stvl_layer:
         plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"
@@ -434,9 +448,10 @@ global_costmap:
         # linear decay
         decay_model: 0
 
-        # 약 1초 동안 재관측되지 않은 voxel을 decay
-        # 경로 계획용 기억 시간. 5초와 비교해 상자 회피·사람 시험 결과가 같거나 조금 나았다
-        voxel_decay: 15.0
+        # 경로 계획용 기억 시간. 사람이 지나간 자리가 이 시간만큼 전역 costmap에 남아
+        # 전역 경로를 흔들기 때문에 상자 회피가 유지되는 한 작게 둔다.
+        # 2026-10-14 15 → 3초: 3초·15초 성적이 같았음(상자 회피 유지, 복도 복구 같음)
+        voxel_decay: 3.0
 
         voxel_size: 0.05
 

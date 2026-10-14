@@ -8,6 +8,23 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-14 (31) 시뮬레이션에서 채택된 설정·코드 반영: 전역 STVL 3초, HumanLayer 치명 비용, prune_distance 2.5, 카메라 0.7 m 15°, nav_recorder 지표
+
+**할 일**
+- pull 후 `build_limbo` (HumanLayer C++). 실물 카메라 마운트를 0.70 m·아래 15°로 맞추고 피치를 실측해 URDF와 같게
+
+**변경**
+- `nav2_params.yaml`: 전역 costmap STVL `voxel_decay` 15 → 3초(3초·15초 성적 같음, 작은 값), MPPI `prune_distance` 1.7 → 2.5(1.7이면 4 s 예측 × 0.425 m/s가 사실상 속도 상한. 충장로 직선 0.42 → 0.58 m/s, 사람 있는 복도·홀에서 충돌 0·사람 거리 동일에 시간 −22~31 %), `human_layer` 파라미터 9개
+- `human_layer.cpp/.hpp` 다시 씀: 사람 현재 위치와 0.5 s 안 예측점은 몸 반경 0.25 m 안을 치명(254)으로. 전에는 현재 위치를 안 칠하고 최고 비용 220이라 MPPI 충돌 판정에 안 걸려 사람을 뚫는 궤적을 골랐음. 상수는 yaml로, 2초마다 찍던 INFO 로그는 DEBUG로
+- `limbo.urdf.xacro`·`gazebo.launch.py`·`start_simulation.launch.py`: 카메라 0.50 m 수평 → 0.70 m 아래 15°(짧은 치마 밑단보다 높게 두어 올려다보지 않음, 근거리 바닥 0.78 m부터. 12·15·18° 비교에서 사람 검출·상자 costmap 전과 같음). `camera_z`·`camera_pitch_deg` 인자
+- `nav_recorder`: 순찰(`navigate_through_poses`)도 기록(`action` 열), 사람 충돌(0.3 m 미만)·사람 앞/그 외 멈춤·전역 경로 변경·최소 거리 순간의 사람 접근 속도와 로봇 속도 열. 테스트 23개
+- `tools/demo_patrol.sh`: Nav2 준비 검사 `grep -q active`가 `inactive`에도 맞던 것을 `^active`로
+- `README.md`(따라 하면 무엇이 뜨는지 흐름으로 다시 씀, CSV 열 표), `docs/PROJECT.md`(에이전트용 안내서: 설계 전제·기록 규칙·결정 이력·지금 상태), `docs/KNOWN_ISSUES.md`(맨 위 "지금 주행을 막는 것"), `docs/TROUBLESHOOTING.md`(10-13·14 항목 추가)
+
+**확인**
+- ktj에서 `colcon build` 10개 패키지, `limbo_evaluation` pytest 23개 통과, xacro 카메라 joint (0.235, 0.1575, 0.70) pitch 0.262 rad
+- 학원 2층 순찰 1회 완주 (`tools/demo_patrol.sh`)
+
 ## 2026-10-13 (30) lab에서 실제 로봇 v14 모델·학원 2층 지도·waypoint 선택 가져옴 (실험 기록은 뺌)
 
 **할 일**

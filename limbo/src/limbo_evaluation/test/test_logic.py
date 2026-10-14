@@ -164,3 +164,88 @@ def test_csv_header_written_once(tmp_path):
     with open(path) as f:
         rows = list(csv.DictReader(f))
     assert rows == [{'a': '1', 'b': '2'}, {'a': '3', 'b': '4'}]
+
+
+def test_metrics_collision_and_stopped_time_split_by_person():
+    m = goal_metrics.GoalMetrics(goal_metrics.MetricsConfig(
+        collision_distance=0.3, near_person_distance=1.5, stop_speed=0.05))
+    m.add_truth(0.0, 0.0, 0.0, 'a', 3.0)
+    m.add_truth(1.0, 0.5, 0.0, 'a', 2.0)   # 0.5 m/s 이동, 멈춤 아님
+    m.add_truth(2.0, 0.5, 0.0, 'a', 1.0)   # 멈춤, 사람 1.5 m 안 → 사람 때문에 멈춤
+    m.add_truth(3.0, 0.5, 0.0, 'a', 0.2)   # 멈춤 + 사람과 겹침(충돌)
+    m.add_truth(4.0, 0.51, 0.0, 'a', 2.0)  # 0.01 m/s, 사람 없음 → 막혀서 멈춤
+    row = m.row('SUCCEEDED')
+
+    assert row['person_collision'] == 1
+    assert row['person_collision_time_s'] == 1.0
+    assert row['stopped_time_s'] == 3.0
+    assert row['stopped_near_person_s'] == 2.0
+    assert row['stopped_other_s'] == 1.0
+
+
+def test_metrics_no_collision_when_person_far():
+    m = goal_metrics.GoalMetrics(goal_metrics.MetricsConfig())
+    m.add_truth(0.0, 0.0, 0.0, 'a', 0.4)
+    m.add_truth(1.0, 1.0, 0.0, 'a', 0.4)
+    row = m.row('SUCCEEDED')
+    assert (row['person_collision'], row['person_collision_time_s']) == (0, 0.0)
+    assert row['stopped_time_s'] == 0.0
+
+
+def test_sample_by_spacing_keeps_first_and_spaced_points():
+    points = [(0.0, 0.0), (0.05, 0.0), (0.1, 0.0), (0.25, 0.0), (0.3, 0.0), (0.5, 0.0)]
+    assert goal_metrics.sample_by_spacing(points, 0.2) == [(0.0, 0.0), (0.25, 0.0), (0.5, 0.0)]
+    assert goal_metrics.sample_by_spacing([], 0.2) == []
+
+
+def test_plan_deviation_is_max_distance_from_reference():
+    reference = [(0.0, 0.0), (1.0, 0.0), (2.0, 0.0)]
+    assert goal_metrics.plan_deviation([(0.0, 0.0), (1.0, 0.5)], reference) == pytest.approx(0.5)
+    # 같은 경로의 뒷부분만 남아도 벗어난 게 아니다
+    assert goal_metrics.plan_deviation([(1.0, 0.0), (2.0, 0.0)], reference) == 0.0
+
+
+def test_metrics_counts_plan_changes_only_when_path_moves():
+    m = goal_metrics.GoalMetrics(goal_metrics.MetricsConfig(
+        plan_change_distance=0.3, plan_sample_spacing=0.2))
+    straight = [(x / 10, 0.0) for x in range(0, 21)]          # (0,0)→(2,0)
+    detour = [(x / 10, 0.0 if x < 5 or x > 15 else 0.6) for x in range(0, 21)]
+    m.add_plan(straight)
+    m.add_plan(straight[5:])   # 지나온 만큼 짧아진 같은 경로
+    m.add_plan(detour)         # 0.6 m 돌아감 → 바뀜
+    m.add_plan(detour)
+    m.add_plan([])             # 빈 경로는 세지 않는다
+    row = m.row('SUCCEEDED')
+    assert (row['plan_updates'], row['plan_changes']) == (4, 1)
+
+
+def test_metrics_approach_speed_person_walks_into_stopped_robot():
+    m = goal_metrics.GoalMetrics(goal_metrics.MetricsConfig(speed_window=0.5))
+    # 로봇은 (0,0)에 서 있고 사람이 x=2.0에서 1.0 m/s로 다가온다
+    for i in range(11):
+        t = i * 0.1
+        px = 2.0 - 1.0 * t
+        m.add_truth(t, 0.0, 0.0, 'a', px, (px, 0.0))
+    row = m.row('SUCCEEDED')
+    assert row['min_person_distance_m'] == 1.0
+    assert row['person_approach_speed_mps'] == pytest.approx(1.0, abs=0.05)
+    assert row['robot_speed_at_min_mps'] == 0.0
+
+
+def test_metrics_approach_speed_robot_drives_into_standing_person():
+    m = goal_metrics.GoalMetrics(goal_metrics.MetricsConfig(speed_window=0.5))
+    for i in range(11):
+        t = i * 0.1
+        rx = 0.5 * t
+        m.add_truth(t, rx, 0.0, 'a', 2.0 - rx, (2.0, 0.0))
+    row = m.row('SUCCEEDED')
+    assert row['person_approach_speed_mps'] == pytest.approx(0.0, abs=0.05)
+    assert row['robot_speed_at_min_mps'] == pytest.approx(0.5, abs=0.05)
+
+
+def test_metrics_approach_speed_empty_without_person_position():
+    m = goal_metrics.GoalMetrics(goal_metrics.MetricsConfig())
+    m.add_truth(0.0, 0.0, 0.0, 'a', 1.0)
+    m.add_truth(1.0, 0.5, 0.0, 'a', 0.5)
+    row = m.row('SUCCEEDED')
+    assert row['person_approach_speed_mps'] == ''
