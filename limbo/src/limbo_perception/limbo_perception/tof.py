@@ -102,8 +102,27 @@ class ApproachConfig:
     max_range: float = 3.0       # m, 카메라가 사람을 믿을 만하게 보는 거리
     min_speed: float = 0.2       # m/s, 이보다 느리면 방향을 믿지 않음 (서 있는 사람은 다가오는 사람이 아님)
     seen_hold_sec: float = 1.0   # s, 다가오는 사람을 마지막으로 본 뒤 이만큼은 다가오는 중으로 봄 (검출 끊김)
-    release_sec: float = 1.0     # s, 다가옴도 없고 ToF도 비면 이만큼 뒤 다시 출발
+    release_sec: float = 1.0     # s, 다가옴도 ToF도 앞 섹터 점유도 없으면 이만큼 뒤 다시 출발
     max_hold_sec: float = 60.0   # s, 상한. 넘으면 풀어서 보통 주행·복구로
+
+
+@dataclass
+class SectorConfig:
+    half_angle_deg: float = 30.0  # 범퍼 앞 기준 좌우 각
+    max_range: float = 1.5        # m, 범퍼 앞부터. ToF(0.5 m) 밖에 선 손님까지
+    min_points: int = 2           # 이만큼 칸이 차야 점유 (한 칸짜리 잡음 무시)
+
+
+def sector_occupied(points_base, origin_x, config):
+    """base_link 기준 평면 점(N×2 이상)이 범퍼 앞(origin_x) ±half_angle, max_range 안에 min_points 이상인가."""
+    if len(points_base) == 0:
+        return False
+    points = np.asarray(points_base, dtype=float).reshape(len(points_base), -1)[:, :2]
+    points = points[np.isfinite(points).all(axis=1)]
+    dx, dy = points[:, 0] - origin_x, points[:, 1]
+    inside = (dx > 0.0) & (np.hypot(dx, dy) <= config.max_range) & \
+        (np.abs(np.degrees(np.arctan2(dy, dx))) <= config.half_angle_deg)
+    return int(inside.sum()) >= config.min_points
 
 
 def closest_approach(px, py, vx, vy):
@@ -120,8 +139,9 @@ class ApproachWatch:
     """다가오는 사람(손님)이면 그 자리에 멈춰 기다린다 (전제 2-1, R5 Q4).
 
     사람 속도 방향 직선이 로봇에서 cpa_radius 안을 지나면 정지를 시작한다.
-    카메라는 1.5 m 안 사람을 거의 못 보므로(R4), 정지한 뒤에는 ToF가 코앞을 막힘으로 보는 동안
-    (손님이 와서 섬) 정지를 유지한다. 다가옴도 ToF도 release_sec 동안 없으면(지나감·떠남) 다시 출발한다.
+    카메라는 1.5 m 안 사람을 거의 못 보므로(R4), 정지한 뒤에는 ToF가 코앞을 막힘으로 보거나
+    라이다 앞 섹터(범퍼 앞 1.5 m)가 차 있는 동안(손님이 와서 섬) 정지를 유지한다(Q5).
+    정지는 다가옴으로만 시작하므로 상자 앞에서는 서지 않는다. 셋 다 release_sec 동안 없으면 다시 출발한다.
     시각은 모두 메시지 시각(초)이다.
     """
 
@@ -144,14 +164,14 @@ class ApproachWatch:
         if any(self.approaching(*person) for person in people):
             self.last_approach = t
 
-    def on_tick(self, t, tof_blocked):
+    def on_tick(self, t, tof_blocked, front_occupied=False):
         c = self.config
         seen = self.last_approach is not None and 0.0 <= t - self.last_approach <= c.seen_hold_sec
         if self.stopped_at is None:
             if seen:
                 self.stopped_at = self.last_reason = t
             return self.stopped_at is not None
-        if seen or tof_blocked:
+        if seen or tof_blocked or front_occupied:
             self.last_reason = t
         if t - self.last_reason >= c.release_sec or t - self.stopped_at > c.max_hold_sec:
             self.stopped_at = None

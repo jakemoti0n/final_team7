@@ -26,3 +26,8 @@ tof_node:
     approach_seen_hold_sec: 1.0  # s, 검출이 잠깐 끊겨도 다가오는 중으로 봄
     approach_release_sec: 1.0    # s, 다가옴도 ToF도 이만큼 없으면 다시 출발
     approach_max_hold_sec: 60.0  # s, 상한
+    # 정지 뒤 ToF(0.5 m) 밖에 선 손님 유지: /scan 앞 섹터 점유 (Q5). /scan은 라이다 높이 띠라 30 cm 상자는 안 잡힘
+    scan_topic: /scan
+    front_sector_half_angle_deg: 30.0  # 범퍼 앞 기준 좌우
+    front_sector_max_range: 1.5        # m, 범퍼 앞부터
+    front_sector_min_points: 2         # 한 칸짜리 잡음 무시

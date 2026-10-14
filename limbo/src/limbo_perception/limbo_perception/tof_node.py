@@ -1,7 +1,8 @@
 """ToF 점구름 → /tof/obstacle_ahead, /tof/nearest, 그리고 사람 때문에 멈출지 두 가지 (R5).
 
 /person_blocking: 막히기 시작한 순간 직전에 카메라가 다가오던 사람을 봤으면 참(래치, tof.PersonBlocking).
-/person_approaching: 사람이 진로 위로 다가오면 참, 와서 서 있는 동안(ToF 막힘) 유지(tof.ApproachWatch).
+/person_approaching: 사람이 진로 위로 다가오면 참, 와서 서 있는 동안(ToF 막힘 또는 /scan 앞 섹터 점유) 유지
+(tof.ApproachWatch).
 BT 조건 노드 IsPersonBlocking·IsPersonApproaching이 이 둘을 본다. 실물 I2C 드라이버도 /tof/points만 내면 된다.
 """
 
@@ -12,8 +13,9 @@ import numpy as np
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import LaserScan, PointCloud2
 from sensor_msgs_py import point_cloud2
 from std_msgs.msg import Bool
 from tf2_ros import Buffer, TransformException, TransformListener
@@ -43,6 +45,7 @@ class TofNode(Node):
             confirm_frames=p('confirm_frames', 3).value)
         self.base_frame = p('base_frame', 'base_link').value
         self.latched = False
+        self.sensor_x = 0.25   # 첫 ToF 프레임에서 TF로 바뀜
         self.debounce = tof.Debounce(self.config.confirm_frames)
         self.blocking = tof.PersonBlocking(tof.BlockingConfig(
             memory_sec=p('memory_sec', 5.0).value,
@@ -64,6 +67,13 @@ class TofNode(Node):
             release_sec=p('approach_release_sec', 1.0).value,
             max_hold_sec=p('approach_max_hold_sec', 60.0).value))
         self.approaching = False
+        self.sector = tof.SectorConfig(
+            half_angle_deg=p('front_sector_half_angle_deg', 30.0).value,
+            max_range=p('front_sector_max_range', 1.5).value,
+            min_points=p('front_sector_min_points', 2).value)
+        self.front = (None, False)   # (scan 시각, 점유)
+        self.create_subscription(LaserScan, p('scan_topic', '/scan').value, self.on_scan,
+                                 qos_profile_sensor_data)
         self.approach_pub = self.create_publisher(Bool, '/person_approaching', 10)
         self.create_subscription(
             PersonPredictionArray, p('predictions_topic', '/person_detector/predictions').value,
@@ -87,6 +97,21 @@ class TofNode(Node):
                    q.velocity.x, q.velocity.y) for q in msg.predictions]
         self.approach.on_people(seconds(msg.header.stamp), people)
 
+    def on_scan(self, msg):
+        try:
+            t = self.tf_buffer.lookup_transform(self.base_frame, msg.header.frame_id, Time())
+        except TransformException:
+            return
+        ranges = np.asarray(msg.ranges, dtype=float)
+        angles = msg.angle_min + msg.angle_increment * np.arange(len(ranges))
+        valid = np.isfinite(ranges) & (ranges >= msg.range_min) & (ranges <= msg.range_max)
+        points = np.column_stack([ranges * np.cos(angles), ranges * np.sin(angles),
+                                  np.zeros(len(ranges))])[valid]
+        offset = t.transform.translation
+        points = points @ rotation_matrix(t.transform.rotation).T + [offset.x, offset.y, offset.z]
+        self.front = (seconds(msg.header.stamp),
+                      tof.sector_occupied(points, self.sensor_x, self.sector))
+
     def on_person(self, msg):
         self.blocking.on_person(seconds(msg.header.stamp), msg.point.x, msg.point.y)
 
@@ -101,6 +126,7 @@ class TofNode(Node):
         points = point_cloud2.read_points_numpy(msg, field_names=('x', 'y', 'z'))
         offset = t.transform.translation
         points = points @ rotation_matrix(t.transform.rotation).T + [offset.x, offset.y, offset.z]
+        self.sensor_x = offset.x
         point, distance = tof.nearest_point(points, offset.x, self.config)
         blocked = self.debounce.update(distance < self.config.stop_distance)
         self.ahead_pub.publish(Bool(data=blocked))
@@ -109,7 +135,10 @@ class TofNode(Node):
             self.get_logger().info(f'person_blocking {latched}')
             self.latched = latched
         self.blocking_pub.publish(Bool(data=latched))
-        approaching = self.approach.on_tick(seconds(msg.header.stamp), blocked)
+        now = seconds(msg.header.stamp)
+        scan_time, occupied = self.front
+        front = occupied and scan_time is not None and abs(now - scan_time) < 0.5
+        approaching = self.approach.on_tick(now, blocked, front)
         if approaching != self.approaching:
             self.get_logger().info(f'person_approaching {approaching}')
             self.approaching = approaching

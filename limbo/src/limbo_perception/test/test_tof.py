@@ -111,3 +111,28 @@ def test_approach_stop_gives_up_after_max_hold():
     w.on_people(0.0, [(2.0, 0.0, -1.0, 0.0)])
     assert w.on_tick(0.0, True) is True
     assert w.on_tick(61.0, True) is False
+
+
+def test_front_sector_counts_only_points_ahead_of_the_bumper():
+    c = tof.SectorConfig()
+    assert tof.sector_occupied([[1.2, 0.05], [1.21, 0.0]], SENSOR_X, c) is True     # 0.95 m 앞
+    assert tof.sector_occupied([[1.2, 0.05]], SENSOR_X, c) is False                     # 한 칸은 잡음
+    assert tof.sector_occupied([[1.0, 1.0], [1.0, 1.02]], SENSOR_X, c) is False         # 옆(53°)
+    assert tof.sector_occupied([[2.0, 0.0], [2.0, 0.01]], SENSOR_X, c) is False         # 1.75 m 앞
+    assert tof.sector_occupied([[-0.5, 0.0], [-0.5, 0.01]], SENSOR_X, c) is False       # 뒤
+    assert tof.sector_occupied([[math.inf, 0.0], [math.nan, 0.0]], SENSOR_X, c) is False
+
+
+def test_guest_outside_tof_range_keeps_the_stop_through_the_front_sector():
+    w = tof.ApproachWatch(tof.ApproachConfig())
+    w.on_people(0.0, [(2.0, 0.0, -0.8, 0.0)])
+    assert w.on_tick(0.1, False) is True
+    for i in range(1, 100):                              # 1 m 앞에 10 s 서 있음: ToF 밖, 라이다 섹터만 참
+        assert w.on_tick(0.1 + 0.1 * i, False, True) is True
+    assert w.on_tick(11.5, False, False) is False        # 떠나고 1 s 넘게 비면 재개
+
+
+def test_front_sector_alone_never_starts_a_stop():
+    w = tof.ApproachWatch(tof.ApproachConfig())
+    assert w.on_tick(0.0, True, True) is False           # 상자·벽 앞: 다가온 사람이 없으면 정지 안 함
+    assert tof.sector_occupied([], SENSOR_X, tof.SectorConfig()) is False
