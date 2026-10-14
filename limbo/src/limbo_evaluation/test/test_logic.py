@@ -249,3 +249,16 @@ def test_metrics_approach_speed_empty_without_person_position():
     m.add_truth(1.0, 0.5, 0.0, 'a', 0.5)
     row = m.row('SUCCEEDED')
     assert row['person_approach_speed_mps'] == ''
+
+
+def test_wall_distance_from_grid():
+    from limbo_evaluation import walls
+    # 5x5, 가운데 열(i=2)이 벽. 해상도 0.5 m, 원점 (0,0)
+    data = [0] * 25
+    for j in range(5):
+        data[j * 5 + 2] = 100
+    w = walls.WallDistance(5, 5, 0.5, 0.0, 0.0, data)
+    assert w.at(0.25, 1.25) == pytest.approx(1.0, abs=0.05)   # i=0 → 벽(i=2)까지 2칸 = 1.0 m
+    assert w.at(0.75, 1.25) == pytest.approx(0.5, abs=0.05)
+    assert w.at(1.25, 1.25) == 0.0                              # 벽 칸
+    assert math.isnan(w.at(9.0, 9.0))

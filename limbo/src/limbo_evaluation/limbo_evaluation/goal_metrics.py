@@ -46,6 +46,7 @@ class GoalMetrics:
         self.plan_changes = 0
         self.min_obstacle_distance = math.inf
         self.nearest_obstacle = ''
+        self.wall_distances = []   # 정답 위치마다 지도 벽까지 거리
         self.obstacle_contact_time = 0.0
         self.localization_errors = []
         self.recoveries = 0
@@ -117,6 +118,10 @@ class GoalMetrics:
             self.plan_changes += 1
         self.last_plan = points
 
+    def add_wall_distance(self, distance):
+        if not math.isnan(distance):
+            self.wall_distances.append(distance)
+
     def add_obstacle(self, dt, name, distance):
         """정답 위치 한 번마다 로봇 외곽에서 가장 가까운 장애물까지 거리 (0이면 닿음)."""
         if distance <= 0.0:
@@ -158,6 +163,10 @@ class GoalMetrics:
             'min_obstacle_distance_m': _round(self.min_obstacle_distance, 2),
             'nearest_obstacle': self.nearest_obstacle,
             'obstacle_contact_time_s': _round(self.obstacle_contact_time, 1),
+            'min_wall_distance_m': (_round(min(self.wall_distances), 2)
+                                    if self.wall_distances else ''),
+            'mean_wall_distance_m': (_round(sum(self.wall_distances) / len(self.wall_distances), 2)
+                                     if self.wall_distances else ''),
             'localization_error_mean_m': _round(sum(errors) / len(errors), 3) if errors else '',
             'localization_error_max_m': _round(max(errors), 3) if errors else '',
             'controller_rate_warnings': self.controller_warnings,
