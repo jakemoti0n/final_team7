@@ -83,7 +83,7 @@ def generate_launch_description():
         value_type=str,
     )
     camera_z_arg = DeclareLaunchArgument("camera_z", default_value="0.70")
-    camera_pitch_arg = DeclareLaunchArgument("camera_pitch_deg", default_value="15")
+    camera_pitch_arg = DeclareLaunchArgument("camera_pitch_deg", default_value="0")
 
     world_arg = DeclareLaunchArgument(
         "world",
