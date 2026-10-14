@@ -12,12 +12,29 @@
         <ControllerSelector selected_controller="{selected_controller}" default_controller="FollowPath" topic_name="controller_selector"/>
         <PlannerSelector selected_planner="{selected_planner}" default_planner="GridBased" topic_name="planner_selector"/>
         <RateController hz="1.0">
-          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
-            <ComputePathToPose goal="{goal}" path="{path}" planner_id="{selected_planner}" error_code_id="{compute_path_error_code}"/>
-            <Sequence>
-              <WouldAPlannerRecoveryHelp error_code="{compute_path_error_code}"/>
-              <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
-            </Sequence>
+          <!-- 사람 때문에 멈춰 기다리는 동안 경로 계획이 실패해도 목표를 끝내지 않고 1 s씩 기다린다 (PROJECT.md 2-2, R5 Q6).
+               사람 때문이 아니면 바깥은 기다리지 않고 바로 실패를 넘겨 기존 동작과 같다 -->
+          <RecoveryNode number_of_retries="60" name="ComputePathOrWait">
+            <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+              <ComputePathToPose goal="{goal}" path="{path}" planner_id="{selected_planner}" error_code_id="{compute_path_error_code}"/>
+              <Sequence>
+                <!-- 사람 때문에 기다리는 중이면 전역 costmap을 비우지 않는다 (사람 표시까지 지워짐) -->
+                <Inverter><IsPersonApproaching name="NoClearGlobalWhenApproaching" topic="/person_approaching"/></Inverter>
+                <Inverter><IsPersonBlocking name="NoClearGlobalWhenBlocked" topic="/person_blocking"/></Inverter>
+                <WouldAPlannerRecoveryHelp error_code="{compute_path_error_code}"/>
+                <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+              </Sequence>
+            </RecoveryNode>
+            <Fallback name="WaitForPersonWhilePlanning">
+              <Sequence>
+                <IsPersonApproaching name="ApproachingSoWaitPlanning" topic="/person_approaching"/>
+                <Wait wait_duration="1.0"/>
+              </Sequence>
+              <Sequence>
+                <IsPersonBlocking name="BlockedSoWaitPlanning" topic="/person_blocking"/>
+                <Wait wait_duration="1.0"/>
+              </Sequence>
+            </Fallback>
           </RecoveryNode>
         </RateController>
         <!-- 진로 위로 다가오는 사람이 있거나(/person_approaching, Q4) 사람 때문에 코앞이 막혔으면(/person_blocking, Q3)
