@@ -171,6 +171,9 @@ source /opt/ros/jazzy/setup.bash && python -c "import torch, ultralytics, cv_bri
 | `duration_s`, `path_length_m`, `mean_speed_mps` | 걸린 시간, 실제 주행 거리, 평균 속도 (Gazebo 정답 위치 기준) |
 | `min_person_distance_m`, `nearest_person` | 사람 중심까지 가장 가까웠던 거리와 그 사람 (월드 SDF의 시간표 기준). 0.3 m 미만이면 사람 모델과 겹친 것(충돌) |
 | `personal_space_time_s` | 사람 0.5 m 안에 있던 시간 (`nav_recorder.yaml`의 `personal_space`) |
+| `person_collision`, `person_collision_time_s` | 사람 중심과 0.3 m 미만으로 겹친 적이 있으면 1, 겹쳐 있던 시간. 시뮬레이션 사람은 충돌이 없어 뚫고 지나가도 `status`는 SUCCEEDED가 되므로 이 열로 거른다 (`collision_distance`) |
+| `stopped_time_s`, `stopped_near_person_s`, `stopped_other_s` | 0.05 m/s 미만으로 멈춰 있던 시간. 그중 사람이 1.5 m 안에 있던 시간(사람 때문에 멈춤)과 그 밖(막혀서 멈춤) (`stop_speed`, `near_person_distance`) |
+| `plan_updates`, `plan_changes` | 전역 경로를 받은 횟수와 그중 직전 경로에서 0.3 m 넘게 벗어난 횟수. 사람 꼬리로 경로가 흔들리는 정도 (`plan_change_distance`) |
 | `min_obstacle_distance_m`, `nearest_obstacle`, `obstacle_contact_time_s` | 지도에 없는 장애물(SDF 이름이 `obstacle_`로 시작)까지 가장 가까웠던 거리, 그 장애물, 닿아 있던 시간 |
 | `localization_error_mean_m`, `_max_m` | 위치 추정 오차 (TF `map → base_footprint`와 정답 비교) |
 | `recoveries`, `controller_rate_warnings`, `wheel_slip_events` | 복구 동작 횟수, 컨트롤러 주기 경고 수, 헛돎 감지 수 |

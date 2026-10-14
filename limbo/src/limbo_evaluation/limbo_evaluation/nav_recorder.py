@@ -2,7 +2,8 @@
 Nav2 Goal이 끝날 때마다 주행 평가 지표를 CSV에 한 줄씩 남기는 노드 (시뮬레이션 전용).
 
 Gazebo 정답 위치(/ground_truth/odom)와 월드 SDF의 사람 시간표를 기준으로
-주행 시간·거리, 사람과의 최소 거리, 위치 추정 오차 등을 잰다.
+주행 시간·거리, 사람과의 최소 거리(0.3 m 미만은 충돌), 멈춘 시간(사람 앞 / 그 외),
+전역 경로가 바뀐 횟수, 위치 추정 오차 등을 잰다.
 위치 추정 오차는 TF(map → base_footprint)로 재므로 AMCL이 아닌 다른 위치 추정을 써도 같은 기준이다.
 Goal은 RViz·순찰 노드 등 누가 보내든 Nav2 액션 상태를 보고 따라간다.
 """
@@ -16,7 +17,7 @@ from action_msgs.msg import GoalStatus, GoalStatusArray
 from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
 from limbo_evaluation import actors, csv_log, goal_metrics, obstacles
 from nav2_msgs.action import NavigateToPose
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, Path
 from rcl_interfaces.msg import Log
 import rclpy
 from rclpy.executors import ExternalShutdownException
@@ -70,6 +71,7 @@ class NavRecorder(Node):
             self.feedback_callback, QUEUE)
         self.create_subscription(Log, '/rosout', self.rosout_callback, QUEUE)
         self.create_subscription(Bool, self.slip_topic, self.slip_callback, QUEUE)
+        self.create_subscription(Path, self.plan_topic, self.plan_callback, QUEUE)
 
         self.get_logger().info(
             f'Nav recorder started: {len(self.trajectories)} people, '
@@ -87,13 +89,18 @@ class NavRecorder(Node):
         self.base_frame = p('base_frame', 'base_footprint').value
         self.navigate_action = p('navigate_action', '/navigate_to_pose').value
         self.slip_topic = p('slip_topic', '/wheel_slip').value
+        self.plan_topic = p('plan_topic', '/plan').value
         self.controller_node = p('controller_node', 'controller_server').value
         # 로봇 외곽 (정사각형 한 변의 절반). nav2_params.yaml의 footprint와 맞춘다
         self.robot_half_size = p('robot_half_size', 0.225).value
 
         m = goal_metrics.MetricsConfig()
         self.metrics_config = goal_metrics.MetricsConfig(
-            personal_space=p('personal_space', m.personal_space).value)
+            personal_space=p('personal_space', m.personal_space).value,
+            collision_distance=p('collision_distance', m.collision_distance).value,
+            near_person_distance=p('near_person_distance', m.near_person_distance).value,
+            stop_speed=p('stop_speed', m.stop_speed).value,
+            plan_change_distance=p('plan_change_distance', m.plan_change_distance).value)
 
     def _load_world(self):
         """(사람 시간표, 장애물 상자). 월드 파일을 못 읽으면 둘 다 비운다."""
@@ -162,6 +169,11 @@ class NavRecorder(Node):
                 and CONTROLLER_RATE_WARNING in msg.msg):
             self.metrics.controller_warnings += 1
 
+    def plan_callback(self, msg):
+        if self.metrics is not None:
+            self.metrics.add_plan(
+                [(p.pose.position.x, p.pose.position.y) for p in msg.poses])
+
     def slip_callback(self, msg):
         if self.metrics is not None and msg.data and not self.slipping:
             self.metrics.slip_events += 1
@@ -172,7 +184,10 @@ class NavRecorder(Node):
         csv_log.append_row(self.csv_path, row)
         self.get_logger().info(
             f'Goal {status}: {row["duration_s"]} s, {row["path_length_m"]} m, '
-            f'nearest person {row["min_person_distance_m"]} m, '
+            f'nearest person {row["min_person_distance_m"]} m '
+            f'(collision {row["person_collision"]}), '
+            f'stopped {row["stopped_time_s"]} s (near person {row["stopped_near_person_s"]} s), '
+            f'plan changes {row["plan_changes"]}/{row["plan_updates"]}, '
             f'localization error max {row["localization_error_max_m"]} m')
         self.goal_id = None
         self.metrics = None

@@ -10,6 +10,22 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (59) `nav_recorder` 지표 분리: 사람 충돌, 멈춘 시간(사람 앞 / 그 외), 전역 경로 변경 횟수
+
+**할 일**
+- pull 후 `build_limbo` 불필요(파이썬·yaml, 심볼릭 링크 설치). 새 CSV부터 열이 늘어남
+- 한 명 복도(`people2`)에서 `record:=true`로 돌려 새 열 값이 눈으로 본 것과 맞는지 확인 (아직 안 함)
+
+**변경**
+- `limbo_evaluation/goal_metrics.py`: `person_collision`/`person_collision_time_s`(사람 중심과 0.3 m 미만 = 충돌. 시뮬레이션 사람은 충돌이 없어 뚫고 지나가도 SUCCEEDED가 되므로), `stopped_time_s`/`stopped_near_person_s`/`stopped_other_s`(0.05 m/s 미만으로 멈춘 시간을 사람 1.5 m 안/밖으로 나눔 — 전제 2-1·2-2에서 "사람 앞 멈춤"은 서비스, 그 밖은 낭비), `plan_updates`/`plan_changes`(전역 경로가 직전에서 0.3 m 넘게 벗어난 횟수. 0.2 m 간격으로 점을 골라 비교). 기존 열은 그대로
+- `nav_recorder.py`: `/plan` 구독, 파라미터 5개(`collision_distance`, `near_person_distance`, `stop_speed`, `plan_change_distance`, `plan_topic`). 끝날 때 로그에 충돌·멈춤·경로 변경을 같이 찍음
+- `config/nav_recorder.yaml`: 위 값과 이유. `README.md` CSV 열 표에 3행
+- `test/test_logic.py`: 충돌·멈춤 분리, 경로 점 간격 추출, 경로 벗어남, 경로 변경 횟수 테스트 5개 (18개 통과)
+- `docs/KNOWN_ISSUES.md` 1번, `docs/PROJECT.md` 8절 1번: 넣었음·시뮬레이션 확인 남음으로
+
+**확인**
+- pytest 18개·ament flake8·pep257 통과. 노드를 시뮬레이션 없이 yaml로 띄워 파라미터가 읽히는 것까지 봤음. 실제 주행에서 값 확인은 아직
+
 ## 2026-10-14 (58) ktj 점검 3: 학원 2층 시연 순찰 완주 확인 (전역 STVL 3초로 첫 완주)
 
 **할 일**

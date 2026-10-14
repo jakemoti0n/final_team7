@@ -8,6 +8,15 @@ import math
 @dataclass(frozen=True)
 class MetricsConfig:
     personal_space: float = 0.5   # m, 사람 중심에서 이 거리 안이면 개인 공간 침범으로 센다
+    # m, 로봇 중심과 사람 중심이 이보다 가까우면 사람 모델과 겹친 것이라 충돌로 센다.
+    # 시뮬레이션 사람은 충돌이 없어 "성공"에 뚫고 지나간 경우가 섞이기 때문에 따로 센다
+    collision_distance: float = 0.3
+    # m, 멈춰 있을 때 사람이 이 거리 안에 있으면 "사람 때문에 멈춤", 없으면 "막혀서 멈춤"으로 나눈다
+    near_person_distance: float = 1.5
+    stop_speed: float = 0.05      # m/s, 이보다 느리면 멈춘 것으로 본다
+    # m, 새 전역 경로가 직전 경로에서 이보다 멀리 벗어나면 "경로가 바뀜"으로 센다
+    plan_change_distance: float = 0.3
+    plan_sample_spacing: float = 0.2   # m, 경로 비교는 이 간격으로 점을 골라서 한다 (계산량)
 
 
 class GoalMetrics:
@@ -22,6 +31,12 @@ class GoalMetrics:
         self.min_person_distance = math.inf
         self.nearest_person = ''
         self.personal_space_time = 0.0
+        self.collision_time = 0.0
+        self.stopped_time = 0.0
+        self.stopped_near_person_time = 0.0
+        self.last_plan = None
+        self.plan_updates = 0
+        self.plan_changes = 0
         self.min_obstacle_distance = math.inf
         self.nearest_obstacle = ''
         self.obstacle_contact_time = 0.0
@@ -35,14 +50,39 @@ class GoalMetrics:
         if self.last_xy is None:
             self.start_time, self.start_xy = sim_time, (x, y)
         else:
-            self.path_length += math.dist(self.last_xy, (x, y))
-            if person_distance < self.config.personal_space:
-                self.personal_space_time += sim_time - self.end_time
+            step = math.dist(self.last_xy, (x, y))
+            dt = sim_time - self.end_time
+            self.path_length += step
+            self._add_time_near_person(dt, person_distance)
+            if dt > 0 and step / dt < self.config.stop_speed:
+                self._add_stopped_time(dt, person_distance)
         self.last_xy, self.end_time = (x, y), sim_time
 
         if person_distance < self.min_person_distance:
             self.min_person_distance = person_distance
             self.nearest_person = person_name
+
+    def _add_time_near_person(self, dt, person_distance):
+        if person_distance < self.config.personal_space:
+            self.personal_space_time += dt
+        if person_distance < self.config.collision_distance:
+            self.collision_time += dt
+
+    def _add_stopped_time(self, dt, person_distance):
+        self.stopped_time += dt
+        if person_distance < self.config.near_person_distance:
+            self.stopped_near_person_time += dt
+
+    def add_plan(self, points):
+        """전역 경로 한 번 ((x, y), ...). 직전 경로에서 많이 벗어났으면 바뀐 것으로 센다."""
+        points = sample_by_spacing(points, self.config.plan_sample_spacing)
+        if not points:
+            return
+        self.plan_updates += 1
+        if self.last_plan is not None and \
+                plan_deviation(points, self.last_plan) > self.config.plan_change_distance:
+            self.plan_changes += 1
+        self.last_plan = points
 
     def add_obstacle(self, dt, name, distance):
         """정답 위치 한 번마다 로봇 외곽에서 가장 가까운 장애물까지 거리 (0이면 닿음)."""
@@ -73,6 +113,13 @@ class GoalMetrics:
             'min_person_distance_m': _round(self.min_person_distance, 2),
             'nearest_person': self.nearest_person,
             'personal_space_time_s': _round(self.personal_space_time, 1),
+            'person_collision': int(self.min_person_distance < self.config.collision_distance),
+            'person_collision_time_s': _round(self.collision_time, 1),
+            'stopped_time_s': _round(self.stopped_time, 1),
+            'stopped_near_person_s': _round(self.stopped_near_person_time, 1),
+            'stopped_other_s': _round(self.stopped_time - self.stopped_near_person_time, 1),
+            'plan_updates': self.plan_updates,
+            'plan_changes': self.plan_changes,
             'min_obstacle_distance_m': _round(self.min_obstacle_distance, 2),
             'nearest_obstacle': self.nearest_obstacle,
             'obstacle_contact_time_s': _round(self.obstacle_contact_time, 1),
@@ -81,6 +128,20 @@ class GoalMetrics:
             'controller_rate_warnings': self.controller_warnings,
             'wheel_slip_events': self.slip_events,
         }
+
+
+def sample_by_spacing(points, spacing):
+    """경로 점 중 앞 점과 spacing 이상 떨어진 것만 남긴다. 첫 점은 항상 남긴다."""
+    kept = []
+    for point in points:
+        if not kept or math.dist(kept[-1], point) >= spacing:
+            kept.append(tuple(point))
+    return kept
+
+
+def plan_deviation(points, reference):
+    """points의 각 점에서 reference까지 가장 가까운 거리 중 최댓값. 경로가 얼마나 벗어났는지."""
+    return max(min(math.dist(p, r) for r in reference) for p in points)
 
 
 def nearest_in_time(times, values, t):
