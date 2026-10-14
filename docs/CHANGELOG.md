@@ -10,6 +10,15 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (72) 서브 PC 요청 R6: 정면으로 오는 안 비켜 주는 사람 앞에서 비켜선 뒤 기다리기 (R5 뒤)
+
+**할 일**
+- 서브 PC: R5 끝난 뒤 지시서대로
+
+**변경**
+- `docs/lab/requests.md` R6, `experiments/orders/2026-10-14_sub_pull_over.md`: 조건 `IsPersonOncoming`(카메라가 잘 잡는 1.5~4 m에서 진로 위·다가옴), 액션 `ComputePullOverPose`(local costmap으로 좌·우 0.55 m 중 비용 낮은 쪽), BT 분기(비켜선 뒤 R5 조건이 거짓일 때까지 기다림, 상한 약 20 s), 손님과의 구분(approach_intent면 비켜서지 않고 R5 기다리기), 받아들이는 기준(no_yield 충돌 0·0.5 m 이상, 나머지 유지)
+- `docs/PROJECT.md` 8절 3번에 R6 한 줄
+
 ## 2026-10-14 (71) 소셜 포스 시나리오(no_yield 복도·approach 홀) × HumanLayer 켬/끔: 정면 조우는 둘 다 뚫림
 
 **할 일**

@@ -18,6 +18,14 @@
 
 ## 요청
 
+### R6. 안 비켜 주는 사람이 정면으로 오면 복도 한쪽으로 비켜선 뒤 기다리기 (2026-10-14 13:00, 대기 — **R5 끝난 뒤**)
+
+소셜 포스 시나리오에서 폰 보는 사람 정면 조우가 HumanLayer 켬/끔 모두 뚫림(로봇이 복도 가운데서 멈춤). 조건 노드 `IsPersonOncoming`(1.5~4 m 앞, 진로 위, 다가옴) + 액션 `ComputePullOverPose`(costmap으로 비울 쪽 고름) + BT 분기(비켜선 뒤 R5 조건이 거짓이 될 때까지 기다림, 상한 약 20 s). 손님(approach_intent)에는 비켜서지 말고 R5 기다리기.
+
+자세한 지시: [`experiments/orders/2026-10-14_sub_pull_over.md`](../experiments/orders/2026-10-14_sub_pull_over.md). 시험 벤치 `experiments/2026-10-14_social_people/run_scenarios.sh`
+- 기준: no_yield 복도 충돌 0·최소 0.5 m 이상, approach·시간표 복도·상자는 전과 같음
+- 하지 말 것: 후진, timeout으로 때우기
+
 ### R5. ToF 근접 센서(시뮬레이션+노드) + `IsPersonAhead` 입력을 "카메라 기억 + ToF"로 (2026-10-14 11:50, 대기)
 
 R4 Q1의 답: **(다) + ToF**. 실물에 VL53L5CX(8×8, 63°, 4 m) 하나를 범퍼 높이 10 cm 전면 수평으로 달아 젯슨 오린 나노 I2C에 직결하기로 함. 시뮬레이션 센서·노드(`/tof/obstacle_ahead` Bool, `/tof/nearest`)를 만들고, 조건 노드를 "최근 5 s 안 카메라가 0.8~3 m에서 다가오는 사람을 봤음 AND 지금 ToF 0.3 m 안 물체"로 바꿔 한 명 복도·상자 구간으로 시험. 통과하면 켠 채로 커밋.
