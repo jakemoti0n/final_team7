@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest'
 import { LiveControl, fromServer, lockReason, pauseReason, resumeReason, stageShapes } from './control'
 import { headingDeg, isMapInfo, toPixel, uncertaintyPx } from './map'
 import { MockProvider } from './demo'
-import { overall } from './App'
+import { overall, patrolLabel } from './App'
 import type { ServerCommand, ServerStage, Snapshot, View } from './types'
 
 function view(change: (s: Snapshot) => void = () => {}, serverProblem = false): View {
@@ -84,4 +84,10 @@ it('one-line summary: normal / check needed with the reason / disconnected', () 
   expect(overall(view(s => { s.topics.camera_raw.status = 'delayed' }))).toMatchObject({ label: '확인 필요', detail: '카메라 원본 수신 지연' })
   expect(overall(view(s => { s.bridge.status = 'disconnected' })).label).toBe('연결 끊김')
   expect(overall(view(undefined, true)).label).toBe('연결 끊김')
+})
+it('patrol card: retrying and stopped after navigation failure are shown apart from normal states', () => {
+  expect(patrolLabel('patrolling', 'navigation failed, retry 1/2')).toMatchObject({ label: '순찰 중 · 이동 다시 시도 (1/2)', tone: 'warn' })
+  expect(patrolLabel('paused', 'navigation failed')).toMatchObject({ label: '이동 실패 · 확인 후 재개', tone: 'warn' })
+  expect(patrolLabel('paused', 'paused by request')).toMatchObject({ label: '일시정지', note: '' })
+  expect(patrolLabel('patrolling', 'lap 2 started')).toMatchObject({ label: '순찰 중', tone: 'good' })
 })
