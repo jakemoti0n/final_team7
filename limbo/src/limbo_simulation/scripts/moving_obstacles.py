@@ -55,7 +55,8 @@ SIDESTEP_AHEAD = 1.5     # m, 로봇이 이 거리 안
 SIDESTEP_ANGLE = math.radians(35)   # 목표 방향에서 이 각 안에 로봇이 있으면 "정면을 막음"
 STUCK_SPEED = 0.2        # m/s, 이보다 느리게
 STUCK_TIME = 1.0         # s, 이 시간 넘게 막혀 있으면 돌아가기 시작
-SIDESTEP_FORCE = 3.0     # m/s², 옆으로 미는 힘 (로봇 반발·벽 힘을 이길 만큼)
+SIDESTEP_FORCE = 6.0     # m/s², 옆으로 미는 힘. 3.0은 1.8 m 복도에서 벽 힘·로봇 반발에 막혀 1.5 m 앞에 다시 섰다(서브 PC 10-14, 오프라인 모의 재현)
+SIDESTEP_ROBOT_FORCE = (3.0, 0.2)   # 돌아가는 동안의 로봇 반발. B를 반으로: "바짝 지나가기로 한" 사람은 로봇과 0.6 m까지 좁힌다 (1.8 m 복도 11.9 s에 통과)
 SIDESTEP_PROBE = 0.8     # m, 어느 쪽 벽 여유가 큰지 재는 거리
 
 
@@ -164,7 +165,8 @@ class Person:
         for p in others:
             ax, ay = self._add_repulsion(ax, ay, (p.x, p.y), PERSON_RADIUS + PERSON_RADIUS, PERSON_FORCE)
         if robot is not None and self.type == 'yield':
-            ax, ay = self._add_repulsion(ax, ay, robot, PERSON_RADIUS + ROBOT_RADIUS, ROBOT_FORCE)
+            ax, ay = self._add_repulsion(ax, ay, robot, PERSON_RADIUS + ROBOT_RADIUS,
+                                         SIDESTEP_ROBOT_FORCE if self.sidestep else ROBOT_FORCE)
             ax, ay = self._add_sidestep(ax, ay, goal, robot, walls, t)
         if walls is not None:
             d, (nx, ny) = walls.nearest(self.x, self.y)
