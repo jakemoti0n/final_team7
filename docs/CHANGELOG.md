@@ -10,6 +10,16 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (61) 서브 PC 요청 R4: BT "사람이면 기다리기" 분기 (알려진 문제 3번)
+
+**할 일**
+- 서브 PC: 지시서대로 pull → `build_limbo` → 구현 → `people_one.sh`로 전·후 비교
+
+**변경**
+- `docs/lab/requests.md` R4, `experiments/orders/2026-10-14_sub_bt_wait.md`: 설계(C++ BT 조건 노드 `IsPersonAhead`가 `/person_detector/person_position_base`로 앞 2.0 m·폭 0.8 m 안 사람을 보고, 복구 분기 앞에 Wait 5 s), 시험 방법, 받아들이는 기준(복도에서 회전·후진 0·충돌 0, 상자 구간은 전과 같아야 함), 하지 말 것(timeout 숫자로 때우기)
+- `experiments/orders/people_one.sh <라벨>`: 한 명 복도 + 상자 구간을 설정 변경 없이 1회씩 도는 스크립트(R3 스크립트에서 설정 바꾸는 부분을 뺀 것)
+- `docs/KNOWN_ISSUES.md` 1번 행: 시뮬레이션 확인 끝남으로
+
 ## 2026-10-14 (60) 해결 기록 보강(기술적 고생 10건), 시험 도구의 Nav2 active 검사 오류 수정, 새 지표 한 명 복도 확인
 
 **할 일**

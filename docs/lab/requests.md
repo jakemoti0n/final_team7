@@ -18,6 +18,16 @@
 
 ## 요청
 
+### R4. BT "사람이면 기다리기" 분기 구현 + 한 명 복도·상자 구간 시험 (2026-10-14 09:50, 대기)
+
+`docs/KNOWN_ISSUES.md` 맨 위 3번(막히면 기다리지 않고 복구로 넘어감). 복구 분기 앞에 "사람이 앞에 있으면 Wait" 조건을 넣는 C++ BT 조건 노드 하나와 BT XML 사본 2개. 구현 + 시험 약 반나절.
+
+자세한 지시: [`experiments/orders/2026-10-14_sub_bt_wait.md`](../experiments/orders/2026-10-14_sub_bt_wait.md), 시험 스크립트 `experiments/orders/people_one.sh <라벨>`
+- 준비: pull 후 `build_limbo` 필수 (C++)
+- 범위: "막혔을 때 사람이면 기다리기"까지. 2-1의 "다가오는 손님 보면 미리 멈추기"는 R5로 따로
+- 하지 말 것: `progress_checker` timeout 숫자로 때우기, 후진 복구를 이번 커밋에 섞기(별도 커밋이면 됨)
+- 결과는 `experiments/2026-10-14_bt_wait_sub/`와 `reports.md`에
+
 ### R3. 전역 costmap STVL 기억 시간 15 → 3초 시험 (2026-10-13 19:10 → 노트북: 결과 받음, 2026-10-14)
 
 > 결과 확인함 (`experiments/2026-10-13_stvl_decay_sub/`). 상자 회피 유지·복도 복구 같음(1회씩) → 같은 성적이면 작은 값 규칙대로 **전역 `voxel_decay` 3초 채택** (10-14). 효과는 전역 경로가 바뀐 횟수를 재는 열을 도구에 넣은 뒤 반복 시험으로 확인한다. **서브 PC는 이 작업에서 해제**, 다음 요청 전까지 대기.
