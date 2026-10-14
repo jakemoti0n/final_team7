@@ -1,3 +1,6 @@
 patrol_r7_1 TIMEOUT 960s
 patrol_r7_2 OK 194s
 patrol_r7_3 OK 171s
+patrol_a105_1 OK 209s
+patrol_a105_2 OK 180s
+patrol_a105_3 OK 226s
