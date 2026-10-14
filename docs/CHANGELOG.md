@@ -10,6 +10,21 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (70) 소셜 포스 사람: gz 플러그인 `ActorPoseControl` + `moving_obstacles.py` 유형 셋, 월드 `aischool_2f_social`
+
+**할 일**
+- pull 후 `build_limbo` (C++ 플러그인, 월드 사본). 비켜 주는 사람 월드: `world:=aischool_2f_social map:=aischool_2f_map`
+
+**변경**
+- `limbo_simulation/plugins/actor_pose_control.cpp`(+CMake, package.xml): 토픽 `/limbo/actor_poses`(Pose_V)대로 actor의 `TrajectoryPose`·`AnimationTime`을 바꾸는 gz-sim 시스템 플러그인. actor는 set_pose로 안 움직여서 필요(해결 기록 "Gazebo actor를 set_pose로 옮길 수 없음"). `gazebo.launch.py`가 `GZ_SIM_SYSTEM_PLUGIN_PATH`에 `install/limbo_simulation/lib` 추가
+- `scripts/moving_obstacles.py`: 물체 고리 이동은 그대로, 사람(`people`) 추가 — 유형 `yield`(로봇을 사람처럼 피함) / `no_yield`(로봇을 안 봄) / `approach`(3 m 안이면 다가와 0.8 m에 멈춰 `wait`초 머물다 감). 힘은 Helbing 꼴(목표 τ 0.5 s, 사람 2.0/0.3, 로봇 3.0/0.4, 벽은 지도 거리 변환 5.0/0.15). 사람 위치를 `/sim/people`(PoseArray)·`/sim/people_names`로 ROS에도 발행(ROS 없으면 생략)
+- `limbo_evaluation/nav_recorder.py`: `/sim/people`이 0.5 s 안에 왔으면 SDF 시간표 대신 그 위치로 사람 거리를 잼
+- 월드 `aischool_2f_social.sdf`(시나리오 월드에서 actor 제거 + 플러그인 + 사람 2명), `aischool_2f_social_movers.json`
+- `experiments/2026-10-14_social_people/`: 오프라인 점검과 첫 회차. `docs/TROUBLESHOOTING.md` 항목 1, `docs/PROJECT.md` 8절 4번·안 되는 것, `docs/KNOWN_ISSUES.md` 복도 행 대책, `README.md` 절 1
+
+**확인**
+- 오프라인(`Person.step`): 정지 로봇 옆 통과 yield 0.96 m / no_yield 0.05 m, approach 0.8 m 정지 후 재출발
+- 한 명 복도 `people2` 1회(yield): 3구간 성공, 복구 0, 사람 최소 0.81·0.89 m(시간표 사람 때 0.34·0.55), "진전 없음" 0(2), MPPI 경고 1(14). YOLO·HumanLayer가 플러그인 actor를 그대로 잡음
 ## 2026-10-14 (69) 이동이 실패해도 순찰을 끝내지 않고 2번 다시 가 본 뒤 멈춰서 사람의 재개를 기다리게 함
 
 **할 일**

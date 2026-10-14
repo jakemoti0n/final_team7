@@ -1,0 +1,39 @@
+{
+  "world": "aischool_2f_social",
+  "map": "aischool_2f_map",
+  "robot": "limbo",
+  "people": [
+    {
+      "name": "walker_yield",
+      "type": "yield",
+      "speed": 0.7,
+      "waypoints": [
+        [
+          -6.0,
+          10.1
+        ],
+        [
+          1.9,
+          10.1
+        ]
+      ],
+      "loop": true
+    },
+    {
+      "name": "walker_noyield",
+      "type": "no_yield",
+      "speed": 0.7,
+      "waypoints": [
+        [
+          -13.0,
+          -1.1
+        ],
+        [
+          -3.0,
+          -1.1
+        ]
+      ],
+      "loop": true
+    }
+  ]
+}

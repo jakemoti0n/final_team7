@@ -14,6 +14,7 @@ import os
 import time
 
 from action_msgs.msg import GoalStatus, GoalStatusArray
+from geometry_msgs.msg import PoseArray
 from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
 from limbo_evaluation import actors, csv_log, goal_metrics, obstacles
 from nav2_msgs.action import NavigateToPose
@@ -24,13 +25,15 @@ from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import qos_profile_action_status_default
 from rclpy.time import Time
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 from tf2_ros import Buffer, TransformException, TransformListener
 
 QUEUE = 10
 # TF는 정답보다 늦게 도착할 수 있어 TF 시각의 정답 위치와 비교한다. 그만큼 지난 정답을 들고 있는다
 TRUTH_HISTORY_SEC = 5.0
 MAX_TRUTH_GAP_SEC = 0.1   # 이보다 시각 차이가 큰 정답과는 비교하지 않는다
+# 소셜 포스 사람(moving_obstacles.py)은 시간표가 없어 /sim/people로 위치를 받는다. 이보다 오래되면 안 쓴다
+LIVE_PEOPLE_MAX_AGE_SEC = 0.5
 FINISHED = {
     GoalStatus.STATUS_SUCCEEDED: 'SUCCEEDED',
     GoalStatus.STATUS_CANCELED: 'CANCELED',
@@ -55,6 +58,8 @@ class NavRecorder(Node):
         self.truth_times = []
         self.truth_poses = []  # (시각, x, y)
         self.slipping = False
+        self.live_people = None        # (시각, [(이름, x, y), ...]) — /sim/people이 오면 SDF 시간표 대신 쓴다
+        self.live_people_names = []
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.csv_path = os.path.join(
@@ -72,6 +77,8 @@ class NavRecorder(Node):
         self.create_subscription(Log, '/rosout', self.rosout_callback, QUEUE)
         self.create_subscription(Bool, self.slip_topic, self.slip_callback, QUEUE)
         self.create_subscription(Path, self.plan_topic, self.plan_callback, QUEUE)
+        self.create_subscription(PoseArray, '/sim/people', self.people_callback, QUEUE)
+        self.create_subscription(String, '/sim/people_names', self.people_names_callback, QUEUE)
 
         self.get_logger().info(
             f'Nav recorder started: {len(self.trajectories)} people, '
@@ -126,11 +133,31 @@ class NavRecorder(Node):
         del self.truth_times[:cut], self.truth_poses[:cut]
 
         if self.metrics is not None:
-            name, distance = actors.nearest_person(self.trajectories, t, x, y)
+            name, distance = self._nearest_person(t, x, y)
             self.metrics.add_truth(t, x, y, name, distance)
             name, distance = obstacles.nearest_box(self.boxes, x, y, yaw, self.robot_half_size)
             self.metrics.add_obstacle(dt, name, distance)
             self._add_localization_error()
+
+    def _nearest_person(self, t, x, y):
+        """살아 있는 사람 위치(/sim/people)가 최근 것이면 그것, 아니면 월드 SDF 시간표"""
+        if self.live_people is not None and abs(t - self.live_people[0]) <= LIVE_PEOPLE_MAX_AGE_SEC:
+            best = ('', math.inf)
+            for name, px, py in self.live_people[1]:
+                d = math.hypot(px - x, py - y)
+                if d < best[1]:
+                    best = (name, d)
+            return best
+        return actors.nearest_person(self.trajectories, t, x, y)
+
+    def people_callback(self, msg):
+        names = self.live_people_names
+        people = [(names[i] if i < len(names) else f'p{i}', p.position.x, p.position.y)
+                  for i, p in enumerate(msg.poses)]
+        self.live_people = (stamp_sec(msg.header.stamp), people)
+
+    def people_names_callback(self, msg):
+        self.live_people_names = msg.data.split(',') if msg.data else []
 
     def _add_localization_error(self):
         # Nav2가 실제로 쓰는 위치(가장 최근 TF)를 같은 시각의 정답과 비교한다

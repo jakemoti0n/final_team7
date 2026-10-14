@@ -67,6 +67,12 @@ def generate_launch_description():
         gz_resource_path
     )
 
+    # 시스템 플러그인(plugins/actor_pose_control.cpp → lib/libactor_pose_control.so)을 월드 SDF에서 찾게 한다
+    set_gz_plugin_path = AppendEnvironmentVariable(
+        "GZ_SIM_SYSTEM_PLUGIN_PATH",
+        os.path.join(get_package_prefix("limbo_simulation"), "lib")
+    )
+
     # 카메라 높이·피치는 센서 배치 실험용 (limbo.urdf.xacro의 xacro:arg). 기본값은 URDF와 같다
     xacro_args = [
         " camera_z:=", LaunchConfiguration("camera_z"),
@@ -175,6 +181,7 @@ def generate_launch_description():
         camera_pitch_arg,
         set_gz_resource_path,
         bookstore_resource_path,
+        set_gz_plugin_path,
         gz_sim,
         robot_state_publisher,
         bridge,

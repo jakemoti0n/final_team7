@@ -167,6 +167,13 @@
 - **해결**: 녹화에 `--include-hidden-topics`, 분석은 상태 토픽이 없으면 경고를 내고 위치로 근사. 안 닫힌 bag은 `ros2 bag reindex <bag> -s mcap` 후 분석 (`tools/sim_trials/patrol_trial.sh`, `patrol_analyze.py`)
 - **확인**: 서브 PC 10회 반복(R1)에서 수정 전 bag도 재색인 후 분석됨
 
+### Gazebo actor(사람)를 set_pose 서비스로 옮길 수 없음 — 2026-10-14
+- **증상**: 소셜 포스 사람을 만들려고 `set_pose`/`set_pose_vector`로 actor를 옮기면 응답은 `data: true`인데 자리가 안 바뀜. actor는 `pose/info`·`scene/info`에도 안 나와 위치를 확인할 통로가 없음
+- **원인**: actor의 월드 위치는 Pose 컴포넌트가 아니라 시간표(trajectory)가 만드는 `TrajectoryPose` 컴포넌트가 정하고, UserCommands의 set_pose는 Pose만 바꿈. 시간표 없는 actor는 아예 보이지 않았는데, 이는 SDF `<pose>`가 TrajectoryPose에 더해져 엉뚱한 높이로 가기 때문(FollowActor가 Pose를 0으로 만드는 이유)
+- **확인 방법**: 시험 월드에 LiDAR를 두고 사람 메시가 스캔에 잡히는 각도·거리로 판정 (`gz sim -s`만 띄워 30초)
+- **해결**: gz-sim 시스템 플러그인 `limbo::ActorPoseControl`(`limbo_simulation/plugins/actor_pose_control.cpp`)이 토픽 `/limbo/actor_poses`로 받은 위치를 `TrajectoryPose`에 쓰고, FollowActor처럼 actor의 Pose를 0으로 두고 `AnimationName`·`AnimationTime`을 만들어 옮긴 거리만큼 걷는 애니메이션을 진행시킴. 빌드는 `gz_sim_vendor`·`gz_plugin_vendor`를 먼저 찾아야 `gz-sim::core`가 잡힘(ROS Jazzy는 Gazebo를 vendor 패키지로 줌). launch가 `GZ_SIM_SYSTEM_PLUGIN_PATH`에 `install/limbo_simulation/lib`을 넣음. actor는 skin·animation만 두고 `<script><loop>true</loop><auto_start>true</auto_start></script>`, 명령 z는 1.0(메시 원점이 골반)
+- **확인**: 명령 (2, 0, z 1.0) → LiDAR 0°에서 1.82 m(높이 1.0)·2.15 m(높이 0.3, 다리). z 0이면 상체가 LiDAR 아래로 내려가 안 보임. 복도 주행에서 YOLO·HumanLayer가 그대로 잡음 ([기록](../experiments/2026-10-14_social_people/README.md))
+
 ## 인지(person_detector)
 
 ### person_detector가 CPU를 8코어(775%)나 씀 — 2026-10-02

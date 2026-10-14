@@ -7,9 +7,17 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+
+# gz-sim 시스템 플러그인 (plugins/actor_pose_control.cpp): 토픽 명령대로 actor를 옮긴다.
+# ROS Jazzy는 Gazebo를 vendor 패키지로 주므로 gz_sim_vendor를 먼저 찾아야 gz-sim이 잡힌다
+find_package(gz_sim_vendor REQUIRED)
+find_package(gz-sim REQUIRED)
+find_package(gz_plugin_vendor REQUIRED)
+find_package(gz-plugin REQUIRED COMPONENTS register)
+
+add_library(actor_pose_control SHARED plugins/actor_pose_control.cpp)
+target_link_libraries(actor_pose_control gz-sim::core gz-plugin::register)
+install(TARGETS actor_pose_control DESTINATION lib)
 
 install(
   DIRECTORY
