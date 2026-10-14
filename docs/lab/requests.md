@@ -33,6 +33,25 @@
 > - **(B) `stop_distance`는 물리에서 정한다, 튜닝이 아니라.** 로봇이 서는 자리는 HumanLayer 치명 반경 0.25 m + inflation(로봇 내접 반경 0.25 m까지 253)이라 로봇 앞면이 사람 몸 표면에서 약 0.3~0.4 m(관측 ToF 0.32~0.40 m). 그래서 `stop_distance` = **0.5 m**(관측 최대 0.40 + 여유 0.1). yaml 주석에 이 근거를 적는다. 치명 반경을 바꾸면 같이 바꿔야 하니 두 yaml 주석이 서로를 가리키게. 30 cm 상자 0.485 m가 참이 되지만 카메라 기억이 없으면 `person_blocking`은 거짓이라 괜찮다.
 > - 한 명 복도에서 바깥 복구까지 안 가면 분기가 tick 0인 건 정상(멈췄다가 사람이 지나가면 그냥 간다). 시험은 두 명 복도(`aischool_2f_scenarios` 원본 `people2`)와 **소셜 포스 approach 손님**(`experiments/2026-10-14_social_people/run_scenarios.sh`의 `zz_social_approach`, 경로 `hall`: 손님이 0.8 m 앞에 와서 6 s 서 있음)으로. 손님 앞에서 "기다림"이 돌고 회전·후진 0이면 통과.
 > - R6은 R5가 풀린 뒤.
+>
+> **Q3 답 (14:35).** BT 쪽으로, 그리고 복구 단계가 아니라 **경로 추종 자리**에. 속도 필터는 안 함(속도를 0으로 깎아도 FollowPath는 계속 돌아 10 s 진전 없음이 울리고, BT가 "기다리는 중"이라는 상태를 모른다). 구조는 R4 트리의 `FollowPath` RecoveryNode를 이렇게:
+> ```xml
+> <RecoveryNode number_of_retries="60" name="FollowPathOrWait">
+>   <ReactiveSequence>
+>     <Inverter><IsPersonBlocking topic="/person_blocking"/></Inverter>   <!-- 래치가 참이면 FollowPath를 멈춘다(halt → 컨트롤러 취소 → 정지) -->
+>     <FollowPath path="{path}" controller_id="{selected_controller}" error_code_id="{follow_path_error_code}"/>
+>   </ReactiveSequence>
+>   <Sequence name="WaitWhileBlocked">
+>     <IsPersonBlocking topic="/person_blocking"/>
+>     <Wait wait_duration="1.0"/>
+>   </Sequence>
+> </RecoveryNode>
+> ```
+> - 막힘(래치 참) → ReactiveSequence 실패 → 복구 자식이 1 s 기다리고 성공 → 다시 시도. 래치가 거짓이 되면 FollowPath 재개. 사람이 안 가면 60번(약 60 s) 뒤 RecoveryNode 실패 → 바깥 기존 복구(상한, 전제 2-2)
+> - 막힘이 아닌 FollowPath 실패 → 복구 자식(`IsPersonBlocking` 거짓)이 실패 → 바깥 기존 복구로. 즉 기존 동작은 그대로
+> - 기존 `ClearLocalCostmap` 문맥 복구는 이 RecoveryNode의 복구 자식을 `Fallback(WaitWhileBlocked, 기존 Sequence)`로 두면 유지됨
+> - **R6도 같은 자리**: 복구 자식을 `Fallback(PullOverAndWait(IsPersonOncoming), WaitWhileBlocked)`로 확장. 그러니 R5는 이 구조로 켜고, R6은 그 Fallback에 한 가지를 더하는 일이 된다
+> - 시험: 소셜 포스 손님(`hall`)에서 "손님 앞 정지 → 손님이 떠난 뒤 재개"가 로그(`WaitWhileBlocked`)와 `stopped_near_person_s`로 보이면 통과. 돌아서 지나가면 안 됨
 
 R4 Q1의 답: **(다) + ToF**. 실물에 VL53L5CX(8×8, 63°, 4 m) 하나를 범퍼 높이 10 cm 전면 수평으로 달아 젯슨 오린 나노 I2C에 직결하기로 함. 시뮬레이션 센서·노드(`/tof/obstacle_ahead` Bool, `/tof/nearest`)를 만들고, 조건 노드를 "최근 5 s 안 카메라가 0.8~3 m에서 다가오는 사람을 봤음 AND 지금 ToF 0.3 m 안 물체"로 바꿔 한 명 복도·상자 구간으로 시험. 통과하면 켠 채로 커밋.
 
