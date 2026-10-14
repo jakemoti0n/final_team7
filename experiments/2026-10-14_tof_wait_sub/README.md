@@ -86,3 +86,43 @@ ToF 단독: 상자 앞면이 센서에서 0.485 m → `obstacle_ahead` 거짓(�
 ## 다음 (노트북이 정할 것)
 - 손님을 기다리게 하려면 BT 복구 단계(멈춘 지 10~20 s 뒤)가 아니라 주행 중에 막아야 한다: `person_blocking`이 참이면 컨트롤러 앞에서 속도를 0으로(예: BT `FollowPath` 앞 조건으로 경로 추종을 멈추고 Wait, 또는 속도 필터). 전제 2-1 "다가오는 손님은 멈춰 기다린다"와 R6(비켜선 뒤 기다리기)이 같은 자리다
 - 래치가 "ToF 1 s 비면 풂"이라 로봇이 스스로 돌아서도 풀린다. 기다리는 동안 로봇이 안 움직이게 되면 이 문제는 없어진다
+
+## Q3 반영 뒤: 경로 추종 자리에서 기다리기 (같은 날 14:44~15:20)
+노트북 답(14:35)대로 BT를 바꿈. 조건 노드 이름 `IsPersonAhead` → `IsPersonBlocking`(라이브러리 `limbo_is_person_blocking_condition_bt_node`), R4의 복구 단계 앞 분기는 뺌.
+
+```xml
+<RecoveryNode number_of_retries="60" name="FollowPathOrWait">
+  <RecoveryNode number_of_retries="1" name="FollowPath">          <!-- Nav2 원래 것 그대로 -->
+    <ReactiveSequence>
+      <Inverter><IsPersonBlocking name="StopFollowingWhenBlocked"/></Inverter>
+      <FollowPath .../>
+    </ReactiveSequence>
+    <Sequence>
+      <Inverter><IsPersonBlocking name="NoClearWhenBlocked"/></Inverter>   <!-- 사람 때문이면 costmap 안 비움 -->
+      <WouldAControllerRecoveryHelp .../><ClearEntireCostmap ... local .../>
+    </Sequence>
+  </RecoveryNode>
+  <Sequence name="WaitWhileBlocked"><IsPersonBlocking name="BlockedSoWait"/><Wait wait_duration="1.0"/></Sequence>
+</RecoveryNode>
+```
+
+**답과 다르게 한 것**: 답의 한 단(`RecoveryNode 60` 복구 자식 = `Fallback(WaitWhileBlocked, costmap 비우기)`)이면 사람과 무관한 실패에서도 costmap 비우기가 1번이 아니라 60번까지 반복된다(약 10분). 그래서 원래 1번짜리 RecoveryNode를 안에 그대로 두고 60번짜리로 감쌌다. 사람 때문이 아니면 바깥은 기다리지 않고 바로 실패를 넘겨 기존 동작과 같다.
+
+**첫 시험에서 찾은 버그(고침)**: 트리 안 `IsPersonBlocking` 세 개가 각자 구독해서, 막힌 순간 멈추기 쪽은 "막힘", 기다리기 쪽은 아직 "풀림"을 봐 기다리지 않고 목표가 바로 실패했다(두 명 복도 22 s ABORTED). BT 노드(rclcpp)·토픽마다 구독 하나를 같이 보게 고침.
+
+| 시험 | 결과 | 래치 참 | 기다림(1 s Wait) | 회전 / 후진 |
+|---|---|---|---|---|
+| 손님 다가옴 `hall` (고친 뒤) | 4/4 성공, 사람 최소 0.59~0.77 m, 충돌 0 | 1번 | **2번** — 3번째 구간에서 손님 앞에 서서 기다렸다 감(사람 앞 멈춤 4.8 s) | 0 / 0 |
+| 두 명 복도 (고친 뒤) | 동쪽 ABORTED 18.7 s(기다림 뒤 래치가 풀리자 두 사람이 막아 경로 계획 실패 — 원래 못 지나가는 경로), 서쪽 성공 91.3 s | 2번 | **58번**(약 60 s 기다린 뒤 지나감) | 0 / 0 |
+| 상자 구간 (고친 뒤) | 4/4, 닿음 0, 상자 최소 0.28 m | 0번 | 0 | 0 / 0 |
+| 손님 2회 (고치기 전) | 4/4·4/4, 충돌 0 | 0번 | 0 | 0 / 0 |
+| 상자 (고치기 전) | 4구간 모두 0~1 s ABORTED — controller_server가 `follow_path` 목표를 안 받음(그 회차 통신 문제로 보고 다시 돌림) | | | |
+
+## 결론 (Q3 반영 뒤)
+- **기다리는 동작은 된다**: 래치가 켜지면 경로 추종을 멈추고 1 s씩 기다리다 풀리면 다시 간다. 회전·후진 0. 상자 앞에서는 래치가 안 켜져 기다리지 않는다
+- **손님 앞 통과 기준은 못 채웠다**: 손님 4번 마주침 중 1번만 기다렸고, 3번은 래치가 켜지기 전에 로봇이 손님을 0.6~0.8 m 두고 돌아갔다(사람 앞 멈춤 0.8~1.0 s). 넓은 홀에서는 HumanLayer 비용으로 미리 비켜 가서 ToF 0.5 m 안에 손님이 들어오지 않는다. 래치는 "코앞이 막힘"이 조건이라 막히기 전에 비켜 가는 경우는 못 잡는다
+- 분기는 이번에도 `nav2_params.yaml`에서 꺼 둔 채 커밋. 켜는 세 줄은 위 "켜는 법"과 같고 라이브러리 이름만 `limbo_is_person_blocking_condition_bt_node`
+
+## 다음 (노트북이 정할 것)
+- 손님을 "멈춰 기다리기"로 잡으려면 막히기 전에, 카메라가 손님을 보는 거리(0.8~3 m)에서 판단해야 한다. R6의 `IsPersonOncoming`(1.5~4 m 앞, 진로 위, 다가옴)이 같은 판단이다. 그래서 손님 쪽은 R6의 `Fallback(비켜서기, ...)` 자리에 "다가오는 손님(approach_intent)이면 그 자리 정지·기다림"을 같이 넣는 것이 맞아 보임
+- 이번 구조(코앞이 막히면 기다리기)는 그대로 쓸모가 있다: 두 명 복도처럼 실제로 막혔을 때 회전·후진 대신 기다린다. 켤지 여부는 노트북이

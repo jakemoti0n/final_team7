@@ -1,0 +1,5 @@
+world,action,start_time_s,status,duration_s,path_length_m,mean_speed_mps,start_x,start_y,end_x,end_y,recoveries,min_person_distance_m,nearest_person,personal_space_time_s,person_collision,person_approach_speed_mps,robot_speed_at_min_mps,person_collision_time_s,stopped_time_s,stopped_near_person_s,stopped_other_s,plan_updates,plan_changes,min_obstacle_distance_m,nearest_obstacle,obstacle_contact_time_s,localization_error_mean_m,localization_error_max_m,controller_rate_warnings,wheel_slip_events
+aischool_2f_scenarios,navigate_to_pose,28.7,ABORTED,1.1,0.0,0.0,-0.0,0.0,0.0,0.0,0,7.02,turn_corner,0.0,0,,,0.0,1.1,0.0,1.1,2,0,2.57,obstacle_low_10cm,0.0,0.0,0.0,0,0
+aischool_2f_scenarios,navigate_to_pose,29.8,ABORTED,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0,7.75,turn_corner,0.0,0,,,0.0,0.0,0.0,0.0,1,0,2.57,obstacle_low_10cm,0.0,0.0,0.0,0,0
+aischool_2f_scenarios,navigate_to_pose,0.0,ABORTED,0.0,0.0,0.0,,,,,0,inf,,0.0,0,,,0.0,0.0,0.0,0.0,1,0,inf,,0.0,,,1,0
+aischool_2f_scenarios,navigate_to_pose,29.9,SUCCEEDED,1.2,0.01,0.01,0.0,0.0,0.01,0.0,0,6.89,approach_stop,0.0,0,0.99,0.02,0.0,1.2,0.0,1.2,2,0,2.57,obstacle_low_10cm,0.0,0.024,0.046,0,0

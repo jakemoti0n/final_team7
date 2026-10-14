@@ -10,6 +10,19 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (84) R5 Q3: 사람 때문에 막히면 경로 추종 자리에서 멈춰 기다리게 함. 기다리기는 되지만 손님은 미리 비켜 가 대부분 못 잡음 (분기 꺼 둠)
+
+**할 일**
+- `build_limbo` (조건 노드 이름·라이브러리가 `IsPersonBlocking`·`limbo_is_person_blocking_condition_bt_node`로 바뀜). 주행 동작은 그대로(분기 꺼 둠)
+
+**변경**
+- BT XML 두 개: R4의 복구 앞 분기를 빼고, Nav2 원래 `FollowPath` RecoveryNode(costmap 비우기 1번)를 `RecoveryNode 60`(`WaitWhileBlocked`: 래치 참이면 1 s Wait)으로 감쌈. `ReactiveSequence`로 래치 참이면 FollowPath를 멈추고, 사람 때문이면 costmap을 비우지 않음. 답의 한 단 구조는 사람과 무관한 실패에서 비우기가 60번 반복돼 두 단으로 둠
+- `IsPersonBlocking`: 트리 안 세 개가 BT 노드·토픽마다 구독 하나를 같이 봄(따로 구독하면 막힌 순간 서로 다른 값을 봐 목표가 바로 실패했음). 로그는 판단이 바뀔 때만
+- `KNOWN_ISSUES` 3번 행, `docs/lab/reports.md` R5·Q4
+
+**확인**
+- 고친 뒤: 손님 4/4·충돌 0·회전·후진 0, 기다림 1번(나머지 3번은 래치 전에 돌아감). 두 명 복도 58번 기다린 뒤 통과. 상자 4/4·래치 0 ([기록](../experiments/2026-10-14_tof_wait_sub/README.md))
+
 ## 2026-10-14 (83) 속도 설정 A·B·C를 사람 있는 조건에서 재비교: B(`prune_distance` 2.5) 채택 권고
 
 **할 일**

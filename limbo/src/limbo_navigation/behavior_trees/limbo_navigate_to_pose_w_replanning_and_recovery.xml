@@ -1,6 +1,6 @@
 
 <!--
-  Nav2 Jazzy 기본 트리에 WaitForPerson 분기만 넣은 사본.
+  Nav2 Jazzy 기본 트리에 "사람 때문에 막혔으면 기다리기"(FollowPathOrWait)만 넣은 사본.
   This Behavior Tree replans the global path periodically at 1 Hz and it also has
   recovery actions specific to planning / control as well as general system issues.
   This will be continuous if a kinematically valid planner is selected.
@@ -20,11 +20,27 @@
             </Sequence>
           </RecoveryNode>
         </RateController>
-        <RecoveryNode number_of_retries="1" name="FollowPath">
-          <FollowPath path="{path}" controller_id="{selected_controller}" error_code_id="{follow_path_error_code}"/>
-          <Sequence>
-            <WouldAControllerRecoveryHelp error_code="{follow_path_error_code}"/>
-            <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+        <!-- 사람 때문에 막혔으면(tof_node /person_blocking 래치) 경로 추종을 멈추고 1 s씩 기다린다 (PROJECT.md 2-1·2-2, R5 Q3).
+             래치가 풀리면 다시 간다. 60번(약 60 s) 넘게 안 풀리면 실패 → 바깥 기존 복구(기다림 상한).
+             사람 때문이 아닌 실패는 안쪽 원래 RecoveryNode(costmap 비우기 1번) 그대로이고, 바깥은 기다리지 않고 바로 실패를 넘긴다.
+             (답의 Fallback(기다림, costmap 비우기) 한 단으로 하면 비우기가 60번까지 반복되어 두 단으로 둠)
+             R6은 WaitWhileBlocked 자리를 Fallback(비켜선 뒤 기다리기, WaitWhileBlocked)로 넓힌다 -->
+        <RecoveryNode number_of_retries="60" name="FollowPathOrWait">
+          <RecoveryNode number_of_retries="1" name="FollowPath">
+            <ReactiveSequence>
+              <Inverter><IsPersonBlocking name="StopFollowingWhenBlocked" topic="/person_blocking"/></Inverter>
+              <FollowPath path="{path}" controller_id="{selected_controller}" error_code_id="{follow_path_error_code}"/>
+            </ReactiveSequence>
+            <Sequence>
+              <!-- 사람 때문에 멈춘 것이면 costmap을 비우지 않는다 (사람 표시까지 지워짐) -->
+              <Inverter><IsPersonBlocking name="NoClearWhenBlocked" topic="/person_blocking"/></Inverter>
+              <WouldAControllerRecoveryHelp error_code="{follow_path_error_code}"/>
+              <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+            </Sequence>
+          </RecoveryNode>
+          <Sequence name="WaitWhileBlocked">
+            <IsPersonBlocking name="BlockedSoWait" topic="/person_blocking"/>
+            <Wait wait_duration="1.0"/>
           </Sequence>
         </RecoveryNode>
       </PipelineSequence>
@@ -35,12 +51,6 @@
         </Fallback>
         <ReactiveFallback name="RecoveryFallback">
           <GoalUpdated/>
-          <!-- 막히기 시작한 순간 직전에 다가오던 사람(카메라)이 지금 코앞(ToF)을 막고 있으면(tof_node /person_blocking 래치) 회전·후진 대신 기다린다 (PROJECT.md 2-2, R5). 기다린 뒤 RecoveryNode가 경로 추종을 다시 시도하고,
-               재시도 6번(한 번에 진전 없음 10 s x 2 + 대기 5 s)을 넘기면 목표가 실패한다. 사람을 못 봤으면 아래 기존 복구 -->
-          <Sequence name="WaitForPerson">
-            <IsPersonAhead topic="/person_blocking"/>
-            <Wait wait_duration="5.0"/>
-          </Sequence>
           <RoundRobin name="RecoveryActions">
             <Sequence name="ClearingActions">
               <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
