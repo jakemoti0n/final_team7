@@ -23,6 +23,20 @@
 **확인**
 - 고친 뒤: 손님 4/4·충돌 0·회전·후진 0, 기다림 1번(나머지 3번은 래치 전에 돌아감). 두 명 복도 58번 기다린 뒤 통과. 상자 4/4·래치 0 ([기록](../experiments/2026-10-14_tof_wait_sub/README.md))
 
+## 2026-10-14 (84) MPPI `prune_distance` 1.7 → 2.5 채택
+
+**할 일**
+- pull 후 그대로 뜸(yaml 링크). ktj 반영 후보(메인 PC): `nav2_params.yaml` MPPI `prune_distance` 한 줄
+
+**변경**
+- `limbo_navigation/config/nav2_params.yaml` MPPI `prune_distance` 1.7 → 2.5, 주석에 근거(1.7이면 4 s 예측 × 0.425 m/s가 사실상 속도 상한; 충장로 직선 0.42 → 0.58 m/s, 사람 있는 복도·홀에서 충돌 0·사람 거리 동일에 시간 −22~27 %; 상한 0.75는 MPPI 경고가 늘어 보류)
+- `experiments/2026-10-14_speed_social/README.md` 채택 절 + CSV 2개, `docs/PROJECT.md` 8절 5번
+
+**확인** (`people_one.sh prune25`, 각 1회, 전 = 같은 날 1.7 회차)
+- 시간표 한 명 복도: 41.2·27.5·36.7 → 31.2·20.9·25.4 s, 충돌 0, 사람 최소 0.49~0.87 m, 복구는 costmap 비우기 1·1(회전·후진 0)
+- 상자: 4/4, 41.9~42.8 → 27.5~31.3 s, 최소 0.28~0.31 m, 닿음 0
+- MPPI 경고 12(1.7 때 9~14)로 같은 범위
+
 ## 2026-10-14 (83) 속도 설정 A·B·C를 사람 있는 조건에서 재비교: B(`prune_distance` 2.5) 채택 권고
 
 **할 일**

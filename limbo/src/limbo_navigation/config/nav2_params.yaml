@@ -109,7 +109,10 @@ controller_server:
       wz_std: 0.8
       wz_max: 1.8
       iteration_count: 1
-      prune_distance: 1.7
+      # 2026-10-14 1.7 → 2.5: MPPI는 예측 시간(4 s) 안에 갈 수 있는 경로만 보므로 1.7 m면 0.425 m/s가 사실상 상한이 됨.
+      # 2.5(= 상한 0.6 × 4 s 이상)로 충장로 직선 0.42 → 0.58 m/s, 사람 있는 복도·홀에서도 충돌 0·사람 거리 동일에 시간 −22~27 %
+      # (experiments/2026-10-13_chungjang_speed, 2026-10-14_speed_social). 상한 0.75는 MPPI 경고가 늘어 보류
+      prune_distance: 2.5
       transform_tolerance: 0.5
       temperature: 0.2
       gamma: 0.015
