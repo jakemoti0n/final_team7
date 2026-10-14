@@ -113,13 +113,16 @@ def create_waypoint(
 
 
 def wait_for_localization(navigator, timeout_sec=30.0):
-    """AMCL pose와 TF를 기다리되 초기 위치를 다시 발행하지 않는다."""
+    """map -> base_footprint TF를 기다리되 초기 위치를 다시 발행하지 않는다.
+
+    AMCL은 위치를 잡아야 map -> odom TF를 내므로 TF가 있으면 준비된 것이다. /amcl_pose까지 요구하면
+    slam_toolbox(위치 추정·지도 작성 모드)처럼 AMCL이 없는 구성에서 순찰을 못 시작한다 (2026-10-14).
+    """
     tf_buffer = Buffer()
     tf_listener = TransformListener(tf_buffer, navigator)
     deadline = time.monotonic() + timeout_sec
     while time.monotonic() < deadline:
-        if (navigator.initial_pose_received and
-                tf_buffer.can_transform('map', 'base_footprint', Time())):
+        if tf_buffer.can_transform('map', 'base_footprint', Time()):
             return
         rclpy.spin_once(navigator, timeout_sec=0.2)
     raise TimeoutError(

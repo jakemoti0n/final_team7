@@ -10,6 +10,17 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (103) 순찰 노드가 AMCL 없는 구성(slam_toolbox)에서도 출발하게 함
+
+**할 일**
+- pull만(develop 링크)
+
+**변경**
+- `patrol_node.py` `wait_for_localization`: `/amcl_pose` 수신 조건을 빼고 `map → base_footprint` TF만 본다. AMCL은 위치를 잡아야 TF를 내므로 판정은 같고, slam_toolbox 위치 추정·지도 작성 모드에서는 `/amcl_pose`가 없어 30 s 뒤 "localization not ready"로 순찰이 실패하던 것을 고침(네모 화면 AMCL vs slam 비교 중 발견)
+
+**확인**
+- 네모 화면 slam 순찰 회차에서 출발 확인 예정(결과는 다음 항목)
+
 ## 2026-10-14 (102) R5 통과: 다가오는 사람·코앞을 막은 사람 앞에서 회전·후진 대신 멈춰 기다리는 트리를 켬
 
 **할 일**
