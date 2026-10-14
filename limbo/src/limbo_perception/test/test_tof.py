@@ -70,3 +70,44 @@ def test_latch_gives_up_after_max_hold():
     t = _approach(b, 0.0, [2.5, 2.3])
     assert b.on_tof(t + 1.0, True) is True
     assert b.on_tof(t + 62.0, True) is False
+
+
+def test_closest_approach():
+    t, d = tof.closest_approach(3.0, 0.3, -1.0, 0.0)    # 앞에서 곧장 다가옴
+    assert math.isclose(t, 3.0) and math.isclose(d, 0.3)
+    t, d = tof.closest_approach(3.0, 0.0, 1.0, 0.0)     # 멀어짐
+    assert t < 0
+
+
+def test_oncoming_person_stops_robot_until_they_pass():
+    w = tof.ApproachWatch(tof.ApproachConfig())
+    w.on_people(0.0, [(2.5, 0.2, -1.0, 0.0)])
+    assert w.on_tick(0.05, False) is True                # 진로 위로 다가옴 → 정지
+    assert w.on_tick(0.9, False) is True                 # 검출 끊겨도 잠깐은 유지
+    assert w.on_tick(2.1, False) is False                # 다가옴·ToF 모두 1 s 넘게 없음 → 재개
+
+
+def test_guest_standing_in_front_keeps_the_stop_through_tof():
+    w = tof.ApproachWatch(tof.ApproachConfig())
+    w.on_people(0.0, [(2.0, 0.0, -0.8, 0.0)])
+    assert w.on_tick(0.1, False) is True
+    for i in range(1, 300):                              # 손님이 와서 30 s 서 있음 (카메라는 못 봄, ToF 막힘)
+        assert w.on_tick(0.1 + 0.1 * i, True) is True
+    assert w.on_tick(30.5, False) is True                # 떠난 직후
+    assert w.on_tick(31.2, False) is False               # 1 s 넘게 비면 재개
+
+
+def test_passers_by_and_standing_people_do_not_stop():
+    w = tof.ApproachWatch(tof.ApproachConfig())
+    w.on_people(0.0, [(2.0, 1.5, 0.0, -1.0)])            # 옆에서 가로질러 감: 최근접 2.0 m
+    w.on_people(0.1, [(1.5, 0.0, 0.0, 0.05)])            # 앞에 서 있는 사람 (속도 없음)
+    w.on_people(0.2, [(2.0, 0.0, 1.0, 0.0)])             # 앞에서 멀어짐
+    w.on_people(0.3, [(4.0, 0.0, -1.0, 0.0)])            # 아직 멂
+    assert w.on_tick(0.35, True) is False                # ToF만으로는 정지 안 함 (그건 /person_blocking)
+
+
+def test_approach_stop_gives_up_after_max_hold():
+    w = tof.ApproachWatch(tof.ApproachConfig())
+    w.on_people(0.0, [(2.0, 0.0, -1.0, 0.0)])
+    assert w.on_tick(0.0, True) is True
+    assert w.on_tick(61.0, True) is False

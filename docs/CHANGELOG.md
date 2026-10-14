@@ -10,6 +10,20 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (85) R5 Q4: 진로 위로 다가오는 사람이면 그 자리에 멈춰 기다리게 하고 트리를 켬. 손님 앞 정지는 검출 부족으로 8번 중 1번
+
+**할 일**
+- `build_limbo`. **주행 동작이 바뀜**: 다가오는 사람(`/person_approaching`)이나 사람 때문에 막힌 코앞(`/person_blocking`)이면 경로 추종을 멈추고 1 s씩 기다림(최대 60 s), 회전·후진 안 함
+
+**변경**
+- `limbo_perception/tof.py` `ApproachWatch`·`closest_approach`(시험 5개 추가, 12개): 사람 속도 방향 직선이 로봇 0.6 m 안을 지나면(3 m 안, 0.2 m/s 이상) 정지, 정지 뒤에는 ToF 막힘 동안 유지(카메라가 1 m 안을 못 봄), 다가옴·ToF 1 s 없으면 재개, 상한 60 s. `tof_node`가 `/person_approaching`을 내고 `ExternalShutdownException`도 받음. `tof.yaml`에 숫자·근거
+- BT XML 두 개: `IsPersonApproaching`(같은 클래스 다른 이름)을 `ReactiveSequence` 멈춤 조건·costmap 비우기 막기·`Fallback(StopAndWaitForApproaching, WaitWhileBlocked)`에. `nav2_params.yaml`에서 켬
+- `KNOWN_ISSUES` 3번 행, `docs/lab/reports.md` R5·Q5. 변경 기록 (84)가 두 개(서브 PC R5 Q3, 메인 PC prune_distance)라 이 항목은 (85)
+
+**확인**
+- 손님 2회 정지 1/8, 비켜 주는 사람 복도 3/3·+3.2·+6.4 s, 상자 4/4·상자 앞 정지 0, 모두 회전·후진 0
+- 녹화: 손님이 정면에서 3 m → 0.8 m 곧장 오는 동안 예측에 사람 0건. 같은 장면 카메라 0.5 m 수평이면 사람 든 예측 19건(15°는 4건), 정지 2/4 ([기록](../experiments/2026-10-14_tof_wait_sub/README.md))
+
 ## 2026-10-14 (84) R5 Q3: 사람 때문에 막히면 경로 추종 자리에서 멈춰 기다리게 함. 기다리기는 되지만 손님은 미리 비켜 가 대부분 못 잡음 (분기 꺼 둠)
 
 **할 일**

@@ -18,3 +18,11 @@ tof_node:
     person_half_width: 1.0
     clear_sec: 1.0             # s, ToF가 이만큼 계속 비면 풂
     max_hold_sec: 60.0         # s, 상한. 넘으면 풀어서 보통 복구로
+    # /person_approaching: 진로 위로 다가오는 사람이면 그 자리 정지, 와서 서 있으면(ToF 막힘) 유지 (전제 2-1)
+    predictions_topic: /person_detector/predictions
+    approach_cpa_radius: 0.6     # m, 사람 속도 방향 직선이 로봇에서 이 안을 지나면 진로 위 (전제 2-1)
+    approach_max_range: 3.0      # m, 카메라가 사람을 믿을 만하게 보는 거리
+    approach_min_speed: 0.2      # m/s, 이보다 느리면 방향을 안 믿음 (서 있는 사람은 다가오는 사람이 아님)
+    approach_seen_hold_sec: 1.0  # s, 검출이 잠깐 끊겨도 다가오는 중으로 봄
+    approach_release_sec: 1.0    # s, 다가옴도 ToF도 이만큼 없으면 다시 출발
+    approach_max_hold_sec: 60.0  # s, 상한

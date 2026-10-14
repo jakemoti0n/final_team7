@@ -94,3 +94,66 @@ class PersonBlocking:
             elif t - self.latched_at > c.max_hold_sec:
                 self.latched_at = None
         return self.latched_at is not None
+
+
+@dataclass
+class ApproachConfig:
+    cpa_radius: float = 0.6      # m, 사람 속도 방향 직선이 로봇에서 이 안을 지나면 진로 위로 다가옴 (전제 2-1)
+    max_range: float = 3.0       # m, 카메라가 사람을 믿을 만하게 보는 거리
+    min_speed: float = 0.2       # m/s, 이보다 느리면 방향을 믿지 않음 (서 있는 사람은 다가오는 사람이 아님)
+    seen_hold_sec: float = 1.0   # s, 다가오는 사람을 마지막으로 본 뒤 이만큼은 다가오는 중으로 봄 (검출 끊김)
+    release_sec: float = 1.0     # s, 다가옴도 없고 ToF도 비면 이만큼 뒤 다시 출발
+    max_hold_sec: float = 60.0   # s, 상한. 넘으면 풀어서 보통 주행·복구로
+
+
+def closest_approach(px, py, vx, vy):
+    """로봇(원점)에 대한 사람 위치·속도로 (최근접까지 시간 s, 최근접 거리 m). 멀어지면 시간 <= 0."""
+    speed2 = vx * vx + vy * vy
+    if speed2 == 0.0:
+        return 0.0, (px * px + py * py) ** 0.5
+    t = -(px * vx + py * vy) / speed2
+    cx, cy = px + vx * t, py + vy * t
+    return t, (cx * cx + cy * cy) ** 0.5
+
+
+class ApproachWatch:
+    """다가오는 사람(손님)이면 그 자리에 멈춰 기다린다 (전제 2-1, R5 Q4).
+
+    사람 속도 방향 직선이 로봇에서 cpa_radius 안을 지나면 정지를 시작한다.
+    카메라는 1.5 m 안 사람을 거의 못 보므로(R4), 정지한 뒤에는 ToF가 코앞을 막힘으로 보는 동안
+    (손님이 와서 섬) 정지를 유지한다. 다가옴도 ToF도 release_sec 동안 없으면(지나감·떠남) 다시 출발한다.
+    시각은 모두 메시지 시각(초)이다.
+    """
+
+    def __init__(self, config):
+        self.config = config
+        self.last_approach = None
+        self.stopped_at = None
+        self.last_reason = None
+
+    def approaching(self, rel_x, rel_y, vx, vy):
+        c = self.config
+        too_slow = (vx * vx + vy * vy) ** 0.5 < c.min_speed
+        if too_slow or (rel_x * rel_x + rel_y * rel_y) ** 0.5 > c.max_range:
+            return False
+        t, distance = closest_approach(rel_x, rel_y, vx, vy)
+        return t > 0.0 and distance < c.cpa_radius
+
+    def on_people(self, t, people):
+        """people: 로봇 기준 (상대 x, 상대 y, 속도 x, 속도 y) 목록 (같은 좌표계 축)."""
+        if any(self.approaching(*person) for person in people):
+            self.last_approach = t
+
+    def on_tick(self, t, tof_blocked):
+        c = self.config
+        seen = self.last_approach is not None and 0.0 <= t - self.last_approach <= c.seen_hold_sec
+        if self.stopped_at is None:
+            if seen:
+                self.stopped_at = self.last_reason = t
+            return self.stopped_at is not None
+        if seen or tof_blocked:
+            self.last_reason = t
+        if t - self.last_reason >= c.release_sec or t - self.stopped_at > c.max_hold_sec:
+            self.stopped_at = None
+            self.last_approach = None   # 상한으로 풀었을 때 바로 다시 잡지 않게
+        return self.stopped_at is not None

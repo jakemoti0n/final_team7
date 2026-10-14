@@ -1,13 +1,16 @@
-"""ToF 점구름 → /tof/obstacle_ahead, /tof/nearest, 그리고 /person_blocking (R5).
+"""ToF 점구름 → /tof/obstacle_ahead, /tof/nearest, 그리고 사람 때문에 멈출지 두 가지 (R5).
 
 /person_blocking: 막히기 시작한 순간 직전에 카메라가 다가오던 사람을 봤으면 참(래치, tof.PersonBlocking).
-BT 조건 노드 IsPersonAhead가 이것만 본다. 실물 I2C 드라이버도 /tof/points만 내면 된다.
+/person_approaching: 사람이 진로 위로 다가오면 참, 와서 서 있는 동안(ToF 막힘) 유지(tof.ApproachWatch).
+BT 조건 노드 IsPersonBlocking·IsPersonApproaching이 이 둘을 본다. 실물 I2C 드라이버도 /tof/points만 내면 된다.
 """
 
 from geometry_msgs.msg import PointStamped
+from limbo_interfaces.msg import PersonPredictionArray
 from limbo_perception import tof
 import numpy as np
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2
@@ -53,11 +56,36 @@ class TofNode(Node):
         self.ahead_pub = self.create_publisher(Bool, '/tof/obstacle_ahead', 10)
         self.nearest_pub = self.create_publisher(PointStamped, '/tof/nearest', 10)
         self.blocking_pub = self.create_publisher(Bool, '/person_blocking', 10)
+        self.approach = tof.ApproachWatch(tof.ApproachConfig(
+            cpa_radius=p('approach_cpa_radius', 0.6).value,
+            max_range=p('approach_max_range', 3.0).value,
+            min_speed=p('approach_min_speed', 0.2).value,
+            seen_hold_sec=p('approach_seen_hold_sec', 1.0).value,
+            release_sec=p('approach_release_sec', 1.0).value,
+            max_hold_sec=p('approach_max_hold_sec', 60.0).value))
+        self.approaching = False
+        self.approach_pub = self.create_publisher(Bool, '/person_approaching', 10)
+        self.create_subscription(
+            PersonPredictionArray, p('predictions_topic', '/person_detector/predictions').value,
+            self.on_predictions, 10)
         self.create_subscription(
             PointStamped, p('person_topic', '/person_detector/person_position_base').value,
             self.on_person, 10)
         self.create_subscription(
             PointCloud2, p('points_topic', '/tof/points').value, self.on_points, 10)
+
+    def on_predictions(self, msg):
+        # 예측은 odom 기준. 최근접 거리는 회전과 무관하므로 로봇 위치만 빼서 같은 축으로 본다
+        if not msg.predictions:
+            return
+        try:
+            t = self.tf_buffer.lookup_transform(msg.header.frame_id, self.base_frame, Time())
+        except TransformException:
+            return
+        rx, ry = t.transform.translation.x, t.transform.translation.y
+        people = [(q.current_position.x - rx, q.current_position.y - ry,
+                   q.velocity.x, q.velocity.y) for q in msg.predictions]
+        self.approach.on_people(seconds(msg.header.stamp), people)
 
     def on_person(self, msg):
         self.blocking.on_person(seconds(msg.header.stamp), msg.point.x, msg.point.y)
@@ -81,6 +109,11 @@ class TofNode(Node):
             self.get_logger().info(f'person_blocking {latched}')
             self.latched = latched
         self.blocking_pub.publish(Bool(data=latched))
+        approaching = self.approach.on_tick(seconds(msg.header.stamp), blocked)
+        if approaching != self.approaching:
+            self.get_logger().info(f'person_approaching {approaching}')
+            self.approaching = approaching
+        self.approach_pub.publish(Bool(data=approaching))
         if point is not None:
             nearest = PointStamped()
             nearest.header.stamp = msg.header.stamp
@@ -94,7 +127,7 @@ def main(args=None):
     node = TofNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()

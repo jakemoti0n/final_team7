@@ -11,8 +11,9 @@
 namespace limbo_navigation
 {
 
-// 사람 때문에 막혔으면 참. BT가 경로 추종 자리에서 FollowPath를 멈추고 기다리는 데 쓴다 (PROJECT.md 2-1·2-2, R5 Q3).
-// 판단은 tof_node의 /person_blocking이 막히기 시작한 순간에 정해 둔다(카메라 기억 + ToF 래치, R5 Q2).
+// 사람 때문에 멈춰야 하면 참. BT가 경로 추종 자리에서 FollowPath를 멈추고 기다리는 데 쓴다 (PROJECT.md 2-1·2-2, R5).
+// 판단은 tof_node가 한다: IsPersonBlocking = /person_blocking(코앞이 막히기 시작한 순간의 카메라 기억 + ToF 래치, Q2),
+// IsPersonApproaching = /person_approaching(진로 위로 다가오는 사람, 와서 서 있으면 유지, Q4). 같은 클래스를 두 이름으로 등록한다.
 class IsPersonBlockingCondition : public BT::ConditionNode
 {
 public:

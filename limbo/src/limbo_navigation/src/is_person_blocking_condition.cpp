@@ -64,7 +64,7 @@ BT::NodeStatus IsPersonBlockingCondition::tick()
   if (shouldLog(blocking)) {
     RCLCPP_INFO(
       node_->get_logger(), "IsPersonBlocking(%s): %s", name().c_str(),
-      blocking ? "사람 때문에 막힘 → 기다림" : "풀림 → 주행");
+      blocking ? "참 → 멈춤·기다림" : "거짓 → 주행");
   }
   return blocking ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
 }
@@ -84,4 +84,6 @@ bool IsPersonBlockingCondition::shouldLog(bool blocking)
 BT_REGISTER_NODES(factory)
 {
   factory.registerNodeType<limbo_navigation::IsPersonBlockingCondition>("IsPersonBlocking");
+  // 같은 "Bool 토픽이 참인가" 조건. 다가오는 사람(tof_node /person_approaching)에 쓴다 (전제 2-1, R5 Q4)
+  factory.registerNodeType<limbo_navigation::IsPersonBlockingCondition>("IsPersonApproaching");
 }
