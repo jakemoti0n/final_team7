@@ -10,6 +10,18 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (108) R6 비켜서기 노드를 만들었지만 다가오는 사람을 1.5 m에서야 알아 늦어서 트리에는 안 넣음
+
+**할 일**
+- `build_limbo` (새 BT 라이브러리 `limbo_compute_pull_over_pose_bt_node`, 트리·주행 동작은 그대로)
+
+**변경**
+- `limbo_navigation`: `ComputePullOverPose`(local costmap으로 옆 0.5·0.4·0.3 m·앞 0.3 m 중 비켜설 자리, 사람 반대쪽, 다가오는 사람 한 명에 한 번). CMake·package.xml. 트리 주석만 바뀜
+- `experiments/2026-10-14_pull_over_sub/`, `docs/lab/reports.md` R6 결과
+
+**확인**
+- 트리에 넣고 no_yield 복도 3회: 6구간 모두 충돌(다가옴이 1.5~1.7 m에서야 참, 로봇 정지 뒤 사람이 걸어 들어옴). 비켜 주는 사람 복도 3/3 → 1/3로 나빠짐. 손님·상자는 같음 ([기록](../experiments/2026-10-14_pull_over_sub/README.md))
+
 ## 2026-10-14 (107) R6 비켜서 기다리기 설계 (구현 전)
 
 **할 일**

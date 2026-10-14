@@ -42,7 +42,7 @@
              래치가 풀리면 다시 간다. 60번(약 60 s) 넘게 안 풀리면 실패 → 바깥 기존 복구(기다림 상한).
              사람 때문이 아닌 실패는 안쪽 원래 RecoveryNode(costmap 비우기 1번) 그대로이고, 바깥은 기다리지 않고 바로 실패를 넘긴다.
              (답의 Fallback(기다림, costmap 비우기) 한 단으로 하면 비우기가 60번까지 반복되어 두 단으로 둠)
-             R6(비켜서기)을 하게 되면 WaitForPerson Fallback에 하나 더한다 -->
+             R6 비켜서기(ComputePullOverPose)는 시험에서 손해라 트리에 안 넣음(experiments/2026-10-14_pull_over_sub) -->
         <RecoveryNode number_of_retries="60" name="FollowPathOrWait">
           <RecoveryNode number_of_retries="1" name="FollowPath">
             <ReactiveSequence>
@@ -59,7 +59,7 @@
             </Sequence>
           </RecoveryNode>
           <Fallback name="WaitForPerson">
-            <!-- 진로 위로 다가오는 사람(손님)이면 그 자리에 서서 기다린다 (전제 2-1, R5 Q4). R6 비켜서기는 미룸 -->
+            <!-- 진로 위로 다가오는 사람(손님)이면 그 자리에 서서 기다린다 (전제 2-1, R5 Q4) -->
             <Sequence name="StopAndWaitForApproaching">
               <IsPersonApproaching name="ApproachingSoWait" topic="/person_approaching"/>
               <Wait wait_duration="1.0"/>
