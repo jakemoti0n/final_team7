@@ -10,6 +10,20 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (77) 순찰이 이동 실패로 멈춰도 알림이 없어서, 서버가 순찰 상태로 알림을 만들게 함. 휴대폰 원격 제어 확인
+
+**할 일**
+- 관제 서버 다시 시작 (UI는 그대로)
+
+**변경**
+- `dashboard/server/state.py` `check_patrol`: 순찰 사유 `navigation failed, retry n/m` → 정보 "이동이 막혀 다시 시도합니다", `paused` + `navigation failed` → 경고(켜진 문제) "순찰이 멈췄습니다: 이동 실패 (다음 목표 X). 확인 후 재개해 주세요", `failed` → 오류. 다시 `patrolling`이면 풀고 복구 알림. 같은 (상태, 사유)는 한 번만. 요청에 의한 일시정지는 알림 안 만듦
+- 시험 3개(`tests/test_control.py`)
+- `KNOWN_ISSUES`: 학원 2층 A 앞 (-6.9, 0.55)에서 반복해서 막힘(collision monitor가 `/cmd_vel` 0). `PROJECT.md` 8절 "그 밖에 열린 것", `CONTROL_SCREEN.md`
+
+**확인**
+- 서버 시험 58개 통과
+- 시연 스택: 휴대폰(ngrok + basic auth)에서 일시정지·재개 각각 1초 안에 확인됨. 알림 수정 뒤 멈춘 상태에서 경고가 뜨고 재개하면 풀림 ([기록](../experiments/2026-10-14_loop_patrol/README.md))
+
 ## 2026-10-14 (76) PROJECT.md 8절 "지금 상태와 다음"을 10-14 저녁 기준으로 다시 씀
 
 **할 일**

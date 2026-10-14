@@ -264,6 +264,8 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 - `backup` 복구 제거(전제 2-3). MID-360 기울기 각도(기울이면 `pointcloud_to_laserscan` 프레임과 STVL `vertical_fov_offset`을 같이 고쳐야 함). 하반신 모델이 오면 ID 바뀜 비교.
 - 헛돎 감시의 주행 취소가 **임시로 꺼진 상태**(10-12, 팀원 환경 오탐). 진짜 막혔을 때 상자를 2분 동안 밀었던 적이 있어, 오탐 원인을 잡은 뒤 취소를 다시 켜거나 "정지·경고"로 바꿀지 정해야 한다.
 - Nav2 heartbeat 끊김(시작 때, 그리고 10-14 네모 화면 주행 중 1회 `controller_server`). 시험 도구는 다시 띄우지만 실물에서는 Nav2 전체가 내려가는 일. bond timeout·SIGKILL 뒤 `/dev/shm/fastrtps_*` 잔재 확인.
+- 학원 2층 반복 순찰이 G → A 구간 끝(A 0.8 m 앞, (-6.9, 0.55))에서 반복해서 막힌다(10-14 세 번). Nav2는 앞으로 가라고 내지만(`/cmd_vel_nav` 0.02 m/s) collision monitor가 0으로 막음("approach … away from collision"). 시뮬레이션 사람 `person_2` 경로의 모퉁이(-6.75, 0.75)와 겹치지만 사람이 지나간 뒤에도 30분 넘게 그대로라 원인 미확인. 이동 실패 처리로 멈추고 경고 알림이 뜬다(`KNOWN_ISSUES`).
+- 서버가 시뮬레이션보다 먼저 뜨면 시작 때 "로봇 연결 끊김" 오류 알림이 하나 남는다(실제 끊김 아님).
 - 시뮬레이션 카메라 far clip 5 m라 5 m 밖 혼잡도는 못 봄. 실물 깊이도 5 m 넘으면 부정확.
 
 ---

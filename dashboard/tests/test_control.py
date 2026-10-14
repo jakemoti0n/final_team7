@@ -305,3 +305,43 @@ def test_real_project_map_loads():
     with TestClient(create_app(store.settings, store)) as client:
         meta = client.get('/api/v1/map').json()
         assert meta['width'] > 0 and len(meta['waypoints']) == 10
+
+
+# ---- 순찰 이동 실패 알림 (CONTROL_SCREEN.md A 4단계) ----
+
+def alerts(store):
+    return store.snapshot()['alerts']
+
+
+def test_navigation_retry_and_stop_raise_alerts_and_resume_clears(rig):
+    clock, store, client, robot = rig
+    robot.send()
+    robot.send(reason='navigation failed, retry 1/2')
+    robot.send(reason='navigation failed, retry 1/2')        # 같은 상태가 계속 와도 한 번만
+    retry = [a for a in alerts(store) if a['key'] == 'patrol:retry']
+    assert len(retry) == 1 and retry[0]['severity'] == 'info' and '1/2' in retry[0]['message']
+    robot.send(reason='navigation failed, retry 2/2')
+    robot.send(state='paused', reason='navigation failed')
+    stopped = alerts(store)[0]
+    assert stopped['key'] == 'patrol:stopped' and stopped['severity'] == 'warning' and stopped['active']
+    assert '다음 목표 A' in stopped['message']
+    robot.send(state='patrolling', reason='navigating')
+    first = alerts(store)[0]
+    assert first['key'] == 'patrol:stopped' and first['kind'] == 'recovery'
+    assert not any(a['active'] for a in alerts(store) if a['key'].startswith('patrol:'))
+
+
+def test_pause_by_request_is_not_a_patrol_alert(rig):
+    clock, store, client, robot = rig
+    robot.send()
+    robot.send(state='paused', reason='paused by request')
+    robot.send(state='patrolling', reason='navigating')
+    assert not [a for a in alerts(store) if a['key'].startswith('patrol:')]
+
+
+def test_patrol_failure_is_an_error(rig):
+    clock, store, client, robot = rig
+    robot.send()
+    robot.send(state='failed', reason='Navigation goal rejected', has_resumable_task=False)
+    failed = alerts(store)[0]
+    assert failed['key'] == 'patrol:failed' and failed['severity'] == 'error' and 'goal rejected' in failed['message']
