@@ -16,6 +16,9 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(limbo_interfaces REQUIRED)
+find_package(behaviortree_cpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav2_behavior_tree REQUIRED)
 
 add_library(human_layer SHARED
   src/human_layer.cpp
@@ -40,8 +43,26 @@ pluginlib_export_plugin_description_file(
   human_layer_plugin.xml
 )
 
+# BT 조건 노드: 사람 때문에 막혔는지 (bt_navigator plugin_lib_names로 읽는다)
+add_library(limbo_is_person_ahead_condition_bt_node SHARED
+  src/is_person_ahead_condition.cpp
+)
+target_include_directories(limbo_is_person_ahead_condition_bt_node
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+target_compile_definitions(limbo_is_person_ahead_condition_bt_node PRIVATE BT_PLUGIN_EXPORT)
+ament_target_dependencies(limbo_is_person_ahead_condition_bt_node
+  behaviortree_cpp
+  geometry_msgs
+  nav2_behavior_tree
+  rclcpp
+)
+
 install(
   DIRECTORY
+    behavior_trees
     config
     maps
     launch
@@ -49,7 +70,7 @@ install(
 )
 
 install(
-  TARGETS human_layer
+  TARGETS human_layer limbo_is_person_ahead_condition_bt_node
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin

@@ -10,6 +10,21 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (66) R4 BT "사람이면 기다리기" 조건 노드·트리를 만들었지만 가까운 사람 인식이 끊겨 막힘 (분기는 꺼 둠)
+
+**할 일**
+- `build_limbo` (C++ 플러그인이 새로 생김). 주행 동작은 그대로(분기를 `nav2_params.yaml`에서 켜지 않음)
+
+**변경**
+- `limbo_navigation`: BT 조건 노드 `IsPersonAhead`(`src/is_person_ahead_condition.cpp`, 앞 2.0 m·폭 0.8 m 안 사람이 영상 시각 1.0 s 안이면 참, 세 값은 XML 포트), Nav2 기본 트리 사본 2개(`behavior_trees/`, 복구 앞에 사람이면 Wait 5 s), CMake·package.xml 의존성
+- 판단 로그는 바뀔 때나 1초마다만(ReactiveFallback이 10 ms마다 다시 물어 1초 100줄이 나왔음)
+- `KNOWN_ISSUES` 맨 위 3번, `PROJECT.md` 8절 다음 3번: 막힘 근거
+
+**확인**
+- 한 명 복도·상자 before/wait1/wait2: 상자 4/4·닿음 0·상자 앞 기다림 0. 한 명 복도는 바깥 복구까지 안 가서 분기 시험 불가
+- 시험은 (63) HumanLayer 치명 비용 전 코드(`07f240f`)
+- 두 명 복도 2회: 바깥 복구 때 사람 위치가 4~13초 전 것이라 대부분 회전·후진. 녹화로 1 m 안 사람 인식 10~16% 확인 ([기록](../experiments/2026-10-14_bt_wait_sub/README.md))
+
 ## 2026-10-14 (65) HumanLayer 네모 화면 확인: 로봇은 더 멈추지만 비켜 주지 않는 사람이 걸어 들어옴, 순찰 bag 사람 거리 도구
 
 **할 일**
