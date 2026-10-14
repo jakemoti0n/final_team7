@@ -1,0 +1,4 @@
+world,start_time_s,status,duration_s,path_length_m,mean_speed_mps,start_x,start_y,end_x,end_y,recoveries,min_person_distance_m,nearest_person,personal_space_time_s,person_collision,person_collision_time_s,stopped_time_s,stopped_near_person_s,stopped_other_s,plan_updates,plan_changes,min_obstacle_distance_m,nearest_obstacle,obstacle_contact_time_s,localization_error_mean_m,localization_error_max_m,controller_rate_warnings,wheel_slip_events
+zz_single,24.5,SUCCEEDED,42.5,14.65,0.34,-0.0,0.0,-6.53,9.98,0,0.87,standing,0.0,0,0.0,3.6,0.0,3.6,42,2,0.27,obstacle_low_30cm,0.0,0.062,0.104,0,0
+zz_single,67.1,SUCCEEDED,33.9,10.0,0.29,-6.53,9.98,3.31,9.92,1,0.46,pair_right,0.2,0,0.0,4.6,2.7,2.0,34,5,7.84,obstacle_low_30cm,0.0,0.047,0.076,1,0
+zz_single,101.0,SUCCEEDED,35.4,10.29,0.29,3.32,9.92,-6.6,9.92,0,0.31,pair_right,0.8,0,0.0,6.6,0.9,5.8,35,4,7.77,obstacle_low_30cm,0.0,0.049,0.092,0,0
