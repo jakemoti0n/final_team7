@@ -113,13 +113,14 @@ def test_approach_stop_gives_up_after_max_hold():
     assert w.on_tick(61.0, True) is False
 
 
-def test_front_sector_counts_only_points_ahead_of_the_bumper():
+def test_front_band_counts_only_points_in_the_robot_path():
     c = tof.SectorConfig()
     assert tof.sector_occupied([[1.2, 0.05], [1.21, 0.0]], SENSOR_X, c) is True     # 0.95 m 앞
-    assert tof.sector_occupied([[1.2, 0.05]], SENSOR_X, c) is False                     # 한 칸은 잡음
-    assert tof.sector_occupied([[1.0, 1.0], [1.0, 1.02]], SENSOR_X, c) is False         # 옆(53°)
-    assert tof.sector_occupied([[2.0, 0.0], [2.0, 0.01]], SENSOR_X, c) is False         # 1.75 m 앞
-    assert tof.sector_occupied([[-0.5, 0.0], [-0.5, 0.01]], SENSOR_X, c) is False       # 뒤
+    assert tof.sector_occupied([[1.2, 0.05]], SENSOR_X, c) is False                  # 한 칸은 잡음
+    assert tof.sector_occupied([[1.5, -0.63], [1.6, -0.63]], SENSOR_X, c) is False   # 벽 모서리
+    assert tof.sector_occupied([[1.6, -0.5], [1.6, -0.52]], SENSOR_X, c) is True     # 진로에 걸친 사람
+    assert tof.sector_occupied([[2.0, 0.0], [2.0, 0.01]], SENSOR_X, c) is False      # 1.75 m 앞
+    assert tof.sector_occupied([[-0.5, 0.0], [-0.5, 0.01]], SENSOR_X, c) is False    # 뒤
     assert tof.sector_occupied([[math.inf, 0.0], [math.nan, 0.0]], SENSOR_X, c) is False
 
 

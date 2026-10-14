@@ -33,5 +33,6 @@ for a,b in spans:
             ddx,ddy=p.position.x-rx,p.position.y-ry
             ppl.append((math.hypot(ddx,ddy), math.cos(yaw)*ddx+math.sin(yaw)*ddy, -math.sin(yaw)*ddx+math.cos(yaw)*ddy))
         nd=min(ppl)
+        band=(dx>0)&(dx<=1.5)&(np.abs(dy)<=0.55)
         sect=pts[ins]
         print(f'  +{(t-a)/1e9:4.1f} s ToF {"막힘" if tb and tb.data else "빔 "} 섹터 {ins.sum():2d}칸'+(f' (x {sect[:,0].min():.2f}~{sect[:,0].max():.2f}, y {sect[:,1].min():.2f}~{sect[:,1].max():.2f})' if ins.sum() else '')+f'  사람 {nd[0]:.2f} m (앞 {nd[1]:.2f}, 옆 {nd[2]:.2f})  로봇 ({rx:.2f},{ry:.2f})')

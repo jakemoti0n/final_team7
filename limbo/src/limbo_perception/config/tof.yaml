@@ -26,8 +26,9 @@ tof_node:
     approach_seen_hold_sec: 1.0  # s, 검출이 잠깐 끊겨도 다가오는 중으로 봄
     approach_release_sec: 1.0    # s, 다가옴도 ToF도 이만큼 없으면 다시 출발
     approach_max_hold_sec: 60.0  # s, 상한
-    # 정지 뒤 ToF(0.5 m) 밖에 선 손님 유지: /scan 앞 섹터 점유 (Q5). /scan은 라이다 높이 띠라 30 cm 상자는 안 잡힘
+    # 정지 뒤 ToF(0.5 m) 밖에 선 손님 유지: /scan 앞 진로 폭 띠 점유 (Q5·Q9). /scan은 라이다 높이 띠라 30 cm 상자는 안 잡힘
     scan_topic: /scan
-    front_sector_half_angle_deg: 30.0  # 범퍼 앞 기준 좌우
+    front_sector_half_width: 0.55      # m, 로봇 중심선 좌우 = 로봇 반폭 0.3 + 사람 반경 0.25 (진로 위 사람만, Q9).
+                                       # ±30° 부채꼴은 복도에서 벽 모서리를 잡아 사람이 떠난 뒤에도 정지가 안 풀렸다
     front_sector_max_range: 1.5        # m, 범퍼 앞부터
     front_sector_min_points: 2         # 한 칸짜리 잡음 무시

@@ -68,7 +68,7 @@ class TofNode(Node):
             max_hold_sec=p('approach_max_hold_sec', 60.0).value))
         self.approaching = False
         self.sector = tof.SectorConfig(
-            half_angle_deg=p('front_sector_half_angle_deg', 30.0).value,
+            half_width=p('front_sector_half_width', 0.55).value,
             max_range=p('front_sector_max_range', 1.5).value,
             min_points=p('front_sector_min_points', 2).value)
         self.front = (None, False)   # (scan 시각, 점유)

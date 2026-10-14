@@ -108,20 +108,20 @@ class ApproachConfig:
 
 @dataclass
 class SectorConfig:
-    half_angle_deg: float = 30.0  # 범퍼 앞 기준 좌우 각
+    # 진로 폭 띠 (Q9): 부채꼴(±30°)은 복도에서 사람이 떠난 뒤 벽 모서리를 잡아 정지가 안 풀렸다
+    half_width: float = 0.55      # m, 로봇 중심선 좌우. 로봇 반폭 0.3 + 사람 반경 0.25 = 진로를 막는 사람
     max_range: float = 1.5        # m, 범퍼 앞부터. ToF(0.5 m) 밖에 선 손님까지
     min_points: int = 2           # 이만큼 칸이 차야 점유 (한 칸짜리 잡음 무시)
 
 
 def sector_occupied(points_base, origin_x, config):
-    """base_link 기준 평면 점(N×2 이상)이 범퍼 앞(origin_x) ±half_angle, max_range 안에 min_points 이상인가."""
+    """base_link 기준 평면 점(N×2 이상)이 범퍼 앞(origin_x) 0~max_range, 좌우 half_width 띠에 min_points 이상인가."""
     if len(points_base) == 0:
         return False
     points = np.asarray(points_base, dtype=float).reshape(len(points_base), -1)[:, :2]
     points = points[np.isfinite(points).all(axis=1)]
     dx, dy = points[:, 0] - origin_x, points[:, 1]
-    inside = (dx > 0.0) & (np.hypot(dx, dy) <= config.max_range) & \
-        (np.abs(np.degrees(np.arctan2(dy, dx))) <= config.half_angle_deg)
+    inside = (dx > 0.0) & (dx <= config.max_range) & (np.abs(dy) <= config.half_width)
     return int(inside.sum()) >= config.min_points
 
 
@@ -140,7 +140,7 @@ class ApproachWatch:
 
     사람 속도 방향 직선이 로봇에서 cpa_radius 안을 지나면 정지를 시작한다.
     카메라는 1.5 m 안 사람을 거의 못 보므로(R4), 정지한 뒤에는 ToF가 코앞을 막힘으로 보거나
-    라이다 앞 섹터(범퍼 앞 1.5 m)가 차 있는 동안(손님이 와서 섬) 정지를 유지한다(Q5).
+    라이다 앞 진로 폭 띠(범퍼 앞 1.5 m, 좌우 0.55 m)가 차 있는 동안(손님이 와서 섬) 정지를 유지한다(Q5·Q9).
     정지는 다가옴으로만 시작하므로 상자 앞에서는 서지 않는다. 셋 다 release_sec 동안 없으면 다시 출발한다.
     시각은 모두 메시지 시각(초)이다.
     """
