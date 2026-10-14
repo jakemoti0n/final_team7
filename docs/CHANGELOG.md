@@ -10,6 +10,19 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (91) 위치 추정 비교 1차(AMCL 유지), launch `localization:=amcl|slam|mapping`, 포즈그래프 생성 도구
+
+**할 일**
+- pull 후 빌드 불필요(launch·yaml·셸 링크). `localization:=slam`을 쓰려면 `tools/sim_trials/make_posegraph.sh aischool_2f aischool_2f_map`으로 포즈그래프를 먼저 만든다(24 MB, 저장소에 없음)
+
+**변경**
+- `start_simulation.launch.py`: `localization` 인자. `slam`은 slam_toolbox 위치 추정 노드(포즈그래프, bond 끔), `mapping`은 정적 지도 서버 + slam_toolbox(지도는 `/slam_map`)로 주행하며 포즈그래프를 쌓음. `limbo_navigation/config/slam_toolbox.yaml`, `tools/sim_trials/make_posegraph.sh`. `.gitignore`에 포즈그래프
+- `experiments/2026-10-14_localization_compare/`: AMCL vs slam_toolbox × 복도·홀 각 1회(`run.sh`). 결론 AMCL 유지 — 주행 성적 같음, 홀은 slam 오차 0.029 m(AMCL 0.055), 복도는 slam 0.16 m 치우침(포즈그래프 프레임이 정적 지도·정답과 어긋남)
+- `docs/TROUBLESHOOTING.md`: slam_toolbox heartbeat·포즈그래프 경로·지도 작성 모드 항목. `experiments/2026-10-14_planner_compare/stop_run.sh` 라벨 일반화
+
+**확인**
+- 지도 작성 주행(상자 구간 + 복도 왕복) 9구간 모두 성공, 포즈그래프 저장. slam 복도·홀 완주, 충돌 0, slam IS DOWN 0
+
 ## 2026-10-14 (90) 기다리기 트리를 끔: 비켜 주는 사람 복도에서 60번 기다리다 실패 (메인 PC 회귀 보고)
 
 **할 일**

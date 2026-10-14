@@ -201,6 +201,12 @@
 - **해결**: ROS·gz 프로세스가 하나도 없을 때 `ros2 daemon stop` 후 `rm -f /dev/shm/fastrtps_*`. `sim_ctl.sh stop`이 그 조건에서 자동으로 한다. 잔존 프로세스는 `ps -eo pid,lstart,args`로 런치 시각별로 보고 **PID로** 끈다(패턴으로 모아 죽이면 자기 셸까지 죽음)
 - **확인**: 정리 뒤 같은 회차(`patrol_trial.sh rec2`)가 1번에 시작해 완주. 오전에 "확인할 후보"로 적었던 가설이 이렇게 확정됨
 
+### slam_toolbox 위치 추정 모드가 뜨자마자 내려가고 Nav2까지 무너짐 — 2026-10-14
+- **증상**: `localization:=slam`으로 띄우면 `CRITICAL FAILURE: SERVER slam_toolbox IS DOWN after not receiving a heartbeat for 4000 ms` → lifecycle manager가 slam_toolbox를 내리고, `map→odom`이 사라져 controller_server가 abort(-6). 시험 도구가 3번 다 실패
+- **원인**: slam_toolbox가 24 MB 포즈그래프를 읽고 스캔을 맞추는 동안 bond heartbeat를 4 s 넘게 못 보냄. 그 전엔 포즈그래프 파일 경로가 `install/.../maps`인데 파일은 `src/.../maps`에만 있어 `DeserializePoseGraph: Failed to read file`(maps는 복사 설치)
+- **해결**: slam 전용 lifecycle manager에 `bond_timeout: 0.0`(lifecycle 전이는 그대로, 감시만 끔). 포즈그래프는 설치 폴더에 복사(`experiments/2026-10-14_localization_compare/run.sh`가 함). 지도 작성 모드는 Nav2가 slam_toolbox의 작은 지도로는 멀리 못 가서(목표가 지도 밖 → 0초 포기) 정적 지도를 `/map`으로 따로 띄우고 slam 지도는 `/slam_map`으로
+- **확인**: 고친 뒤 slam 복도·홀 1번에 시작, 완주. 비교 결과는 `experiments/2026-10-14_localization_compare/`
+
 ## 인지(person_detector)
 
 ### person_detector가 CPU를 8코어(775%)나 씀 — 2026-10-02

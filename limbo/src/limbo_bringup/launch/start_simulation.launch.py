@@ -218,6 +218,48 @@ def generate_launch_description():
     )
 
 
+    # 위치 추정을 바꿔 비교할 때: localization:=slam (slam_toolbox 위치 추정 모드, maps/<map>_posegraph 필요)
+    #                             localization:=mapping (slam_toolbox 지도 작성 모드. tools/sim_trials/make_posegraph.sh가 씀)
+    # slam_toolbox가 /map과 map→odom TF를 내므로 map_server·AMCL은 띄우지 않는다
+    def make_localization(context):
+        mode = LaunchConfiguration('localization').perform(context)
+        if mode == 'amcl':
+            return [localization]
+        slam_params = os.path.join(limbo_navigation_dir, 'config', 'slam_toolbox.yaml')
+        map_name = LaunchConfiguration('map').perform(context)
+        overrides = {'use_sim_time': True, 'mode': 'localization' if mode == 'slam' else 'mapping'}
+        extra = []
+        if mode == 'slam':
+            overrides['map_file_name'] = os.path.join(limbo_navigation_dir, 'maps', map_name + '_posegraph')
+            overrides['map_start_pose'] = [0.0, 0.0, 0.0]
+        else:
+            # 지도 작성 중에는 Nav2가 slam_toolbox의 작은 지도로는 멀리 못 가므로(목표가 지도 밖) 정적 지도를 /map으로 따로 띄우고,
+            # slam_toolbox의 지도는 /slam_map으로 보낸다. TF map→odom은 slam_toolbox가 낸다(시작 자세가 지도 원점과 같아야 함)
+            overrides['map_name'] = '/slam_map'
+            extra = [
+                Node(package='nav2_map_server', executable='map_server', name='map_server', output='screen',
+                     parameters=[{'use_sim_time': True, 'yaml_filename': os.path.join(limbo_navigation_dir, 'maps', map_name + '.yaml')}]),
+                Node(package='nav2_lifecycle_manager', executable='lifecycle_manager', name='lifecycle_manager_map', output='screen',
+                     parameters=[{'use_sim_time': True, 'autostart': True, 'node_names': ['map_server']}]),
+            ]
+        slam = Node(
+            package='slam_toolbox',
+            executable='localization_slam_toolbox_node' if mode == 'slam' else 'async_slam_toolbox_node',
+            name='slam_toolbox',
+            output='screen',
+            parameters=[slam_params, overrides],
+        )
+        manager = Node(
+            package='nav2_lifecycle_manager',
+            executable='lifecycle_manager',
+            name='lifecycle_manager_localization',
+            output='screen',
+            # bond_timeout 0: slam_toolbox가 큰 포즈그래프(24 MB)를 읽거나 맞추는 동안 heartbeat 4 s를 놓치면
+            # lifecycle manager가 노드를 내려 Nav2까지 무너짐 (2026-10-14). 감시만 끄고 lifecycle 전이는 그대로
+            parameters=[{'use_sim_time': True, 'autostart': True, 'bond_timeout': 0.0, 'node_names': ['slam_toolbox']}],
+        )
+        return extra + [slam, manager]
+
     # ============================================================
     # 5. Navigation2
     #
@@ -359,6 +401,8 @@ def generate_launch_description():
         # 카메라 높이(m)와 아래로 기울인 각도(도). 기본은 URDF 값 (0.70 m, 15°, 2026-10-14). 비교 실험 때만 바꾼다
         DeclareLaunchArgument('camera_z', default_value='0.70'),
         DeclareLaunchArgument('camera_pitch_deg', default_value='15'),
+        # 위치 추정: amcl(기본) / slam(slam_toolbox 위치 추정, maps/<map>_posegraph 필요) / mapping(slam_toolbox 지도 작성)
+        DeclareLaunchArgument('localization', default_value='amcl'),
 
         # 바로 Gazebo 실행
         gazebo,
@@ -376,10 +420,10 @@ def generate_launch_description():
             actions=[pointcloud_to_laserscan, wheel_slip_monitor]
         ),
 
-        # /scan 생성 후 AMCL 실행
+        # /scan 생성 후 위치 추정(AMCL 또는 slam_toolbox) 실행
         TimerAction(
             period=8.0,
-            actions=[localization]
+            actions=[OpaqueFunction(function=make_localization)]
         ),
 
         # localization 준비 후 Nav2 실행
