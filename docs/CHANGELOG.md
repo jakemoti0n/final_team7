@@ -10,6 +10,19 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (57) 전역 costmap STVL 기억 15 → 3초 채택
+
+**할 일**
+- pull 후 `build_limbo` (설정 파일이 바뀜). 학원 PC: ktj 반영 후보 — `nav2_params.yaml` 전역 costmap `stvl_layer.voxel_decay` 한 줄
+
+**변경**
+- `limbo_navigation/config/nav2_params.yaml`: 전역 costmap `voxel_decay` 15.0 → 3.0. 서브 PC R3(55)에서 3초도 상자 회피를 유지했고(최소 0.24 m, 닿음 0) 복도 복구가 15초와 같아, "같은 성적이면 작은 값" 규칙대로 작은 쪽을 택함. 걷는 사람(0.7 m/s)이 전역 costmap에 남기는 꼬리가 10 m → 2 m
+- `docs/KNOWN_ISSUES.md` 0번 행, `docs/PROJECT.md` 8절 0번·결정 이력, `docs/TROUBLESHOOTING.md`, `docs/lab/requests.md` R3: 채택으로 고침. 남은 일은 효과 확인(전역 경로 바뀐 횟수 열 → 복도 3회 반복)
+- `experiments/orders/stvl_decay_one.sh`: 기존 값이 15.0이 아니어도 바꾸게 정규식 수정
+
+**확인**
+- 설정 파일 diff가 한 값(+주석)뿐인지 봤음. 주행 재확인은 안 했음(R3가 같은 값으로 돌린 결과가 근거)
+
 ## 2026-10-14 (56) ktj 점검: 네모 화면 순찰 완주 확인, R3 판단(전역 STVL 3초는 후보로 두고 설정은 그대로)
 
 **할 일**

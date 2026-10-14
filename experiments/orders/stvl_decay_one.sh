@@ -10,7 +10,7 @@ import sys, re
 p = '/home/kim/limbo/limbo/src/limbo_navigation/config/nav2_params.yaml'.replace('/home/kim', __import__('os').path.expanduser('~'))
 s = open(p).read(); g = s.index('\nglobal_costmap:')
 head, tail = s[:g], s[g:]
-tail, n = re.subn(r'(        voxel_decay: )15\.0', r'\g<1>' + str(float(sys.argv[1])), tail, count=1); assert n == 1
+tail, n = re.subn(r'(        voxel_decay: )\d+\.\d+', r'\g<1>' + str(float(sys.argv[1])), tail, count=1); assert n == 1
 open(p, 'w').write(head + tail); print('전역 voxel_decay →', sys.argv[1])
 PY
 python3 - <<'PY'
