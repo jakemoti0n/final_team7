@@ -3,6 +3,7 @@
 # 사용법: tools/demo_patrol.sh [월드] [지도] [waypoint 파일]
 #   기본: aischool_2f aischool_2f_map aischool_waypoints.yaml
 #   예:   tools/demo_patrol.sh aischool_2f_furnished aischool_2f_furnished_map aischool_furnished_waypoints.yaml
+#   LOOP=1 이면 마지막 지점 뒤에 처음부터 계속 반복한다 (일시정지로만 멈춤)
 # 순찰 노드는 위치 추정을 30초만 기다리는데 시뮬레이션은 뜨는 데 1~2분 걸려서, 그냥 이어서 치면 시간 초과로 끝난다
 WORLD=${1:-aischool_2f} MAP=${2:-aischool_2f_map} WAYPOINTS=${3:-aischool_waypoints.yaml}
 source /opt/ros/jazzy/setup.bash; source ~/limbo/limbo/install/setup.bash; source ~/limbo/venvs/limbo_yolo/bin/activate
@@ -26,6 +27,6 @@ for i in $(seq 1 40); do
 done
 sleep 3
 echo "준비됨. 순찰 시작 ($WAYPOINTS)"
-ros2 run limbo_patrol patrol_node --ros-args -p use_sim_time:=true -p waypoints:=$WAYPOINTS
+ros2 run limbo_patrol patrol_node --ros-args -p use_sim_time:=true -p waypoints:=$WAYPOINTS -p loop:=$([ "${LOOP:-0}" = 1 ] && echo true || echo false)
 echo "순찰 끝. 시뮬레이션은 계속 떠 있음. Ctrl+C 로 내림"
 wait $LAUNCH

@@ -209,7 +209,7 @@ class PatrolControl(Node):
             response.success, response.message = False, 'nothing to resume'
         return response
 
-    def start_navigating(self, index):
+    def start_navigating(self, index, reason='navigating'):
         """새 구간 주행을 보낸 직후 호출한다.
 
         그 사이에 정지 요청이 들어와 이미 pausing이면 patrolling으로 되돌리지 않는다.
@@ -219,7 +219,7 @@ class PatrolControl(Node):
             if self.pause_requested:
                 self.index = index
                 return
-        self.set(PatrolState.PATROLLING, 'navigating', index=index, resumable=True)
+        self.set(PatrolState.PATROLLING, reason, index=index, resumable=True)
 
     def take_pause_request(self):
         with self.lock:
@@ -247,8 +247,19 @@ def spin_control(executor):
 
 
 
-def patrol(navigator, control, waypoint_configs):
-    """위치 추정·Nav2 준비를 기다린 뒤 waypoint를 끝까지 돈다."""
+def segment_order(segments, loop):
+    """(바퀴, 구간) 순서. loop면 마지막 구간 뒤에 첫 구간부터 다시 돈다 (멈추는 건 일시정지로만)."""
+    lap = 1
+    while True:
+        for segment in segments:
+            yield lap, segment
+        if not loop:
+            return
+        lap += 1
+
+
+def patrol(navigator, control, waypoint_configs, loop=False):
+    """위치 추정·Nav2 준비를 기다린 뒤 waypoint를 끝까지 돈다. loop면 계속 반복한다."""
 
     print('Waiting for AMCL pose and TF...')
     try:
@@ -286,8 +297,16 @@ def patrol(navigator, control, waypoint_configs):
 
     mission_succeeded = True
     failure_reason = ''
+    count = len(waypoint_configs)
 
-    for segment in segments:
+    for lap, segment in segment_order(segments, loop):
+
+        # 이 구간 다음 waypoint 번호. 반복하면 마지막 다음은 첫 번째
+        after = (segment[-1] + 1) % count if loop else segment[-1] + 1
+        reason = 'navigating'
+        if lap > 1 and segment is segments[0]:
+            print(f'Lap {lap} started')
+            reason = f'lap {lap} started'
 
         # 이번 구간에서 아직 지나지 않은 waypoint 번호
         remaining = list(segment)
@@ -319,7 +338,8 @@ def patrol(navigator, control, waypoint_configs):
                 mission_succeeded = False
                 break
 
-            control.start_navigating(remaining[0])
+            control.start_navigating(remaining[0], reason)
+            reason = 'navigating'
 
             # 주행 완료까지 기다린다. 정지 요청이 오면 주행을 취소한다.
             pausing = False
@@ -378,7 +398,7 @@ def patrol(navigator, control, waypoint_configs):
                 break
 
             if pausing:
-                next_index = remaining[0] if remaining else segment[-1] + 1
+                next_index = remaining[0] if remaining else after
                 if not wait_while_paused(control, next_index):
                     mission_succeeded = False
                     failure_reason = 'shutdown while paused'
@@ -403,7 +423,7 @@ def patrol(navigator, control, waypoint_configs):
             deadline = time.monotonic() + wait_sec
             while time.monotonic() < deadline:
                 if control.take_pause_request():
-                    if not wait_while_paused(control, segment[-1] + 1):
+                    if not wait_while_paused(control, after):
                         mission_succeeded = False
                         failure_reason = 'shutdown while paused'
                     break
@@ -433,7 +453,8 @@ def main(args=None):
 
     # 파일 이름이 틀렸으면 Nav2를 기다리기 전에 바로 알 수 있게 먼저 읽는다
     waypoints_name = navigator.declare_parameter('waypoints', DEFAULT_WAYPOINTS).value
-    print(f'Waypoints: {waypoints_name}')
+    loop = navigator.declare_parameter('loop', False).value
+    print(f'Waypoints: {waypoints_name}' + (' (loop)' if loop else ''))
     waypoint_configs = load_waypoints(waypoints_name)
 
     if not waypoint_configs or waypoint_configs[-1]['type'] != 'stop':
@@ -447,7 +468,7 @@ def main(args=None):
 
     ready = True
     try:
-        ready = patrol(navigator, control, waypoint_configs) is not False
+        ready = patrol(navigator, control, waypoint_configs, loop) is not False
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:

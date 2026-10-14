@@ -10,6 +10,19 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (62) 따로 명령하지 않으면 waypoint를 끝없이 도는 반복 순찰(`loop:=true`)을 넣음
+
+**할 일**
+- `build_limbo`. 반복하려면 `-p loop:=true` 또는 `LOOP=1 tools/demo_patrol.sh` (기본은 지금처럼 한 바퀴)
+
+**변경**
+- `limbo_patrol/patrol_node.py`: `loop` 파라미터. 마지막 구간 뒤에 첫 구간부터 다시 돌고, 바퀴가 바뀌면 상태 사유 `lap N started`. 마지막 구간에서 정지했을 때 다음 waypoint 번호도 첫 번째로 돌림. 메시지는 그대로
+- `tools/demo_patrol.sh`: `LOOP=1`, `README.md` 순찰 참고에 한 줄
+- `docs/KNOWN_ISSUES.md`, `docs/PROJECT.md` 8절: 이동 한 번 실패하면 반복도 끝난다는 근거 추가
+
+**확인**
+- `aischool_2f`(사람 10명) 시연 스택: 1바퀴 약 155 s 뒤 A부터 2바퀴째, 2바퀴째 일시정지·재개 confirmed. 그 뒤 A 1.8 m 앞에서 2분간 진전 없음으로 Nav2 실패 → 순찰 끝남 ([기록](../experiments/2026-10-14_loop_patrol/README.md))
+
 ## 2026-10-14 (61) 서브 PC 요청 R4: BT "사람이면 기다리기" 분기 (알려진 문제 3번)
 
 **할 일**
