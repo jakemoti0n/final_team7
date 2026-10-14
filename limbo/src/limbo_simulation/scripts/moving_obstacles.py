@@ -22,6 +22,7 @@ json:
 import json
 import math
 import os
+import signal
 import sys
 import time
 
@@ -41,7 +42,7 @@ ACTOR_Z = 1.0            # 사람 메시 원점(골반) 높이. 월드 시간표
 PERSON_RADIUS = 0.3
 ROBOT_RADIUS = 0.4       # v14 외접 반지름 0.39
 RELAX_TIME = 0.5         # 원하는 속도로 돌아가는 시간 (s). 작을수록 급하게 방향을 바꿈
-PERSON_FORCE = (2.0, 0.3)   # (A m/s², B m): A·exp((r−d)/B). 사람끼리
+PERSON_FORCE = (3.0, 0.3)   # (A m/s², B m): A·exp((r−d)/B). 사람끼리. 2.0이면 복도에서 어깨 간격 0.54 m까지 스쳐 3.0으로 (10-14 눈 확인)
 ROBOT_FORCE = (3.0, 0.4)    # yield가 로봇을 피하는 힘. 사람보다 조금 넓게 피한다(기계라 조심함)
 WALL_FORCE = (5.0, 0.15)    # 벽. 가까울 때만 강하게
 MAX_SPEED_RATIO = 1.3    # 원하는 속도의 몇 배까지 허용
@@ -262,6 +263,10 @@ def main():
     robot_name = config.get('robot', 'limbo')
 
     node = Node()
+    # gz transport가 SIGINT·SIGTERM 핸들러를 걸어 신호를 삼키므로, launch가 끝낼 때 이 스크립트가 남지 않게 우리 핸들러로 덮는다
+    # (2026-10-14: 잔존 스크립트 둘이 같은 actor에 다른 위치를 보내 사람이 두 자리를 번갈아 그려짐)
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, lambda *_: sys.exit(0))
     sim = {'t': None, 'robot': None}
 
     def on_clock(msg):

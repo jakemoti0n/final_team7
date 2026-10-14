@@ -10,6 +10,20 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (79) 소셜 포스 사람 눈 확인: GUI 깜빡임·순간이동 원인 둘 고침, 사람끼리 간격 넓힘
+
+**할 일**
+- pull 후 `build_limbo` (플러그인 C++). 월드를 바꿨으면 `aischool_2f_social`의 actor도 `interpolate_x` false
+
+**변경**
+- `plugins/actor_pose_control.cpp`: 명령 때만 갱신 → 매 물리 스텝마다 목표 쪽으로 `max_speed`(2.0 m/s) × dt 보간하고 옮긴 거리만큼 애니메이션 진행. GUI가 그 사이 프레임을 다른 자세로 그려 깜빡이던 것을 없앰
+- `scripts/moving_obstacles.py`: gz transport가 삼키던 SIGINT·SIGTERM을 `sys.exit`로 덮어 launch 종료 때 잔존하지 않게. 잔존 스크립트가 같은 actor에 다른 위치를 보내 "순간이동"으로 보였음. 사람끼리 미는 힘 2.0 → 3.0(복도에서 어깨 간격 0.54 m가 좁아 보임)
+- 월드 `aischool_2f_social`, 시나리오 월드 2개: actor `interpolate_x` false (루트 이동이 위치에 더해져 미끄러짐). `README.md` 한 줄
+- `docs/TROUBLESHOOTING.md` 항목 1, `experiments/2026-10-14_social_people/README.md` 눈 확인 절
+
+**확인**
+- 사람 4명 시험 월드(복도에 셋, 홀에 손님)를 gui로 봄. 사용자: "확실히 매끄럽다. 사람인 내 기준에 움직임의 95 %는 리얼. 둘이 마주쳤을 때 서로 피해 주려 살짝 움찔하는 것까지"
+- 명령 위치 15 s: 한 스텝 최대 0.05 m, 방향 뒤집힘 0, 벽 0.45 m 이상, 사람끼리 0.54 m 이상
 ## 2026-10-14 (78) 학원 2층 반복 순찰이 2바퀴째부터 A 앞에서 막혀서, 반복용 waypoint 사본에서 A를 stop으로 둠
 
 **할 일**

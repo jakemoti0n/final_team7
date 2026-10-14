@@ -170,7 +170,7 @@ source /opt/ros/jazzy/setup.bash && python -c "import torch, ultralytics, cv_bri
 ```bash
 ros2 launch limbo_bringup start_simulation.launch.py world:=aischool_2f_social map:=aischool_2f_map
 ```
-사람 2명(위쪽 복도 `walker_yield`, 아래 복도 `walker_noyield`)이 소셜 포스로 움직인다. 설정은 `limbo_simulation/worlds/aischool_2f_social_movers.json`(이름·유형 `yield`/`no_yield`/`approach`·속도·경유점). actor를 더 넣으려면 월드 SDF에 같은 이름의 actor(시간표 없이)를 추가한다. 다른 월드에 쓰려면 월드에 `limbo::ActorPoseControl` 플러그인 줄을 넣고 `<월드>_movers.json`을 만들면 launch가 알아서 띄운다.
+사람 2명(위쪽 복도 `walker_yield`, 아래 복도 `walker_noyield`)이 소셜 포스로 움직인다. 설정은 `limbo_simulation/worlds/aischool_2f_social_movers.json`(이름·유형 `yield`/`no_yield`/`approach`·속도·경유점). actor를 더 넣으려면 월드 SDF에 같은 이름의 actor(시간표 없이, `interpolate_x` false)를 추가한다. 다른 월드에 쓰려면 월드에 `limbo::ActorPoseControl` 플러그인 줄을 넣고 `<월드>_movers.json`을 만들면 launch가 알아서 띄운다.
 
 ### 주행 평가 기록 (`record:=true`) CSV 열
 

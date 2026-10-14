@@ -727,16 +727,17 @@
           <material><ambient>0.85 0.35 0.1 1</ambient><diffuse>0.85 0.35 0.1 1</diffuse></material></visual>
       </link>
     </model>
-    <!-- 소셜 포스 사람: 시간표 없이 scripts/moving_obstacles.py가 /limbo/actor_poses로 옮긴다 (aischool_2f_social_movers.json) -->
+    <!-- 소셜 포스 사람: 시간표 없이 scripts/moving_obstacles.py가 /limbo/actor_poses로 옮긴다 (aischool_2f_social_movers.json).
+         interpolate_x는 false: 플러그인이 위치를 정하므로 애니메이션의 루트 이동을 더하면 한 걸음마다 미끄러졌다 되돌아온다 -->
     <plugin filename="actor_pose_control" name="limbo::ActorPoseControl"><topic>/limbo/actor_poses</topic><animation_x_vel>2.0</animation_x_vel></plugin>
     <actor name="walker_yield">
       <skin><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><scale>1.0</scale></skin>
-      <animation name="walk"><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><interpolate_x>true</interpolate_x></animation>
+      <animation name="walk"><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><interpolate_x>false</interpolate_x></animation>
       <script><loop>true</loop><auto_start>true</auto_start></script>
     </actor>
     <actor name="walker_noyield">
       <skin><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><scale>1.0</scale></skin>
-      <animation name="walk"><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><interpolate_x>true</interpolate_x></animation>
+      <animation name="walk"><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><interpolate_x>false</interpolate_x></animation>
       <script><loop>true</loop><auto_start>true</auto_start></script>
     </actor>
   </world>

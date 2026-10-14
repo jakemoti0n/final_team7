@@ -11,7 +11,9 @@
 //     <animation_x_vel>2.0</animation_x_vel>     <!-- 애니메이션 1초가 몇 m 걷는지. 숫자가 작으면 발이 빨리 움직임 -->
 //   </plugin>
 // actor는 <skin>·<animation>만 두고 trajectory 없이 <script><loop>true</loop><auto_start>true</auto_start></script>.
+// animation의 <interpolate_x>는 false로 (true면 애니메이션 루트 이동이 위치에 더해져 한 걸음마다 미끄러졌다 되돌아온다).
 
+#include <algorithm>
 #include <chrono>
 #include <mutex>
 #include <string>
@@ -44,6 +46,7 @@ public:
   {
     topic_ = sdf->Get<std::string>("topic", "/limbo/actor_poses").first;
     anim_x_vel_ = sdf->Get<double>("animation_x_vel", 2.0).first;
+    max_speed_ = sdf->Get<double>("max_speed", 2.0).first;
     node_.Subscribe(topic_, &ActorPoseControl::OnPoses, this);
     gzmsg << "ActorPoseControl: listening on " << topic_ << std::endl;
   }
@@ -53,21 +56,24 @@ public:
     if (info.paused) {
       return;
     }
-    std::unordered_map<std::string, gz::math::Pose3d> commands;
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      commands.swap(commands_);
+      for (auto & [name, pose] : commands_) {
+        targets_[name] = pose;
+      }
+      commands_.clear();
     }
-    if (commands.empty()) {
+    if (targets_.empty()) {
       return;
     }
+    const double dt = std::chrono::duration<double>(info.dt).count();
     ecm.Each<gz::sim::components::Actor, gz::sim::components::Name>(
       [&](const gz::sim::Entity & entity, const gz::sim::components::Actor *,
       const gz::sim::components::Name * name) -> bool
       {
-        auto it = commands.find(name->Data());
-        if (it != commands.end()) {
-          MoveActor(ecm, entity, it->second);
+        auto it = targets_.find(name->Data());
+        if (it != targets_.end()) {
+          MoveActor(ecm, entity, it->second, dt);
         }
         return true;
       });
@@ -87,16 +93,19 @@ private:
     }
   }
 
+  // 매 물리 스텝마다 목표(마지막 명령) 쪽으로 max_speed_ × dt 만큼 옮기고, 옮긴 거리만큼 애니메이션 시간을 진행시킨다.
+  // 명령이 올 때(20 Hz)만 바꾸면 GUI가 그 사이 프레임에서 자기 시간으로 그린 자세와 번갈아 그려 깜빡인다 (2026-10-14).
+  // FollowActor도 매 스텝 갱신한다
   void MoveActor(
     gz::sim::EntityComponentManager & ecm, const gz::sim::Entity & entity,
-    const gz::math::Pose3d & target)
+    const gz::math::Pose3d & target, double dt)
   {
     auto * traj = ecm.Component<TrajectoryPose>(entity);
     auto * anim = ecm.Component<AnimationTime>(entity);
     if (!traj) {
       // 처음 명령: FollowActor와 같이 준비한다. actor의 SDF pose는 0으로 두고(TrajectoryPose가 월드 기준 위치가 됨),
       // 애니메이션 이름·시간 컴포넌트가 없으면 만든다
-      gzmsg << "ActorPoseControl: taking control of actor [" << ecm.Component<gz::sim::components::Name>(entity)->Data() << "]" << std::endl;
+      gzmsg << "ActorPoseControl: taking control of actor [" << name_of(ecm, entity) << "]" << std::endl;
       auto * pose = ecm.Component<gz::sim::components::Pose>(entity);
       if (pose) {
         *pose = gz::sim::components::Pose(gz::math::Pose3d::Zero);
@@ -114,19 +123,34 @@ private:
       }
       return;
     }
-    const double distance = (target.Pos() - traj->Data().Pos()).Length();
-    *traj = TrajectoryPose(target);
+    gz::math::Pose3d current = traj->Data();
+    const gz::math::Vector3d delta = target.Pos() - current.Pos();
+    const double distance = delta.Length();
+    const double step = std::min(distance, max_speed_ * dt);
+    if (distance > 1e-6) {
+      current.Pos() += delta * (step / distance);
+    }
+    current.Rot() = target.Rot();
+    *traj = TrajectoryPose(current);
     ecm.SetChanged(entity, TrajectoryPose::typeId, gz::sim::ComponentState::OneTimeChange);
     if (anim && anim_x_vel_ > 0.0) {
       const auto advance = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-        std::chrono::duration<double>(distance / anim_x_vel_));
+        std::chrono::duration<double>(step / anim_x_vel_));
       *anim = AnimationTime(anim->Data() + advance);
       ecm.SetChanged(entity, AnimationTime::typeId, gz::sim::ComponentState::OneTimeChange);
     }
   }
 
+  static std::string name_of(gz::sim::EntityComponentManager & ecm, const gz::sim::Entity & entity)
+  {
+    auto * n = ecm.Component<gz::sim::components::Name>(entity);
+    return n ? n->Data() : std::string("?");
+  }
+
   std::string topic_;
   double anim_x_vel_{2.0};
+  double max_speed_{2.0};   // m/s, 목표로 따라가는 최대 속도 (명령 20 Hz 사이를 메움). 사람 걷기 1.3 m/s보다 크게
+  std::unordered_map<std::string, gz::math::Pose3d> targets_;
   gz::transport::Node node_;
   std::mutex mutex_;
   std::unordered_map<std::string, gz::math::Pose3d> commands_;

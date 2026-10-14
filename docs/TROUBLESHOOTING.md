@@ -174,6 +174,16 @@
 - **해결**: gz-sim 시스템 플러그인 `limbo::ActorPoseControl`(`limbo_simulation/plugins/actor_pose_control.cpp`)이 토픽 `/limbo/actor_poses`로 받은 위치를 `TrajectoryPose`에 쓰고, FollowActor처럼 actor의 Pose를 0으로 두고 `AnimationName`·`AnimationTime`을 만들어 옮긴 거리만큼 걷는 애니메이션을 진행시킴. 빌드는 `gz_sim_vendor`·`gz_plugin_vendor`를 먼저 찾아야 `gz-sim::core`가 잡힘(ROS Jazzy는 Gazebo를 vendor 패키지로 줌). launch가 `GZ_SIM_SYSTEM_PLUGIN_PATH`에 `install/limbo_simulation/lib`을 넣음. actor는 skin·animation만 두고 `<script><loop>true</loop><auto_start>true</auto_start></script>`, 명령 z는 1.0(메시 원점이 골반)
 - **확인**: 명령 (2, 0, z 1.0) → LiDAR 0°에서 1.82 m(높이 1.0)·2.15 m(높이 0.3, 다리). z 0이면 상체가 LiDAR 아래로 내려가 안 보임. 복도 주행에서 YOLO·HumanLayer가 그대로 잡음 ([기록](../experiments/2026-10-14_social_people/README.md))
 
+### 소셜 포스 사람이 GUI에서 깜빡이며 순간이동하고 자리를 바꾸는 것처럼 보임 — 2026-10-14
+- **증상**: gui를 켜고 보면 사람이 반짝이며 튀고, 마주치면 벽을 뚫고 자리를 바꾸는 듯함. 그런데 `/sim/people`로 받은 명령 위치는 한 스텝 0.05 m 이하로 매끈하고, 서버의 LiDAR로 잰 actor 위치도 명령을 그대로 따름
+- **원인**:
+  1. **이전 런치의 `moving_obstacles.py`가 안 죽고 남아** 같은 actor 이름에 다른 위치를 20 Hz로 보냄. gz transport 파이썬 `Node`가 SIGINT·SIGTERM 핸들러를 걸어 launch의 종료 신호를 삼키기 때문(`kill -TERM`에도 안 죽음, SIGKILL만 듣음). `ps`로 세면 런치마다 하나씩 쌓여 있었음
+  2. 플러그인이 명령이 올 때(20 Hz)만 `TrajectoryPose`·`AnimationTime`을 바꿔, GUI가 그 사이 렌더 프레임을 다른 애니메이션 단계로 그림(다리가 모였다 벌어졌다 순서가 뒤섞임)
+  3. 애니메이션 `interpolate_x` true면 걷기 루트 이동이 위치에 더해져 한 걸음마다 앞으로 미끄러졌다 되돌아옴
+- **해결**: ① 스크립트가 `Node()` 뒤에 SIGINT·SIGTERM을 `sys.exit`로 덮음. ② 플러그인이 매 물리 스텝마다 목표 쪽으로 `max_speed × dt` 보간하고 옮긴 거리만큼 애니메이션 진행(FollowActor 방식). ③ 소셜 포스 actor는 `interpolate_x` false
+- **확인 방법**: 잔존은 `ps -eo pid,lstart,args | grep moving_obstacles`로 런치 시각별로 보고 **PID로** 끈다. 화면은 복도 안 시점(`gz service -s /gui/move_to/pose`)에서 PIL `ImageGrab`로 초당 30장 찍어 자세 순서가 이어지는지 본다
+- **확인**: 사용자 눈 확인 "확실히 매끄럽다, 움직임의 95 %는 리얼" (`experiments/2026-10-14_social_people/README.md`). 주의: 프로세스를 패턴으로 모아 죽이면 자기 셸까지 죽는다(이날 두 번). 목록을 먼저 출력하고 PID만 넘긴다
+
 ## 인지(person_detector)
 
 ### person_detector가 CPU를 8코어(775%)나 씀 — 2026-10-02
