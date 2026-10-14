@@ -162,7 +162,7 @@ source /opt/ros/jazzy/setup.bash && python -c "import torch, ultralytics, cv_bri
 - 마지막 waypoint는 `type: stop`이어야 한다. 파일 이름이 틀리면 Nav2를 기다리기 전에 바로 오류가 난다
 - 순찰 노드는 위치 추정을 30초만 기다린다. 시뮬레이션 launch와 순찰 노드를 손으로 이어 치면 시간 초과로 끝날 수 있어 `demo_patrol.sh`가 준비될 때까지 기다렸다가 시작한다
 - 일시정지·재개 서비스: `/patrol/pause`, `/patrol/resume`, 상태 `/patrol/state`
-- 반복 순찰: `-p loop:=true`(시연 스크립트는 `LOOP=1 tools/demo_patrol.sh`). 마지막 waypoint 뒤에 첫 번째부터 다시 돌고, 일시정지로만 멈춘다. 상태 사유에 `lap N started`가 남는다
+- 반복 순찰: `-p loop:=true`(시연 스크립트는 `LOOP=1 tools/demo_patrol.sh`, 학원 2층은 A를 `stop`으로 둔 `aischool_loop_waypoints.yaml`을 씀 — `pass`면 2바퀴째 G → A → B 되돌아가는 경로에서 A 앞에 막힘). 마지막 waypoint 뒤에 첫 번째부터 다시 돌고, 일시정지로만 멈춘다. 상태 사유에 `lap N started`가 남는다
 - 이동 실패: `retry_delay_sec`(3초) 뒤 남은 지점으로 `retries`(2)번 다시 보내고, 그래도 안 되면 순찰을 끝내지 않고 `paused`(사유 `navigation failed`)로 멈춘다. 확인 후 재개하면 남은 지점부터 간다
 
 ### 비켜 주는 사람이 있는 월드 (`world:=aischool_2f_social`)

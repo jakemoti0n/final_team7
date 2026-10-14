@@ -5,7 +5,9 @@
 #   예:   tools/demo_patrol.sh aischool_2f_furnished aischool_2f_furnished_map aischool_furnished_waypoints.yaml
 #   LOOP=1 이면 마지막 지점 뒤에 처음부터 계속 반복한다 (일시정지로만 멈춤)
 # 순찰 노드는 위치 추정을 30초만 기다리는데 시뮬레이션은 뜨는 데 1~2분 걸려서, 그냥 이어서 치면 시간 초과로 끝난다
-WORLD=${1:-aischool_2f} MAP=${2:-aischool_2f_map} WAYPOINTS=${3:-aischool_waypoints.yaml}
+# 반복이면 A를 stop으로 둔 사본을 쓴다(2바퀴째 G → A → B 되돌아가는 경로에서 막힘, experiments/2026-10-14_loop_patrol)
+[ "${LOOP:-0}" = 1 ] && DEFAULT_WAYPOINTS=aischool_loop_waypoints.yaml || DEFAULT_WAYPOINTS=aischool_waypoints.yaml
+WORLD=${1:-aischool_2f} MAP=${2:-aischool_2f_map} WAYPOINTS=${3:-$DEFAULT_WAYPOINTS}
 source /opt/ros/jazzy/setup.bash; source ~/limbo/limbo/install/setup.bash; source ~/limbo/venvs/limbo_yolo/bin/activate
 export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-97} DISPLAY=${DISPLAY:-:1}
 export __NV_PRIME_RENDER_OFFLOAD=${__NV_PRIME_RENDER_OFFLOAD:-1} __GLX_VENDOR_LIBRARY_NAME=${__GLX_VENDOR_LIBRARY_NAME:-nvidia}

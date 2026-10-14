@@ -1,0 +1,56 @@
+# 반복 순찰(loop:=true)용 aischool_waypoints.yaml 사본. A만 stop으로 바꿈.
+# 2바퀴째부터 G → A → B가 같은 복도를 내려왔다 되돌아가서, A가 pass면 로봇이 A 0.8 m 앞에서 먼저 돌아서고
+# 지난 지점 판정(0.7 m) 밖이라 막힌다(experiments/2026-10-14_loop_patrol). stop이면 목표가 A에서 끝나 되돌아가는 경로가 한 목표에 안 들어간다
+waypoints:
+
+  - name: A
+    type: stop
+    x: -6.837
+    y: -0.240
+    yaw: 0.0
+    wait_sec: 0
+
+
+  - name: B
+    type: pass
+    x: -6.827
+    y: 7.997
+    yaw: 0.0
+    wait_sec: 0
+
+  - name: C
+    type: pass
+    x: -13.742
+    y: 7.998
+    yaw: 0.0
+    wait_sec: 0
+
+  - name: D
+    type: stop
+    x: -13.970
+    y: 0.641
+    yaw: 0.0
+    wait_sec: 5
+
+  - name: E
+    type: pass
+    x: -9.083
+    y: 0.656
+    yaw: 0.0
+    wait_sec: 0
+
+  - name: F
+    type: pass
+    x: -8.805
+    y: 7.957
+    yaw: 0.0
+    wait_sec: 0
+
+  - name: G
+    type: stop
+    x: 3.731
+    y: 10.276
+    yaw: 0.0
+    wait_sec: 0
+
+                  

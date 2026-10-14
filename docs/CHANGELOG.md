@@ -10,6 +10,19 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (78) 학원 2층 반복 순찰이 2바퀴째부터 A 앞에서 막혀서, 반복용 waypoint 사본에서 A를 stop으로 둠
+
+**할 일**
+- `build_limbo`. 반복 시연은 `LOOP=1 tools/demo_patrol.sh`(새 사본이 기본)
+
+**변경**
+- `limbo_patrol/config/aischool_loop_waypoints.yaml`: `aischool_waypoints.yaml`에서 A만 `stop`. 2바퀴째부터 G → A → B가 같은 복도를 내려왔다 되돌아가서, A가 `pass`면 로봇이 A 0.8 m 앞에서 먼저 북쪽으로 돌아서고 지난 지점 판정 반경 0.7 m 밖이라 "진전 없음"을 반복했음. 반경을 늘리지 않고 목표를 A에서 끊음. 원본은 다른 시험이 쓰므로 그대로
+- `tools/demo_patrol.sh`: `LOOP=1`이면 이 사본이 기본. `README.md` 한 줄
+- `KNOWN_ISSUES`·`PROJECT.md` 8절의 A 앞 막힘 행을 지움
+
+**확인**
+- 시연 스택(사람 10명): 고치기 전 2·3바퀴째 G → A에서 세 번 막힘(collision monitor는 둘레 0.6 m 안 점 0이라 원인 아님). 고친 뒤 3바퀴 연속 다시 시도·복구 0 ([기록](../experiments/2026-10-14_loop_patrol/README.md))
+
 ## 2026-10-14 (77) 순찰이 이동 실패로 멈춰도 알림이 없어서, 서버가 순찰 상태로 알림을 만들게 함. 휴대폰 원격 제어 확인
 
 **할 일**
