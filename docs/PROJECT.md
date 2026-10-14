@@ -113,7 +113,7 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 | `README.md` | 따라 하면 무엇이 뜨는지 | 실행 방법이 바뀔 때 | 명령 블록 + "→ 그러면 무엇이 열린다" 한 줄. 상세는 맨 아래 "자세히" 절 |
 | `docs/CHANGELOG.md` | 커밋을 상세히 쓴 것 | **push할 때마다** 맨 위에 | 아래 양식 |
 | `docs/KNOWN_ISSUES.md` | 아직 못 고친 문제 | 문제를 찾았을 때. 고치면 지우고 TROUBLESHOOTING으로 | 표 한 행: 문제 · 근거(언제 어디서 몇 번) · 영향 · 대책 후보 |
-| `docs/TROUBLESHOOTING.md` | 해결한 문제 | 고쳤을 때 | `### 증상 — 날짜` 아래 원인 → 해결 → 확인 |
+| `docs/TROUBLESHOOTING.md` | 해결한 문제 | 고쳤을 때. **기술적으로 고생한 것은 빠짐없이**(원인을 찾는 데 시간이 든 것, 우회한 것, 포기한 대안) | `### 증상 — 날짜` 아래 원인 → 해결 → 확인. 로그 한 줄·숫자·커밋을 넣어 같은 증상을 검색으로 찾게. 단순 실수는 안 적음 |
 | `experiments/날짜_주제/` (lab) | 실험 하나의 조건·결과·결론 | 실험이 끝났을 때 | `README.md`(왜 했나 / 조건 / 결과 표 / 결론 / 다음) + 그 실험의 CSV·스크립트. 여러 실험이 다시 쓰는 도구는 `tools/sim_trials/`로 |
 | `docs/lab/requests.md`, `reports.md` (lab) | 두 PC 소통 | 상대 PC에 전할 때 | requests는 노트북만, reports는 서브 PC만 쓴다. 상대 파일은 읽기만. 긴 지시는 `experiments/orders/` |
 

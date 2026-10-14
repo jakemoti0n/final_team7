@@ -17,7 +17,7 @@ trap 'echo; echo "끝내는 중"; kill -INT $LAUNCH 2>/dev/null; wait $LAUNCH 2>
 echo "시뮬레이션 띄우는 중 ($WORLD). 로그: /tmp/demo_sim.log"
 for i in $(seq 1 120); do
   grep -qE "Failed to bring up|process has died" /tmp/demo_sim.log && { echo "시작 실패. tail /tmp/demo_sim.log 로 확인"; kill -INT $LAUNCH; wait $LAUNCH; exit 1; }
-  timeout 5 ros2 lifecycle get /bt_navigator 2>/dev/null | grep -q active && break
+  timeout 5 ros2 lifecycle get /bt_navigator 2>/dev/null | grep -q '^active' && break
   sleep 2
 done
 for i in $(seq 1 40); do

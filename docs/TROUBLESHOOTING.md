@@ -82,6 +82,36 @@
 - **다른 waypoint 파일을 만들 때**: 정지 지점의 yaw를 직전 지점에서 들어오는 방향으로 둔다. 도착 판정 범위를 넓히는 방법은 못 간 상태를 도착으로 착각하게 해서 쓰지 않는다
 - **자세한 기록**: [원인 조사(통제 실험)](NAV2_NEAR_GOAL_FAILURE_2026-10-12.md), [수정 후 10회 검증](NAV2_YAW_10_RUN_VALIDATION_2026-10-12.md) (원작자 작성)
 
+### 순찰이 막다른 통로 끝 0.8 m 앞에서 "Failed to make progress"를 반복함 — 2026-10-13
+- **증상**: 가구 월드 순찰에서 왼쪽 책상 통로 끝(G) 직전에 멈춰 회전·후진 복구를 반복. 같은 좌표를 단독 목표로 주면 성공
+- **원인**: 통로 끝 waypoint가 `pass`라 올라가는 경로와 내려오는 경로가 NavigateThroughPoses 경로 하나에 겹침. MPPI가 겹친 두 경로 사이에서 갈피를 못 잡음 (닫힌 고리 경로를 한 번에 줄 때와 같은 원인)
+- **해결**: 되돌아오는 지점을 `stop`(wait_sec 0)으로 두어 구간을 나눔 (`aischool_furnished_waypoints.yaml`, 2026-10-13)
+- **확인**: `tools/demo_patrol.sh aischool_2f_furnished aischool_2f_furnished_map aischool_furnished_waypoints.yaml` → 진전 없음 0번, 복구 0번으로 완주
+
+### 장애물 없는 직선에서도 0.42 m/s밖에 안 남 (상한은 0.6) — 2026-10-13
+- **증상**: 충장로 200 m 직선 왕복에서 평균 0.42 m/s. 속도 평활기·collision monitor·Gazebo 구동 상한은 모두 0.6 이상인데 MPPI가 그 이상을 안 냄
+- **원인**: MPPI `prune_distance` 1.7 m. MPPI는 예측 시간(4초) 동안 갈 수 있는 경로만 보고 궤적을 고르는데, 1.7 m는 4초 × 0.425 m/s라 그보다 빠른 궤적은 경로 끝을 넘어가 점수가 낮아짐. 즉 `prune_distance`가 사실상 속도 상한이 됨
+- **해결(후보)**: `prune_distance` 2.5(= 상한 0.6 × 4초 이상)면 평균 0.58 m/s, 왕복 500 → 351 s. 계산량은 거의 안 늚(batch 2000 × 80이 지배). 노트북·서브 PC에서 1~6초 차이로 재현. **아직 어느 브랜치 설정에도 반영 안 함**(사람 있는 조건 재비교 뒤 결정, `PROJECT.md` 다음 5번)
+- **확인**: [`experiments/2026-10-13_chungjang_speed/`](../experiments/2026-10-13_chungjang_speed/README.md). 상한 0.75 + 3.0이면 0.72 m/s까지 나오지만 실물은 평지에서만 0.8 m/s라 0.6~0.7이 안전
+
+### launch 뒤에 순찰 노드를 이어서 치면 위치 추정 시간 초과로 끝남 — 2026-10-13
+- **증상**: `ros2 launch ... && ros2 run limbo_patrol patrol_node`처럼 이어 치면 순찰 노드가 "위치 추정 없음"으로 바로 끝남
+- **원인**: 순찰 노드는 `map → base_footprint` TF를 30초만 기다리는데, 시뮬레이션은 뜨는 데 1~2분 걸림(Gazebo + Nav2 lifecycle + AMCL)
+- **해결**: `tools/demo_patrol.sh`가 `bt_navigator`가 active가 되고 TF가 나올 때까지 기다렸다가 순찰 노드를 띄움. 30초를 늘리는 대신 이렇게 한 이유: 실제 로봇에서는 30초면 충분하고, 기다림은 시뮬레이션 쪽 사정이라 스크립트가 맡는 게 맞음
+- **확인**: `aischool_2f`·`aischool_2f_furnished`·`human_test_world` 순찰 완주. 참고: 이 스크립트를 백그라운드로 띄우면 launch가 SIGINT를 무시해 Ctrl+C 방식이 안 먹음 → `kill -TERM $(cat /tmp/demo_sim.pid)`
+
+### 시험 도구가 "준비됨"이라 했는데 Goal이 영영 처리되지 않음 (Nav2가 configure 단계에서 멈춤) — 2026-10-13
+- **증상**: 시뮬레이션은 떠 있고 AMCL·TF도 정상인데 `nav_route.py`가 첫 줄만 찍고 10분 넘게 멈춤. `nav.log` 비어 있음. 로봇은 출발점 그대로
+- **원인**: 시작 부하가 몰릴 때 lifecycle 서비스 응답이 끊김
+  ```
+  [collision_monitor] failed to send response to /collision_monitor/change_state (timeout)
+  [route_server] failed to send response to /route_server/change_state (timeout)
+  ```
+  lifecycle manager가 그 노드의 configure 결과를 못 받아 더 진행하지 않고, Nav2가 inactive인 채로 남음. 도구는 TF만 보고 준비됐다고 판단해 Goal을 보냈고 액션 서버가 없으니 응답이 영영 없음. 2026-10-12 서브 PC 10회 중 2회는 다른 증상(`Failed to activate global_costmap because transform ... did not become available`)으로 같은 "시작 부하" 계열
+- **해결(우회)**: `tools/sim_trials/sim_ctl.sh`가 `bt_navigator`가 3분 안에 active인지 확인하고, 아니면 다 내리고 최대 3번 다시 띄움 (`135851e`). 근본 원인(시작 부하·bond timeout)은 `KNOWN_ISSUES.md`에 열려 있음
+- **2026-10-14 추가**: 그 확인이 `ros2 lifecycle get /bt_navigator | grep -q active`였는데 `inactive [2]`에도 맞아서, planner_server 활성화가 60초 시간 초과로 실패(`Failed to change state for node: planner_server`)한 회차를 "준비됨"으로 넘겼고 Goal 3개가 모두 `Action server is inactive. Rejecting the goal`로 거부됨. `grep -q '^active'`로 고침 (`sim_ctl.sh`, `demo_patrol.sh`). 상태 문자열을 부분 일치로 검사하지 말 것
+- **확인**: 2026-10-14 한 명 복도 회차에서 1번째 시작이 이 증상으로 실패 → 자동으로 2번째 시작. 회차 시간이 200 → 430초로 늘어나는 정도라 반복 시험에는 지장 없음
+
 ## 시뮬레이션
 
 ### Gazebo가 일시정지로 시작함 — 2026-10-02
@@ -107,6 +137,35 @@
 - **해결**: launch에 `world`, `map` 인자 추가 (`c4fb638`). 예: `world:=aischool_2f map:=aischool_2f_map`
 
 ---
+
+### 시뮬레이션이 실시간의 0.6배로 돌아 로봇이 느려 보임 — 2026-10-13
+- **증상**: 시연 화면에서 로봇이 너무 느려 보임. MPPI 실속 0.4 m/s가 화면에서는 0.24 m/s. Gazebo 실시간 비율(RTF) 0.60
+- **원인**: gz 서버의 물리 스레드(1 ms 스텝 = 시뮬 1초에 1,000번 계산)가 한 코어를 포화함(서버 CPU 150%, 그중 메인 스레드 88%). 코어가 16개라도 물리는 한 스레드라 더 못 씀. gz gui가 210%를 더 씀
+- **해결**: 월드 7개의 `max_step_size` 0.001 → 0.002 (`815bab9`). 계산이 반으로 줄어 RTF 0.60 → 0.95(화면 켬), 0.96(화면 끔). `build_limbo` 필요(월드 sdf는 install에 복사됨)
+- **확인**: 정확도는 같음 — 직진 6 m에서 8 mm 차이, 제자리 5바퀴 회전 오차는 1 ms·2 ms 모두 +150°, 최고 속도 0.44 m/s 동일. [`experiments/2026-10-13_physics_step/`](../experiments/2026-10-13_physics_step/README.md). 따로 알게 된 것: 바퀴 odom이 제자리 회전 때 9% 더 돈 것으로 세는 건 스텝과 무관(실린더 바퀴 옆미끄러짐으로 추정, EKF·AMCL이 보정)
+
+### 시뮬레이션을 스크립트로 띄우고 끌 때 프로세스가 남거나 엉뚱한 것이 죽음 — 2026-10-13
+- **증상**: (1) `pkill -f <패턴>`으로 끄면 그 명령을 친 셸까지 죽음(exit 144). (2) gz gui 프로세스만 PID로 끄면 서버까지 같이 종료됨. (3) 프로세스 그룹을 kill해도 launch·gz가 남아 다음 회차의 `map_server`까지 실패함. (4) 백그라운드 `ros2 bag record`·백그라운드로 띄운 launch는 `kill -INT`로 안 멈춤
+- **원인**: (1) 패턴이 자기 셸의 명령줄에도 맞음. (2) gz gui와 서버가 같은 transport 세션으로 묶여 있어 gui가 닫히면 서버가 종료 신호를 받음. (3) launch가 자식을 다 거두기 전에 그룹이 사라짐. (4) 비대화형 셸에서 백그라운드로 띄운 프로세스는 SIGINT를 무시함
+- **해결**: `tools/sim_trials/sim_ctl.sh`가 `setsid`로 자기 프로세스 그룹을 만들어 띄우고, 끌 때 그룹 kill 뒤 남은 `start_simulation.launch`·`gz sim` PID를 찾아 끝냄. 화면은 처음부터 `gui:=false`. `pkill -f`는 쓰지 않고 PID나 `sim_ctl.sh stop`만 (`CLAUDE.md`). 녹화·백그라운드 launch는 `kill -TERM`
+- **확인**: 10-13·10-14 반복 회차에서 `남은 gz: 0  남은 launch: 0`으로 끝남
+
+### 큰 야외 월드(충장로 번화가 470 × 530 m)를 만들면 너무 무거움 — 2026-10-13
+- **증상**: OSM 자료로 거리·건물을 월드와 지도로 만들 때 (1) 5 cm 격자면 약 1억 4천만 칸이라 Nav2 costmap·경로 계획이 못 버팀. (2) 건물마다 격자 마스크를 들면 생성에 131 s·메모리 30 GB. (3) 건물 블록 안 구멍(안마당·지붕, 10곳 676 m²)이 빈 공간으로 남아 경로 계획이 후보로 봄. (4) 메시 26 MB(56만 면)가 저장소에 들어가 다시 만들 때마다 이력이 그만큼 늚
+- **해결**: (1) 격자 10 cm(약 3,500만 칸, 로봇 폭 0.5 m에 충분). 큰길 너머 건물 242채는 울타리에 가려 안 보이니 세우지 않음. (2) 건물을 번호 라벨 이미지 하나로 다룸 → 5.7 s·1.4 GB. (3) 출발점(원점)과 이어진 빈 칸만 남기고 나머지는 가장 가까운 건물에 붙임(거리 변환). (4) 생성 산출물은 `.gitignore`, 생성기 `tools/chungjang/gen_street.py`만 저장소에(`2e9d88c`). README "생성해서 쓰는 월드"
+- **확인**: 시뮬레이션+Nav2 1번에 시작, 메모리 6 GB, RTF 0.68~0.95, NavFn 527 m 경로 0.21~0.37 s. 200 m 거리 왕복 주행 완료
+
+### 두 PC가 같은 네트워크에서 동시에 시뮬레이션하면 토픽·Gazebo가 섞임 — 2026-10-13
+- **증상**: 노트북과 서브 PC가 둘 다 `ROS_DOMAIN_ID=97`로 시뮬레이션을 띄우면 상대 로봇의 토픽·Gazebo 모델이 보여 시험 결과가 오염됨
+- **원인**: ROS 2(DDS)는 같은 도메인이면 같은 네트워크의 노드를 다 찾고, gz transport도 같은 파티션이면 서로 붙음
+- **해결**: 서브 PC는 `ROS_DOMAIN_ID=98`, `GZ_PARTITION=desk`. `tools/sim_trials/*.sh`는 환경변수가 있으면 그대로 쓰고 없으면 97. 팀원과 통신할 때만 97로
+- **확인**: 두 PC가 같은 시각에 돌린 R2·R3 결과가 서로 섞이지 않음
+
+### ros2 bag에 Nav2 상태 토픽이 안 들어가 분석이 "멈춘 구간 0개"를 냄 — 2026-10-12
+- **증상**: `patrol_analyze.py`가 주행 중 구간을 못 찾아 멈춘 구간을 0개로 냄. 녹화가 마무리되지 않은 bag은 아예 못 읽음
+- **원인**: Nav2 액션 상태 토픽(`/navigate_to_pose/_action/status`)은 `_` 접두의 숨김 토픽이라 `ros2 bag record -a`가 기본으로 빼놓음. bag은 `kill -INT`로 닫혀야 메타데이터가 써지는데 그 전에 끊기면 인덱스가 없음
+- **해결**: 녹화에 `--include-hidden-topics`, 분석은 상태 토픽이 없으면 경고를 내고 위치로 근사. 안 닫힌 bag은 `ros2 bag reindex <bag> -s mcap` 후 분석 (`tools/sim_trials/patrol_trial.sh`, `patrol_analyze.py`)
+- **확인**: 서브 PC 10회 반복(R1)에서 수정 전 bag도 재색인 후 분석됨
 
 ## 인지(person_detector)
 
@@ -210,6 +269,12 @@
   cd ~/limbo/limbo && rm -rf build install log && build_limbo
   ```
 
+### ktj ↔ lab 브랜치를 바꾸면 `person_detector`가 시작하자마자 죽어 시뮬레이션 시작이 계속 실패 — 2026-10-13
+- **증상**: 브랜치를 바꾸고 `build_limbo` 없이 띄우면 `person_detector`가 바로 종료되고 launch가 `process has died`로 실패를 반복
+- **원인**: `limbo_interfaces`의 메시지 집합이 브랜치마다 다름(ktj에 `PatrolState` 추가). 파이썬 노드는 심볼릭 링크라 소스가 바로 바뀌지만, 메시지 패키지는 빌드 산출물이라 옛 것이 남아 import가 실패함
+- **해결**: 브랜치를 바꾸면 `build_limbo`(최소한 `colcon build --packages-select limbo_interfaces`). 병합 뒤 pull 받는 쪽도 같음 — 변경 기록 "할 일"에 `build_limbo`가 있으면 건너뛰지 말 것
+- **확인**: 서브 PC R2에서 재현·해결 (`docs/lab/reports.md`)
+
 ### `git stash` 후 `limbo_monitor` 패키지가 없다는 에러 — 2026-10-06
 - **원인**: stash로 소스는 치웠는데 빌드 결과물(`install/limbo_monitor`)은 남아 서로 맞지 않았음
 - **해결**: `git stash pop` 후 해당 패키지 다시 빌드. 새 패키지가 있는 작업을 stash할 때는 빌드 결과물도 같이 정리해야 함
@@ -268,10 +333,3 @@
 ### MPPI가 낸 회전 명령이 Gazebo에서 잘림 (2026-09-23)
 - **원인**: Nav2 쪽 각속도 한계는 1.8인데 Gazebo diff-drive는 0.8로 남아 있었음
 - **해결**: Gazebo 한계를 Nav2 값에 맞췄음 (`1628b5a`, 이후 PR #5에서 각가속도 4.0으로 다시 조정됨)
-
-## 순찰이 막다른 통로 끝 0.8 m 앞에서 "Failed to make progress"를 반복함
-
-- **증상**: 가구 월드 순찰에서 왼쪽 책상 통로 끝(G) 직전에 멈춰 회전·후진 복구를 반복. 같은 좌표를 단독 목표로 주면 성공
-- **원인**: 통로 끝 waypoint가 `pass`라 올라가는 경로와 내려오는 경로가 NavigateThroughPoses 경로 하나에 겹침. MPPI가 겹친 두 경로 사이에서 갈피를 못 잡음 (닫힌 고리 경로를 한 번에 줄 때와 같은 원인)
-- **해결**: 되돌아오는 지점을 `stop`(wait_sec 0)으로 두어 구간을 나눔 (`aischool_furnished_waypoints.yaml`, 2026-10-13)
-- **확인**: `tools/demo_patrol.sh aischool_2f_furnished aischool_2f_furnished_map aischool_furnished_waypoints.yaml` → 진전 없음 0번, 복구 0번으로 완주

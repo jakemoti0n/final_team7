@@ -28,12 +28,12 @@ start_once() {   # 0: 준비됨, 1: 실패
   echo $! > $PIDFILE
   for i in $(seq 1 90); do
     grep -qE "Failed to bring up|process has died" $LOG && return 1
-    timeout 5 ros2 lifecycle get /bt_navigator 2>/dev/null | grep -q active && break
+    timeout 5 ros2 lifecycle get /bt_navigator 2>/dev/null | grep -q '^active' && break
     sleep 2
   done
   # 3분이 지나도 active가 아니면 실패로 본다. lifecycle 서비스 응답이 끊겨(collision_monitor change_state timeout) Nav2가
   # configure 단계에서 멈춘 채 TF만 나오는 경우가 있어서, TF만 보고 "준비됨"으로 넘기면 Goal이 영영 처리되지 않는다 (2026-10-13)
-  timeout 5 ros2 lifecycle get /bt_navigator 2>/dev/null | grep -q active || return 1
+  timeout 5 ros2 lifecycle get /bt_navigator 2>/dev/null | grep -q '^active' || return 1
   # AMCL이 map → base_footprint를 내야 Nav2가 Goal을 받는다
   for i in $(seq 1 30); do
     timeout 4 ros2 run tf2_ros tf2_echo map base_footprint 2>&1 | grep -q Translation && { sleep 3; return 0; }
