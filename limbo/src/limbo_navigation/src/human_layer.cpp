@@ -1,568 +1,255 @@
+// 사람 비용 층 (local costmap 전용).
+// person_detector의 예측(/person_detector/predictions)을 받아
+//   - 현재 위치와 lethal_time 안의 예측점은 몸 반경 안을 치명(LETHAL)으로,
+//   - 그 뒤 예측점은 시간이 멀수록 낮아지는 가우시안 비용으로
+// 칠한다. 치명 비용은 뒤에 오는 inflation 층이 로봇 반경만큼 부풀린다.
+// 왜 치명이 필요한가: MPPI 장애물 critic은 치명(254)만 "충돌"로 보고 그 밖은 가중치로만 본다.
+// 2026-10-13 복도 실험에서 최고 비용 220으로는 로봇이 사람을 뚫는 궤적을 골랐다 (KNOWN_ISSUES 2번).
+
 #include "limbo_navigation/human_layer.hpp"
 
-#include <functional>
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
+#include "nav2_costmap_2d/cost_values.hpp"
 #include "pluginlib/class_list_macros.hpp"
-
 
 namespace limbo_navigation
 {
 
-namespace
+void HumanLayer::Bounds::add(double x, double y, double r)
 {
-
-// Human prediction cost를 계산할 최대 반경
-constexpr double HUMAN_RADIUS = 0.35;
-
-// Gaussian의 퍼짐 정도
-constexpr double HUMAN_SIGMA = 0.15;
-
-// 너무 작은 cost는 실제 costmap에 기록하지 않음
-constexpr unsigned char MIN_HUMAN_COST = 10;
-
-// 시간에 따른 Human cost
-constexpr double MIN_PREDICTION_TIME = 0.25;
-constexpr double MAX_PREDICTION_TIME = 2.0;
-
-// 가장 가까운 미래의 중심 cost
-constexpr double NEAR_PEAK_COST = 220.0;
-
-// 가장 먼 미래의 중심 cost
-constexpr double FAR_PEAK_COST = 110.0;
-
-}  
+  if (!valid) {
+    min_x = x - r; min_y = y - r; max_x = x + r; max_y = y + r;
+    valid = true;
+    return;
+  }
+  min_x = std::min(min_x, x - r);
+  min_y = std::min(min_y, y - r);
+  max_x = std::max(max_x, x + r);
+  max_y = std::max(max_y, y + r);
+}
 
 void HumanLayer::onInitialize()
 {
   auto node = node_.lock();
-
   if (!node) {
-    throw std::runtime_error(
-      "HumanLayer: failed to lock parent node"
-    );
+    throw std::runtime_error("HumanLayer: failed to lock parent node");
   }
+  readParameters();
 
-  // HumanLayer 전용 파라미터 선언
-  declareParameter(
-    "enabled",
-    rclcpp::ParameterValue(true)
-  );
-
-  // nav2_params.yaml의
-  // human_layer.enabled 값을 읽음
-  node->get_parameter(
-    name_ + ".enabled",
-    enabled_
-  );
-
-  declareParameter(
-    "max_prediction_age",
-    rclcpp::ParameterValue(1.0)
-  );
-
-  node->get_parameter(
-    name_ + ".max_prediction_age",
-    max_prediction_age_
-  );
-
-  prediction_sub_ =
-    node->create_subscription<PredictionArray>(
-      "/person_detector/predictions",
-      rclcpp::QoS(10),
-
-      std::bind(
-        &HumanLayer::predictionCallback,
-        this,
-        std::placeholders::_1
-      )
-    );
-
+  prediction_sub_ = node->create_subscription<PredictionArray>(
+    "/person_detector/predictions", rclcpp::QoS(10),
+    std::bind(&HumanLayer::predictionCallback, this, std::placeholders::_1));
   current_ = true;
 
   RCLCPP_INFO(
     node->get_logger(),
-    "HumanLayer initialized. "
-    "Subscribing to /person_detector/predictions"
-  );
+    "HumanLayer: lethal radius %.2f m within %.2f s, gaussian radius %.2f m (sigma %.2f), peak %.0f -> %.0f",
+    config_.lethal_radius, config_.lethal_time, config_.radius, config_.sigma,
+    config_.near_peak_cost, config_.far_peak_cost);
 }
 
-
-void HumanLayer::predictionCallback(
-  const PredictionArray::SharedPtr msg)
+void HumanLayer::readParameters()
 {
-  {
-    std::lock_guard<std::mutex> lock(
-      prediction_mutex_
-    );
-
-    latest_predictions_ = msg;
-  }
-
   auto node = node_.lock();
-
-  if (node) {
-    RCLCPP_INFO_THROTTLE(
-      node->get_logger(),
-      *node->get_clock(),
-      2000,
-      "HumanLayer received %zu person predictions",
-      msg->predictions.size()
-    );
-  }
+  auto read = [&](const char * name, double & value) {
+      declareParameter(name, rclcpp::ParameterValue(value));
+      node->get_parameter(name_ + "." + name, value);
+    };
+  declareParameter("enabled", rclcpp::ParameterValue(true));
+  node->get_parameter(name_ + ".enabled", enabled_);
+  read("lethal_radius", config_.lethal_radius);
+  read("lethal_time", config_.lethal_time);
+  read("radius", config_.radius);
+  read("sigma", config_.sigma);
+  read("near_peak_cost", config_.near_peak_cost);
+  read("far_peak_cost", config_.far_peak_cost);
+  read("min_prediction_time", config_.min_prediction_time);
+  read("max_prediction_time", config_.max_prediction_time);
+  read("min_cost", config_.min_cost);
+  read("max_prediction_age", config_.max_prediction_age);
+  paint_radius_ = std::max(config_.radius, config_.lethal_radius);
 }
 
+void HumanLayer::predictionCallback(const PredictionArray::SharedPtr msg)
+{
+  std::lock_guard<std::mutex> lock(prediction_mutex_);
+  latest_predictions_ = msg;
+}
+
+// 최신 예측이 max_prediction_age보다 오래됐으면 없는 것으로 본다.
+// person_detector는 그 프레임에서 본 사람만 보내므로, 오래된 메시지를 쓰면 사라진 사람이 남는다
+HumanLayer::PredictionArray::SharedPtr HumanLayer::takeFreshPredictions()
+{
+  PredictionArray::SharedPtr predictions;
+  {
+    std::lock_guard<std::mutex> lock(prediction_mutex_);
+    predictions = latest_predictions_;
+  }
+  auto node = node_.lock();
+  if (!predictions || !node) {
+    return nullptr;
+  }
+  const auto age = node->get_clock()->now() -
+    rclcpp::Time(predictions->header.stamp, RCL_ROS_TIME);
+  if (age.nanoseconds() < 0 || age.seconds() > config_.max_prediction_age) {
+    return nullptr;
+  }
+  return predictions;
+}
+
+HumanLayer::Bounds HumanLayer::predictionBounds(const PredictionArray & predictions) const
+{
+  Bounds bounds;
+  for (const auto & person : predictions.predictions) {
+    bounds.add(person.current_position.x, person.current_position.y, paint_radius_);
+    for (const auto & point : person.predicted_positions) {
+      bounds.add(point.x, point.y, paint_radius_);
+    }
+  }
+  return bounds;
+}
 
 void HumanLayer::updateBounds(
-  double robot_x,
-  double robot_y,
-  double robot_yaw,
-  double * min_x,
-  double * min_y,
-  double * max_x,
-  double * max_y)
+  double /*robot_x*/, double /*robot_y*/, double /*robot_yaw*/,
+  double * min_x, double * min_y, double * max_x, double * max_y)
 {
-  (void)robot_x;
-  (void)robot_y;
-  (void)robot_yaw;
-
   if (!enabled_) {
     return;
   }
+  cycle_predictions_ = takeFreshPredictions();
 
-  // ============================================================
-  // 1. 이번 costmap cycle에서 사용할 prediction snapshot
-  // ============================================================
-
-  {
-    std::lock_guard<std::mutex> lock(prediction_mutex_);
-    cycle_predictions_ = latest_predictions_;
+  // 이전 주기 영역을 먼저 넣어야 움직인 사람의 옛 비용이 이번 주기에 지워진다
+  if (previous_bounds_.valid) {
+    *min_x = std::min(*min_x, previous_bounds_.min_x);
+    *min_y = std::min(*min_y, previous_bounds_.min_y);
+    *max_x = std::max(*max_x, previous_bounds_.max_x);
+    *max_y = std::max(*max_y, previous_bounds_.max_y);
   }
 
-  auto node = node_.lock();
-
-  if (cycle_predictions_ && node) {
-    const auto age =
-      node->get_clock()->now() -
-      rclcpp::Time(
-        cycle_predictions_->header.stamp,
-        RCL_ROS_TIME
-      );
-
-    if (
-      age.nanoseconds() < 0 ||
-      age.seconds() > max_prediction_age_
-    ) {
-      cycle_predictions_.reset();
-    }
-  }
-
-  // ============================================================
-  // 2. 현재 prediction들의 bounds 계산
-  // ============================================================
-
-  bool has_current_bounds = false;
-
-  double current_min_x = 0.0;
-  double current_min_y = 0.0;
-  double current_max_x = 0.0;
-  double current_max_y = 0.0;
-
+  Bounds current;
   if (cycle_predictions_) {
-
-    for (const auto & person : cycle_predictions_->predictions) {
-
-      for (const auto & point : person.predicted_positions) {
-
-        const double point_min_x =
-          point.x - HUMAN_RADIUS;
-
-        const double point_min_y =
-          point.y - HUMAN_RADIUS;
-
-        const double point_max_x =
-          point.x + HUMAN_RADIUS;
-
-        const double point_max_y =
-          point.y + HUMAN_RADIUS;
-
-        if (!has_current_bounds) {
-
-          current_min_x = point_min_x;
-          current_min_y = point_min_y;
-          current_max_x = point_max_x;
-          current_max_y = point_max_y;
-
-          has_current_bounds = true;
-        }
-        else {
-
-          current_min_x =
-            std::min(current_min_x, point_min_x);
-
-          current_min_y =
-            std::min(current_min_y, point_min_y);
-
-          current_max_x =
-            std::max(current_max_x, point_max_x);
-
-          current_max_y =
-            std::max(current_max_y, point_max_y);
-        }
-      }
-    }
+    current = predictionBounds(*cycle_predictions_);
   }
-
-  // ============================================================
-  // 3. 이전 cycle 영역도 update 대상에 포함
-  //
-  // 사람이 이동했을 때 이전 cost를 지우기 위해 필요
-  // ============================================================
-
-  if (has_previous_bounds_) {
-
-    *min_x = std::min(
-      *min_x,
-      previous_min_x_
-    );
-
-    *min_y = std::min(
-      *min_y,
-      previous_min_y_
-    );
-
-    *max_x = std::max(
-      *max_x,
-      previous_max_x_
-    );
-
-    *max_y = std::max(
-      *max_y,
-      previous_max_y_
-    );
+  if (current.valid) {
+    *min_x = std::min(*min_x, current.min_x);
+    *min_y = std::min(*min_y, current.min_y);
+    *max_x = std::max(*max_x, current.max_x);
+    *max_y = std::max(*max_y, current.max_y);
   }
-
-  // ============================================================
-  // 4. 현재 prediction 영역도 update 대상에 포함
-  // ============================================================
-
-  if (has_current_bounds) {
-
-    *min_x = std::min(
-      *min_x,
-      current_min_x
-    );
-
-    *min_y = std::min(
-      *min_y,
-      current_min_y
-    );
-
-    *max_x = std::max(
-      *max_x,
-      current_max_x
-    );
-
-    *max_y = std::max(
-      *max_y,
-      current_max_y
-    );
-
-    // 다음 cycle에서 "이전 영역"으로 사용
-    previous_min_x_ = current_min_x;
-    previous_min_y_ = current_min_y;
-    previous_max_x_ = current_max_x;
-    previous_max_y_ = current_max_y;
-
-    has_previous_bounds_ = true;
-  }
-  else {
-
-    // 이번 cycle에는 사람이 없음.
-    //
-    // 위에서 previous bounds를 한 번 update 영역에 넣었으므로
-    // 이전 Human cost가 이번 cycle에서 제거된다.
-    //
-    // 다음 cycle에는 더 이상 갱신할 이전 영역이 없음.
-    has_previous_bounds_ = false;
-  }
+  previous_bounds_ = current;
 }
-
 
 void HumanLayer::updateCosts(
   nav2_costmap_2d::Costmap2D & master_grid,
-  int min_i,
-  int min_j,
-  int max_i,
-  int max_j)
+  int min_i, int min_j, int max_i, int max_j)
 {
-  if (!enabled_) {
+  if (!enabled_ || !cycle_predictions_) {
     return;
   }
-
-  // updateBounds()에서 잡아둔
-  // 같은 cycle의 prediction 사용
-  const auto predictions =
-    cycle_predictions_;
-
-  if (!predictions) {
-    return;
-  }
-
-  if (predictions->predictions.empty()) {
-    return;
-  }
-
-  const double resolution =
-    master_grid.getResolution();
-
-  // 0.25m 반경이 costmap 기준 몇 cell인지 계산
-  const int cell_radius = static_cast<int>(
-    std::ceil(
-      HUMAN_RADIUS / resolution
-    )
-  );
-
-  std::size_t used_people = 0;
-  std::size_t used_prediction_points = 0;
-  std::size_t checked_cells = 0;
-  std::size_t modified_cells = 0;
-
-  // ============================================================
-  // 모든 사람
-  // ============================================================
-
-  for (const auto & person : predictions->predictions) {
-
-    const std::size_t point_count =
-      std::min(
-        person.predicted_positions.size(),
-        person.time_offsets.size()
-      );
-
-    if (point_count == 0) {
-      continue;
-    }
-
-    used_people++;
-
-    // ==========================================================
-    // 모든 미래 예측점
-    // ==========================================================
-
-    for (std::size_t i = 0; i < point_count; ++i) {
-
-      const auto & point =
-        person.predicted_positions[i];
-
-      const double time_offset =
-        static_cast<double>(
-          person.time_offsets[i]
-        );
-
-      // ========================================================
-      // 시간에 따른 연속적인 peak cost 계산
-      // ========================================================
-
-      if (
-        time_offset < MIN_PREDICTION_TIME ||
-        time_offset > MAX_PREDICTION_TIME)
-      {
-        continue;
-      }
-
-      const double time_ratio =
-        (
-          time_offset -
-          MIN_PREDICTION_TIME
-        )
-        /
-        (
-          MAX_PREDICTION_TIME -
-          MIN_PREDICTION_TIME
-        );
-
-      // 선형 보간
-      //
-      // time_ratio = 0 → 220
-      // time_ratio = 1 → 110
-      const double peak_cost =
-        NEAR_PEAK_COST
-        +
-        time_ratio *
-        (
-          FAR_PEAK_COST -
-          NEAR_PEAK_COST
-        );
-
-      unsigned int center_mx;
-      unsigned int center_my;
-
-      // prediction 중심이 현재 local costmap 안에 있는지 확인
-      if (!master_grid.worldToMap(
-          point.x,
-          point.y,
-          center_mx,
-          center_my))
-      {
-        continue;
-      }
-
-      used_prediction_points++;
-
-      // ========================================================
-      // 해당 prediction 주변 cell 범위만 계산
-      // ========================================================
-
-      const int start_x = std::max(
-        min_i,
-        static_cast<int>(center_mx) - cell_radius
-      );
-
-      const int end_x = std::min(
-        max_i,
-        static_cast<int>(center_mx) + cell_radius + 1
-      );
-
-      const int start_y = std::max(
-        min_j,
-        static_cast<int>(center_my) - cell_radius
-      );
-
-      const int end_y = std::min(
-        max_j,
-        static_cast<int>(center_my) + cell_radius + 1
-      );
-
-      // ========================================================
-      // 이 작은 영역 안에서만 정확한 원 거리 계산
-      // ========================================================
-
-      for (int my = start_y; my < end_y; ++my) {
-
-        for (int mx = start_x; mx < end_x; ++mx) {
-
-          checked_cells++;
-
-          double wx;
-          double wy;
-
-          master_grid.mapToWorld(
-            static_cast<unsigned int>(mx),
-            static_cast<unsigned int>(my),
-            wx,
-            wy
-          );
-
-          const double distance =
-            std::hypot(
-              wx - point.x,
-              wy - point.y
-            );
-
-          // 우리가 계산할 최대 Human 영역 밖이면 무시
-          if (distance > HUMAN_RADIUS) {
-            continue;
-          }
-
-          // ========================================================
-          // Gaussian spatial cost
-          //
-          // 중심에서 가까울수록 1에 가깝고,
-          // 멀어질수록 0에 가까워진다.
-          //
-          //                 d²
-          // exp( - ---------------- )
-          //           2 * sigma²
-          // ========================================================
-
-          const double gaussian =
-            std::exp(
-              -(
-                distance * distance
-              ) / (
-                2.0 *
-                HUMAN_SIGMA *
-                HUMAN_SIGMA
-              )
-            );
-
-          // 시간에 따른 peak cost
-          // ×
-          // 공간에 따른 Gaussian 감쇠
-          const double calculated_cost =
-            static_cast<double>(peak_cost)
-            * gaussian;
-
-          // 바깥쪽의 너무 작은 cost는 무시
-          if (
-            calculated_cost <
-            static_cast<double>(MIN_HUMAN_COST)
-          ) {
-            continue;
-          }
-
-          const unsigned char human_cost =
-            static_cast<unsigned char>(
-              std::round(calculated_cost)
-            );
-
-          const unsigned char current_cost =
-            master_grid.getCost(
-              static_cast<unsigned int>(mx),
-              static_cast<unsigned int>(my)
-            );
-
-          // Static/STVL 등의 기존 높은 cost를 낮추지 않는다.
-          if (current_cost < human_cost) {
-
-            master_grid.setCost(
-              static_cast<unsigned int>(mx),
-              static_cast<unsigned int>(my),
-              human_cost
-            );
-
-            modified_cells++;
-          }
-        }
-      }
-    }
+  modified_cells_ = 0;
+  const CellRange range{min_i, min_j, max_i, max_j};
+  for (const auto & person : cycle_predictions_->predictions) {
+    paintPerson(master_grid, range, person);
   }
 
   auto node = node_.lock();
-
   if (node) {
-
-    RCLCPP_INFO_THROTTLE(
-      node->get_logger(),
-      *node->get_clock(),
-      2000,
-      "HumanLayer: people=%zu, points=%zu, checked=%zu, modified=%zu",
-      used_people,
-      used_prediction_points,
-      checked_cells,
-      modified_cells
-    );
+    RCLCPP_DEBUG_THROTTLE(
+      node->get_logger(), *node->get_clock(), 2000,
+      "HumanLayer: people=%zu, modified cells=%zu",
+      cycle_predictions_->predictions.size(), modified_cells_);
   }
 }
 
+// 가까운 미래(min_prediction_time)는 near_peak_cost, 먼 미래(max_prediction_time)는 far_peak_cost. 사이는 선형
+double HumanLayer::peakCostAt(double time_offset) const
+{
+  const double span = config_.max_prediction_time - config_.min_prediction_time;
+  const double ratio = span > 0.0 ?
+    std::clamp((time_offset - config_.min_prediction_time) / span, 0.0, 1.0) : 0.0;
+  return config_.near_peak_cost + ratio * (config_.far_peak_cost - config_.near_peak_cost);
+}
+
+void HumanLayer::paintPerson(
+  nav2_costmap_2d::Costmap2D & grid, const CellRange & range,
+  const limbo_interfaces::msg::PersonPrediction & person)
+{
+  // 현재 위치: 사람이 지금 서 있는 곳이라 항상 치명
+  paintCircle(
+    grid, range, person.current_position.x, person.current_position.y,
+    true, config_.near_peak_cost);
+
+  const std::size_t count =
+    std::min(person.predicted_positions.size(), person.time_offsets.size());
+  for (std::size_t i = 0; i < count; ++i) {
+    const double t = person.time_offsets[i];
+    if (t < config_.min_prediction_time || t > config_.max_prediction_time) {
+      continue;
+    }
+    const auto & p = person.predicted_positions[i];
+    paintCircle(grid, range, p.x, p.y, t <= config_.lethal_time, peakCostAt(t));
+  }
+}
+
+// (x, y) 둘레를 칠한다. lethal이면 lethal_radius 안은 LETHAL, 그 밖(radius까지)은 가우시안.
+// 기존 비용(정적 지도·STVL)은 낮추지 않는다
+void HumanLayer::paintCircle(
+  nav2_costmap_2d::Costmap2D & grid, const CellRange & range,
+  double x, double y, bool lethal, double peak_cost)
+{
+  unsigned int center_mx, center_my;
+  if (!grid.worldToMap(x, y, center_mx, center_my)) {
+    return;
+  }
+  const int cell_radius = static_cast<int>(std::ceil(paint_radius_ / grid.getResolution()));
+  const int start_x = std::max(range.min_i, static_cast<int>(center_mx) - cell_radius);
+  const int end_x = std::min(range.max_i, static_cast<int>(center_mx) + cell_radius + 1);
+  const int start_y = std::max(range.min_j, static_cast<int>(center_my) - cell_radius);
+  const int end_y = std::min(range.max_j, static_cast<int>(center_my) + cell_radius + 1);
+  const double two_sigma_sq = 2.0 * config_.sigma * config_.sigma;
+
+  for (int my = start_y; my < end_y; ++my) {
+    for (int mx = start_x; mx < end_x; ++mx) {
+      double wx, wy;
+      grid.mapToWorld(static_cast<unsigned int>(mx), static_cast<unsigned int>(my), wx, wy);
+      const double distance = std::hypot(wx - x, wy - y);
+
+      double cost;
+      if (lethal && distance <= config_.lethal_radius) {
+        cost = nav2_costmap_2d::LETHAL_OBSTACLE;
+      } else if (distance <= config_.radius) {
+        cost = peak_cost * std::exp(-(distance * distance) / two_sigma_sq);
+        if (cost < config_.min_cost) {
+          continue;
+        }
+      } else {
+        continue;
+      }
+
+      const auto new_cost = static_cast<unsigned char>(
+        std::min(std::round(cost), static_cast<double>(nav2_costmap_2d::LETHAL_OBSTACLE)));
+      const auto mx_u = static_cast<unsigned int>(mx);
+      const auto my_u = static_cast<unsigned int>(my);
+      if (grid.getCost(mx_u, my_u) < new_cost) {
+        grid.setCost(mx_u, my_u, new_cost);
+        modified_cells_++;
+      }
+    }
+  }
+}
 
 void HumanLayer::reset()
 {
   std::lock_guard<std::mutex> lock(prediction_mutex_);
-
   latest_predictions_.reset();
   cycle_predictions_.reset();
-
-  has_previous_bounds_ = false;
-
+  previous_bounds_ = Bounds{};
   current_ = true;
 }
 
-}
+}  // namespace limbo_navigation
 
-PLUGINLIB_EXPORT_CLASS(
-  limbo_navigation::HumanLayer,
-  nav2_costmap_2d::Layer
-)
+PLUGINLIB_EXPORT_CLASS(limbo_navigation::HumanLayer, nav2_costmap_2d::Layer)

@@ -10,6 +10,23 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (63) HumanLayer: 사람 몸 안을 치명 비용으로, 숫자 전부 yaml로 (알려진 문제 2번)
+
+**할 일**
+- pull 후 `build_limbo` (C++). 시뮬레이션에서 사람 통과 확인은 아직 안 함 — 다음 회차에 `people2`와 네모 화면으로 `person_collision`·시간 비교
+
+**변경**
+- `limbo_navigation/src/human_layer.cpp`, `include/.../human_layer.hpp`: 다시 씀(567 → 250줄)
+  - 사람 **현재 위치**와 `lethal_time`(0.5 s) 안 예측점은 `lethal_radius`(0.25 m, 어깨 폭 기준 몸 반경) 안을 치명(254)으로. 전에는 현재 위치를 아예 안 칠하고(예측점 0.25 s부터) 최고 비용이 220이라 MPPI 장애물 critic의 충돌 판정(254)에 걸리지 않아 사람을 뚫는 궤적을 골랐음(10-13 복도 실험, 네모 화면 0.01~0.07 m)
+  - 그 뒤 예측점은 전처럼 가우시안(220 → 110). 예측 경로 전부를 치명으로 하지 않는 이유는 PROJECT 2-1 "사람만 보면 우회" 금지
+  - 치명 셀은 뒤에 오는 inflation 층이 로봇 반경만큼 부풀리므로 몸 반경만 칠함
+  - 상수 9개를 `declare_parameter` + yaml로(`lethal_radius`, `lethal_time`, `radius`, `sigma`, `near/far_peak_cost`, `min/max_prediction_time`, `min_cost`). 기존 값은 그대로
+  - 함수를 단계별로 나눔(bounds / 신선한 예측 고르기 / 사람 하나 / 원 하나). 2초마다 찍던 INFO 로그 2줄을 DEBUG로(시뮬 로그 1.7 MB 중 대부분이 이것이었음)
+- `nav2_params.yaml` local costmap `human_layer`: 위 값과 이유
+- `docs/KNOWN_ISSUES.md` 2번, `docs/PROJECT.md` 5절 4·8절 2번
+
+**확인**
+- `colcon build --packages-select limbo_navigation` 경고 없음. 동작 확인은 시뮬레이션 회차 뒤에
 ## 2026-10-14 (62) 따로 명령하지 않으면 waypoint를 끝없이 도는 반복 순찰(`loop:=true`)을 넣음
 
 **할 일**
