@@ -191,17 +191,23 @@ ros2 launch limbo_bringup start_simulation.launch.py world:=aischool_2f_social m
 
 시뮬레이션 전용. 정답 위치는 `/ground_truth/odom`(주행 노드는 안 씀). 지도 원점과 월드 원점이 같다고 가정한다. 사람은 시간표대로 움직이므로 같은 시각에 같은 Goal을 보내면 같은 상황이 재현된다.
 
-### 새 지도 만들기 (SLAM)
+### 새 지도 만들기 (SLAM, `tools/make_map.sh`)
 
-시뮬레이션을 띄운 상태에서 다른 터미널로:
+로봇을 사람이 몰며 slam_toolbox로 지도를 만든다. 위치 추정·Nav2는 안 띄운다(`mapping.launch.py`).
 
 ```bash
-limbo
-ros2 launch slam_toolbox online_async_launch.py use_sim_time:=true \
-  slam_params_file:=$HOME/limbo/limbo/install/limbo_navigation/share/limbo_navigation/config/slam.yaml
+tools/make_map.sh start 지도이름 [월드]   # 뒤에서 띄움 → 약 12초 뒤 RViz에 지도가 쌓임. 월드 기본 human_test_world
+tools/make_map.sh drive                   # 다른 터미널: 키보드로 몰기 (i 전진, , 후진, j/l 회전, k 정지). 게임패드는 start만으로 됨(LB 누른 채 왼쪽 스틱)
+tools/make_map.sh save                    # 지금까지 저장 (몇 번이든)
+tools/make_map.sh stop                    # 내리기 (저장 안 했으면 물어봄)
 ```
 
-로봇을 돌아다니게 한 뒤 `ros2 run nav2_map_server map_saver_cli -f <이름>`으로 저장하고, `.pgm`·`.yaml`을 `limbo_navigation/maps/`에 넣는다.
+→ `limbo_navigation/maps/지도이름.pgm/.yaml`(커밋)과 `지도이름_posegraph`(큰 파일, 커밋 안 함)가 생긴다. 바로 `map:=지도이름`으로 주행에 쓴다.
+
+- **잘 되고 있나**: RViz에서 로봇 위 글자 `SLAM OK`(초록)·`map updates n`·`graph nodes n`(0.5 m마다 1개씩 늘어야 함)·`correction n cm`(map→odom 보정량). 빨간 라이다 점이 검은 벽 위에 붙어 있으면 정상, 회전할 때 벽에서 미끄러지면 못 맞추는 것. 회색(미지)으로 남은 다닐 곳이 없고 벽이 두 겹인 곳이 없으면 끝.
+- 60초마다 `지도이름_autosave` 포즈그래프를 자동 저장한다. 중간에 죽으면 `tools/make_map.sh resume 지도이름`으로 이어서. `status`가 살아 있는지·마지막 자동 저장을 보여 준다
+- 조종은 `drive_gate`(`limbo_drive`)를 거친다: 입력이 0.5초 끊기면 정지(데드맨), 전진 0.3·후진 0.15 m/s·회전 0.8 rad/s 상한. 로그는 `~/limbo_bags/mapping/`
+- 네모 월드(`human_test_world`)는 방이 작아 첫 스캔에 다 보여 지도가 처음부터 완성돼 보인다. "쌓이는" 걸 보려면 `aischool_2f`에서
 
 ### 생성해서 쓰는 월드 (충장로, 레이싱 트랙 — lab)
 

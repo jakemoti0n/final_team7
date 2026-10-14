@@ -10,6 +10,24 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (110) 지도 작성 도구 `tools/make_map.sh` (slam_toolbox + 사람 조종, Nav2 없음)
+
+**할 일**
+- pull 후 `colcon build --symlink-install --packages-select limbo_drive limbo_bringup`
+- 써 보기: `tools/make_map.sh start 지도이름 [월드]` → 다른 터미널 `drive`(키보드) 또는 게임패드 → `save` → `stop`. README "새 지도 만들기"
+
+**변경**
+- `limbo_bringup/launch/mapping.launch.py`: Gazebo+로봇 → ekf → self_filter → `/scan` → slam_toolbox 지도 작성 모드(갱신 1.5 s, `resume_from`으로 이어 하기) → 조종 관문·게임패드(joy + teleop_twist_joy, xbox 설정) → RViz(`rviz/mapping.rviz`: 지도·라이다·로봇·포즈그래프·판정문·map/odom 축). AMCL·Nav2·인지 노드 없음
+- 새 패키지 `limbo_drive`: `drive_gate`(모든 입력 `/drive/cmd` → `/cmd_vel`, 데드맨 0.5 s, 상한 전진 0.3·후진 0.15 m/s·회전 0.8 rad/s, 가속 제한, enable/disable, 순찰 중 거절·자동 끔), `map_status`(로봇 위 판정문: `SLAM OK/STALE`, 지도 갱신 횟수·시각, 포즈그래프 노드 수, map→odom 보정 cm, 지도 크기·알려진 칸 %, 자동 저장 시각. RViz 마커 글꼴에 한글이 없어 영문)
+- `tools/make_map.sh start/drive/save/status/stop/resume`: 스택은 뒤에서 돌고(PID·로그 `~/limbo_bags/mapping/`), 60 s마다 `*_autosave` 포즈그래프 자동 저장, 저장은 slam_toolbox `save_map`(pgm/yaml) + `serialize_map`(포즈그래프). `.gitignore`에 `*_autosave.*`
+- README "새 지도 만들기" 절 교체(명령 4개, 잘 되고 있는지 보는 법, 이어 하기)
+- (앞 push) 서브 PC R6 결과 확인·R9(라이다로 다가오는 사람 판정) 지시
+
+**확인**
+- 학원 2층 월드: 서쪽 복도로 몰자 지도 562×247 → 562×409칸, `save`로 pgm 230 KB·yaml·포즈그래프 18 MB 생성, 지도 그림에 홀·복도 벽선 또렷. `/map` 0.67 Hz, 자동 저장 동작
+- 판정문 RViz 표시 확인(SLAM OK, 갱신 23회, 노드 4, 보정 3 cm). map_saver_cli는 지도 구독 2 s 안에 못 받아 실패해 save_map 서비스로 바꿈
+- 네모 월드는 방이 작아 첫 스캔에 지도가 완성돼 "쌓이는" 게 안 보임(README에 적음)
+
 ## 2026-10-14 (109) (105) 되돌이 처리 뒤 학원 2층 순찰 3/3 완주, A 맴돎 없어짐
 
 **할 일**
