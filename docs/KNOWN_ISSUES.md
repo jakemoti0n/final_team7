@@ -66,3 +66,7 @@
 | `person_detector`의 남는 실행기 스레드가 YOLO가 도는 동안 헛돎 (약 20%p) | `person_detector.py` `main()`의 `MultiThreadedExecutor`. 콜백이 한 그룹이라 동시에 못 도는데 다른 스레드가 "실행할 게 있나"를 계속 확인함 | 그냥 싱글스레드로 바꾸면 YOLO 동안 TF를 못 받아 위치 조회가 0.1초씩 기다려 처리량이 절반(14→6.7Hz). TF 대기를 0으로 하면 처리량은 돌아오지만 TF 실패가 0→54번으로 늘어 동작이 바뀜. tf2 `spin_thread=True`는 오히려 CPU 173%. TF만 따로 받는 구조가 필요 |
 | MID-360 LiDAR가 설정은 10Hz인데 실제 약 5Hz | `limbo.gazebo.xacro` `update_rate`. 시뮬레이션 시간 기준으로도 5.5Hz이고 간격이 0.1~0.6초로 들쭉날쭉함 (프레임을 건너뜀). 실시간 비율 0.99, GPU 사용률 8%, Gazebo 창을 꺼도(5.5Hz) 켜도(5.4Hz) 같아서 **부하 때문은 아님**. 카메라(15Hz)와 LiDAR(10Hz)를 한 렌더링 루프에서 처리하는 Gazebo 센서 스케줄링 때문으로 추정 | AMCL·costmap 업데이트가 드묾 | LiDAR `update_rate`를 카메라와 맞추거나(5·15Hz) 해상도를 낮춰 다시 측정 |
 | 모델 경로가 상대경로 (`yolo11n.pt`) | `person_detector.yaml`의 `yolo.model` | 실행 위치에 따라 모델을 새로 내려받음 |
+
+## 카메라 0°에서 근거리 낮은 장애물을 잃음 (2026-10-14)
+- 0.7 m·0° 카메라는 바닥이 1.0 m 앞부터 보이고 30 cm 상자 윗면은 0.78 m 안에서 시야를 벗어난다(15°는 0.44 m). STVL `voxel_decay` 3 s 뒤 지워지면 로봇이 상자로 파고든다. 상자 벤치 12구간 중 1회 64.8 s 접촉(`experiments/2026-10-14_camera_angle/`)
+- 설계상 범퍼 높이 ToF(`/tof/points`)가 맡을 자리인데 costmap 관측원에 아직 없다. 넣고 재확인 예정

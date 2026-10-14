@@ -21,6 +21,20 @@
 
 **확인**
 - 재현 1회 녹화(`/scan`·ToF·래치·정답 위치)로 정지 동안 상태를 0.5 s마다 셈(`corridor_hold.py`)
+## 2026-10-14 (92) 카메라 0.7 m·0°(앞 push `4dd827d` 포함), 컨트롤러 RPP 재비교(MPPI 유지), 0°의 낮은 장애물 약점 확인
+
+**할 일**
+- pull 후 `colcon build --packages-select limbo_description` (URDF 기본값)
+
+**변경**
+- `limbo.urdf.xacro`·launch: 카메라 기본 피치 15° → **0°**(높이 0.7 m 유지). 서브 PC 손님 장면 측정 0° 19 % / 8° 8 % / 15° 3 %(`experiments/2026-10-14_tof_wait_sub/`). 하반신 모델이 오면 재측정
+- `experiments/2026-10-14_controller_rpp/`: 채택 설정에서 MPPI vs RPP 1회씩. 둘 다 완주, RPP는 홀·상자 10~18 % 빠르지만 복도 복구 5·경로 변경 15, 상자 0.11~0.21 m → **MPPI 유지**. 젯슨 CPU 문제 때 기준표
+- `experiments/2026-10-14_camera_angle/`: 0° 상자 3회 추가. 30 cm 상자 윗면이 0.78 m 안에서 시야를 벗어나 2회차에 64.8 s 접촉 → `docs/KNOWN_ISSUES.md`에 적음. 다음은 ToF 점군을 costmap에 넣고 재확인
+- `docs/lab/requests.md`: R5 Q6·Q7 답(카메라 0°, 서로 기다림은 시뮬 사람 돌아가기(메인 PC) + R6 둘 다)
+
+**확인**
+- 0° 복도 3/3, 상자 11/12(접촉 1회). RPP 벤치 10/10
+
 ## 2026-10-14 (91) 위치 추정 비교 1차(AMCL 유지), launch `localization:=amcl|slam|mapping`, 포즈그래프 생성 도구
 
 **할 일**
