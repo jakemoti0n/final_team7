@@ -51,7 +51,8 @@ APPROACH_DISTANCE = 3.0  # m, approach형이 로봇을 알아보는 거리
 STOP_DISTANCE = 0.8      # m, approach형이 로봇 앞에서 멈추는 거리 (중심 사이)
 # 돌아가기: 로봇이 멈춰 길을 막으면 목표 힘(앞으로)과 로봇 반발(뒤로)이 상쇄돼 yield 사람도 로봇 앞에 서 버린다(소셜 포스 국소 최소점).
 # 그러면 로봇은 "1 m 안에 1 s 넘게 선 사람 = 손님"으로 보고 기다려 서로 기다린다 (2026-10-14 서브 PC 회귀, 60 s). 실제 사람은 옆으로 돌아간다
-SIDESTEP_AHEAD = 1.5     # m, 로봇이 이 거리 안
+SIDESTEP_AHEAD = 2.5     # m, 로봇이 이 거리 안. 1.5는 로봇 코앞까지 간 뒤에야 돌아가기 시작해 틈이 없는 자리에서 섰다(서브 PC Q10)
+ROBOT_STOPPED_SPEED = 0.1   # m/s, 로봇이 이보다 느리면 "서 있는 로봇". 서 있는 로봇이 진로에 있으면 막히기 전에 미리 돌아간다 (실제 사람처럼)
 SIDESTEP_ANGLE = math.radians(35)   # 목표 방향에서 이 각 안에 로봇이 있으면 "정면을 막음"
 STUCK_SPEED = 0.2        # m/s, 목표 쪽으로 나아가는 속도가 이보다 느리면 (밀려났다 다가가기를 반복하는 경우도 잡힌다)
 STUCK_TIME = 1.0         # s, 이 시간 넘게 막혀 있으면 돌아가기 시작
@@ -138,6 +139,7 @@ class Person:
         self.waiting_until = None    # approach형이 로봇 앞에 멈춘 뒤 떠나는 시각
         self.served = False          # 한 로봇 방문에 한 번만 다가간다
         self.blocked_since = None    # yield형이 로봇 정면에 막혀 느려진 시각
+        self.robot_hist = None       # (시각, x, y) 로봇 속도 추정용
         self.sidestep = None         # 돌아가는 중이면 옆 방향 단위 벡터
 
     def goal(self, robot, t):
@@ -210,11 +212,17 @@ class Person:
         g = math.hypot(gx, gy)
         if d < 1e-6 or g < 1e-6:
             return ax, ay
+        robot_speed = None
+        if self.robot_hist is not None and t > self.robot_hist[0]:
+            robot_speed = math.dist(robot, self.robot_hist[1:]) / (t - self.robot_hist[0])
+        self.robot_hist = (t, robot[0], robot[1])
         toward = (dx * gx + dy * gy) / (d * g)        # 목표 방향과 로봇 방향의 cos
         ahead = d < SIDESTEP_AHEAD and toward > math.cos(SIDESTEP_ANGLE)
         if self.sidestep is None:
             progress = (self.vx * gx + self.vy * gy) / g       # 목표 쪽 속도 성분
-            if ahead and progress < STUCK_SPEED:
+            robot_stopped = robot_speed is not None and robot_speed < ROBOT_STOPPED_SPEED
+            # 서 있는 로봇이 진로에 있거나(미리 돌아감), 내가 막혀 못 나아가면(뒤늦게라도 돌아감)
+            if ahead and (robot_stopped or progress < STUCK_SPEED):
                 if self.blocked_since is None:
                     self.blocked_since = t
                 elif t - self.blocked_since > STUCK_TIME:
