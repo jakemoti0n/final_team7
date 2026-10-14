@@ -1,0 +1,5 @@
+world,start_time_s,status,duration_s,path_length_m,mean_speed_mps,start_x,start_y,end_x,end_y,recoveries,min_person_distance_m,nearest_person,personal_space_time_s,person_collision,person_collision_time_s,stopped_time_s,stopped_near_person_s,stopped_other_s,plan_updates,plan_changes,min_obstacle_distance_m,nearest_obstacle,obstacle_contact_time_s,localization_error_mean_m,localization_error_max_m,controller_rate_warnings,wheel_slip_events
+zz_social_approach,27.3,SUCCEEDED,18.7,5.05,0.27,-0.0,0.0,-4.77,0.65,0,0.57,walker_yield,0.0,0,0.0,4.9,0.9,4.0,19,0,0.76,obstacle_low_30cm,0.0,0.054,0.106,0,0
+zz_social_approach,46.0,SUCCEEDED,14.4,4.78,0.33,-4.77,0.65,-0.26,0.02,0,0.71,walker_yield,0.0,0,0.0,0.8,0.8,0.0,15,0,0.78,obstacle_low_30cm,0.0,0.054,0.091,0,0
+zz_social_approach,60.5,SUCCEEDED,17.8,5.3,0.3,-0.25,0.02,-4.81,0.66,0,0.6,walker_yield,0.0,0,0.0,2.5,2.5,0.0,18,3,0.76,obstacle_low_30cm,0.0,0.054,0.096,0,0
+zz_social_approach,78.3,SUCCEEDED,19.0,4.85,0.25,-4.81,0.66,-0.21,-0.04,0,0.64,walker_yield,0.0,0,0.0,5.2,5.2,0.0,19,0,0.76,obstacle_low_30cm,0.0,0.065,0.106,0,0

@@ -246,8 +246,11 @@ class RosPeoplePublisher:
             msg.poses.append(pose)
             pose.position.x, pose.position.y, pose.position.z = p.x, p.y, 0.0
             pose.orientation.z, pose.orientation.w = math.sin(p.yaw / 2), math.cos(p.yaw / 2)
-        self.pose_pub.publish(msg)
-        self.name_pub.publish(self.String(data=self.names))
+        try:
+            self.pose_pub.publish(msg)
+            self.name_pub.publish(self.String(data=self.names))
+        except Exception:      # launch가 끝날 때 ROS가 먼저 내려가면 publish가 예외를 낸다. 조용히 넘긴다
+            pass
 
 
 def main():

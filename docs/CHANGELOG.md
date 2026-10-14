@@ -10,6 +10,21 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (71) 소셜 포스 시나리오(no_yield 복도·approach 홀) × HumanLayer 켬/끔: 정면 조우는 둘 다 뚫림
+
+**할 일**
+- 없음 (기록·시험 벤치). R5(BT)에 "비켜서 기다리기" 요구를 더할지 노트북이 정함
+
+**변경**
+- `experiments/2026-10-14_social_people/`: 시나리오 월드 `worlds/zz_social_noyield`(복도 가운데 폰 보는 사람), `zz_social_approach`(홀 손님) + 설정, `run_scenarios.sh`(켬/끔 × 2 시나리오, 설정 원복), 결과 CSV 4개와 해석
+- `tools/sim_trials/nav_route.py`: `hall` 경로(홀 서쪽 ↔ 출발점 2왕복)
+- `scripts/moving_obstacles.py`: launch 종료 때 ROS publish 예외를 조용히 넘김
+
+**확인** (각 1회)
+- no_yield 정면: 켬 0.02·0.02 m, 끔 0.09·0.09 m — 둘 다 충돌. 로봇은 사람 앞에서 멈추지만(켬 3.3·2.6 s, 끔 1.2·2.4 s) 복도 가운데라 그대로 뚫림. 치명 비용은 로봇이 사람에게 들어가는 것만 막고 옆으로 비켜서는 행동은 못 만듦
+- approach 손님: 켬/끔 모두 충돌 0·복구 0, 최소 0.56~0.72 m. 로봇이 손님을 돌아서 지나감(멈춰 기다리기는 R5 BT 몫)
+- HumanLayer 켬/끔 차이는 1회로는 못 가름. 두 시나리오를 BT 시험 벤치로 씀
+
 ## 2026-10-14 (70) 소셜 포스 사람: gz 플러그인 `ActorPoseControl` + `moving_obstacles.py` 유형 셋, 월드 `aischool_2f_social`
 
 **할 일**
