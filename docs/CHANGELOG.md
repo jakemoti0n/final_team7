@@ -10,6 +10,21 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (65) HumanLayer 네모 화면 확인: 로봇은 더 멈추지만 비켜 주지 않는 사람이 걸어 들어옴, 순찰 bag 사람 거리 도구
+
+**할 일**
+- 없음 (기록·도구). 사람 있는 평가는 소셜 포스 사람(PROJECT 다음 4번) 뒤에
+
+**변경**
+- `tools/sim_trials/bag_person.py <bag> <월드>`: 순찰 bag의 정답 위치와 월드 사람 시간표로 묶음별 사람 최소 거리·0.3 m 미만 시간·멈춤 시간, 최소 거리 순간의 로봇 속도와 사람 접근 속도. nav_recorder가 NavigateThroughPoses(순찰)를 안 받아서 만든 보조 도구
+- `experiments/2026-10-14_human_layer_lethal/README.md`: 네모 화면 2회 표와 전체 결론
+- `docs/KNOWN_ISSUES.md` 2번·collision_monitor 행, `docs/PROJECT.md` 8절 2·4번
+
+**확인** (`human_test_world` 사람 10명, `test_waypoints.yaml`, 2회)
+- 1회차: J 직전 실패 — 사람 탓이 아니라 `controller_server` heartbeat 4 s 끊김으로 lifecycle manager가 Nav2 전체를 내림(사람 두 명 새로 잡힌 직후). 2회차: 완주 247 s, heartbeat 끊김 없음
+- 사람 최소 거리 0.03~0.57 m(전 0.01~0.07)로 같은 급. 최소 순간에 사람이 0.5~1.0 m/s로 로봇(0.04~0.4 m/s)에 걸어 들어옴 → 로봇이 멈춰도 actor가 뚫고 지나감. HumanLayer는 로봇이 사람에게 들어가는 쪽만 막음
+- 로봇은 사람 앞에서 더 멈춤(2회차 A→C 멈춤 24.7 s 중 사람 앞 17.5 s)
+
 ## 2026-10-14 (64) HumanLayer 치명 비용 확인: 한 명 복도·상자 구간 유지, 사람 앞에서 멈춤
 
 **할 일**

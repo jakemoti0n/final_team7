@@ -13,7 +13,7 @@
 |---|---|
 | 전역 STVL 사람 꼬리 → 경로 흔들림·복도 계획 실패 (10-14 기억 15 → 3초, 효과는 아직 못 잼) | 0 |
 | "성공"이 사람을 뚫고 간 것인지 지표가 구분 못 함 → 10-14 `nav_recorder`에 충돌·멈춤·경로 변경 열 추가, 한 명 복도에서 확인함. 끝 | 1 |
-| HumanLayer가 사람 안을 치명 비용으로 안 칠해 MPPI가 뚫는 궤적을 고름 → 10-14 현재 위치·0.5 s 안 예측점의 몸 반경 0.25 m를 치명으로, 숫자 yaml화. 한 명 복도·상자 구간 1회 확인: 통과·회피 유지, 충돌 0, 사람 앞에서 멈춤 ↑ ([기록](../experiments/2026-10-14_human_layer_lethal/README.md)). 네모 화면 확인 남음 | 2 |
+| HumanLayer가 사람 안을 치명 비용으로 안 칠해 MPPI가 뚫는 궤적을 고름 → 10-14 현재 위치·0.5 s 안 예측점의 몸 반경 0.25 m를 치명으로, 숫자 yaml화. 한 명 복도·상자 구간 1회 확인: 통과·회피 유지, 충돌 0, 사람 앞에서 멈춤 ↑. 네모 화면(사람 10명) 2회: 로봇은 더 멈추지만 사람이 0.5~1.0 m/s로 걸어 들어와 최소 0.03~0.16 m — 로봇 탓이 아니라 비켜 주지 않는 시뮬레이션 사람의 한계 ([기록](../experiments/2026-10-14_human_layer_lethal/README.md)). 코드는 끝, 평가는 4번(소셜 포스 사람) 뒤에 | 2 |
 | 막히면 기다리지 않고 10초 뒤 복구(회전·후진)로 넘어감 — 쓰레기통 용도와 모순 | 3 |
 
 ## 주행·위치 추정
@@ -27,7 +27,7 @@
 | 바퀴 마찰 계수가 낮음 (`mu1`, `mu2` = 0.5) | `limbo_description/urdf/limbo.gazebo.xacro` | 회전·가속 시 바퀴가 미끄러짐. 바퀴 odom 회전 오차 약 10%의 원인으로 추정(EKF로 보정 중) | 실제 바퀴·바닥에 맞는 값으로 조정 |
 | 좁은 복도(1.54m)에서 제자리 회전 실패 | `aischool_2f` 왼쪽 복도에서 `behavior_server: Collision Ahead - Exiting Spin`. 로봇이 정사각형(0.45m)이라 돌 때 모서리가 그리는 원(반지름 0.32m)이 벽 inflation에 걸림 | 좁은 곳에서 방향을 돌려야 하는 Goal이 실패 | 복구 동작 순서(후진 먼저), footprint·inflation 조정, 실제 복도 폭 실측 |
 | 사람이 많아 LiDAR 시야 대부분이 가려지는 상황 | AMCL beamskip은 안 맞는 빔이 90%를 넘으면 꺼지고 원래 방식으로 계산함 | 혼잡한 곳에서 위치 추정이 다시 불안정해질 수 있음 | 실제 환경에서 확인 |
-| 시작 직후 `collision_monitor` 응답 끊김 → Nav2 전체 재시작 (약 5초), 또는 **configure 단계에서 멈춤** | `CRITICAL FAILURE: SERVER collision_monitor IS DOWN after not receiving a heartbeat for 4000 ms`. 2026-10-13: `failed to send response to /collision_monitor/change_state (timeout)` 뒤 lifecycle manager가 더 진행하지 않아 Nav2가 inactive인 채로 남음(AMCL·TF는 정상이라 겉으로는 준비된 것처럼 보임) | 그 사이 보낸 Goal은 거절되거나, 멈춘 경우엔 응답 없이 영영 대기 | 시작 순서·CPU 부하 확인, bond timeout 조정. 시험 도구는 `bt_navigator` active를 확인하고 아니면 다시 띄움 (`sim_ctl.sh`, 2026-10-13). 확인할 후보(10-14): SIGKILL로 끝낸 뒤 `/dev/shm/fastrtps_*` 조각이 수백 개 남아 있었음(Fast DDS 공유 메모리). 이것이 서비스 응답 유실과 관련 있는지는 미확인 — 지운 뒤 실패 빈도가 줄면 `sim_ctl.sh stop`에 정리 추가 |
+| 시작 직후 `collision_monitor` 응답 끊김 → Nav2 전체 재시작 (약 5초), 또는 **configure 단계에서 멈춤** | `CRITICAL FAILURE: SERVER collision_monitor IS DOWN after not receiving a heartbeat for 4000 ms`. 2026-10-13: `failed to send response to /collision_monitor/change_state (timeout)` 뒤 lifecycle manager가 더 진행하지 않아 Nav2가 inactive인 채로 남음(AMCL·TF는 정상이라 겉으로는 준비된 것처럼 보임) | 그 사이 보낸 Goal은 거절되거나, 멈춘 경우엔 응답 없이 영영 대기 | 시작 순서·CPU 부하 확인, bond timeout 조정. 시험 도구는 `bt_navigator` active를 확인하고 아니면 다시 띄움 (`sim_ctl.sh`, 2026-10-13). 확인할 후보(10-14): SIGKILL로 끝낸 뒤 `/dev/shm/fastrtps_*` 조각이 수백 개 남아 있었음(Fast DDS 공유 메모리). 이것이 서비스 응답 유실과 관련 있는지는 미확인 — 지운 뒤 실패 빈도가 줄면 `sim_ctl.sh stop`에 정리 추가. **10-14 주행 중 사례**: 네모 화면(사람 10명) 순찰 중 `controller_server` heartbeat 4 s 끊김으로 Nav2 전체가 내려가 순찰 실패(1/2회, 사람 두 명이 새로 잡힌 직후). bond timeout 4 s가 시뮬레이션 부하에 비해 짧은지 확인 |
 | Nav2가 목표를 한 번 실패하면 순찰 노드가 순찰 전체를 끝냄 (일시정지 후 재개해도 이어서 못 감) | 2026-10-13 관제 화면 시험 중 3번: 재개 직후 controller TF 시각 10 ms 차이(`extrapolation into the future`), 순찰 중 MPPI `Controller patience exceeded` 2번. 2026-10-14 반복 순찰(`loop:=true`) 2바퀴째 A 1.8 m 앞에서 2분간 `Failed to make progress` → 끝남 ([기록](../experiments/2026-10-14_loop_patrol/README.md)) | 순찰 노드가 `failed`로 끝나 재개 버튼이 잠기고 다시 띄워야 함. 반복 순찰은 오래 돌수록 걸리기 쉬움 | 몇 번 다시 시도하고, 그래도 안 되면 끝내지 말고 멈춘 채 사람의 재개를 기다림 (`CONTROL_SCREEN.md` A 4단계 계획, lab 성능 시험 뒤 구현) |
 
 ## 바퀴 헛돎 감시
