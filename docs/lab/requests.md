@@ -83,6 +83,13 @@ lab에는 같은 설정이 들어 있으니 lab에서 재현한다.
 >   1. R5 복도 3/3 재확인((101) 반영). 되면 트리 켜서 커밋
 >   2. **R8 ToF 사각 보완**: ToF costmap을 켜고도 홀 입구 30 cm 상자(정면 45°, ToF·카메라 사각)에 갇힌 반례가 13회 중 1회(KNOWN_ISSUES). local costmap STVL `voxel_decay` 1 → 3 s(전역과 같게)로 상자 벤치 `box` 3회 + 비켜 주는 사람 복도 1회. 기준: 상자 접촉 0·최소 0.15 m 이상, 복도 시간 +15 s 안. `experiments/2026-10-14_stvl_local_sub/`에 기록
 >   3. R6 비켜서 기다리기 설계·구현 시작: `IsPersonOncoming`(1.5~4 m 진로 위 다가오는 no_yield 사람) + `ComputePullOverPose`(costmap으로 비울 쪽 한 칸) + BT. 시험 벤치 `experiments/2026-10-14_social_people/run_scenarios.sh` no_yield. 질문은 reports.md에
+> - **R5·R6 충돌 지점 정리 (19:35).** 둘 다 "진로 위 다가오는 사람"이 방아쇠라 같은 사람에 두 동작(그 자리 정지 vs 비켜서기)이 겹친다. 3 m 앞에서는 손님과 행인을 못 가르므로 **구분하지 않고 한 가지 순서**로 간다:
+>   1. 판단 노드는 하나: 지금 `/person_approaching`(`IsPersonApproaching`, 진로 폭 띠·1.5~4 m)을 그대로 R6의 `IsPersonOncoming`으로 쓴다. 새 노드를 만들지 않는다
+>   2. 동작 순서: 다가오는 사람 → `ComputePullOverPose`가 비울 자리를 찾으면 **비켜서 정지**, 못 찾으면(좁은 복도·양쪽 다 막힘) **그 자리 정지**(지금 R5 동작). 정지 뒤는 R5 규칙 그대로(ToF 막힘·카메라 기억 래치로 유지, 사람이 떠나거나 1 s 비면 재개, 상한 60 s)
+>   3. 비켜선 로봇에 손님이 와서 서면 그 자리에서 기다리면 되니 전제 2-1(손님=서비스)과 어긋나지 않고, 행인은 비워 준 길로 지나간다(전제 2-2)
+>   4. 래치: 한 번 비켜서기를 시작하면 도착할 때까지 다가옴 조건을 다시 보지 않는다(같은 사람에 정지↔비켜서기를 번갈아 하지 않게). 비켜설 자리는 HumanLayer 치명·팽창 밖, 벽에서 로봇 반경 + 0.1 m 이상
+>   5. Wait 노드·상한·재개 조건은 R5 것을 공유한다. R6는 R5 트리의 "다가오는 사람이면 정지" 자리 **앞에** `ComputePullOverPose → 짧은 이동` 한 단계를 끼우는 것으로 끝나야 한다
+>   R5 복도 3/3이 먼저다. R6는 이 순서로 설계만 적어 reports.md에 올리고 시작
 > - "덜 기다리게" 바꾸지 않은 판단 맞음. 1 m 안 1 s 멈춤 = 손님 규칙은 유지
 > - 참고(14:55): `tof_node`가 launch 종료 때 `rclpy.spin`에서 Traceback을 내며 죽는다(주행엔 영향 없음). `except (KeyboardInterrupt, ExternalShutdownException)`로 감싸면 됨(`nav_recorder.py` main 참고)
 
