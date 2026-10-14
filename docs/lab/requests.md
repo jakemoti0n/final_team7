@@ -18,6 +18,15 @@
 
 ## 요청
 
+### R7. 학원 2층 순찰(`aischool_2f`, 시간표 사람 3명)이 채택 설정에서 완주하는지, 안 되면 원인과 대책 (2026-10-14 15:50, 대기 — **R5와 같이 진행해도 됨, R6보다 먼저**)
+
+메인 PC가 채택분(전역 STVL 3초·HumanLayer 치명·`prune_distance` 2.5·카메라 15°)을 ktj로 옮기려고 `tools/demo_patrol.sh`(기본 `aischool_2f` + `aischool_waypoints.yaml`)를 돌렸더니 **첫 묶음(A→D)에서 실패**(679 s, 진전 없음 12회, 전역 계획 실패 11회 `GridBased plugin failed to plan from (-6.83, 8.00) to (-13.74, 8.00)`, 복구 후진 1·회전 2·대기 2). 사람과 무관한 시점에 로봇은 왼쪽 복도를 0.57 m/s로 잘 갔음. 10-14 오전(카메라 0°, HumanLayer 전)엔 같은 순찰이 복구 0으로 완주했음(변경 기록 58).
+lab에는 같은 설정이 들어 있으니 lab에서 재현한다.
+- **할 것**: `patrol_trial.sh` 3회(bag·CSV 남김). 실패하면 `bag_person.py`·CSV로 **어느 구간에서 누가(시간표 사람 3명 중) 어떻게 막았는지** 찾기. 전역 계획 실패면 그 순간 전역 costmap에 뭐가 치명이었는지(사람 + inflation 0.45로 1.8 m 복도가 막힌 것인지, 다른 것인지)
+- **가설 후보**: ① 복도에서 시간표 사람(person_2가 y≈10 복도, person_3)이 서 있거나 마주 와서 전역 costmap이 막힘(STVL 사람 점 + inflation) → 대책은 KNOWN_ISSUES 전역 STVL 행의 B안(person_detector가 사람 점 뺀 점구름을 전역에 줌) 또는 전역 inflation만 줄이기 ② 카메라 15°로 바닥·문턱이 장애물로 찍힘(전역 STVL rgbd 소스) → 해당 구간 점구름 z 분포 ③ `prune_distance` 2.5로 모서리에서 경로를 벗어남
+- **하지 말 것**: 설정 숫자를 돌려 맞추기. 원인을 하나로 좁혀 보고. 대책 구현은 보고 뒤 메인 PC가 정함
+- 결과: `experiments/<날짜>_aischool_regress_sub/`, `reports.md`
+
 ### R6. 안 비켜 주는 사람이 정면으로 오면 복도 한쪽으로 비켜선 뒤 기다리기 (2026-10-14 13:00, 대기 — **R5 끝난 뒤**)
 
 소셜 포스 시나리오에서 폰 보는 사람 정면 조우가 HumanLayer 켬/끔 모두 뚫림(로봇이 복도 가운데서 멈춤). 조건 노드 `IsPersonOncoming`(1.5~4 m 앞, 진로 위, 다가옴) + 액션 `ComputePullOverPose`(costmap으로 비울 쪽 고름) + BT 분기(비켜선 뒤 R5 조건이 거짓이 될 때까지 기다림, 상한 약 20 s). 손님(approach_intent)에는 비켜서지 말고 R5 기다리기.
