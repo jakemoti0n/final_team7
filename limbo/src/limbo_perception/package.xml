@@ -10,6 +10,7 @@
   <exec_depend>limbo_interfaces</exec_depend>
   <exec_depend>message_filters</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>sensor_msgs_py</exec_depend>
 
   <depend>rclpy</depend>
   <depend>sensor_msgs</depend>

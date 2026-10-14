@@ -198,6 +198,19 @@
     <origin xyz="0 0 0" rpy="-1.570796 0 -1.570796"/>
   </joint>
 
+  <!-- ================================ -->
+  <!-- ToF 근접 센서 (VL53L5CX, 8x8)     -->
+  <!-- ================================ -->
+  <!-- 범퍼 높이 전면 중앙, 수평. 카메라가 못 보는 코앞(1.5 m 안)에 무언가 있는지만 본다 (R5).
+       차체 메시 앞면이 x 0.245라 그 바로 앞에 둔다 -->
+  <link name="tof_link"/>
+
+  <joint name="tof_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="tof_link"/>
+    <origin xyz="0.25 0 0.10" rpy="0 0 0"/>
+  </joint>
+
   <xacro:include filename="$(find limbo_description)/urdf/limbo.gazebo.xacro"/>
 
 </robot>

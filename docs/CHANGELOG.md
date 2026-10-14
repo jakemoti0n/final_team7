@@ -10,6 +10,20 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (73) R5 ToF 근접 센서·노드를 넣었지만 "카메라 기억 + ToF" 기다리기 조건은 막힘 (분기는 꺼 둠)
+
+**할 일**
+- `build_limbo` (URDF·bridge·launch·C++). 시뮬레이션에 `/tof/points`, `/tof/obstacle_ahead`, `/tof/nearest`가 새로 나옴. 주행 동작은 그대로
+
+**변경**
+- `limbo_description`: `tof_link`(앞 x 0.25, z 0.10, 수평), gz `gpu_lidar` 8×8 ±31.5° 0.02~4 m 10 Hz. `bridge.yaml` `/tof/points`
+- `limbo_perception`: `tof_node`·`tof.py`(바닥 0.03 m 위 점 중 센서 앞 0.30 m 안이면 막힘, 3프레임 연속이어야 바뀜)·`config/tof.yaml`·`test_tof.py` 3개. `start_simulation.launch.py`에 추가
+- `IsPersonAhead`: 입력을 "최근 5 s 안 0.8~3 m에서 다가오던 사람(카메라) AND ToF 막힘"으로. 분기는 `nav2_params.yaml`에서 꺼 둔 그대로
+- `KNOWN_ISSUES` 3번 행, `PROJECT.md` 8절 3번: 막힘 근거
+
+**확인**
+- ToF 단독(상자 0.485/0.235 m), tof1·tof2(상자 4/4·상자 앞 기다림 0, 한 명 복도는 분기 tick 0), 두 명 복도 2회(기다림 1/25). 멈춘 뒤 복구까지 약 20 s라 기억 5 s가 끝나 있고, 사람 앞 ToF 0.32~0.40 m에서 멈춤 ([기록](../experiments/2026-10-14_tof_wait_sub/README.md))
+
 ## 2026-10-14 (72) 서브 PC 요청 R6: 정면으로 오는 안 비켜 주는 사람 앞에서 비켜선 뒤 기다리기 (R5 뒤)
 
 **할 일**

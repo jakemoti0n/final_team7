@@ -310,6 +310,15 @@ def generate_launch_description():
 
     detector = OpaqueFunction(function=make_detector)
 
+    # ToF 근접 센서 → /tof/obstacle_ahead. BT "사람이면 기다리기"의 "지금 코앞에 무언가" 입력 (R5)
+    tof = Node(
+        package='limbo_perception',
+        executable='tof_node',
+        name='tof_node',
+        output='screen',
+        parameters=[os.path.join(limbo_perception_dir, 'config', 'tof.yaml')]
+    )
+
     # 주행 평가 기록 (record:=true일 때만). Goal이 끝날 때마다 ~/limbo_results/에 CSV 한 줄
     nav_recorder = Node(
         package='limbo_evaluation',
@@ -386,5 +395,6 @@ def generate_launch_description():
         ),
 
         detector,
+        tof,
         nav_recorder,
     ])

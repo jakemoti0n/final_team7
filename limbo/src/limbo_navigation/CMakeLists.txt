@@ -19,6 +19,7 @@ find_package(limbo_interfaces REQUIRED)
 find_package(behaviortree_cpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav2_behavior_tree REQUIRED)
+find_package(std_msgs REQUIRED)
 
 add_library(human_layer SHARED
   src/human_layer.cpp
@@ -58,6 +59,7 @@ ament_target_dependencies(limbo_is_person_ahead_condition_bt_node
   geometry_msgs
   nav2_behavior_tree
   rclcpp
+  std_msgs
 )
 
 install(
