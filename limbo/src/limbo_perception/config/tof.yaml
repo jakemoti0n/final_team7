@@ -1,8 +1,20 @@
-# ToF 근접 센서 (VL53L5CX 8x8, 범퍼 높이 전면 중앙). 용도는 "코앞에 무언가 있음"뿐이고 사람·상자 구분은 카메라 기억이 한다 (R5)
+# ToF 근접 센서 (VL53L5CX 8x8, 범퍼 높이 전면 중앙). "코앞에 무언가 있음"을 내고,
+# 막히기 시작한 순간 직전에 카메라가 다가오던 사람을 봤으면 /person_blocking을 참으로 둔다 (R5)
 tof_node:
   ros__parameters:
     points_topic: /tof/points
+    person_topic: /person_detector/person_position_base
     base_frame: base_link
-    stop_distance: 0.30        # m, 센서 앞면부터
+    # 로봇이 사람 앞에서 서는 자리에서 정한 값이다(튜닝 아님): HumanLayer 치명 반경 0.25 m(nav2_params.yaml
+    # human_layer.lethal_radius) + inflation(로봇 내접 반경까지 253) → 앞면이 사람 몸에서 약 0.3~0.4 m,
+    # 관측 ToF 0.32~0.40 m(experiments/2026-10-14_tof_wait_sub). 최대 0.40 + 여유 0.1. 치명 반경을 바꾸면 같이 바꾼다
+    stop_distance: 0.50        # m, 센서 앞면부터
     min_obstacle_height: 0.03  # m, base_link z. 바닥 반사 거름
     confirm_frames: 3          # 연속 프레임 같아야 바뀜 (10 Hz면 0.3 s)
+    # /person_blocking 래치
+    memory_sec: 5.0            # s, 막히기 직전 이 시간 안에 본 사람만 (늘리지 않는다: 사라진 사람이 오래 남음)
+    person_min_distance: 0.8   # m, 카메라가 사람을 잘 잡는 앞쪽 거리 (1.5 m 안은 거의 못 봄)
+    person_max_distance: 3.0
+    person_half_width: 1.0
+    clear_sec: 1.0             # s, ToF가 이만큼 계속 비면 풂
+    max_hold_sec: 60.0         # s, 상한. 넘으면 풀어서 보통 복구로

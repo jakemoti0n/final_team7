@@ -31,3 +31,42 @@ def test_debounce_changes_only_after_consecutive_frames():
         [False, False, False, False, False, True]
     assert [d.update(x) for x in [False, True, False, False, False]] == \
         [True, True, True, True, False]
+
+
+def _approach(blocking, start_t, xs, dt=0.1):
+    for i, x in enumerate(xs):
+        blocking.on_person(start_t + dt * i, x, 0.1)
+    return start_t + dt * (len(xs) - 1)
+
+
+def test_person_seen_just_before_blocking_latches_until_tof_clears():
+    b = tof.PersonBlocking(tof.BlockingConfig())
+    t = _approach(b, 0.0, [2.5, 2.3, 2.1, 1.9, 1.7])   # 다가오다 카메라에서 사라짐
+    assert b.on_tof(t + 3.0, False) is False
+    assert b.on_tof(t + 4.0, True) is True              # 4 s 뒤 코앞이 막힘
+    assert b.on_tof(t + 30.0, True) is True             # 막혀 있는 동안 기억과 무관하게 유지
+    assert b.on_tof(t + 30.5, False) is True            # 잠깐 빈 것은 무시
+    assert b.on_tof(t + 31.1, False) is False           # 1 s 넘게 비면 풂
+
+
+def test_blocked_without_a_person_is_a_box():
+    b = tof.PersonBlocking(tof.BlockingConfig())
+    assert b.on_tof(0.0, True) is False
+    t = _approach(b, 10.0, [2.5, 2.3, 2.1])             # 막힌 뒤에 사람이 보여도 이미 막힌 것은 상자
+    assert b.on_tof(t, True) is False
+
+
+def test_person_seen_too_long_ago_or_walking_away_does_not_latch():
+    b = tof.PersonBlocking(tof.BlockingConfig())
+    t = _approach(b, 0.0, [1.7, 1.9, 2.1])              # 멀어지는 사람
+    assert b.on_tof(t + 1.0, True) is False
+    b = tof.PersonBlocking(tof.BlockingConfig())
+    t = _approach(b, 0.0, [2.5, 2.3, 2.1])
+    assert b.on_tof(t + 6.0, True) is False             # 5 s보다 오래 전
+
+
+def test_latch_gives_up_after_max_hold():
+    b = tof.PersonBlocking(tof.BlockingConfig())
+    t = _approach(b, 0.0, [2.5, 2.3])
+    assert b.on_tof(t + 1.0, True) is True
+    assert b.on_tof(t + 62.0, True) is False

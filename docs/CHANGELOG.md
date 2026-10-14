@@ -10,6 +10,19 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (80) R5 Q2: 기다리기 판단을 막히기 시작한 순간의 래치(/person_blocking)로, ToF 정지 거리 0.5 m. 손님 앞 BT 기다림은 아직 안 돎
+
+**할 일**
+- `build_limbo`. 시뮬레이션에 `/person_blocking`이 새로 나옴. 주행 동작은 그대로(분기 꺼 둠)
+
+**변경**
+- `limbo_perception/tof.py` `PersonBlocking`: ToF가 비었다 → 막힘으로 바뀌는 순간 직전 5 s 안에 앞 0.8~3 m에서 다가오던 사람을 봤으면 참, ToF가 1 s 넘게 비거나 60 s면 풂. `tof_node`가 `/person_blocking`을 냄. 시험 4개 추가(7개)
+- `tof.yaml` `stop_distance` 0.30 → 0.50(로봇이 사람 앞에서 서는 자리 ToF 0.32~0.40 + 0.1, 근거 주석). `nav2_params.yaml` `lethal_radius` 주석이 이를 가리킴
+- `IsPersonAhead`: `/person_blocking`만 봄(포트 `topic`). BT XML 두 개 포트 바꿈
+
+**확인**
+- 손님 다가옴 2회 4/4·충돌 0·회전·후진 0, 래치 참 3번인데 BT 분기 tick 0(로봇이 1~3 s 멈췄다 돌아서 지나감). 두 명 복도 기다림 2/14. 상자 4/4·래치 참 0. 손님 시험 2회는 (79) 사람 이동 스크립트 잔존 수정 전이라 2회째에 사람이 겹쳐 있었을 수 있음 ([기록](../experiments/2026-10-14_tof_wait_sub/README.md))
+
 ## 2026-10-14 (79) 소셜 포스 사람 눈 확인: GUI 깜빡임·순간이동 원인 둘 고침, 사람끼리 간격 넓힘
 
 **할 일**

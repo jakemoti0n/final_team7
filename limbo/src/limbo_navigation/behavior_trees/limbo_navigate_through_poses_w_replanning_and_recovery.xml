@@ -37,10 +37,10 @@
         </Fallback>
         <ReactiveFallback name="RecoveryFallback">
           <GoalUpdated/>
-          <!-- 방금 다가오던 사람(카메라 기억)이 지금 코앞(ToF)에 있어 막혔으면 회전·후진 대신 기다린다 (PROJECT.md 2-2, R5). 기다린 뒤 RecoveryNode가 경로 추종을 다시 시도하고,
+          <!-- 막히기 시작한 순간 직전에 다가오던 사람(카메라)이 지금 코앞(ToF)을 막고 있으면(tof_node /person_blocking 래치) 회전·후진 대신 기다린다 (PROJECT.md 2-2, R5). 기다린 뒤 RecoveryNode가 경로 추종을 다시 시도하고,
                재시도 6번(한 번에 진전 없음 10 s x 2 + 대기 5 s)을 넘기면 목표가 실패한다. 사람을 못 봤으면 아래 기존 복구 -->
           <Sequence name="WaitForPerson">
-            <IsPersonAhead person_topic="/person_detector/person_position_base" tof_topic="/tof/obstacle_ahead" memory_sec="5.0" min_distance="0.8" max_distance="3.0" half_width="1.0"/>
+            <IsPersonAhead topic="/person_blocking"/>
             <Wait wait_duration="5.0"/>
           </Sequence>
           <RoundRobin name="RecoveryActions">
