@@ -10,6 +10,17 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (104) R8: local STVL 기억 3 s는 ToF 사각 상자에 효과가 안 보여 1 s 유지 권고
+
+**할 일**
+- 없음 (기록만, 설정 안 바꿈)
+
+**변경**
+- `experiments/2026-10-14_stvl_local_sub/`: local `voxel_decay` 1 s·3 s 상자 각 3회. 둘 다 접촉 0, 반례 재현 안 됨, 3 s에서 상자 최소 0.14 m 1번. 3 s 복도 1회 81 s(R5 다가옴 정지 60 s 재발). `nav_route.py` 멈춤 1회 기록
+- `docs/lab/reports.md` R8·Q11
+
+**확인**
+- 같은 커밋(트리 켬)에서 기준 1 s도 같이 돌림 ([기록](../experiments/2026-10-14_stvl_local_sub/README.md))
 ## 2026-10-14 (103) 순찰 노드가 AMCL 없는 구성(slam_toolbox)에서도 출발하게 함
 
 **할 일**
