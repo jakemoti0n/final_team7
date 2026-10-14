@@ -21,7 +21,7 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 | 모터 | IG-32GM 03TYPE × 2, 12 V, 감속 1:71, 정격 83 RPM, 토크 4.7 kgf·cm | 바퀴 지름 15 cm → 정격 **0.65 m/s**, 실주행 최고 약 0.8 m/s(무부하·전압 여유). 4~5 km/h는 구동부 교체 없이는 불가 |
 | 드라이버 | RoboClaw 2x15A | |
 | LiDAR | Livox MID-360 (지붕, 수평 360°, 수직 -7°~+52°) + 내장 IMU 200 Hz | 가까운 낮은 물체 사각(0.3 m 높이는 3.5 m 안), 후방 바닥 사각 |
-| 카메라 | RGB-D(OAK-D Lite), 전방 FOV 69°, 5 m, **높이 0.70 m·아래 15°**(10-14, 전 0.50 m 수평) | 치마 밑단보다 높게 두어 올려다보지 않음. 바닥은 0.78 m 앞부터, 2 m 앞 1.1 m 높이까지라 가까운 사람은 **다리 위주**. 뒤쪽 사람은 못 봄 |
+| 카메라 | RGB-D(OAK-D Lite), 전방 FOV 69°, 5 m, **높이 0.70 m·수평 0°**(10-14, 전 0.50 m 수평 → 0.70 m 15° → 0°) | 치마 밑단보다 높게 두어 올려다보지 않음. 기울이면 비스듬히 오는 손님의 상체가 잘려 검출 19 % → 3 %라 수평. 바닥은 1.0 m 앞부터라 **코앞 낮은 장애물은 ToF가 costmap에 표시**. 뒤쪽 사람은 못 봄 |
 
 ### 소프트웨어 (패키지 → 하는 일)
 
@@ -225,6 +225,10 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 | 2026-10-13 | HuNavSim 안 쓰고 소셜 포스 사람을 직접 만듦 | Humble + Classic/Fortress만 지원, Jazzy/Harmonic 포팅에 며칠 |
 | 2026-10-13 | 메시·생성 산출물은 저장소 밖, 생성기만 커밋 | 26 MB가 월드 재생성마다 쌓여 `.git` 311 MB |
 | 2026-10-13 | 문서는 여섯 곳만, 실수·무효 실험 기록 안 함 (4절) | 정정 항목이 쌓여 읽기 어려워짐 |
+| 2026-10-14 | 경로 계획기 NavFn 유지 | Smac2D 경로 변경 13·Theta* 홀 복구 6, 복도 셋 같음 (`experiments/2026-10-14_planner_compare/`) |
+| 2026-10-14 | 위치 추정 AMCL 유지 | slam_toolbox는 홀 오차 절반이나 복도 0.16 m 치우침, 주행 같음, 24 MB 포즈그래프 운영 부담 (`experiments/2026-10-14_localization_compare/`) |
+| 2026-10-14 | 컨트롤러 MPPI 유지 재확인 | 채택 설정에서 RPP 완주하나 복도 복구 5·경로 변경 15·상자 0.11 m (`experiments/2026-10-14_controller_rpp/`) |
+| 2026-10-14 | 카메라 0.7 m·0° + ToF 점군 costmap | 기울이면 손님 검출 19 % → 3 %. 0°가 놓치는 30 cm 상자는 ToF가 표시 (`experiments/2026-10-14_tof_costmap/`) |
 
 ---
 
@@ -237,7 +241,7 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 - 측정: `nav_recorder`(Goal마다 CSV, 사람 충돌 0.3 m·사람 앞/그 외 멈춤·전역 경로 변경 열), `tools/sim_trials/`(반복 시험, `bag_person.py`), 소셜 포스 시나리오 벤치 `experiments/2026-10-14_social_people/run_scenarios.sh`.
 - 사람: HumanLayer가 사람 몸 반경 0.25 m를 치명으로 칠해 로봇이 사람에게 들어가지 않음. 비켜 주는 사람(`aischool_2f_social`)과는 1.8 m 복도에서 0.8 m 두고 지나감. 시간표 사람 한 명 복도도 복구 0으로 통과.
 - 시뮬레이션 사람: gz 플러그인 `ActorPoseControl` + `moving_obstacles.py`로 비켜 줌/안 비켜 줌/다가와 멈춤 세 유형.
-- 센서: 카메라 0.7 m 아래 15°(10-14 채택), ToF 근접 센서(서브 PC R5, `tof_node`, `/tof/obstacle_ahead`), 전역 STVL 기억 3초.
+- 센서: 카메라 0.7 m 수평(10-14 채택), ToF 근접 센서(서브 PC R5, `tof_node`, `/tof/obstacle_ahead`) + **ToF 점군이 local costmap에**(10-14, 30 cm 상자 접촉 해소), 전역 STVL 기억 3초.
 
 ### 안 되는 것 (자세한 건 KNOWN_ISSUES)
 
@@ -252,10 +256,12 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 1. **BT 기다리기 (R5, 서브 PC)**: `/person_blocking` 래치(ToF가 막힘으로 바뀐 순간 직전 5 s에 다가오던 사람을 봤으면 참) + Wait. ToF `stop_distance` 0.5 m(치명 반경 0.25 + inflation에서 로봇이 서는 거리 0.32~0.40 + 여유). 시험: 두 명 복도, 소셜 포스 손님(`hall`).
 2. **비켜선 뒤 기다리기 (R6, 서브 PC, R5 뒤)**: `IsPersonOncoming`(1.5~4 m 진로 위 다가옴) + `ComputePullOverPose`(costmap으로 비울 쪽) + BT. 시험: `run_scenarios.sh` no_yield.
 3. **소셜 포스 사람 다듬기 (노트북)**: ~~눈으로 확인~~(10-14 끝, 사용자 "95 % 리얼"), ~~`nav_recorder` 순찰 지원·사람 접근 속도 열~~(10-14 끝, `action`·`person_approach_speed_mps`·`robot_speed_at_min_mps`). 남은 것: 힘 숫자의 근거(실물 관찰), 걷는 애니메이션 속도.
-4. **실물 준비**: 카메라 마운트 0.70 m·15° 실측(기울인 깊이 카메라는 1° 오차에 3 m 앞 바닥이 5 cm 떠 보임), ToF(VL53L5CX, 범퍼 높이 10 cm, 젯슨 I2C) 드라이버, 하반신 모델이 오면 `run_angles.sh`로 1.5 m 안 검출 재측정.
+4. **실물 준비**: 카메라 마운트 0.70 m·0°(브래킷은 각도 조절 가능하게 — 하반신 모델이 오면 0·8·15° 재측정), ToF(VL53L8CX, 범퍼 높이 10 cm, 젯슨 I2C) 드라이버는 `/tof/points`를 내면 costmap·`tof_node` 둘 다 그대로.
 5. ~~속도 설정 재비교~~(10-14 끝: 사람 있는 조건에서도 B `prune_distance` 2.5가 충돌 0·사람 거리 동일에 시간 22~27 % 단축, C 0.75는 MPPI 경고 9배라 보류, `experiments/2026-10-14_speed_social/`) → 10-14 15:03 **B 채택**(`prune_distance` 2.5, 복도·상자 확인: 시간 −24~31 %, 충돌·닿음 0). 다음은 경로 계획기 비교(NavFn·Smac 2D·Theta*).
 
-### 10-14에 끝낸 것 (근거는 experiments/ 와 변경 기록 56~75)
+### 10-14에 끝낸 것 (근거는 experiments/ 와 변경 기록 56~95)
+
+저녁: 경로 계획기 NavFn 유지(Smac2D·Theta* 이점 없음) · 위치 추정 AMCL 유지(slam_toolbox 홀 오차 절반이나 복도 0.16 m 프레임 치우침, 주행 같음; 사람 10명 네모 화면은 미시험) · 컨트롤러 MPPI 유지 재확인(RPP 복도 복구 5·상자 더 붙음) · 카메라 0.7 m 0°(손님 검출) + ToF 점군 costmap(낮은 장애물) · 비켜 주는 사람 돌아가기(서로 기다림 해소).
 
 전역 STVL 3초 채택(3·15초 같음, 0번 닫음) · `nav_recorder` 지표 분리 · HumanLayer 치명 비용+yaml(복도·상자 유지, 사람 앞 멈춤 ↑, 정면 조우·손님은 BT 몫) · 카메라 0.7 m 15°(12·15·18° 같음) · 소셜 포스 사람 · 시험 도구 active 검사 버그 · 해결 기록 보강 · ktj 점검 1~3.
 
