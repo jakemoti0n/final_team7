@@ -10,6 +10,20 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-14 (67) 카메라 높이·피치 비교(0.5 m 수평 vs 0.7 m 12·15·18°): 네 조건 같음, URDF·launch에 카메라 인자
+
+**할 일**
+- 없음 (기본값은 그대로 0.5 m·0°). 각도를 정하면 `limbo.urdf.xacro`의 `camera_z`·`camera_pitch_deg` 기본값만 바꾸고 `build_limbo`
+
+**변경**
+- `limbo_description/urdf/limbo.urdf.xacro`: `xacro:arg camera_z`(0.50)·`camera_pitch_deg`(0) → 카메라 joint rpy에 피치 적용. `limbo_simulation/launch/gazebo.launch.py`, `limbo_bringup/launch/start_simulation.launch.py`: 같은 이름의 launch 인자를 xacro에 넘김(robot_state_publisher와 self_filter 둘 다). 기본값이 전과 같아 동작 변화 없음
+- `experiments/2026-10-14_camera_angle/`: 측정 월드 2개(사람 한 명 정면 접근, 지도에 없는 상자 3개), 측정 노드 `camera_probe.py`(거리 구간별 검출 비율·위치 오차, 상자 costmap 최대 비용), 실행 `run_angles.sh`, 결과·결론
+- `docs/KNOWN_ISSUES.md` "2 m 안 다리만 보임" 행에 측정값, `docs/PROJECT.md` 열린 것(센서 배치)
+
+**확인** (조건당 1회, 로봇 정지)
+- 사람 검출: 네 조건 모두 1.5 m 안 0 %, 2.5~4.5 m 50~100 %, 4.5 m 밖 0 %(시뮬 카메라 far clip 5 m). 위치 오차 2 m에서 0.6~0.7 m, 3.5 m에서 0.1~0.2 m
+- 상자(30 cm 0.5 m, 30 cm 0.8 m, 10 cm 1.0 m): 네 조건 모두 치명(100)으로 찍힘
+- 결론: 가까운 사람을 못 잡는 건 각도가 아니라 전신 YOLO 모델 문제(하반신 모델 필요). 각도는 개인정보·근거리 바닥·설명 가능성으로 정하면 되고 0.7 m 15°는 잃는 게 없음
 ## 2026-10-14 (66) R4 BT "사람이면 기다리기" 조건 노드·트리를 만들었지만 가까운 사람 인식이 끊겨 막힘 (분기는 꺼 둠)
 
 **할 일**

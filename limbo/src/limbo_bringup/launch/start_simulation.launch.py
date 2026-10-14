@@ -87,6 +87,8 @@ def generate_launch_description():
             'world': LaunchConfiguration('world'),
             'gui': LaunchConfiguration('gui'),
             'robot': LaunchConfiguration('robot'),
+            'camera_z': LaunchConfiguration('camera_z'),
+            'camera_pitch_deg': LaunchConfiguration('camera_pitch_deg'),
         }.items()
     )
 
@@ -112,7 +114,9 @@ def generate_launch_description():
         launch_arguments={
             'robot_description': Command([
                 'xacro ',
-                urdf_file
+                urdf_file,
+                ' camera_z:=', LaunchConfiguration('camera_z'),
+                ' camera_pitch_deg:=', LaunchConfiguration('camera_pitch_deg'),
             ]),
             'filter_config': self_filter_config,
             'in_pointcloud_topic': '/mid360/points',
@@ -343,6 +347,9 @@ def generate_launch_description():
         DeclareLaunchArgument('person_model', default_value=''),
         # 로봇 모델: v14(기본, 쓰레기통 로봇 45x45x70) 또는 legacy(이전 모델, 비교용)
         DeclareLaunchArgument('robot', default_value='v14'),
+        # 카메라 높이(m)와 아래로 기울인 각도(도). 센서 배치 실험용, 기본은 URDF 값 (0.50 m, 0°)
+        DeclareLaunchArgument('camera_z', default_value='0.50'),
+        DeclareLaunchArgument('camera_pitch_deg', default_value='0'),
 
         # 바로 Gazebo 실행
         gazebo,

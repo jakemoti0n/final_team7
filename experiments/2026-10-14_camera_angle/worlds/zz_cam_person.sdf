@@ -1,0 +1,90 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <world name="zz_cam_person">
+    <!-- 2 ms: 1 ms면 물리 스레드가 한 코어를 다 써서 노트북에서 실시간 비율 0.6에 머문다. 2 ms로 바꿔도 odom 정확도 차이 없음 (experiments/2026-10-13_physics_step) -->
+    <physics name="2ms" type="ignored">
+      <max_step_size>0.002</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>15 15</size></plane></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>15 15</size></plane></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.7 0.7 0.7 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_north">
+      <static>true</static><pose>0 7.5 1 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>15 0.1 2</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>15 0.1 2</size></box></geometry></visual>
+      </link>
+    </model>
+    <model name="wall_south">
+      <static>true</static><pose>0 -7.5 1 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>15 0.1 2</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>15 0.1 2</size></box></geometry></visual>
+      </link>
+    </model>
+    <model name="wall_east">
+      <static>true</static><pose>7.5 0 1 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.1 15 2</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.1 15 2</size></box></geometry></visual>
+      </link>
+    </model>
+    <model name="wall_west">
+      <static>true</static><pose>-7.5 0 1 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.1 15 2</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.1 15 2</size></box></geometry></visual>
+      </link>
+    </model>
+
+    <!-- 사람 한 명: 로봇 정면(x축)으로 6 m → 0.6 m까지 0.5 m/s로 다가왔다가 돌아간다. 카메라 각도별 검출 비율 측정용 -->
+    <actor name="walker">
+      <skin>
+        <filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename>
+        <scale>1.0</scale>
+      </skin>
+      <animation name="walk">
+        <filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename>
+        <interpolate_x>true</interpolate_x>
+      </animation>
+      <script>
+        <loop>true</loop>
+        <delay_start>0.0</delay_start>
+        <auto_start>true</auto_start>
+        <trajectory id="0" type="walk">
+          <waypoint><time>0.00</time><pose>6.00 0.16 1.0 0 0 3.1416</pose></waypoint>
+          <waypoint><time>10.80</time><pose>0.60 0.16 1.0 0 0 3.1416</pose></waypoint>
+          <waypoint><time>21.60</time><pose>6.00 0.16 1.0 0 0 0</pose></waypoint>
+        </trajectory>
+      </script>
+    </actor>
+  </world>
+</sdf>

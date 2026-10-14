@@ -67,10 +67,17 @@ def generate_launch_description():
         gz_resource_path
     )
 
+    # 카메라 높이·피치는 센서 배치 실험용 (limbo.urdf.xacro의 xacro:arg). 기본값은 URDF와 같다
+    xacro_args = [
+        " camera_z:=", LaunchConfiguration("camera_z"),
+        " camera_pitch_deg:=", LaunchConfiguration("camera_pitch_deg"),
+    ]
     robot_description = ParameterValue(
-        Command(["xacro ", xacro_file]),
+        Command(["xacro ", xacro_file] + xacro_args),
         value_type=str,
     )
+    camera_z_arg = DeclareLaunchArgument("camera_z", default_value="0.50")
+    camera_pitch_arg = DeclareLaunchArgument("camera_pitch_deg", default_value="0")
 
     world_arg = DeclareLaunchArgument(
         "world",
@@ -164,6 +171,8 @@ def generate_launch_description():
         world_arg,
         robot_arg,
         gui_arg,
+        camera_z_arg,
+        camera_pitch_arg,
         set_gz_resource_path,
         bookstore_resource_path,
         gz_sim,
