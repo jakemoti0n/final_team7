@@ -10,6 +10,22 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-15 (116) 하드웨어 최종 치수 반영: 라이다 0.70 m(몸체 높이 0.609)·카메라 0.60 m
+
+**할 일**
+- `build_limbo` (URDF·launch 기본값)
+
+**변경**
+- `limbo_description/urdf/limbo.urdf.xacro`: `body_top` 0.709 → 0.609로 MID-360을 바닥 0.70 m에(0.609 + 0.09094). 몸체 메시 z 배율은 `body_top / 0.835` 식 그대로라 자동으로 따라감. `camera_z` 기본값 0.70 → 0.60(수평 0° 그대로)
+- `limbo_bringup/launch/start_simulation.launch.py`·`limbo_simulation/launch/gazebo.launch.py`: `camera_z` 기본값 0.60
+- 바퀴 지름 15 cm(`wheel_radius` 0.075)·바퀴 축 높이는 그대로 둠: 실측 축 높이 0.08 m는 반지름 0.075와 0.5 cm 어긋나는데, `base_link` 원점이 바닥이라 축만 올리면 바퀴가 뜨고 몸체를 내리면 캐스터(0.0625)가 바닥에 박힘 → 실물 재측정 뒤 결정
+- `docs/PROJECT.md`: 크기(높이 약 0.72 m)·MID-360(0.70 m, 낮은 물체 사각 0.3 m 높이 3.3 m 안·바닥 5.7 m 안)·카메라(0.60 m) 행
+
+**확인** (메인 PC, `~/limbo_bags/sim_trials/logs/trial_lidar70_*`)
+- xacro 전개 base_footprint 기준 높이: `mid360_link` 0.700, `rgbd_camera_link` 0.60, `tof_link` 0.10, `lid_link` 0.609. 바퀴 축 0.075·캐스터 중심 0.0625(둘 다 바닥 접지)
+- 출발 자리 진단: scan 1.0 m 안 점 0개, 라이다·카메라 센서 0.6 m 안 점 0개(자기 몸체 안 봄). 0.80 m 때와 달리 앞-오른쪽 1.7 m 물체가 scan에 새로 잡혀 local costmap 1 m 가장자리에 팽창 비용이 생김(실제 물체)
+- 복도 3/3(31.3·25.3·89.2 s, 사람 충돌 0, 사람 최소 0.70 m) — 3회차는 `person_approaching` 60 s 유지(위 알려진 문제, 라이다 무관). 상자 4/4(31~36 s, 장애물 최소 0.18 m, 충돌 0)
+
 ## 2026-10-15 (115) 주행 회귀 세트(dev 반영 전 점검)·라이다 0.80 m(몸체 높이 0.709)·default_server_timeout 100·잔존 bag 정리
 
 **할 일**

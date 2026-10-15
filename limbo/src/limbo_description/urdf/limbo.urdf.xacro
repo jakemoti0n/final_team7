@@ -15,8 +15,8 @@
   <!-- 크기                              -->
   <!-- ================================ -->
   <xacro:property name="body_size" value="0.45"/>
-  <!-- 몸체 윗면 높이. 2026-10-15 0.835 → 0.709: 뚜껑 위 MID-360이 바닥에서 0.80 m가 되게 몸체를 줄임(하드웨어 결정). 카메라는 0.70 m 그대로 -->
-  <xacro:property name="body_top" value="0.709"/>
+  <!-- 몸체 윗면 높이. 2026-10-15 0.835 → 0.609: 뚜껑 위 MID-360이 바닥에서 0.70 m가 되게 몸체를 줄임(하드웨어 최종 치수). 카메라는 0.60 m -->
+  <xacro:property name="body_top" value="0.609"/>
   <xacro:property name="body_clearance" value="0.06"/>
 
   <xacro:property name="wheel_radius" value="0.075"/>
@@ -32,18 +32,19 @@
   <xacro:property name="lid_thickness" value="0.07"/>
   <xacro:property name="lid_open_max" value="1.9722220547535925"/>
 
-  <!-- MID-360: 뚜껑 위, 몸체 중심 위 바닥에서 0.80 m (경첩 높이 0.709 + 0.09094) -->
+  <!-- MID-360: 뚜껑 위, 몸체 중심 위 바닥에서 0.70 m (경첩 높이 0.609 + 0.09094) -->
   <xacro:property name="mid360_above_hinge" value="0.09094"/>
 
-  <!-- OAK-D Lite: 앞면, 바닥에서 0.50 m, 중심에서 왼쪽 0.1575 m, 수평 (2026-10-12 결정) -->
+  <!-- OAK-D Lite: 앞면, 바닥에서 0.60 m(camera_z), 중심에서 왼쪽 0.1575 m, 수평 -->
   <xacro:property name="camera_x" value="0.235"/>
   <xacro:property name="camera_y" value="0.1575"/>
   <!-- 카메라 높이·아래로 기울인 각도(도). launch 인자 camera_z / camera_pitch_deg로 바꿀 수 있다.
        2026-10-14 0.50 m 수평 → 0.70 m: 짧은 치마 밑단보다 높게 두어 올려다보는 구도를 없앤다(개인정보). 높이가 핵심, 각도는 부차.
+       2026-10-15 하드웨어 최종 치수로 0.60 m(수평 그대로).
        각도는 0°: 15°는 근거리 바닥(0.78 m부터)이 보이지만 비스듬히 다가오는 손님의 상체가 잘려 전신 YOLO 검출이 19 % → 3 %로 떨어짐
        (서브 PC 손님 장면 0/8/15° 각 3회). 근거리 바닥은 ToF(VL53L8CX)가 맡는다. 하반신 모델이 오면 0·8·15°를 다시 잰다(실물 브래킷은 각도 조절 가능하게).
        실물 마운트와 같은 값이어야 인식 좌표가 맞는다 -->
-  <xacro:arg name="camera_z" default="0.70"/>
+  <xacro:arg name="camera_z" default="0.60"/>
   <xacro:arg name="camera_pitch_deg" default="0"/>
   <xacro:property name="camera_z" value="$(arg camera_z)"/>
   <xacro:property name="camera_pitch" value="${radians($(arg camera_pitch_deg))}"/>
