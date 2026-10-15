@@ -25,8 +25,7 @@ Ubuntu 24.04 + ROS 2 Jazzy Desktop이 깔려 있다고 가정한다 ([ROS 설치
 sudo apt install ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-ros-gz \
   ros-jazzy-cv-bridge ros-jazzy-pcl-ros ros-jazzy-pointcloud-to-laserscan \
   ros-jazzy-spatio-temporal-voxel-layer ros-jazzy-slam-toolbox \
-  ros-jazzy-robot-localization ros-jazzy-teleop-twist-keyboard \
-  ros-jazzy-joy ros-jazzy-teleop-twist-joy ros-dev-tools python3-venv   # ROS 패키지
+  ros-jazzy-robot-localization ros-dev-tools python3-venv              # ROS 패키지
 git clone --recurse-submodules https://github.com/jakemoti0n/final_team7.git ~/limbo   # 저장소 (서브모듈 포함)
 python3 -m venv --system-site-packages ~/limbo/venvs/limbo_yolo && \
   ~/limbo/venvs/limbo_yolo/bin/pip install -r ~/limbo/requirements.txt   # YOLO용 Python 환경 (CPU torch)
@@ -185,23 +184,17 @@ source /opt/ros/jazzy/setup.bash && python -c "import torch, ultralytics, cv_bri
 
 시뮬레이션 전용. 정답 위치는 `/ground_truth/odom`(주행 노드는 안 씀). 지도 원점과 월드 원점이 같다고 가정한다. 사람은 시간표대로 움직이므로 같은 시각에 같은 Goal을 보내면 같은 상황이 재현된다.
 
-### 새 지도 만들기 (SLAM, `tools/make_map.sh`)
+### 새 지도 만들기 (SLAM)
 
-로봇을 사람이 몰며 slam_toolbox로 지도를 만든다. 위치 추정·Nav2는 안 띄운다(`mapping.launch.py`).
+시뮬레이션을 띄운 상태에서 다른 터미널로:
 
 ```bash
-tools/make_map.sh start 지도이름 [월드]   # 뒤에서 띄움 → 약 12초 뒤 RViz에 지도가 쌓임. 월드 기본 human_test_world
-tools/make_map.sh drive                   # 다른 터미널: 키보드로 몰기 (i 전진, , 후진, j/l 회전, k 정지). 게임패드는 start만으로 됨(LB 누른 채 왼쪽 스틱)
-tools/make_map.sh save                    # 지금까지 저장 (몇 번이든)
-tools/make_map.sh stop                    # 내리기 (저장 안 했으면 물어봄)
+limbo
+ros2 launch slam_toolbox online_async_launch.py use_sim_time:=true \
+  slam_params_file:=$HOME/limbo/limbo/install/limbo_navigation/share/limbo_navigation/config/slam.yaml
 ```
 
-→ `limbo_navigation/maps/지도이름.pgm/.yaml`(커밋)과 `지도이름_posegraph`(큰 파일, 커밋 안 함)가 생긴다. 바로 `map:=지도이름`으로 주행에 쓴다.
-
-- **잘 되고 있나**: RViz에서 로봇 위 글자 `SLAM OK`(초록)·`map updates n`·`graph nodes n`(0.5 m마다 1개씩 늘어야 함)·`correction n cm`(map→odom 보정량). 빨간 라이다 점이 검은 벽 위에 붙어 있으면 정상, 회전할 때 벽에서 미끄러지면 못 맞추는 것. 회색(미지)으로 남은 다닐 곳이 없고 벽이 두 겹인 곳이 없으면 끝.
-- 60초마다 `지도이름_autosave` 포즈그래프를 자동 저장한다. 중간에 죽으면 `tools/make_map.sh resume 지도이름`으로 이어서. `status`가 살아 있는지·마지막 자동 저장을 보여 준다
-- 조종은 `drive_gate`(`limbo_drive`)를 거친다: 입력이 0.5초 끊기면 정지(데드맨), 전진 0.3·후진 0.15 m/s·회전 0.8 rad/s 상한. 로그는 `~/limbo_bags/mapping/`
-- 네모 월드(`human_test_world`)는 방이 작아 첫 스캔에 다 보여 지도가 처음부터 완성돼 보인다. "쌓이는" 걸 보려면 `aischool_2f`에서
+로봇을 돌아다니게 한 뒤 `ros2 run nav2_map_server map_saver_cli -f <이름>`으로 저장하고, `.pgm`·`.yaml`을 `limbo_navigation/maps/`에 넣는다.
 
 ### 충장로 맛보기 (생성해서 쓰는 야외 월드)
 
@@ -224,14 +217,13 @@ ros2 service call /collision_monitor/toggle nav2_msgs/srv/Toggle "{enable: false
 
 | 패키지 | 내용 |
 |---|---|
-| `limbo_bringup` | 통합 실행 `start_simulation.launch.py`, 지도 작성 `mapping.launch.py` |
+| `limbo_bringup` | 통합 실행 `start_simulation.launch.py` |
 | `limbo_description` | 로봇 모델 (URDF): 실제 로봇 v14(기본), 이전 모델 `urdf/legacy/`. Gazebo 센서(MID-360 LiDAR·IMU, RGB-D 카메라) |
 | `limbo_simulation` | Gazebo 월드, ros_gz 브리지 설정, `tools/aischool_2f/`(도면 사진 → 월드·지도 생성) |
 | `limbo_navigation` | Nav2 설정(`nav2_params.yaml`), AMCL, EKF, 지도, 사람 cost 플러그인 `human_layer` |
 | `limbo_perception` | `person_detector`: YOLO 사람 인식·추적·경로 예측 |
 | `limbo_interfaces` | 사람 예측 메시지 `PersonPrediction(Array)`, 순찰 상태 `PatrolState` |
 | `limbo_patrol` | waypoint 순찰. 일시정지·재개 서비스 |
-| `limbo_drive` | 사람이 모는 조종 관문 `drive_gate`(데드맨·속도 상한), 지도 작성 상태 표시 `map_status` |
 | `limbo_monitor` | `wheel_slip_monitor`: 바퀴 헛돎 감지 |
 | `limbo_evaluation` | `nav_recorder`: Goal마다 주행 평가 지표를 CSV로 기록 (시뮬레이션 전용) |
 | `robot_self_filter` | (서브모듈) LiDAR에서 로봇 몸체 점을 걸러 냄 |
