@@ -18,3 +18,7 @@ limbo/src/limbo_simulation/worlds/race_track.sdf
 limbo/src/limbo_navigation/maps/chungjang_map.*
 limbo/src/limbo_navigation/maps/chungjang_all_map.*
 limbo/src/limbo_navigation/maps/race_track_map.*
+
+# slam_toolbox 포즈그래프(수십 MB)는 커밋하지 않는다
+limbo/src/limbo_navigation/maps/*_posegraph.*
+limbo/src/limbo_navigation/maps/*_autosave.*
