@@ -44,7 +44,7 @@ bt_navigator:
     robot_base_frame: base_link
     odom_topic: /odom
     bt_loop_duration: 10
-    default_server_timeout: 20
+    default_server_timeout: 100   # 20 ms(기본)는 시작 직후 부하에서 계획·추종 서버 응답을 놓쳐 목표를 바로 포기함 (2026-10-15 손님 장면 0/4)
     wait_for_service_timeout: 1000
     action_server_result_timeout: 900.0
     navigators: ["navigate_to_pose", "navigate_through_poses"]

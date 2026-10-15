@@ -1,0 +1,66 @@
+# 지도 작성용 RViz 설정: 쌓이는 지도·라이다·로봇·포즈그래프·상태 글자만 (tools/make_map.sh)
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Fixed Frame: map
+    Frame Rate: 15
+    Background Color: 255; 255; 255
+  Displays:
+    - Class: rviz_default_plugins/Map
+      Name: 지도(slam)
+      Enabled: true
+      Topic: {Value: /map, Durability Policy: Transient Local, Reliability Policy: Reliable}
+      Alpha: 1.0
+      Color Scheme: map
+    - Class: rviz_default_plugins/LaserScan
+      Name: 라이다 scan
+      Enabled: true
+      Topic: {Value: /scan, Reliability Policy: Best Effort}
+      Color: 255; 0; 0
+      Size (m): 0.06
+      Style: Flat Squares
+      Color Transformer: FlatColor
+    - Class: rviz_default_plugins/RobotModel
+      Name: 로봇
+      Enabled: true
+      Description Topic: {Value: /robot_description, Durability Policy: Transient Local}
+      Alpha: 0.9
+    - Class: rviz_default_plugins/MarkerArray
+      Name: 포즈그래프
+      Enabled: true
+      Topic: {Value: /slam_toolbox/graph_visualization, Reliability Policy: Reliable}
+    - Class: rviz_default_plugins/Marker
+      Name: 상태(판정문)
+      Enabled: true
+      Topic: {Value: /map_status, Reliability Policy: Reliable}
+    # map·odom 두 축만: 둘이 벌어지는 만큼이 SLAM이 오도메트리를 고친 양
+    - Class: rviz_default_plugins/TF
+      Name: map·odom 축
+      Enabled: true
+      Show Names: true
+      Show Axes: true
+      Show Arrows: false
+      Marker Scale: 2.0
+      Frames:
+        All Enabled: false
+        map: {Value: true}
+        odom: {Value: true}
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: 위에서
+      Target Frame: base_footprint
+      Scale: 40
+      X: 0
+      Y: 0
+      Angle: 0
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+Window Geometry:
+  Width: 1200
+  Height: 900
+  Hide Left Dock: true
+  Hide Right Dock: true

@@ -8,6 +8,32 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-15 (33) 하드웨어 최종 치수(라이다 0.70 m·카메라 0.60 m), default_server_timeout 100, 지도 작성 도구, 충장로 맛보기
+
+**할 일**
+- pull 후 `sudo apt install ros-jazzy-teleop-twist-keyboard ros-jazzy-joy ros-jazzy-teleop-twist-joy` (지도 작성 조종용)
+- `colcon build --symlink-install --packages-select limbo_description limbo_drive limbo_bringup limbo_navigation` (URDF·새 패키지 `limbo_drive`·launch·nav2 설정), 또는 `build_limbo`
+- 실물 카메라 마운트를 바닥 0.60 m·수평으로, MID-360을 바닥 0.70 m로 맞춘다 (URDF와 같아야 인식 좌표가 맞음)
+
+**변경**
+- **로봇 치수** (`limbo.urdf.xacro`): 몸체 윗면 `body_top` 0.835 → 0.609로 뚜껑 위 MID-360이 바닥 0.70 m(0.609 + 0.09094, 전 0.926 m). 카메라 `camera_z` 기본값 0.70 → 0.60(수평 0° 그대로). 몸체 시각 메시는 높이 0.835 m로 그려져 있어 z 배율 `body_top / 0.835`로 줄임 — 메시가 높은 채면 Gazebo 라이다가 자기 몸체를 봐 출발 자리에서 못 움직임(`docs/TROUBLESHOOTING.md` "몸체를 낮추자…"). 전체 높이 약 0.72 m
+- `start_simulation.launch.py`·`gazebo.launch.py`: `camera_z` 기본값 0.60
+- `nav2_params.yaml`: `bt_navigator`의 `default_server_timeout` 20 → 100 ms. 시작 직후 부하에서 계획·추종 서버 응답을 놓쳐 목표를 바로 포기하던 것(손님 장면 0/4). 주행 동작은 그대로, 서버 응답 대기만 여유
+- **지도 작성 도구** `tools/make_map.sh start/drive/save/status/stop/resume`: 사람이 로봇을 몰며 slam_toolbox로 지도를 만든다(AMCL·Nav2·인지 없음). 스택은 뒤에서 돌고(로그·PID `~/limbo_bags/mapping/`), 60 s마다 `*_autosave` 포즈그래프 자동 저장, `save`는 pgm/yaml + 포즈그래프
+  - `limbo_bringup/launch/mapping.launch.py`: Gazebo+로봇 → ekf → self_filter → `/scan` → slam_toolbox 지도 작성 모드 → 조종 관문·게임패드(joy + teleop_twist_joy) → RViz(`rviz/mapping.rviz`)
+  - 새 패키지 `limbo_drive`: `drive_gate`(모든 조종 입력 `/drive/cmd` → `/cmd_vel`, 데드맨 0.5 s, 상한 전진 0.3·후진 0.15 m/s·회전 0.8 rad/s), `map_status`(로봇 위 판정문 `SLAM OK`·지도 갱신 횟수·포즈그래프 노드 수·map→odom 보정 cm·자동 저장 시각)
+- **충장로 맛보기**: `limbo_simulation/tools/chungjang/gen_street.py`와 입력 자료 `osm_chungjang.json`(© OpenStreetMap contributors, ODbL 1.0). 충장로 보행자 거리 200 m 구간 월드 `chungjang`·지도 `chungjang_map`을 만든다. 산출물은 커서 저장소에 넣지 않음(`.gitignore`)
+- 순찰 노드의 TF 출발(`/amcl_pose` 없이 `map → base_footprint` TF로 판단)은 (32)에 이미 들어 있어 그대로
+- README "새 지도 만들기" 절 교체, "충장로 맛보기" 절 추가, 설치 패키지에 조종용 3개 추가. `docs/PROJECT.md` 센서 표(크기 약 0.72 m, MID-360 0.70 m·사각 0.3 m 높이 3.3 m 안·바닥 5.7 m 안, 카메라 0.60 m)·결정 표(최종 치수, NavFn A* 유지)
+- `docs/KNOWN_ISSUES.md`: 기다리기 BT "다가옴 정지"가 60 s 상한까지 안 풀리는 경우 간헐(0/3 → 2/2 → 1/3). 기다리기 BT는 켠 채 둠
+
+**확인** (시뮬레이션)
+- xacro 전개 base_footprint 기준 높이: MID-360 0.700, 카메라 0.60, ToF 0.10, 뚜껑 0.609. 출발 자리 scan 1.0 m 안 점 0개(자기 몸체 안 봄)
+- 최종 치수에서 복도 3/3(25~89 s, 사람 충돌 0, 사람 최소 0.70 m), 상자 4/4(31~36 s, 장애물 최소 0.18 m, 충돌 0)
+- `default_server_timeout` 100에서 손님 4/4(17~28 s, 사람 최소 0.56 m), 순찰 3/3(320·258·211 s)
+- 지도 작성: 학원 2층 월드에서 몰자 지도 562×247 → 562×409칸, `save`로 pgm·yaml·포즈그래프 생성, 판정문 `SLAM OK` 표시
+- 계획기: NavFn A* 1.0~2.4 ms vs 다익스트라 1.8~5.8 ms(10회×4목표, 성공 80/80) → A* 유지
+
 ## 2026-10-14 (32) 저녁 채택분 반영: 사람이면 기다리기 BT, ToF costmap, 카메라 0°, MPPI 되돌이 처리, 순찰 반복·TF 출발, 관제 일시정지
 
 **할 일**

@@ -7,7 +7,7 @@ __pycache__/
 *.bak
 *~
 .vscode/
-# 생성해서 쓰는 월드의 산출물(충장로·레이싱 트랙, lab 생성기)
+# 생성해서 쓰는 월드의 산출물(충장로·레이싱 트랙)
 # 생성 산출물은 저장소에 넣지 않는다 (메시 26 MB가 커밋마다 쌓임). 생성기: limbo_simulation/tools/chungjang/gen_street.py, tools/race_track/gen_track.py
 limbo/src/limbo_simulation/models/chungjang_terrain/
 limbo/src/limbo_simulation/models/chungjang_all_terrain/
