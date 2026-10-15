@@ -1,0 +1,5 @@
+label,goal,reps,ok,rtt_mean_ms,rtt_max_ms,plan_mean_ms,plan_max_ms,path_len_m
+dijkstra,왼쪽 복도 위쪽 끝,10,10,17.9,25.8,5.8,14.0,14.47
+dijkstra,위쪽 복도 동쪽,10,10,18.1,24.2,5.2,6.0,14.71
+dijkstra,홀 서쪽,10,10,6.7,9.3,1.8,4.0,5.08
+dijkstra,왼쪽 복도 아래,10,10,15.9,19.7,5.4,6.0,13.16

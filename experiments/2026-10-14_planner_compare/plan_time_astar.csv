@@ -1,0 +1,5 @@
+label,goal,reps,ok,rtt_mean_ms,rtt_max_ms,plan_mean_ms,plan_max_ms,path_len_m
+astar,왼쪽 복도 위쪽 끝,10,10,14.3,22.2,2.0,4.0,14.8
+astar,위쪽 복도 동쪽,10,10,46.9,336.6,2.4,4.0,15.98
+astar,홀 서쪽,10,10,5.5,6.3,1.0,2.0,5.04
+astar,왼쪽 복도 아래,10,10,11.8,12.8,1.6,2.0,13.11
