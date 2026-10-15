@@ -225,6 +225,18 @@
 - **해결**: MPPI `enforce_path_inversion: true`(되돌이 점까지만 경로 사용, `inversion_xy_tolerance` 0.2·yaw 0.4)
 - **확인**: slam_toolbox 순찰 3묶음 성공(35·55·48 s), 진전 없음 0. `~/limbo_bags/sim_trials/logs/patrol_nemo_amcl_bag`(정체), `trial_nemo_slam.csv`
 
+### 진단용 `ros2 bag record`가 20시간 살아남아 시작 부하를 키움 — 2026-10-15
+- **증상**: 손님 벤치에서 `bt_navigator`가 계획 서버 응답을 20 ms(`default_server_timeout`) 안에 못 받아 목표 4개를 0~2 s에 전부 포기(`Timed out while waiting for action server to acknowledge goal request for compute_path_to_pose`). RViz "Publisher already registered" 경고
+- **원인**: 전날 진단 스크립트가 띄운 `ros2 bag record`(local costmap·TF 등 구독)가 `kill -INT` 뒤에도 안 죽고 74,990 s 동안 남아 DDS 참여자·구독을 유지 → 기동 부하 증가. 시작 부하에서 20 ms 응답 제한은 원래 아슬아슬했음(KNOWN_ISSUES "follow_path 응답 20 ms 초과")
+- **해결**: 잔존 녹화 PID로 종료. `sim_ctl.sh stop` 정리 패턴에 `ros2 bag record` 추가. `default_server_timeout` 20 → 100 ms(주행 동작 변화 없음, 서버 응답 대기만 여유)
+- **확인**: 정리·100 ms 뒤 손님 벤치(`zz_social_approach`, `trial_reg_hall3.csv`) 4/4 성공(17~28 s), 사람 충돌 0, 사람 최소 0.56 m. 같은 날 복도·상자·순찰 회귀도 시작 실패 0
+
+### 몸체를 낮추자(라이다 0.80 m) 로봇이 출발 자리에서 못 움직임 — 2026-10-15
+- **증상**: `body_top` 0.835 → 0.709로 줄인 뒤 복도 벤치 첫 목표가 90 s 시간 초과, `Failed to make progress` 10번, 회전 복구도 실패. 로봇 둘레 costmap에 치명 칸, `/scan` 360점 중 292점이 1 m 안(최소 0.20 m)
+- **원인**: 몸체 **시각 메시**(`meshes/v14/body.stl`, z 0.059~0.835 m 고정)는 그대로이고 충돌 상자만 낮아짐. Gazebo gpu_lidar는 시각 메시에 부딪히므로 0.80 m 라이다가 자기 몸체 윗부분(0.709~0.835)을 전 방향 0.2~0.3 m에서 봄(근접 점 9,444개, 방위 고르게 분포). self_filter는 충돌 상자 기준이라 못 거름
+- **해결**: 메시 z 배율을 `body_top / 0.835`로(URDF). 실물에는 없는 시뮬 모델 정합 문제
+- **확인**: 같은 진단에서 `/scan` 최소 1.80 m, 1 m 안 점 0개, 근접 점 0, 로봇 둘레 costmap 0. 복도 3/3·상자 4/4 성공(변경 기록 (115))
+
 ## 인지(person_detector)
 
 ### person_detector가 CPU를 8코어(775%)나 씀 — 2026-10-02

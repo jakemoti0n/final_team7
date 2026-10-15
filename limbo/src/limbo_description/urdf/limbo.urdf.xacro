@@ -15,7 +15,8 @@
   <!-- 크기                              -->
   <!-- ================================ -->
   <xacro:property name="body_size" value="0.45"/>
-  <xacro:property name="body_top" value="0.835"/>
+  <!-- 몸체 윗면 높이. 2026-10-15 0.835 → 0.709: 뚜껑 위 MID-360이 바닥에서 0.80 m가 되게 몸체를 줄임(하드웨어 결정). 카메라는 0.70 m 그대로 -->
+  <xacro:property name="body_top" value="0.709"/>
   <xacro:property name="body_clearance" value="0.06"/>
 
   <xacro:property name="wheel_radius" value="0.075"/>
@@ -31,7 +32,7 @@
   <xacro:property name="lid_thickness" value="0.07"/>
   <xacro:property name="lid_open_max" value="1.9722220547535925"/>
 
-  <!-- MID-360: 뚜껑 위, 몸체 중심 위 바닥에서 약 0.926 m (경첩 높이 + 0.09094) -->
+  <!-- MID-360: 뚜껑 위, 몸체 중심 위 바닥에서 0.80 m (경첩 높이 0.709 + 0.09094) -->
   <xacro:property name="mid360_above_hinge" value="0.09094"/>
 
   <!-- OAK-D Lite: 앞면, 바닥에서 0.50 m, 중심에서 왼쪽 0.1575 m, 수평 (2026-10-12 결정) -->
@@ -70,7 +71,8 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://limbo_description/meshes/v14/body.stl" scale="1 1 1"/>
+        <!-- 메시는 높이 0.835 m로 그려져 있어 body_top에 맞춰 z만 줄인다 (Gazebo 라이다는 시각 메시에 부딪히므로 메시가 높으면 자기 몸체를 본다, 2026-10-15) -->
+        <mesh filename="package://limbo_description/meshes/v14/body.stl" scale="1 1 ${body_top / 0.835}"/>
       </geometry>
       <material name="body_gray"/>
     </visual>

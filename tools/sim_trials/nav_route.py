@@ -24,14 +24,12 @@ for name, x, y in ROUTES[sys.argv[1]]:
     g = NavigateToPose.Goal(); g.pose.header.frame_id = 'map'
     g.pose.pose.position.x, g.pose.pose.position.y, g.pose.pose.orientation.w = x, y, 1.0
     t0 = time.time(); f = ac.send_goal_async(g)
-    # 수락 응답은 10 s까지만 기다린다. 서버가 응답을 안 주면(이전 목표 정리 중·DDS 지연) 한 번 더 보내고, 그래도 없으면 다음 구간으로
-    # (2026-10-14 서브 PC: 첫 목표 뒤 응답 없이 6분 멈춤 — 제한 없는 spin_until_future_complete 때문)
-    rclpy.spin_until_future_complete(n, f, timeout_sec=10.0)
+    # 수락 응답을 기다린다. 시작 직후 부하로 수십 초 걸릴 수 있어 60 s까지 보고, 다시 보내지는 않는다
+    # (다시 보내면 서버에는 두 목표가 생겨 앞 목표가 선점·취소된다 — 2026-10-15 손님 벤치 0/7 원인).
+    # 서브 PC가 본 "6분 멈춤"은 제한 없는 대기 때문이라 60 s 상한으로 막는다
+    rclpy.spin_until_future_complete(n, f, timeout_sec=60.0)
     if not f.done():
-        print(f'{name:12s} → 수락 응답 없음, 다시 보냄', flush=True); time.sleep(2)
-        f = ac.send_goal_async(g); rclpy.spin_until_future_complete(n, f, timeout_sec=10.0)
-        if not f.done():
-            print(f'{name:12s} → 수락 응답 없음 {time.time() - t0:5.1f}s', flush=True); continue
+        print(f'{name:12s} → 수락 응답 없음 {time.time() - t0:5.1f}s', flush=True); continue
     if not f.result().accepted:
         print(f'{name:12s} → 거부됨', flush=True); continue
     r = f.result().get_result_async()

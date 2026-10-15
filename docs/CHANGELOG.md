@@ -10,6 +10,23 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-15 (115) 주행 회귀 세트(dev 반영 전 점검)·라이다 0.80 m(몸체 높이 0.709)·default_server_timeout 100·잔존 bag 정리
+
+**할 일**
+- `build_limbo` (URDF·nav2 설정)
+
+**변경**
+- `limbo_description/urdf/limbo.urdf.xacro`: `body_top` 0.835 → 0.709로 MID-360을 바닥 0.80 m에(하드웨어 결정, 카메라 0.70 m 유지). 몸체 시각 메시 z 배율 `body_top / 0.835` — 메시가 높은 채면 Gazebo 라이다가 자기 몸체를 봐 출발 자리에서 못 움직임(`docs/TROUBLESHOOTING.md` "몸체를 낮추자…")
+- `limbo_navigation/config/nav2_params.yaml`: `default_server_timeout` 20 → 100 ms. 시작 부하에서 계획 서버 응답을 놓쳐 목표를 바로 포기하던 것(손님 0/4)
+- `tools/sim_trials/nav_route.py`: 수락 응답 60 s까지 대기, 재전송 없음(재전송하면 두 목표가 생겨 앞 목표가 취소됨). `tools/sim_trials/sim_ctl.sh`: stop 정리 패턴에 `ros2 bag record` 추가(20시간 남은 진단 녹화가 원인, TROUBLESHOOTING "진단용 `ros2 bag record`…")
+- `docs/KNOWN_ISSUES.md` "기다리기 BT 60 s": 복도 다가옴 정지가 60 s 상한까지 안 풀리는 경우 간헐 재발 → dev에는 기다리기 트리를 끈 채 올리는 것이 안전
+- `docs/PROJECT.md` 센서 표: MID-360 높이 0.80 m·몸체 0.709 m
+
+**확인** (메인 PC, `~/limbo_bags/sim_trials/logs/trial_reg_*`·`trial_lidar80_*`)
+- 비켜 주는 사람 복도 3회: 8/9 성공, 3회차 셋째 구간만 `person_approaching` 60 s 유지 → 89.8 s 중단(위 알려진 문제). 사람 충돌 0, 사람 최소 0.64~0.70 m
+- 상자 4/4(29~35 s, 장애물 최소 0.21 m), 손님(`default_server_timeout` 100) 4/4(17~28 s, 사람 최소 0.56 m), 순찰 3/3(320·258·211 s, Goal failed 1·1·0)
+- 라이다 0.80 m 뒤: 복도 3/3(25~31 s, 사람 최소 0.63 m), 상자 4/4(30~35 s, 장애물 최소 0.23 m) — 회귀 없음
+
 ## 2026-10-15 (114) NavFn A* vs 다익스트라 + 계획 계산 시간 측정 도구 (A* 유지)
 
 **할 일**
