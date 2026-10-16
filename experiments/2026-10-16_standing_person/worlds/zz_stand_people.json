@@ -1,0 +1,11 @@
+{
+  "world": "zz_stand",
+  "map": "aischool_2f_map",
+  "robot": "limbo",
+  "people": [
+    {"name": "walker_yield", "type": "stand", "speed": 0.7, "wait": 10.0, "trigger": 2.0,
+     "waypoints": [[-2.6, 11.6], [-2.6, 10.1]]},
+    {"name": "walker_noyield", "type": "no_yield", "speed": 0.7,
+     "waypoints": [[-13.0, -1.1], [-13.0, -1.1]], "loop": false}
+  ]
+}
