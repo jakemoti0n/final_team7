@@ -40,6 +40,9 @@ tof_node:
     map_topic: /map
     map_margin_cells: 2        # 지도 점유 칸에서 이 칸 수(× 지도 해상도) 안의 점은 벽으로 보고 버림. 칸 단위라 지도가 바뀌어도 맞음.
                                # 띠만으로는 복도 벽 모서리가 걸려 사람이 떠나도 정지가 60 s 안 풀렸다
+    # "앞 띠" = 로봇 앞에 그린 진로 구역(폭 2×(robot_half_width+person_radius), 길이 blob_max_range).
+    # 멈춘 뒤 "손님이 아직 앞에 있나"를 라이다로 볼 때만 쓴다. MPPI의 prune_distance(전역 경로를 앞 몇 m까지
+    # 잘라 따라갈지)와는 이름만 비슷하고 다른 것이다. 일반 장애물은 Nav2 costmap이 따로 본다
     robot_half_width: 0.30     # m, 로봇 중심선에서 가장 바깥(바퀴 바깥면 = wheel_separation/2 + wheel_width/2 = 0.295). 로봇이 바뀌면 이것만
     person_radius: 0.25        # m, 사람 몸 반경(HumanLayer lethal_radius와 같은 값). 띠 반폭 = robot_half_width + person_radius
     blob_max_range: 1.5        # m, 범퍼 앞부터. ToF(0.5 m) 밖, 카메라가 못 보는 1.5 m 안에 선 손님까지
