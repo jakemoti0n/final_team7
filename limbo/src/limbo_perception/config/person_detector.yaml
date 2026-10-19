@@ -20,9 +20,9 @@ person_detector:
       leg_pair_gap_ratio: 1.5
       leg_pair_vertical_overlap: 0.5
 
-    # depth는 몸의 카메라 쪽 겉면까지라, 카메라→사람 방향으로 이만큼 밀어 몸 중심으로 (m).
-    # human_layer lethal_radius와 같은 값. 0이면 보정 없음
-    person_radius: 0.25
+    # depth는 몸의 카메라 쪽 겉면까지라, 카메라→사람 방향으로 이만큼 밀어 몸 중심으로 (m). 0이면 보정 없음
+    leg_radius: 0.25         # leg 박스: 다리 앞면 → 몸 중심 (human_layer lethal_radius와 같은 값)
+    person_box_radius: 0.12  # person 박스: 몸통 가운데 영역 depth → 몸 두께 절반
 
     sync:
       queue_size: 5

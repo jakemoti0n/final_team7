@@ -242,3 +242,14 @@ def test_push_to_body_center_moves_away_from_camera():
     x, y, z = geometry.push_to_body_center(0.6, 0.0, 0.8, 0.25)
     assert abs(np.hypot(x, z) - 1.25) < 1e-9
     assert abs(x / z - 0.75) < 1e-9
+
+
+def test_body_center_radius_depends_on_box_kind():
+    # leg 박스는 다리 앞면 → 몸 중심(0.25 m), person 박스는 몸 두께 절반(0.12 m)
+    config = geometry.DepthConfig()
+    _, _, z_leg = geometry.push_to_body_center(
+        0.0, 0.0, 2.0, geometry.body_center_radius(config, leg=True))
+    _, _, z_person = geometry.push_to_body_center(
+        0.0, 0.0, 2.0, geometry.body_center_radius(config, leg=False))
+    assert abs(z_leg - 2.25) < 1e-9
+    assert abs(z_person - 2.12) < 1e-9

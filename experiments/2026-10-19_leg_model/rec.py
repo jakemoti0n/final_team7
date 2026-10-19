@@ -5,11 +5,11 @@ from rclpy.time import Time
 from tf2_ros import Buffer, TransformListener
 from limbo_interfaces.msg import PersonPredictionArray
 from geometry_msgs.msg import PoseArray
-from std_msgs.msg import String, Int32MultiArray
+from std_msgs.msg import String
 rclpy.init(); n = Node('leg_rec'); buf = Buffer(); TransformListener(buf, n)
 pending, frames, gt, names, boxes = [], [], [], [''], []
-# 박스 수 [person, leg, 합친 뒤 남은 수] (3차부터, 노드가 /person_detector/box_counts로 냄)
-n.create_subscription(Int32MultiArray, '/person_detector/box_counts', lambda m: boxes.append(list(m.data)), 50)
+# 박스 (4차부터, /person_detector/boxes JSON: t, YOLO 박스 [클래스, x1, y1, x2, y2, 신뢰도], 합친 뒤 kept)
+n.create_subscription(String, '/person_detector/boxes', lambda m: boxes.append(json.loads(m.data)), 50)
 n.create_subscription(PersonPredictionArray, '/person_detector/predictions', lambda m: pending.append((m, time.time())), 50)
 n.create_subscription(PoseArray, '/sim/people', lambda m: gt.append((Time.from_msg(m.header.stamp).nanoseconds * 1e-9, [(p.position.x, p.position.y) for p in m.poses])), 50)
 n.create_subscription(String, '/sim/people_names', lambda m: names.__setitem__(0, m.data), 10)

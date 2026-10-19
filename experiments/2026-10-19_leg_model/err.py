@@ -19,6 +19,8 @@ for p in sys.argv[1:]:
     m = lambda v: f"{st.median(v):.2f}" if v else '-'
     print(p.split('/')[-1][:-5], f"겹침 {100*dup/det:.0f}% | 1.5m안 오차 {m(E['n'])} (앞뒤 {m(rad['n'])}, 옆 {m(lat['n'])}, n={len(E['n'])}) | 밖 {m(E['f'])} (앞뒤 {m(rad['f'])}, 옆 {m(lat['f'])})")
     B = D.get('boxes')
+    if B and isinstance(B[0], dict):  # 4차부터 박스 JSON → [person 수, leg 수, 남은 수]
+        B = [[sum(b[0] == 0 for b in d['boxes']), sum(b[0] == 1 for b in d['boxes']), len(d['kept'])] for d in B]
     if B:  # 3차부터: 박스 수. leg 2개 이상 & person 0인 frame, 합쳐서 박스가 줄어든 frame
         legs2 = sum(1 for p_, l, k in B if p_ == 0 and l >= 2); fewer = sum(1 for p_, l, k in B if k < p_ + l)
         print(f"  박스 frame {len(B)}: person 없이 leg≥2 {legs2} ({100*legs2/len(B):.0f}%), 합쳐서 줄어듦 {fewer} ({100*fewer/len(B):.0f}%)")

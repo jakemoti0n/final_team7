@@ -32,6 +32,10 @@ class DepthConfig:
     # 다리 하나짜리 박스는 다리가 박스 대부분이라 같은 방법으로도 다리 거리가 나온다
     leg_roi_margin_x: float = 0.05
     leg_percentile: float = 10.0
+    # depth는 몸의 카메라 쪽 겉면까지라 사람 중심으로 밀 거리(m). 박스 종류마다 재는 자리가 달라 값도 다르다
+    # leg 박스: 다리 앞면 → 몸 중심 / person 박스: 몸통 가운데 영역 → 몸 두께 절반
+    leg_radius: float = 0.25
+    person_box_radius: float = 0.12
 
 
 def person_depth(depth_image, x1, y1, x2, y2, config, leg=False):
@@ -156,6 +160,11 @@ def _side_by_side(a, b, gap_ratio, vertical_overlap):
     overlap = min(a[3], b[3]) - max(a[1], b[1])
     shorter = min(a[3] - a[1], b[3] - b[1])
     return shorter > 0 and overlap >= vertical_overlap * shorter
+
+
+def body_center_radius(config, leg):
+    """박스 종류에 맞는 중심 보정 거리(m)."""
+    return config.leg_radius if leg else config.person_box_radius
 
 
 def push_to_body_center(x, y, z, radius):
