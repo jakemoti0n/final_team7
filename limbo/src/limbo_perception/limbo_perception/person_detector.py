@@ -82,6 +82,8 @@ class PersonDetector(Node):
         self.get_logger().info(
             f'모델 {self.model_path} 클래스 {used} '
             f'(전체 {len(self.model.names)}개), 입력 크기 {self.yolo_imgsz}')
+        self.depth_jump_filter = geometry.DepthJumpFilter(
+            jump_m=self.jump_reject_m)
         self.track_manager = tracking.TrackManager(
             self.tracker_config, logger=self.get_logger())
         self.intrinsics = None
@@ -150,6 +152,11 @@ class PersonDetector(Node):
         self.sync_queue_size = p('sync.queue_size', 5).value
         self.sync_slop = p('sync.slop', 0.03).value
         self.tf_timeout = Duration(seconds=p('tf_timeout', 0.1).value)
+        # 화면 좌우 끝에 조금만 걸친 사람 박스는 depth가 뒤쪽 배경을 재므로 거리 계산에서 뺀다
+        self.edge_margin_px = p('edge_margin_px', 2).value
+        self.edge_min_width_px = p('edge_min_width_px', 40).value
+        # 같은 트랙의 depth가 한 프레임에 이만큼 넘게 튀면 그 값을 버림 (3프레임 연속이면 채택)
+        self.jump_reject_m = p('jump_reject_m', 1.0).value
 
         d = geometry.DepthConfig()
         self.depth_config = geometry.DepthConfig(
@@ -273,6 +280,7 @@ class PersonDetector(Node):
         self._publish_nearest(results)
 
         self.track_manager.cleanup(current_time)
+        self.depth_jump_filter.cleanup(current_time)
 
         output_msg = self.bridge.cv2_to_imgmsg(annotated_frame, encoding='bgr8')
         output_msg.header = msg.header
@@ -316,10 +324,23 @@ class PersonDetector(Node):
                            robot_xy, matched_person_ids):
         """Depth → 3D → odom → Kalman → 움직임/의도/예측. depth가 없으면 None."""
         x1, y1, x2, y2 = detection.box
+        if geometry.clipped_at_edge(
+                detection.box, depth_image.shape[1],
+                self.edge_margin_px, self.edge_min_width_px):
+            self.get_logger().debug(
+                f'화면 끝에 걸친 좁은 박스 {detection.box} 거리 계산 제외')
+            return None
         depth = geometry.person_depth(
             depth_image, x1, y1, x2, y2, self.depth_config, leg=detection.leg)
         if depth is None:
             return None
+        measured = depth
+        depth, rejected = self.depth_jump_filter.update(
+            detection.raw_track_id, depth, current_time)
+        if rejected:
+            self.get_logger().debug(
+                f'트랙 {detection.raw_track_id} depth {measured:.2f} m 튐 → '
+                f'직전 {depth:.2f} m 유지')
 
         u = (x1 + x2) / 2.0
         v = (y1 + y2) / 2.0

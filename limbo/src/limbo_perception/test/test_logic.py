@@ -253,3 +253,28 @@ def test_body_center_radius_depends_on_box_kind():
         0.0, 0.0, 2.0, geometry.body_center_radius(config, leg=False))
     assert abs(z_leg - 2.25) < 1e-9
     assert abs(z_person - 2.12) < 1e-9
+
+
+def test_clipped_at_edge_only_for_narrow_boxes_touching_edge():
+    # 320 폭 화면 오른쪽 끝에 걸친 좁은 박스 → 제외, 넓으면(사람이 많이 보임) 사용, 가운데 좁은 박스도 사용
+    assert geometry.clipped_at_edge((290, 50, 320, 240), 320, 2, 40)
+    assert geometry.clipped_at_edge((0, 50, 25, 240), 320, 2, 40)
+    assert not geometry.clipped_at_edge((200, 50, 320, 240), 320, 2, 40)
+    assert not geometry.clipped_at_edge((150, 50, 175, 240), 320, 2, 40)
+
+
+def test_depth_jump_is_ignored_until_it_repeats():
+    # 0.7 m에 있던 사람이 한 프레임 3.2 m(뒤쪽 벽)로 튀면 0.7 m 유지, 3프레임 연속이면 3.2 m 채택
+    f = geometry.DepthJumpFilter(jump_m=1.0, confirm_frames=3)
+    assert f.update(7, 0.7, 0.0) == (0.7, False)
+    assert f.update(7, 3.2, 0.1) == (0.7, True)
+    assert f.update(7, 0.8, 0.2) == (0.8, False)
+    assert f.update(7, 3.2, 0.3) == (0.8, True)
+    assert f.update(7, 3.2, 0.4) == (0.8, True)
+    assert f.update(7, 3.2, 0.5) == (3.2, False)
+
+
+def test_depth_jump_filter_accepts_new_value_after_track_was_gone():
+    f = geometry.DepthJumpFilter(jump_m=1.0, confirm_frames=3, max_age_s=1.0)
+    f.update(7, 0.7, 0.0)
+    assert f.update(7, 3.2, 2.0) == (3.2, False)

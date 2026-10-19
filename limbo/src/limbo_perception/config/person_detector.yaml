@@ -30,6 +30,12 @@ person_detector:
 
     tf_timeout: 0.1         # sec
 
+    # 화면 좌우 끝(이 px 안)에 닿고 폭이 이보다 좁은 박스는 거리 계산에서 뺌 (사람이 조금만 걸치면 depth가 뒤쪽 벽을 잼)
+    edge_margin_px: 2
+    edge_min_width_px: 40     # px (320 폭 기준 12 %)
+    # 같은 트랙의 depth가 한 프레임에 이만큼 넘게 튀면 그 값을 버리고 직전 값 유지 (3프레임 연속이면 새 값 채택)
+    jump_reject_m: 1.0        # m
+
     depth:
       roi_margin: 0.30      # box 각 변에서 잘라낼 비율 (배경 제외)
       min_depth: 0.1        # m

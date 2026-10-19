@@ -198,3 +198,49 @@ def pixel_to_optical_point(u, v, depth, intrinsics):
     x = (u - intrinsics.cx) * z / intrinsics.fx
     y = (v - intrinsics.cy) * z / intrinsics.fy
     return x, y, z
+
+
+def clipped_at_edge(box, image_width, margin_px, min_width_px):
+    """
+    박스가 화면 좌우 끝에 닿아 있고 폭이 좁은가 (사람이 조금만 걸쳐 보임).
+
+    이런 박스는 depth 영역 대부분이 사람 뒤 배경이라 배경 거리를 재고,
+    박스 중심도 사람보다 화면 안쪽이라 방향까지 틀어진다. 거리 계산에 쓰지 않는다.
+    """
+    x1, _, x2, _ = box
+    at_edge = x1 <= margin_px or x2 >= image_width - margin_px
+    return at_edge and (x2 - x1) < min_width_px
+
+
+class DepthJumpFilter:
+    """
+    같은 트랙의 depth가 한 프레임에 jump_m 넘게 튀면 그 값을 버리고 직전 값을 쓴다.
+
+    confirm_frames 프레임 연속으로 튀면(사람이 정말 그 자리에 있음) 새 값을 받아들인다.
+    max_age_s 넘게 안 보였던 트랙은 처음 보는 것처럼 새 값을 받는다.
+    """
+
+    def __init__(self, jump_m=1.0, confirm_frames=3, max_age_s=1.0):
+        self.jump_m = jump_m
+        self.confirm_frames = confirm_frames
+        self.max_age_s = max_age_s
+        self._tracks = {}  # track id -> [받아들인 depth, 연속 튐 수, 마지막 시각]
+
+    def update(self, track_id, depth, stamp):
+        """(쓸 depth, 이번 값을 버렸는지)를 반환한다."""
+        state = self._tracks.get(track_id)
+        if (state is None or stamp - state[2] > self.max_age_s
+                or abs(depth - state[0]) <= self.jump_m):
+            self._tracks[track_id] = [depth, 0, stamp]
+            return depth, False
+        state[1] += 1
+        state[2] = stamp
+        if state[1] >= self.confirm_frames:
+            self._tracks[track_id] = [depth, 0, stamp]
+            return depth, False
+        return state[0], True
+
+    def cleanup(self, stamp):
+        for track_id in [k for k, s in self._tracks.items()
+                         if stamp - s[2] > self.max_age_s]:
+            del self._tracks[track_id]
