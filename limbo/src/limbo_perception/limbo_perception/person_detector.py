@@ -37,7 +37,6 @@ NEAREST_BASE_TOPIC = '/person_detector/person_position_base'
 NEAREST_ODOM_TOPIC = '/person_detector/person_position_odom'
 
 PUBLISH_QUEUE = 10
-YOLO_PERSON_CLASS = 0  # COCO
 EXECUTOR_THREADS = 2
 TF_WARN_PERIOD_SEC = 2.0
 
@@ -72,6 +71,10 @@ class PersonDetector(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.model = YOLO(self.model_path)
+        used = {c: self.model.names.get(c) for c in self.yolo_classes}
+        self.get_logger().info(
+            f'모델 {self.model_path} 클래스 {used} '
+            f'(전체 {len(self.model.names)}개), 입력 크기 {self.yolo_imgsz}')
         self.track_manager = tracking.TrackManager(
             self.tracker_config, logger=self.get_logger())
         self.intrinsics = None
@@ -121,6 +124,10 @@ class PersonDetector(Node):
         self.camera_frame = p('camera_frame', 'rgbd_camera_optical_link').value
         self.model_path = p('yolo.model', 'yolo11n.pt').value
         self.yolo_tracker = p('yolo.tracker', 'botsort.yaml').value
+        # 사람으로 볼 클래스 번호. COCO 모델은 0(person)뿐, 하반신 모델은 0(person)·1(leg)
+        self.yolo_classes = list(p('yolo.classes', [0]).value)
+        # 추론 입력 크기(px). 모델을 학습한 크기에 맞춘다 (yolo11n 640, 하반신 모델 512)
+        self.yolo_imgsz = p('yolo.imgsz', 640).value
 
         self.yolo_confidence = p('yolo.confidence', 0.3).value
         self.sync_queue_size = p('sync.queue_size', 5).value
@@ -240,7 +247,8 @@ class PersonDetector(Node):
         """YOLO + BoT-SORT 결과 중 track ID가 붙은 사람 box만 반환한다."""
         result = self.model.track(
             source=frame,
-            classes=[YOLO_PERSON_CLASS],
+            classes=self.yolo_classes,
+            imgsz=self.yolo_imgsz,
             conf=self.yolo_confidence,
             persist=True,  # BoT-SORT가 이전 frame의 tracking 상태를 이어 쓰게 한다
             tracker=self.yolo_tracker,

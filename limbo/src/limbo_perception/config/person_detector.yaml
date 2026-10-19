@@ -4,6 +4,8 @@ person_detector:
   ros__parameters:
     yolo:
       confidence: 0.3
+      classes: [0]          # 사람으로 볼 클래스 번호 (yolo11n은 0=person. 하반신 모델은 [0, 1] = person, leg)
+      imgsz: 640            # 추론 입력 크기 px (yolo11n 640, 하반신 모델 512)
 
     sync:
       queue_size: 5
