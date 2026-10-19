@@ -1,10 +1,11 @@
 # LIMBO Dashboard
 
-FastAPI 수신 서버와 React/TypeScript 운영 UI. 구현 기준은 [Dashboard PRD](docs/PRD.md), 수신 계약의 단일 기준은 [Bridge PRD §3](../relay_prog/docs/PRD.md)다. 기존 `limbo/`, `relay_prog/` 프로그램을 수정하지 않는다.
+FastAPI 수신 서버와 React/TypeScript 관제 UI. 기본 상태 전달 계약은 [Bridge PRD §3](../relay_prog/docs/PRD.md), 관제 명령·순찰 상태·위치의 설계 참고는 [관제 API 초안](../docs/CONTROL_API_DRAFT.md)과 [Dashboard PRD](docs/PRD.md)를 참고한다. 기존 `limbo/`, `relay_prog/` 프로그램은 이 Dashboard에서 수정하지 않는다.
 
-- `/`: 실제 수신 화면. 세 제어 버튼은 항상 비활성화되며 실제 제어 API는 없다.
+- `/`: 실제 수신·관제 화면. 상태 요약, 순찰 상태, 로봇 위치와 지도를 표시하고 일시정지·순찰 재개 명령을 보낸다.
 - `/demo`: 독립 Mock 공급자. 실제 서버 API/WebSocket에 접속하지 않는다. 가상 데이터·알림·명령 결과는 이 페이지의 메모리에만 존재한다.
 - 서버는 ROS2 설치 없이 실행된다. 한 로봇, 단일 프로세스, 메모리 최신 상태 및 최근 알림 100건을 지원한다. 서버 재시작 시 초기화되며 브라우저 새로고침은 서버 이력을 지우지 않는다.
+- 실제 화면의 명령은 Bridge가 연결되어 있고 다른 명령이 처리 중이지 않을 때 가능하다. 일시정지는 순찰 상태를 몰라도 요청할 수 있지만, 상태가 이미 `paused`/`pausing`이면 잠긴다. 재개는 순찰 상태와 `has_resumable_task`로 허용 여부를 판단한다. 요청 접수만으로 로봇 동작을 확인한 것은 아니다.
 
 ## 명령 실행 디렉터리
 
@@ -87,6 +88,8 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 | `browser_delay_s` | 3초. 1초 갱신 간격보다 커야 함 |
 | `linear_threshold_mps` / `angular_threshold_radps` | 0.05 m/s / 절대값 0.05 rad/s |
 | `alert_limit` | 100, 1~100 |
+| `command_ttl_s` / `command_response_timeout_s` / `command_confirm_timeout_s` | 각각 5초 |
+| `map_yaml` / `waypoints_yaml` | 지도·순찰 waypoint YAML 경로. 기본 `config.json`은 저장소 루트 기준 파일을 지정 |
 
 적용 설정은 서버 스냅샷으로 UI에 전달된다. 토픽별 기준은 실제 발행 주기를 측정한 뒤 조정한다. motion freshness는 odom 지연 기준을 motion 자체 age에 적용한다. ROS 헤더는 freshness 판정에 사용하지 않는다. 현재 세션의 마지막 유효 속도는 별도로 보존하고 현재 값이 없으면 `마지막 수신 값`으로만 표시한다.
 
@@ -100,14 +103,17 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 
 | 경로 | 역할 |
 |---|---|
-| `POST /api/v1/telemetry` | 공통 v1 계약 그대로, 최대 UTF-8 8192바이트 |
+| `POST /api/v1/telemetry` | 공통 v1 필드 또는 v2 (`patrol`, `pose` 추가), 최대 UTF-8 8192바이트 |
 | `GET /api/v1/state` | 전체 현재 판정, 마지막 값, 설정, 알림 |
 | `WS /api/v1/stream` | 연결 즉시, 새 유효 수신 시, 1초 타이머마다 전체 상태 |
 | `GET /healthz` | `{"status":"ok"}`, 서버 생존 확인만 의미 |
+| `POST /api/v1/commands` | 화면에서 `pause` 또는 `resume` 요청 |
+| `GET /api/v1/commands/next`, `POST /api/v1/commands/{id}/claim`, `/result` | Bridge의 명령 가져오기·실행 직전 확인·결과 보고 |
+| `GET /api/v1/map`, `/api/v1/map.png` | 설정된 지도 메타데이터·PNG |
 
-스냅샷에는 `server_run_id`, `revision`, `server_utc`, `robot_id`, `bridge`, `topics`, `motion`, `alerts`, `settings`가 포함된다. `motion.current`와 `motion.last_valid`, 토픽 `receive_hz`와 `last_receive_hz`를 구분한다. 이전 run의 revision과 새 서버 revision을 비교하지 않는다.
+스냅샷에는 `server_run_id`, `revision`, `server_utc`, `robot_id`, `bridge`, `topics`, `motion`, `patrol`, `pose`, `command`, `map_available`, `alerts`, `settings`가 포함된다. 텔레메트리 v1이면 `patrol`·`pose`는 서버에서 `null`이다. v2에서는 두 필드가 항상 객체이며, 아직 수신하지 않은 값은 객체 안의 필드가 `null`이다. Bridge는 미수신 순찰 상태도 `patrol` 객체로 보내며 `update_count`는 0이고 상태·수신 시각 등은 null이다. `pose`는 TF 위치와 AMCL 위치 불확실성을 담고, 미수신이면 그 필드들이 모두 null이다. 객체 자체가 null인 v2 요청은 거부된다. `motion.current`와 `motion.last_valid`, 토픽 `receive_hz`와 `last_receive_hz`를 구분한다. 이전 run의 revision과 새 서버 revision을 비교하지 않는다.
 
-스키마는 누락·추가 필드, 숫자 강제 변환, bool 숫자, NaN/Infinity, 음수 범위, 비UTC 시각, null 관계를 검사한다. 오류 코드는 Bridge PRD를 따른다. 종료된 세션은 최근 100개만 기억한다. 느린 WebSocket에는 대기 스냅샷 한 개만 유지하고 전송이 3초 이상 막히면 연결을 닫는다. UI 빌드가 없으면 `/`와 `/demo`는 안내 JSON과 503을 반환한다.
+명령은 `queued → delivered → accepted → confirmed` 등의 단계로 표시한다. `confirmed`는 명령 응답만으로 처리하지 않는다. 일시정지는 이후 `paused` 상태와 정지 속도, 재개는 이후 `patrolling` 상태 보고로 확인한다. `service_unavailable`은 AMCL 위치 추정이 없다는 뜻이 아니라 Bridge가 호출할 순찰 서비스를 사용할 수 없다는 결과다. 스키마는 누락·추가 필드, 숫자 강제 변환, bool 숫자, NaN/Infinity, 음수 범위, 비UTC 시각, null 관계를 검사한다. 종료된 세션은 최근 100개만 기억한다. 느린 WebSocket에는 대기 스냅샷 한 개만 유지하고 전송이 3초 이상 막히면 연결을 닫는다. UI 빌드가 없으면 `/`와 `/demo`는 안내 JSON과 503을 반환한다.
 
 아래 파일 구조의 기준 디렉터리는 `dashboard/`다.
 
@@ -124,7 +130,7 @@ tools/               개발용 송신기 및 통합 검증 도구
 
 ## 가상 송신기로 독립 검증
 
-가상 송신기는 개발 도구다. **실제 Bridge와 함께 같은 서버에 보내지 않는다.** v1 계약에는 실제/가상 출처 필드가 없으므로 수신 화면은 전송자의 진위를 판별할 수 없다. 반드시 Bridge가 연결되지 않은 전용 서버를 사용한다. `/demo`와는 별개의 테스트다.
+가상 송신기는 개발 도구다. **실제 Bridge와 함께 같은 서버에 보내지 않는다.** v1 계약에는 실제/가상 출처 필드가 없으므로 수신 화면은 전송자의 진위를 판별할 수 없다. 반드시 Bridge가 연결되지 않은 전용 서버를 사용한다. `/demo`와는 별개의 테스트다. 송신기는 v1 텔레메트리 검증용이며 v2 순찰·위치 또는 명령 흐름을 검증하지 않는다. `validate_bridge.py`는 실제 Bridge의 토픽 텔레메트리→화면 전달을 확인하지만 명령 서비스를 호출하지 않으므로 제어 성공 검증이 아니다.
 
 첫 번째 터미널에서 위 「실행·종료」 명령으로 테스트 서버를 8000에 실행한 뒤, **두 번째 터미널**에서 아래 명령을 실행한다. 송신기 실행 디렉터리도 `/home/itkwon/limbo_ros2_workspace/final_team7/dashboard`다. 두 시나리오는 각각 20초씩 순서대로 실행된다.
 

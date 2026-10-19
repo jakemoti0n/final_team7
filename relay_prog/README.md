@@ -1,30 +1,31 @@
 # LIMBO 상태 전달 Bridge
 
-[PRD의 공통 전송 계약 v1](docs/PRD.md)을 구현하는 독립 ROS2 Jazzy 워크스페이스다. 기존 `limbo/` launch나 코드를 수정하지 않는다. 네 구독 콜백은 헤더·수신 UTC·누적 횟수와 odom의 평면 선속도/각속도 숫자만 추출한다. 원본 `Image.data`/`PointCloud2.data`에 접근하거나 메시지를 추가 저장·변환·전송하지 않는다. ROS2 자체 수신·역직렬화 비용은 발생한다.
+[PRD의 공통 텔레메트리 계약](docs/PRD.md)을 바탕으로 텔레메트리 v2와 순찰 명령을 전달하는 ROS2 Jazzy Bridge다. v2는 `patrol` 상태와 지도 좌표 `pose`를 추가한다. 기존 `limbo/` launch나 코드를 수정하지 않는다. 센서 구독 콜백은 헤더·수신 UTC·누적 횟수와 odom의 평면 선속도/각속도 숫자만 추출한다. 원본 `Image.data`/`PointCloud2.data`에 접근하거나 메시지를 추가 저장·변환·전송하지 않는다. ROS2 자체 수신·역직렬화 비용은 발생한다.
 
-> **`tools/receiver.py`는 실제 Server Program(Dashboard 서버)을 대신하는 테스트용 Mock 서버(Mockup)다.** 실제 서버가 준비되지 않아도 Bridge의 JSON 전송과 장애 복구를 검증할 수 있도록 제공한다. 운영용 서버나 Dashboard UI가 아니며, 실제 서버에 연결할 때는 실행하지 않는다.
+> **`tools/receiver.py`는 실제 Server Program(Dashboard 서버)을 대신하는 테스트용 Mock 서버(Mockup)다.** 실제 서버가 준비되지 않아도 Bridge의 v1/v2 텔레메트리와 명령 전송을 검증할 수 있도록 제공한다. 운영용 서버나 Dashboard UI가 아니며, 실제 서버에 연결할 때는 실행하지 않는다.
 
 ## 설치와 빌드
 
-Ubuntu의 기존 ROS2 Jazzy와 시스템 Python 3.12를 사용한다. 아래 명령은 저장소 루트에서 시작한다. YOLO 가상환경을 활성화한 터미널이라면 먼저 `deactivate`한다.
+Ubuntu의 기존 ROS2 Jazzy, 먼저 빌드한 `limbo_interfaces`, 시스템 Python 3.12를 사용한다. 아래 명령은 저장소 루트에서 시작한다. YOLO 가상환경을 활성화한 터미널이라면 먼저 `deactivate`한다. Jazzy와 LIMBO 환경을 먼저 source한 뒤 Bridge를 빌드한다.
 
 ```bash
 source /opt/ros/jazzy/setup.bash
+source limbo/install/setup.bash
 cd relay_prog
 /usr/bin/python3 -m venv --system-site-packages venvs/bridge
 venvs/bridge/bin/python -m pip install -r requirements.txt
 venvs/bridge/bin/python -m colcon build --symlink-install --base-paths src
-source install/setup.bash
 ```
 
-`rclpy`, `nav_msgs`, `sensor_msgs`, `rosgraph_msgs`, colcon은 기존 Jazzy 설치를 사용한다. 새 PC에서 빠진 도구는 다음으로 설치한다. 검증 도구만 `pytest`, `psutil`을 추가로 사용한다.
+`rclpy`, `nav_msgs`, `sensor_msgs`, `geometry_msgs`, `std_srvs`, `tf2_ros`, `rosgraph_msgs`, colcon은 ROS2 Jazzy 설치를 사용한다. `limbo_interfaces`는 `limbo/` 워크스페이스에서 제공한다. 새 PC에서 빠진 도구는 다음으로 설치한다. 검증 도구만 `pytest`, `psutil`을 추가로 사용한다.
 
 ```bash
 sudo apt install python3-venv python3-colcon-common-extensions python3-pytest python3-psutil \
-  python3-yaml ros-jazzy-rclpy ros-jazzy-nav-msgs ros-jazzy-sensor-msgs ros-jazzy-rosgraph-msgs
+  python3-yaml ros-jazzy-rclpy ros-jazzy-nav-msgs ros-jazzy-sensor-msgs \
+  ros-jazzy-geometry-msgs ros-jazzy-std-srvs ros-jazzy-tf2-ros ros-jazzy-rosgraph-msgs
 ```
 
-빌드를 가상환경 Python으로 실행해야 설치된 `bridge` 실행 파일도 같은 Python과 HTTP 의존성을 사용한다. 기존 YOLO 환경에는 설치하지 않는다. 패키지 다운로드에는 인터넷 접속이 필요하다.
+빌드를 가상환경 Python으로 실행해야 설치된 `bridge` 실행 파일도 같은 Python과 HTTP 의존성을 사용한다. 실제 명령 실행에는 `limbo_interfaces`와 `std_srvs/srv/Trigger` 순찰 서비스가 필요하다. 기존 YOLO 환경에는 설치하지 않는다. 패키지 다운로드에는 인터넷 접속이 필요하다.
 
 ## 설정
 
@@ -41,6 +42,10 @@ sudo apt install python3-venv python3-colcon-common-extensions python3-pytest py
 | `reliability` | `best_effort` 또는 `reliable` |
 | `durability` | `volatile` 또는 `transient_local` |
 | `depth` | Keep Last 깊이, 기본 1 |
+| `control.patrol_state_topic` / `pose_topic` | 순찰 상태와 AMCL 공분산 수신 토픽 |
+| `control.map_frame` / `base_frame` | TF 위치 좌표 프레임. 기본 `map` / `base_footprint` |
+| `control.pause_service` / `resume_service` | 일시정지·재개 `std_srvs/srv/Trigger` 서비스 |
+| `control.command_wait_s` / `service_timeout_s` | 명령 long poll 최대 10초 / 순찰 서비스 응답 제한 3초 |
 
 | 키 | 기본 토픽 | 형식 |
 |---|---|---|
@@ -57,13 +62,13 @@ sudo apt install python3-venv python3-colcon-common-extensions python3-pytest py
 
 ### 로컬 검증: Mock 서버 사용
 
-아래 절차는 실제 Server Program 대신 `tools/receiver.py`를 실행하는 로컬 테스트다.
+아래 절차는 실제 Server Program 대신 `tools/receiver.py`를 실행하는 로컬 테스트다. Mock 서버는 v1/v2 텔레메트리 스키마, 순번·세션 처리 및 Bridge 명령 API를 구현한다. 다만 실제 Dashboard 화면이나 ROS 순찰 서비스를 제공하지 않으므로 로봇 제어 결과까지 검증하지는 않는다.
 
 ```text
 ROS2 토픽 → Bridge → receiver.py (Server Program을 대신하는 Mock 서버)
 ```
 
-첫 터미널: ROS 설치 없이 실행 가능한 Mock 서버를 시작한다. 이 서버는 Bridge의 `POST /api/v1/telemetry` 요청을 받아 계약 v1 형식과 세션·순번을 검증하고 응답한다. 장애 모드로 지연·오류·응답 유실을 재현할 수도 있다.
+첫 터미널: ROS 설치 없이 실행 가능한 Mock 서버를 시작한다. 이 서버는 Bridge의 `POST /api/v1/telemetry` 요청을 받아 v1/v2 형식과 세션·순번을 검증하고 응답한다. 장애 모드로 지연·오류·응답 유실을 재현할 수도 있다.
 
 ```bash
 cd relay_prog  # 저장소 루트 기준
@@ -74,12 +79,13 @@ cd relay_prog  # 저장소 루트 기준
 
 ```bash
 source /opt/ros/jazzy/setup.bash
+source limbo/install/setup.bash
 cd relay_prog  # 저장소 루트 기준
 source install/setup.bash
 ros2 run limbo_telemetry_bridge bridge --config src/limbo_telemetry_bridge/config/bridge.yaml
 ```
 
-ROS 메시지가 없어도 기본 주기인 1초마다 null/0 스냅샷을 전송한다. `curl http://127.0.0.1:8000/status`로 Mock 서버가 받은 최신 계약 JSON을 확인할 수 있다. `/status`는 이 Mock 서버의 검증용 기능이다.
+ROS 메시지가 없어도 기본 주기인 1초마다 v2 스냅샷을 전송한다. 순찰·위치 소스가 미수신이면 그 객체는 유지되고 내부 필드는 null이다. `curl http://127.0.0.1:8000/status`로 Mock 서버가 받은 최신 JSON과 명령 결과를 확인할 수 있다. `/status`는 이 Mock 서버의 검증용 기능이다.
 
 ### 실제 Server Program에 연결
 
@@ -89,11 +95,18 @@ ROS 메시지가 없어도 기본 주기인 1초마다 null/0 스냅샷을 전�
 ROS2 토픽 → Bridge → 실제 Server Program(Dashboard 서버)
 ```
 
-1. 실제 서버가 [공통 전송 계약 v1](docs/PRD.md)의 `POST /api/v1/telemetry` 수신 API와 응답 규격을 구현했는지 확인한다.
+1. 실제 Dashboard 서버가 공통 텔레메트리와 v2의 `patrol`·`pose` 필드, 그리고 명령 API를 지원하는지 확인한다.
 2. Bridge 설정 파일의 `server_url`을 실제 서버의 주소로 변경한다. 주소에는 `/api/v1/telemetry` 경로를 붙이지 않는다. 예를 들어 서버 PC의 주소가 `192.168.0.10`, 포트가 `8000`이면 `http://192.168.0.10:8000`으로 설정한다.
-3. 실제 서버를 실행하고, 위와 동일한 Bridge 실행 명령으로 시작한다. 이미 실행 중인 Bridge는 설정 변경 후 다시 시작한다.
+3. 저장소 루트에서 `source /opt/ros/jazzy/setup.bash`, `source limbo/install/setup.bash`, `source relay_prog/install/setup.bash` 순서로 환경을 준비한 뒤 Bridge를 시작한다. 이미 실행 중인 Bridge는 설정 변경 후 다시 시작한다.
 
 Jetson에서 Bridge를 실행하고 다른 PC에서 서버를 운영한다면 `server_url`은 그 서버 PC를 가리켜야 한다. `127.0.0.1`은 Bridge가 실행 중인 Jetson 자신을 가리킨다. 서버는 Jetson에서 접근할 수 있는 네트워크 인터페이스에 바인딩한다. Mock 서버는 실제 서버 연결이나 Jetson 자동 시작 구성의 필수 구성요소가 아니다.
+
+### 순찰 상태·위치와 명령
+
+- 텔레메트리 v2는 `patrol`과 `pose` 객체를 항상 포함한다. 순찰 상태를 아직 받지 못했으면 `patrol.update_count`는 0이고 상태·waypoint·수신 시각 필드는 객체 안에서 null이다. 위치를 아직 받지 못했으면 `pose` 객체의 필드가 모두 null이다. 객체 자체를 null로 보내는 것과 객체 내부 값이 null인 것은 다르며 Dashboard는 v2에서 객체 자체가 null인 요청을 거부한다.
+- `pose`의 위치·방향은 `map_frame`에서 `base_frame`으로 읽은 TF이며, 위치 불확실성은 `/amcl_pose` 공분산에서 가져온다. AMCL 데이터 부재는 순찰 서비스 부재를 뜻하지 않는다.
+- 명령은 Dashboard가 요청하고 Bridge가 가져온 뒤, `/patrol/pause` 또는 `/patrol/resume` 서비스를 호출한다. 서비스가 없거나 사용할 수 없으면 `service_unavailable`; 존재하지만 제한 시간 안에 응답하지 않으면 `no_response`다. 이 결과는 AMCL 상태와 무관하다. 성공은 이후 순찰 상태 보고를 Dashboard가 확인해야 최종 확정된다.
+- 이 명령 경로는 Dashboard의 실제 `/` 화면에서 사용한다. `/demo`는 독립 Mock 공급자다. `receiver.py`는 명령 큐·claim·result 통신을 검증할 수 있지만, 실제 ROS 순찰 서비스 호출이나 실제 Dashboard UI의 결과 판정은 검증하지 않는다.
 
 ### 종료와 토픽 진단
 
@@ -138,7 +151,7 @@ venvs/bridge/bin/python -m pytest tests -q
 /usr/bin/python3 tools/receiver.py --mode ok
 ```
 
-한 포트에는 서버 한 개만 실행한다. 추가 모드: `client_error`(422), `malformed`, `oversized`, `retired`, `drip`(조금씩 응답). `disconnect`는 요청을 반영한 뒤 응답 연결을 닫아 응답 유실을 재현한다. Mock 서버는 별도 v1 검증기로 필드/숫자/null 관계를 검증하고, 순번·세션과 최근 100개 종료 세션을 처리한다. 이 검증은 실제 Dashboard 서버나 UI의 동작 검증을 대신하지 않는다.
+한 포트에는 서버 한 개만 실행한다. 추가 모드: `client_error`(422), `malformed`, `oversized`, `retired`, `drip`(조금씩 응답). `disconnect`는 요청을 반영한 뒤 응답 연결을 닫아 응답 유실을 재현한다. Mock 서버는 v1/v2 필드와 숫자/null 관계를 검증하고, 순번·세션과 최근 100개 종료 세션을 처리한다. 명령 요청·가져오기·claim·result API도 제공하지만, 실제 Dashboard 서버/UI 및 ROS 순찰 서비스 동작을 대신하지 않는다.
 
 ## 실제 ROS2 구독·성능 검증
 

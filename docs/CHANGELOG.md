@@ -8,6 +8,19 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-19 (37) Dashboard·Bridge README를 텔레메트리 v2·명령·지도 구현에 맞춤
+
+**할 일**
+- Bridge 빌드·실행 전 `limbo/install/setup.bash`를 먼저 source한다. 새 PC에서는 `limbo_interfaces`와 추가 ROS 의존성을 준비한다.
+
+**변경**
+- `dashboard/README.md`: 실제 화면의 pause/resume 조건, v2의 객체와 내부 null 구분, 명령 확인 기준 및 `service_unavailable` 의미를 정정. 명령·지도 API, 설정, 가상 송신기와 `validate_bridge.py` 검증 범위를 기록
+- `relay_prog/README.md`: v2 순찰 상태·위치 및 명령 경로, ROS 의존성과 source 순서 추가. Mock receiver가 v1/v2 텔레메트리와 Bridge 명령 API를 검증하지만 실제 순찰 서비스를 대체하지 않는다고 명시
+- 문서만 변경. Bridge·Dashboard 코드 동작은 변경하지 않음
+
+**확인**
+- Dashboard 모델·제어 로직·API, Bridge 직렬화·설정·Mock receiver와 대조해 설명을 확인
+
 ## 2026-10-19 (36) README: pull 뒤 재빌드·다른 브랜치 빌드 흔적 지우기 안내
 
 **할 일**
