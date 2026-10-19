@@ -8,6 +8,21 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-19 (37) dashboard·relay_prog README를 관제 기능(텔레메트리 v2·정지/재개·지도)에 맞게 갱신
+
+**할 일**
+- Bridge를 실행하거나 시험할 때 source 순서는 **Jazzy → `limbo/install/setup.bash` → `relay_prog/install/setup.bash`**. `limbo/`를 빠뜨리면 `ModuleNotFoundError: No module named 'limbo_interfaces'`
+- UI 시험·빌드는 Node.js 22 또는 24. Node 18에서는 `pnpm test`가 `crypto is not defined`로 실패
+
+**변경**
+- 코드 변경 없음. `dashboard/README.md`는 처음 추가(2026-10-06) 뒤 한 번도 고치지 않아 (24)~(29)·(32)의 관제 기능이 빠져 있었음
+- `dashboard/README.md`: 버튼 3개 항상 비활성 → 일시정지·순찰 재개 2개를 실제 제어로. 화면 구성(상태 한 줄 요약·순찰·지도·센서 수신 상세), 설정 `command_ttl_s`·`command_response_timeout_s`·`command_confirm_timeout_s`·`map_yaml`·`waypoints_yaml`, 상태 해석(순찰 카드·지도·버튼 잠금·명령 결과 단계), 명령 API 4개·지도 API 2개·스냅샷 새 필드. Bridge 실행·`validate_bridge.py` 명령에 `source limbo/install/setup.bash` 추가(없으면 Bridge가 안 뜸). 가상 송신기·`validate_bridge.py`는 v1 기준이라 순찰·위치·제어를 검증하지 않음을 적음
+- `relay_prog/README.md`: v2·명령 구현과 `limbo_interfaces` 의존을 소개에. "0. 먼저: `limbo/` 빌드", source 순서, 추가 ROS 패키지(`geometry_msgs`·`std_srvs`·`tf2_ros`), `control` 설정 표, Mock 서버로 명령 넣기, 자주 나는 오류 표
+
+**확인**
+- 문서 내용을 코드(`dashboard/server`, `dashboard/ui/src`, `bridge.yaml`)와 대조
+- 서버 시험 `dashboard/.venv/bin/python -m pytest -q` 58개 통과. UI 단위 시험 `pnpm test`는 Node 24.22.0에서 25개 통과
+
 ## 2026-10-19 (36) README: pull 뒤 재빌드·다른 브랜치 빌드 흔적 지우기 안내
 
 **할 일**

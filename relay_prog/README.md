@@ -1,6 +1,6 @@
 # LIMBO 상태 전달 Bridge
 
-[PRD의 공통 전송 계약 v1](docs/PRD.md)을 구현하는 독립 ROS2 Jazzy 워크스페이스다. 기존 `limbo/` launch나 코드를 수정하지 않는다. 네 구독 콜백은 헤더·수신 UTC·누적 횟수와 odom의 평면 선속도/각속도 숫자만 추출한다. 원본 `Image.data`/`PointCloud2.data`에 접근하거나 메시지를 추가 저장·변환·전송하지 않는다. ROS2 자체 수신·역직렬화 비용은 발생한다.
+[PRD의 공통 전송 계약 v1](docs/PRD.md)에 순찰 상태·위치를 더한 **텔레메트리 v2**와 관제 명령(정지·재개)을 구현하는 별도 ROS2 Jazzy 워크스페이스다. v2와 명령 계약은 [`../docs/CONTROL_API_DRAFT.md`](../docs/CONTROL_API_DRAFT.md)에 있다. 기존 `limbo/` launch나 코드를 수정하지 않는다. 다만 순찰 상태 메시지 `PatrolState`는 `limbo/`의 `limbo_interfaces` 패키지에 있으므로, **`limbo/`를 먼저 빌드하고 그 설치본을 source해야 Bridge가 실행된다.** 네 센서 구독 콜백은 헤더·수신 UTC·누적 횟수와 odom의 평면 선속도/각속도 숫자만 추출한다. 원본 `Image.data`/`PointCloud2.data`에 접근하거나 메시지를 추가 저장·변환·전송하지 않는다. ROS2 자체 수신·역직렬화 비용은 발생한다.
 
 > **`tools/receiver.py`는 실제 Server Program(Dashboard 서버)을 대신하는 테스트용 Mock 서버(Mockup)다.** 실제 서버가 준비되지 않아도 Bridge의 JSON 전송과 장애 복구를 검증할 수 있도록 제공한다. 운영용 서버나 Dashboard UI가 아니며, 실제 서버에 연결할 때는 실행하지 않는다.
 
@@ -8,8 +8,21 @@
 
 Ubuntu의 기존 ROS2 Jazzy와 시스템 Python 3.12를 사용한다. 아래 명령은 저장소 루트에서 시작한다. YOLO 가상환경을 활성화한 터미널이라면 먼저 `deactivate`한다.
 
+### 0. 먼저: `limbo/` 빌드 (`limbo_interfaces`)
+
+Bridge는 `limbo/src/limbo_interfaces`의 `PatrolState` 메시지를 쓴다. 이 패키지는 `relay_prog/` 안에 없다. 저장소 루트 [README](../README.md)의 "빌드"대로 `limbo/`를 빌드해 `limbo/install/limbo_interfaces/`가 생겼는지 확인한다. `limbo/`를 pull·재빌드해 메시지가 바뀌었다면 `relay_prog/`도 다시 빌드한다.
+
+```bash
+ls limbo/install/limbo_interfaces   # 저장소 루트 기준. 없으면 limbo/를 먼저 빌드
+```
+
+### 1. Bridge 빌드
+
+source 순서는 **Jazzy → `limbo/` 설치본 → `relay_prog/` 설치본**이다. `limbo/install/setup.bash`를 빠뜨리면 빌드는 되지만 실행할 때 `ModuleNotFoundError: No module named 'limbo_interfaces'`가 난다.
+
 ```bash
 source /opt/ros/jazzy/setup.bash
+source limbo/install/setup.bash
 cd relay_prog
 /usr/bin/python3 -m venv --system-site-packages venvs/bridge
 venvs/bridge/bin/python -m pip install -r requirements.txt
@@ -17,11 +30,12 @@ venvs/bridge/bin/python -m colcon build --symlink-install --base-paths src
 source install/setup.bash
 ```
 
-`rclpy`, `nav_msgs`, `sensor_msgs`, `rosgraph_msgs`, colcon은 기존 Jazzy 설치를 사용한다. 새 PC에서 빠진 도구는 다음으로 설치한다. 검증 도구만 `pytest`, `psutil`을 추가로 사용한다.
+`rclpy`, `nav_msgs`, `sensor_msgs`, `geometry_msgs`, `std_srvs`, `tf2_ros`, `rosgraph_msgs`, colcon은 기존 Jazzy 설치를 사용한다. 새 PC에서 빠진 도구는 다음으로 설치한다. 검증 도구만 `pytest`, `psutil`을 추가로 사용한다.
 
 ```bash
 sudo apt install python3-venv python3-colcon-common-extensions python3-pytest python3-psutil \
-  python3-yaml ros-jazzy-rclpy ros-jazzy-nav-msgs ros-jazzy-sensor-msgs ros-jazzy-rosgraph-msgs
+  python3-yaml ros-jazzy-rclpy ros-jazzy-nav-msgs ros-jazzy-sensor-msgs ros-jazzy-rosgraph-msgs \
+  ros-jazzy-geometry-msgs ros-jazzy-std-srvs ros-jazzy-tf2-ros
 ```
 
 빌드를 가상환경 Python으로 실행해야 설치된 `bridge` 실행 파일도 같은 Python과 HTTP 의존성을 사용한다. 기존 YOLO 환경에는 설치하지 않는다. 패키지 다운로드에는 인터넷 접속이 필요하다.
@@ -41,6 +55,7 @@ sudo apt install python3-venv python3-colcon-common-extensions python3-pytest py
 | `reliability` | `best_effort` 또는 `reliable` |
 | `durability` | `volatile` 또는 `transient_local` |
 | `depth` | Keep Last 깊이, 기본 1 |
+| `control.*` | 순찰 상태·위치 토픽, TF 프레임, 정지·재개 서비스, 명령 long poll 대기(`command_wait_s`, 기본 10초)와 서비스 응답 제한(`service_timeout_s`, 기본 3초). 아래 둘째 표 |
 
 | 키 | 기본 토픽 | 형식 |
 |---|---|---|
@@ -48,6 +63,17 @@ sudo apt install python3-venv python3-colcon-common-extensions python3-pytest py
 | lidar_raw | `/mid360/points` | `sensor_msgs/msg/PointCloud2` |
 | lidar_filtered | `/mid360/points_filtered` | `sensor_msgs/msg/PointCloud2` |
 | camera_raw | `/rgbd_camera/image` | `sensor_msgs/msg/Image` |
+
+v2 순찰 상태·위치와 명령에 쓰는 `control` 항목:
+
+| 키 | 기본값 | 형식 / 용도 |
+|---|---|---|
+| `patrol_state_topic` | `/patrol/state` | `limbo_interfaces/msg/PatrolState`, Reliable + Transient Local |
+| `pose_topic` | `/amcl_pose` | `geometry_msgs/msg/PoseWithCovarianceStamped`. 위치 불확실성만 사용 |
+| `map_frame` → `base_frame` | `map` → `base_footprint` | 위치·방향은 이 TF를 0.5초마다 읽는다 |
+| `pause_service`, `resume_service` | `/patrol/pause`, `/patrol/resume` | `std_srvs/srv/Trigger` |
+
+순찰 노드나 AMCL이 없어도 Bridge는 실행된다. 이때 `patrol`·`pose` 필드는 `null`로 보내고, 명령 결과는 `service_unavailable`이 된다.
 
 원본 토픽은 `../limbo/src/limbo_simulation/config/bridge.yaml`, 필터 출력은 `../limbo/src/limbo_bringup/launch/start_simulation.launch.py`에서 확인했다. 실제 발행자 QoS는 실행 시 확인한다. Best Effort 구독은 Reliable/Best Effort 발행자와 연결 가능하며, 반대 조합은 호환되지 않는다. [ROS2 QoS 문서](https://docs.ros.org/en/jazzy/Concepts/Intermediate/About-Quality-of-Service-Settings.html).
 
@@ -74,12 +100,26 @@ cd relay_prog  # 저장소 루트 기준
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-cd relay_prog  # 저장소 루트 기준
+source limbo/install/setup.bash   # 저장소 루트 기준. limbo_interfaces
+cd relay_prog
 source install/setup.bash
 ros2 run limbo_telemetry_bridge bridge --config src/limbo_telemetry_bridge/config/bridge.yaml
 ```
 
-ROS 메시지가 없어도 기본 주기인 1초마다 null/0 스냅샷을 전송한다. `curl http://127.0.0.1:8000/status`로 Mock 서버가 받은 최신 계약 JSON을 확인할 수 있다. `/status`는 이 Mock 서버의 검증용 기능이다.
+ROS 메시지가 없어도 기본 주기인 1초마다 null/0 스냅샷을 전송한다. `curl http://127.0.0.1:8000/status`로 Mock 서버가 받은 최신 계약 JSON과 명령 결과(`results`)를 확인할 수 있다. `/status`는 이 Mock 서버의 검증용 기능이다.
+
+Mock 서버에 명령을 넣으면 Bridge가 long poll로 받아 순찰 서비스를 한 번 부르고 결과를 보고한다.
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/commands -H 'Content-Type: application/json' -d '{"command":"pause"}'
+```
+
+### 자주 나는 오류
+
+| 증상 | 원인과 해결 |
+|---|---|
+| `ModuleNotFoundError: No module named 'limbo_interfaces'` | `limbo/install/setup.bash`를 source하지 않았다. 위 순서(Jazzy → `limbo/` → `relay_prog/`)로 새 터미널에서 다시 source한다. `limbo/install/limbo_interfaces/`가 없으면 `limbo/`부터 빌드한다 |
+| `ModuleNotFoundError: No module named 'aiohttp'` | 시스템 Python으로 빌드했다. `venvs/bridge/bin/python -m colcon build ...`로 다시 빌드한다 |
 
 ### 실제 Server Program에 연결
 
@@ -126,8 +166,9 @@ ros2 topic info /rgbd_camera/image -v --no-daemon
 이 절은 실제 Server Program 없이 Mock 서버로 Bridge를 검증하는 절차다. 아래 장애 모드는 `tools/receiver.py`의 테스트 기능이다.
 
 ```bash
-# relay_prog/에서 실행
+# relay_prog/에서 실행. ROS 어댑터 시험도 limbo_interfaces가 필요하다
 source /opt/ros/jazzy/setup.bash
+source ../limbo/install/setup.bash
 venvs/bridge/bin/python -m pytest tests -q
 
 # Mock 서버를 중지한 뒤 같은 포트에 원하는 장애 모드 하나로 다시 시작
@@ -143,7 +184,7 @@ venvs/bridge/bin/python -m pytest tests -q
 ## 실제 ROS2 구독·성능 검증
 
 ```bash
-# relay_prog/에서, Jazzy를 source한 상태
+# relay_prog/에서, Jazzy와 ../limbo/install/setup.bash를 source한 상태
 venvs/bridge/bin/python tools/validate_ros.py \
   --duration 600 --baseline 15 --domain 87 --output docs/ros_validation.json
 venvs/bridge/bin/python tools/analyze_validation.py docs/ros_validation.json \
