@@ -7,6 +7,12 @@ person_detector:
       classes: [0]          # 사람으로 볼 클래스 번호 (yolo11n은 0=person. 하반신 모델은 [0, 1] = person, leg)
       imgsz: 640            # 추론 입력 크기 px (yolo11n 640, 하반신 모델 512)
 
+    # 하반신 모델은 한 사람에 person·leg 박스를 같이 내므로 추적 전에 하나로 합친다 (yolo11n에는 leg가 없어 영향 없음)
+    merge:
+      leg_class: 1
+      leg_inside_ratio: 0.7 # leg 면적의 이 비율 이상이 person 박스 안이면 leg를 버림
+      leg_iou: 0.5          # person 없이 남은 leg끼리 IoU가 이 이상이면 큰 것만 남김
+
     sync:
       queue_size: 5
       slop: 0.03            # sec, RGB와 depth 시각 차이 허용
@@ -18,6 +24,8 @@ person_detector:
       min_depth: 0.1        # m
       max_depth: 5.0        # m
       percentile: 25.0      # 중앙 영역 depth 중 가까운 쪽 25% 값 (50이면 중앙값. 다리만 보일 때 배경을 잴 수 있음)
+      leg_roi_margin_x: 0.05  # leg 박스는 가로를 거의 다 씀 (두 다리가 양옆, 가운데는 다리 사이 틈)
+      leg_percentile: 10.0    # leg 박스는 더 가까운 쪽 값 (틈으로 보이는 배경을 잡지 않게)
 
     tracking:
       reassociate_max_age: 3.0        # sec

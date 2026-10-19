@@ -45,6 +45,7 @@ TF_WARN_PERIOD_SEC = 2.0
 class Detection:
     box: tuple  # (x1, y1, x2, y2) pixel
     raw_track_id: int
+    leg: bool = False  # 하반신 모델의 leg 클래스 박스
 
 
 @dataclass
@@ -128,6 +129,10 @@ class PersonDetector(Node):
         self.yolo_classes = list(p('yolo.classes', [0]).value)
         # 추론 입력 크기(px). 모델을 학습한 크기에 맞춘다 (yolo11n 640, 하반신 모델 512)
         self.yolo_imgsz = p('yolo.imgsz', 640).value
+        # 하반신 모델의 leg 클래스 번호와, 같은 사람의 person·leg 박스를 하나로 합치는 기준
+        self.leg_class = p('merge.leg_class', 1).value
+        self.leg_inside_ratio = p('merge.leg_inside_ratio', 0.7).value
+        self.leg_iou = p('merge.leg_iou', 0.5).value
 
         self.yolo_confidence = p('yolo.confidence', 0.3).value
         self.sync_queue_size = p('sync.queue_size', 5).value
@@ -140,6 +145,9 @@ class PersonDetector(Node):
             min_depth=p('depth.min_depth', d.min_depth).value,
             max_depth=p('depth.max_depth', d.max_depth).value,
             percentile=p('depth.percentile', d.percentile).value,
+            leg_roi_margin_x=p(
+                'depth.leg_roi_margin_x', d.leg_roi_margin_x).value,
+            leg_percentile=p('depth.leg_percentile', d.leg_percentile).value,
         )
 
         t = tracking.TrackerConfig()
@@ -244,7 +252,7 @@ class PersonDetector(Node):
         self.image_pub.publish(output_msg)
 
     def _detect(self, frame):
-        """YOLO + BoT-SORT 결과 중 track ID가 붙은 사람 box만 반환한다."""
+        """YOLO + BoT-SORT 결과 중 track ID가 붙은 사람 box만, 한 사람에 하나씩 반환한다."""
         result = self.model.track(
             source=frame,
             classes=self.yolo_classes,
@@ -260,19 +268,19 @@ class PersonDetector(Node):
             return []
 
         raw_track_ids = boxes.id.int().cpu().tolist()
-        detections = []
-        for box, raw_track_id in zip(boxes, raw_track_ids):
-            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-            detections.append(Detection(
-                (int(x1), int(y1), int(x2), int(y2)), raw_track_id))
-        return detections
+        classes = boxes.cls.int().cpu().tolist()
+        xyxy = [tuple(int(v) for v in b) for b in boxes.xyxy.cpu().numpy()]
+        kept = geometry.merge_leg_boxes(
+            xyxy, classes, self.leg_class, self.leg_inside_ratio, self.leg_iou)
+        return [Detection(xyxy[i], raw_track_ids[i],
+                          leg=classes[i] == self.leg_class) for i in kept]
 
     def _process_detection(self, detection, depth_image, stamp, current_time,
                            robot_xy, matched_person_ids):
         """Depth → 3D → odom → Kalman → 움직임/의도/예측. depth가 없으면 None."""
         x1, y1, x2, y2 = detection.box
         depth = geometry.person_depth(
-            depth_image, x1, y1, x2, y2, self.depth_config)
+            depth_image, x1, y1, x2, y2, self.depth_config, leg=detection.leg)
         if depth is None:
             return None
 

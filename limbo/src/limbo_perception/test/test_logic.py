@@ -155,3 +155,62 @@ def test_person_depth_full_body_is_unchanged():
     config = geometry.DepthConfig()
 
     assert abs(geometry.person_depth(depth, 25, 10, 75, 95, config) - 2.0) < 0.05
+
+
+LEG = 1
+
+
+def _merge(boxes, classes):
+    return geometry.merge_leg_boxes(
+        boxes, classes, leg_class=LEG, leg_inside_ratio=0.7, leg_iou=0.5)
+
+
+def test_merge_drops_leg_box_inside_person_box():
+    # 하반신 모델이 한 사람에 person(전신)과 leg(하반신)를 같이 냄 → person 하나만
+    person = (100, 50, 200, 400)
+    leg = (105, 250, 195, 400)
+    assert _merge([leg, person], [LEG, 0]) == [1]
+
+
+def test_merge_keeps_leg_box_without_person():
+    # 가까워서 다리만 보임 → leg를 사람으로 씀. 같은 다리에 겹친 leg 박스는 큰 것만
+    big = (100, 200, 220, 470)
+    small = (110, 210, 215, 460)
+    assert _merge([small, big], [LEG, LEG]) == [1]
+
+
+def test_merge_keeps_two_separate_people():
+    # 떨어진 두 사람: 한 사람은 person, 다른 사람은 leg만 → 둘 다 남음
+    person = (50, 50, 150, 400)
+    other_leg = (400, 250, 500, 470)
+    assert _merge([person, other_leg], [0, LEG]) == [0, 1]
+
+
+def test_merge_keeps_leg_only_partly_inside_person():
+    # 앞사람 person 박스에 뒷사람 다리가 조금만 걸침 → 다른 사람이라 남김
+    person = (100, 50, 200, 400)
+    leg = (180, 250, 280, 400)  # 면적의 20%만 person 안
+    assert _merge([person, leg], [0, LEG]) == [0, 1]
+
+
+def test_person_depth_leg_box_ignores_gap_between_legs():
+    # 두 다리를 감싼 leg 박스: 양옆 1/3은 다리(1.0 m), 가운데 1/3은 다리 사이로 보이는 벽(4.0 m)
+    depth = np.full((100, 90), 4.0, dtype=np.float32)
+    depth[:, 0:30] = 1.0
+    depth[:, 60:90] = 1.0
+    config = geometry.DepthConfig()
+
+    leg = geometry.person_depth(depth, 0, 0, 90, 100, config, leg=True)
+    assert abs(leg - 1.0) < 0.01
+    # 종전 방식(가운데 40%)이면 벽 거리를 잰다
+    assert geometry.person_depth(depth, 0, 0, 90, 100, config) > 3.0
+
+
+def test_person_depth_single_leg_box_measures_the_leg():
+    # 다리 하나만 감싼 박스: 다리가 가운데, 양 끝에 배경이 조금
+    depth = np.full((100, 40), 4.0, dtype=np.float32)
+    depth[:, 5:35] = 1.2
+    config = geometry.DepthConfig()
+
+    leg = geometry.person_depth(depth, 0, 0, 40, 100, config, leg=True)
+    assert abs(leg - 1.2) < 0.01
