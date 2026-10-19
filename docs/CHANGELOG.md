@@ -10,6 +10,24 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-19 (117) 하반신 검출 모델(leg_512) 적용 준비: 클래스·입력 크기 파라미터, 박스 합치기, leg 깊이 샘플링, 시뮬 비교 2차
+
+**할 일**
+- `limbo_perception` 빌드는 venv를 켠 `python -m colcon build --symlink-install`로(시스템 colcon이면 ultralytics를 못 찾아 노드가 죽음)
+- 기본 모델은 아직 yolo11n. 하반신 모델은 `person_model:=<limbo_perception/models/leg_512.pt 절대 경로>` + `yolo.classes: [0, 1]`, `yolo.imgsz: 512`
+
+**변경**
+- `person_detector.py`: 고정 클래스 0을 `yolo.classes`(기본 [0])·`yolo.imgsz`(기본 640) 파라미터로. 시작 시 모델 경로·클래스 로그
+- `geometry.merge_leg_boxes`: 같은 프레임에서 leg 박스가 person 박스 안에 70 % 이상 들어가면 버리고, leg끼리 IoU 0.5 이상이면 큰 것만. 추적기에 넣기 전에 적용(한 사람이 둘로 갈리던 문제)
+- leg 박스 깊이: 가로 여백 5 %·percentile 10(`depth.leg_roi_margin_x`, `depth.leg_percentile`). person 박스는 종전대로
+- `models/leg_512.pt`(팀원 학습, 5.4 MB) 설치. 단위 시험 6개 추가. 실험 기록 `experiments/2026-10-19_leg_model/`(rec.py·ana.py·err.py·run.sh)
+- `aischool_2f_social_movers.json`: 비켜 주는 사람 반환점 (−6.0, 10.1) → (−5.0, 10.1). 로봇 2구간 출발 자리에서 0.57 m라 사람이 로봇 앞에 영영 서 있던 시험 쪽 결함
+- `docs/PROJECT.md` 2-7(초안): 사람 기다리기를 "사람 트랙"만으로 결정하는 상태 기계 설계. 팀 합의 전
+
+**확인**
+- 손님·복도 × 2회, 카메라 0.60 m·0°. 1.5 m 안 검출 기존 0~49 % → 73~100 %, 멈춘 손님 0 → 62~80 %. 2차에서 한 사람에 예측 2개 이상 22~97 % → 0~5 %, ID 바뀜 20~115 → 1~37(기존 수준). 위치 오차 중앙값 0.22~0.26 m는 몸 앞면을 재서 카메라 쪽으로 일정하게 치우친 것(안전한 방향, 사람 반경 보정 후보). 추론 3.7 → 4.0 ms
+- 손님 주행 3/4·1/4는 손님이 보이니 멈춘 뒤 끝낼 조건이 없어서(2-7 몫). 복도 3/3·2/3, 충돌 0
+
 ## 2026-10-15 (116) 하드웨어 최종 치수 반영: 라이다 0.70 m(몸체 높이 0.609)·카메라 0.60 m
 
 **할 일**
