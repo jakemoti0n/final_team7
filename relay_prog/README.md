@@ -6,10 +6,14 @@
 
 ## 설치와 빌드
 
-Ubuntu의 기존 ROS2 Jazzy와 시스템 Python 3.12를 사용한다. 아래 명령은 저장소 루트에서 시작한다. YOLO 가상환경을 활성화한 터미널이라면 먼저 `deactivate`한다.
+Ubuntu의 기존 ROS2 Jazzy와 시스템 Python 3.12를 사용한다. 아래 명령은 저장소 루트에서 시작한다. YOLO 가상환경을 활성화한 터미널이라면 먼저 `deactivate`한다. Bridge는 같은 저장소의 `limbo_interfaces/PatrolState` 메시지를 사용하므로 먼저 해당 인터페이스를 빌드하고 `limbo/install/setup.bash`를 source해야 한다.
 
 ```bash
 source /opt/ros/jazzy/setup.bash
+cd limbo
+/usr/bin/python3 -m colcon build --symlink-install --base-paths src --packages-select limbo_interfaces
+source install/setup.bash
+cd ..
 cd relay_prog
 /usr/bin/python3 -m venv --system-site-packages venvs/bridge
 venvs/bridge/bin/python -m pip install -r requirements.txt
@@ -17,11 +21,12 @@ venvs/bridge/bin/python -m colcon build --symlink-install --base-paths src
 source install/setup.bash
 ```
 
-`rclpy`, `nav_msgs`, `sensor_msgs`, `rosgraph_msgs`, colcon은 기존 Jazzy 설치를 사용한다. 새 PC에서 빠진 도구는 다음으로 설치한다. 검증 도구만 `pytest`, `psutil`을 추가로 사용한다.
+`rclpy`와 ROS 메시지·TF 패키지, colcon은 기존 Jazzy 설치를 사용한다. 새 PC에서 빠진 도구는 다음으로 설치한다. 검증 도구만 `pytest`, `psutil`을 추가로 사용한다.
 
 ```bash
 sudo apt install python3-venv python3-colcon-common-extensions python3-pytest python3-psutil \
-  python3-yaml ros-jazzy-rclpy ros-jazzy-nav-msgs ros-jazzy-sensor-msgs ros-jazzy-rosgraph-msgs
+  python3-yaml ros-jazzy-rclpy ros-jazzy-nav-msgs ros-jazzy-sensor-msgs ros-jazzy-rosgraph-msgs \
+  ros-jazzy-geometry-msgs ros-jazzy-std-srvs ros-jazzy-tf2-ros
 ```
 
 빌드를 가상환경 Python으로 실행해야 설치된 `bridge` 실행 파일도 같은 Python과 HTTP 의존성을 사용한다. 기존 YOLO 환경에는 설치하지 않는다. 패키지 다운로드에는 인터넷 접속이 필요하다.
@@ -74,6 +79,7 @@ cd relay_prog  # 저장소 루트 기준
 
 ```bash
 source /opt/ros/jazzy/setup.bash
+source limbo/install/setup.bash  # 저장소 루트 기준
 cd relay_prog  # 저장소 루트 기준
 source install/setup.bash
 ros2 run limbo_telemetry_bridge bridge --config src/limbo_telemetry_bridge/config/bridge.yaml

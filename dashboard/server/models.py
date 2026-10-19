@@ -207,6 +207,8 @@ class Settings(StrictModel):
     # 지도·waypoint 파일 (저장소 루트 기준 상대경로 또는 절대경로). 없으면 지도 API가 404
     map_yaml: str | None = None
     waypoints_yaml: str | None = None
+    patrol_ros_domain_id: Annotated[int, Field(ge=0, le=232)] | None = None
+    patrol_use_sim_time: bool = True
 
     @model_validator(mode="after")
     def ordered(self):

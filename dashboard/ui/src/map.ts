@@ -6,6 +6,10 @@ export interface MapInfo { resolution: number; origin: number[]; width: number; 
 export function toPixel(map: MapInfo, x: number, y: number): [number, number] {
   return [(x - map.origin[0]) / map.resolution, map.height - (y - map.origin[1]) / map.resolution]
 }
+/** 그림 픽셀 → ROS 지도 좌표(m). */
+export function fromPixel(map: MapInfo, px: number, py: number): [number, number] {
+  return [map.origin[0] + px * map.resolution, map.origin[1] + (map.height - py) * map.resolution]
+}
 /** SVG rotate()는 시계 방향(도). ROS yaw는 반시계(라디안) */
 export function headingDeg(yaw: number) { return -yaw * 180 / Math.PI }
 /** 불확실성 원 반지름(픽셀): 표준편차의 2배(약 95%) */

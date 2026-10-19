@@ -57,7 +57,7 @@ class FakeNavigator:
 @pytest.fixture
 def control(monkeypatch):
     rclpy.init()
-    monkeypatch.setattr(patrol_node, 'wait_for_localization', lambda navigator: None)
+    monkeypatch.setattr(patrol_node, 'wait_for_localization', lambda navigator, **kwargs: None)
     node = patrol_node.PatrolControl([w['name'] for w in WAYPOINTS])
     yield node
     node.destroy_node()
@@ -117,3 +117,27 @@ def test_pause_during_retry_wait_pauses_by_request(control):
     control.on_resume(Trigger.Request(), Trigger.Response())
     thread.join(5)
     assert control.state == PatrolState.COMPLETED
+
+
+def test_termination_cancels_nav2_goal_before_exiting(control):
+    stop_requested = threading.Event()
+
+    class StoppedNavigator(FakeNavigator):
+        def __init__(self):
+            super().__init__([(TaskResult.CANCELED, None)])
+            self.canceled = False
+
+        def isTaskComplete(self):
+            if not stop_requested.is_set():
+                stop_requested.set()
+                return False
+            return self.canceled
+
+        def cancelTask(self):
+            self.canceled = True
+
+    navigator = StoppedNavigator()
+    patrol_node.patrol(navigator, control, WAYPOINTS, stop_requested=stop_requested)
+    assert navigator.canceled
+    assert len(navigator.routes) == 1
+    assert control.state == PatrolState.FAILED

@@ -2,9 +2,9 @@
 
 FastAPI 수신 서버와 React/TypeScript 운영 UI. 구현 기준은 [Dashboard PRD](docs/PRD.md), 수신 계약의 단일 기준은 [Bridge PRD §3](../relay_prog/docs/PRD.md)다. 기존 `limbo/`, `relay_prog/` 프로그램을 수정하지 않는다.
 
-- `/`: 실제 수신 화면. 세 제어 버튼은 항상 비활성화되며 실제 제어 API는 없다.
+- `/`: 실제 수신 화면. 순찰 상태에 따라 주행 시작·정지·재개가 한 버튼에 나타나며 waypoint 편집을 지원한다.
 - `/demo`: 독립 Mock 공급자. 실제 서버 API/WebSocket에 접속하지 않는다. 가상 데이터·알림·명령 결과는 이 페이지의 메모리에만 존재한다.
-- 서버는 ROS2 설치 없이 실행된다. 한 로봇, 단일 프로세스, 메모리 최신 상태 및 최근 알림 100건을 지원한다. 서버 재시작 시 초기화되며 브라우저 새로고침은 서버 이력을 지우지 않는다.
+- 서버 자체는 ROS2 Python 패키지를 가져오지 않는다. 주행 시작을 사용하려면 ROS 2 Jazzy와 빌드된 `limbo_patrol`, Bridge가 필요하다. 한 로봇, 단일 프로세스, 메모리 최신 상태 및 최근 알림 100건을 지원한다. 서버 재시작 시 관제 상태가 초기화되며 브라우저 새로고침은 서버 이력을 지우지 않는다.
 
 ## 명령 실행 디렉터리
 
@@ -17,6 +17,8 @@ FastAPI 수신 서버와 React/TypeScript 운영 UI. 구현 기준은 [Dashboard
 | UI 설치·빌드·개발 서버 · UI 단위 테스트 · 브라우저 테스트 | `/home/itkwon/limbo_ros2_workspace/final_team7/dashboard/ui` |
 
 **각 명령 블록의 첫 `cd`부터 실행한다.** 따라서 새 터미널을 어느 디렉터리에서 열었든 같은 순서로 실행할 수 있다. 터미널마다 현재 디렉터리는 독립적이므로, 다른 터미널에서 수행한 `cd`는 적용되지 않는다. 다른 PC에 복제했다면 아래 명령의 `/home/itkwon/limbo_ros2_workspace/final_team7` 부분을 해당 PC의 저장소 절대 경로로 바꾼다.
+
+예를 들어 저장소가 `/home/david/limbo`에 있다면 위 경로를 모두 `/home/david/limbo`로 바꾼다. `node --version`이 22 또는 24인지 확인한 다음 UI 명령을 실행한다. 기존 Node 18에서는 이 UI의 설치·빌드를 진행하지 않는다.
 
 ## 설치
 
@@ -69,6 +71,24 @@ corepack pnpm dev
 ```
 
 개발 UI는 <http://127.0.0.1:5173/>. Vite가 `/api` HTTP/WebSocket과 `/healthz`를 8000으로 프록시한다. 양쪽 터미널에서 `Ctrl+C`로 종료한다. 서버 포트를 바꾸면 개발 프록시의 대상도 `ui/vite.config.ts`에서 맞춘다.
+
+## 주행 시작·정지·재개·종료
+
+실제 화면의 제어 버튼은 Bridge가 보고한 순찰 상태에 따라 **주행 시작 → 주행 정지 → 주행 재개**로 바뀐다. 정지는 기존 `/patrol/pause` 서비스를 이용하는 **일시정지**이며 노드를 종료하지 않는다. 재개는 `/patrol/resume`으로 현재 순찰을 이어 간다. 시작은 Dashboard 서버가 설치된 `limbo_patrol`의 `patrol_node` 실행 파일을 직접 실행한다. 시작 요청은 Bridge 연결과 순찰 상태를 확인하며, 기존 `patrol_node` 프로세스가 있으면 중복 실행을 거부한다.
+
+Dashboard 시작은 `waypoints_yaml`의 **절대 경로**를 `waypoints` ROS 파라미터로 전달하므로 화면에서 편집한 바로 그 파일을 읽는다. 기본 `config.json`의 `patrol_ros_domain_id`는 이 작업 환경의 `97`이고 `patrol_use_sim_time`은 `true`다. 다른 도메인이나 실제 로봇을 쓰면 이 설정을 맞춘 뒤 Dashboard 서버를 다시 시작한다. ROS 환경은 `/opt/ros/jazzy/setup.bash`와 `limbo/install/setup.bash`에서 읽는다. 시작 로그 경로는 `/api/v1/patrol/start` 응답에 들어간다. Dashboard 서버를 재시작해도 이미 시작한 순찰 노드는 계속 실행되며 Bridge 상태를 다시 읽어 주행 버튼을 결정한다. **순찰 종료** 버튼은 Dashboard가 현재 서버 실행 중에 시작한 노드에 SIGTERM을 보낸다. 순찰 노드는 진행 중인 Nav2 목표를 취소하고 취소 결과를 받은 뒤 종료한다. 실제 노드가 종료된 것을 확인하면 주행 버튼이 다시 **주행 시작**으로 바뀌며, Bridge에 오래된 순찰 상태가 남아 있어도 새 노드를 시작할 수 있다. 별도 터미널에서 시작한 노드나 서버 재시작 전에 시작한 노드는 이 버튼의 종료 대상이 아니다. 주행 정지는 일시정지, 순찰 종료는 노드 종료다.
+
+일반 터미널에서 `ros2 run limbo_patrol patrol_node`를 파라미터 없이 실행하면 설치된 패키지의 `test_waypoints.yaml`을 읽는다. 현재 환경에서는 설치 파일이 원본 YAML의 별도 사본이므로 Dashboard의 변경이 그 수동 실행에는 자동으로 반영되지 않는다. 수동 실행에서도 편집한 경로를 쓰려면 `-p waypoints:=/home/david/limbo/limbo/src/limbo_patrol/config/test_waypoints.yaml`처럼 파일의 절대 경로를 지정한다.
+
+## Waypoint 지도 편집
+
+실제 화면(`/`)에서 주행 제어 버튼과 순찰 종료 버튼 아래의 Waypoint 목록을 조회하고 `새 지점 만들기`, `이름 변경`, `위치 교체`, `삭제`를 사용할 수 있다. 목록의 ⋮⋮ 손잡이를 다른 행으로 끌어 놓으면 순서가 바뀐다. 마지막 지점은 `stop`이어야 하므로 이를 어기는 순서 변경은 저장하지 않는다. 추가하거나 위치를 바꿀 때 지도를 클릭하여 좌표를 고른다. 저장하면 `config.json`의 `waypoints_yaml` 파일에 반영되고 목록과 지도도 갱신된다. 기본 설정은 `limbo/src/limbo_patrol/config/test_waypoints.yaml`이다. 다른 월드 또는 순찰 파일을 쓸 때는 `map_yaml`과 `waypoints_yaml`을 실제 실행 설정에 맞추고 Dashboard 서버를 다시 시작해야 한다.
+
+순찰 노드는 시작할 때 waypoint 파일을 한 번 읽어 메모리에 보관한다. 주행 중과 일시정지 중에는 waypoint 추가·이름 변경·위치 교체·삭제·순서 변경을 사용할 수 없고, 버튼에 마우스를 올리면 "주행 완료 후 변경 가능합니다"가 표시된다. 저장 API도 해당 상태의 변경을 거절한다. 순찰이 완료되거나 노드가 종료된 뒤 편집한 경로는 다음 순찰 시작 시 적용된다. 파일은 저장 중 문제가 생겨도 기존 내용을 지키도록 원자적으로 교체한다. 다른 편집자가 먼저 파일을 바꾸면 저장 요청이 거절되고 화면의 목록을 다시 불러온다. 마지막 지점은 `stop`이어야 하므로 마지막 정지 지점을 바로 삭제할 수 없다. 새 `pass` 지점은 마지막 정지 지점 앞에 삽입된다. 새 지점의 `yaw`와 `wait_sec`는 0으로 저장하고, 기존 지점을 이동할 때 기존 값은 유지한다.
+
+API: `GET /api/v1/waypoints`로 목록과 `revision`을 읽고, `PUT /api/v1/waypoints`에 `revision` 및 변경 작업을 보낸다. 작업은 `add`(`waypoint`의 `name/type/x/y`), `move`(`name/x/y`), `delete`(`name`), `rename`(`name/new_name`), `reorder`(`order`에 현재 이름 전체를 원하는 순서로 지정)다. `GET /api/v1/map`도 저장된 목록을 다시 읽는다.
+
+`/demo`에서는 같은 조작을 시연할 수 있다. 데모 변경은 브라우저 메모리에만 유지되며 새로고침하면 초기화된다. 실제 YAML은 수정하지 않는다.
 
 ## 설정과 상태 해석
 
@@ -195,6 +215,7 @@ E2E는 테스트용 FastAPI를 127.0.0.1:8017에서 자동 실행한다. 기존 
 ```bash
 cd /home/itkwon/limbo_ros2_workspace/final_team7
 source /opt/ros/jazzy/setup.bash
+source limbo/install/setup.bash
 source relay_prog/install/setup.bash
 ros2 run limbo_telemetry_bridge bridge --config relay_prog/src/limbo_telemetry_bridge/config/bridge.yaml
 ```
@@ -206,6 +227,7 @@ ros2 run limbo_telemetry_bridge bridge --config relay_prog/src/limbo_telemetry_b
 ```bash
 cd /home/itkwon/limbo_ros2_workspace/final_team7
 source /opt/ros/jazzy/setup.bash
+source limbo/install/setup.bash
 PYTHONDONTWRITEBYTECODE=1 CHROME_PATH=/opt/google/chrome/chrome \
   relay_prog/venvs/bridge/bin/python dashboard/tools/validate_bridge.py --domain 91
 ```
