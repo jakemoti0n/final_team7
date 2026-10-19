@@ -52,6 +52,12 @@ build_limbo
 
 → 1~2분 뒤 `~/limbo/limbo/install/`이 생긴다. 빌드는 **반드시 `build_limbo`**로 (venv의 python이라야 YOLO를 찾는다).
 
+**pull 받은 뒤에는 매번 `build_limbo`를 다시 한다.** 로봇 모델(URDF)·인지·BT 파일은 설치본을 읽기 때문에, 빌드를 안 하면 옛 코드로 돈다. 다른 브랜치를 빌드한 적이 있으면 그 브랜치에만 있던 패키지 흔적이 남아 `package '…' not found`로 실행이 막힐 수 있다. 그때는 아래처럼 지우고 다시 빌드한다.
+
+```bash
+cd ~/limbo/limbo && rm -rf build/<그 패키지> install/<그 패키지> && build_limbo
+```
+
 ### 3. 시뮬레이션 띄우기
 
 ```bash
@@ -126,6 +132,7 @@ ros2 launch limbo_bringup start_simulation.launch.py record:=true
 1. [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)에서 증상으로 찾는다 (Goal을 찍어도 안 움직임, RViz 흰 덩어리, 빌드 실패 등).
 2. [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)에 있으면 아직 못 고친 문제다.
 3. pull 받은 직후라면 [docs/CHANGELOG.md](docs/CHANGELOG.md) 맨 위 "할 일"을 했는지 확인한다 (빌드 필요 여부 등).
+4. 내 코드가 최신인지 본다: `git log -1 --oneline`이 [docs/CHANGELOG.md](docs/CHANGELOG.md) 맨 위 항목의 날짜·내용과 맞아야 한다. 안 맞으면 `git pull` 뒤 `build_limbo`.
 
 ---
 
