@@ -1,0 +1,18 @@
+라벨|구간|결과|시간 s|사람 최소 m|충돌|장애물 최소 m|WAITING 진입|대기 최대 s|경보|spin/backup(상태)|FrontStop s|대기 중 종료
+pw_guest_2|홀 서쪽|SUCCEEDED|19.3|0.67|0|0.75|in_zone1|1.2|0|0/0|0.0|
+pw_guest_2|출발점|SUCCEEDED|10.2|1.06|0|0.8|0|0.0|0|0/0|0.0|
+pw_guest_2|홀 서쪽|SUCCEEDED|23.4|0.62|0|0.75|0|0.0|0|0/0|0.1|
+pw_guest_2|출발점|SUCCEEDED|10.0|1.06|0|0.8|0|0.0|0|0/0|0.0|
+pw_guest_3|홀 서쪽|SUCCEEDED|29.8|0.78|0|0.74|approaching2 in_zone1|2.7|0|0/0|5.4|
+pw_guest_3|출발점|SUCCEEDED|10.2|1.07|0|0.8|0|0.0|0|0/0|0.0|
+pw_guest_3|홀 서쪽|SUCCEEDED|25.2|0.74|0|0.75|approaching1|0.7|0|0/0|6.2|
+pw_guest_3|출발점|SUCCEEDED|10.2|1.06|0|0.8|0|0.0|0|0/0|0.0|
+pw_stand_1|왼쪽 복도 위쪽 끝|SUCCEEDED|31.8|4.26|0|0.15|0|0.0|0|0/0|0.0|
+pw_stand_1|위쪽 복도 동쪽|SUCCEEDED|33.2|0.59|0|7.68|approaching1|0.8|0|0/0|11.6|
+pw_stand_1|왼쪽 복도 위쪽 끝|SUCCEEDED|37.5|0.54|0|7.55|approaching1|1.0|0|0/0|10.9|
+pw_stand_2|왼쪽 복도 위쪽 끝|SUCCEEDED|30.7|4.27|0|0.26|0|0.0|0|0/0|0.0|
+pw_stand_2|위쪽 복도 동쪽|SUCCEEDED|33.6|0.57|0|7.66|approaching1|11.1|0|0/0|12.0|
+pw_stand_2|왼쪽 복도 위쪽 끝|CANCELED|120.0|6.19|0|9.46|0|0.0|0|2/1 (DRIVING3)|118.4|
+pw_stand_3|왼쪽 복도 위쪽 끝|SUCCEEDED|34.2|4.27|0|0.27|0|0.0|0|0/0|0.0|
+pw_stand_3|위쪽 복도 동쪽|SUCCEEDED|32.7|0.55|0|7.67|approaching1|10.7|0|0/0|11.2|
+pw_stand_3|왼쪽 복도 위쪽 끝|SUCCEEDED|39.9|0.51|0|7.61|approaching1|10.7|0|0/0|10.9|
