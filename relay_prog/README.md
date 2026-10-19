@@ -73,7 +73,7 @@ v2 순찰 상태·위치와 명령에 쓰는 `control` 항목:
 | `map_frame` → `base_frame` | `map` → `base_footprint` | 위치·방향은 이 TF를 0.5초마다 읽는다 |
 | `pause_service`, `resume_service` | `/patrol/pause`, `/patrol/resume` | `std_srvs/srv/Trigger` |
 
-순찰 노드나 AMCL이 없어도 Bridge는 실행된다. 이때 `patrol`·`pose` 필드는 `null`로 보내고, 명령 결과는 `service_unavailable`이 된다.
+순찰 노드나 AMCL이 없어도 Bridge는 실행된다. v2의 `patrol`·`pose`는 객체 자체가 `null`이 되지 않는다. 순찰 상태를 한 번도 받지 못했다면 `patrol.update_count`는 0이고 나머지 내부 필드는 `null`이며, 위치를 한 번도 얻지 못했다면 `pose`의 내부 필드는 모두 `null`이다. 해당 순찰 서비스를 사용할 수 없을 때 명령 결과는 `service_unavailable`이 된다.
 
 원본 토픽은 `../limbo/src/limbo_simulation/config/bridge.yaml`, 필터 출력은 `../limbo/src/limbo_bringup/launch/start_simulation.launch.py`에서 확인했다. 실제 발행자 QoS는 실행 시 확인한다. Best Effort 구독은 Reliable/Best Effort 발행자와 연결 가능하며, 반대 조합은 호환되지 않는다. [ROS2 QoS 문서](https://docs.ros.org/en/jazzy/Concepts/Intermediate/About-Quality-of-Service-Settings.html).
 
