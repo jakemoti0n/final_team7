@@ -5,8 +5,9 @@
 - 사람 트랙: /person_detector/predictions(odom 기준) → 범퍼 앞 기준 위치·로봇 축 속도
   (geometry.tracks_ahead_of_bumper)
 - 준비: /map 수신 + map→base_link TF가 ready_hold_sec 동안 끊김 없이 조회됨 + 트랙 메시지가 한 번 이상 옴
+- ToF: /tof/obstacle_ahead. 트랙이 끊긴 코앞 손님을 이어 기다릴 때만 쓴다(ToF만으로 기다리기를 시작하지 않음)
 - 비켜서기(R6): /pull_over/available·/pull_over/done (R6가 붙기 전에는 아무도 안 내므로 늘 거짓)
-ToF·라이다 점은 넣지 않는다. 사람인지 모르는 장애물 신호라 Nav2(costmap·collision_monitor) 몫이다.
+라이다 점은 넣지 않는다. 사람인지 모르는 장애물 신호라 Nav2(costmap·collision_monitor) 몫이다.
 BT 조건 IsWaitingForPerson이 /person_wait의 wait만 본다.
 """
 
@@ -54,9 +55,13 @@ class PersonWaitNode(Node):
             approach_range=p('approach_range', 3.0).value,
             cpa_radius=p('cpa_radius', 0.6).value,
             min_speed=p('min_speed', 0.2).value,
+            moving_speed=p('moving_speed', 0.3).value,
+            moving_hold_sec=p('moving_hold_sec', 1.0).value,
             release_sec=p('release_sec', 0.5).value,
             service_sec=p('service_sec', 15.0).value,
-            alarm_period_sec=p('alarm_period_sec', 30.0).value))
+            alarm_period_sec=p('alarm_period_sec', 30.0).value,
+            recent_track_sec=p('recent_track_sec', 3.0).value,
+            track_lost_range=p('track_lost_range', 1.0).value))
         self.base_frame = p('base_frame', 'base_link').value
         self.map_frame = p('map_frame', 'map').value
         self.bumper_frame = p('bumper_frame', 'tof_link').value
@@ -72,6 +77,7 @@ class PersonWaitNode(Node):
         self.tracks_wall = None       # 마지막 트랙 메시지를 받은 벽시계
         self.clock = None             # (메시지 시각, 받은 벽시계): 상태 기계 시각의 기준
         self.last_t = None
+        self.tof = (False, None)       # (/tof/obstacle_ahead, 받은 벽시계)
         self.pull_over_available = False
         self.pull_over_done = False
         self.logged = 0
@@ -87,6 +93,8 @@ class PersonWaitNode(Node):
         self.create_subscription(
             PersonPredictionArray, p('predictions_topic', '/person_detector/predictions').value,
             self.on_predictions, 10)
+        self.create_subscription(
+            Bool, p('tof_topic', '/tof/obstacle_ahead').value, self.on_tof, 10)
         self.create_subscription(Bool, '/pull_over/available', self.on_pull_over_available, 10)
         self.create_subscription(Bool, '/pull_over/done', self.on_pull_over_done, 10)
 
@@ -94,6 +102,9 @@ class PersonWaitNode(Node):
         if not self.map_received:
             self.get_logger().info(f'map {msg.info.width}x{msg.info.height} received')
         self.map_received = True
+
+    def on_tof(self, msg):
+        self.tof = (msg.data, time.monotonic())
 
     def on_pull_over_available(self, msg):
         self.pull_over_available = msg.data
@@ -158,8 +169,11 @@ class PersonWaitNode(Node):
         fresh = self.tracks_wall is not None and wall - self.tracks_wall <= self.tracks_timeout_sec
         tracks = self.tracks if fresh else []
         t = self.now(wall)
+        tof_blocked, tof_wall = self.tof
+        tof_fresh = tof_wall is not None and wall - tof_wall <= self.tracks_timeout_sec
+        tof_blocked = tof_blocked and tof_fresh
         status = self.machine.on_tick(
-            t, tracks, ready, self.pull_over_available, self.pull_over_done)
+            t, tracks, ready, self.pull_over_available, self.pull_over_done, tof_blocked)
         self.log_changes(status, tracks)
         self.publish(t, status)
 

@@ -778,14 +778,18 @@ collision_monitor:
     stop_pub_timeout: 2.0
     # Polygons represent zone around the robot for "stop", "slowdown" and "limit" action types,
     # and robot footprint for "approach" action type.
-    # FrontStop: 코앞 안전 정지. 범퍼(x 0.25, 차체 앞면 0.245) 앞 0.3 m × 로봇 폭 안에 점이 min_points 넘게 있으면 속도 0.
+    # FrontStop: 코앞 안전 정지. 범퍼(x 0.25, 차체 앞면 0.245) 앞 0.3 m × 로봇 폭 안에 점이 min_points 넘게 있으면 전진(과 후진) 0.
+    # 회전은 angular_limit까지 둔다: "stop"(회전까지 0)은 복도 끝 벽을 마주 본 채 돌아서야 하는 목표에서 제자리 회전과
+    # spin 복구까지 막아 120 s 갇혔다(experiments/2026-10-19_person_wait, 앞에 서는 사람 2회차 3구간)
     # 사람인지 따지지 않는다(설계 2-7: "ToF가 사람을 잡는" 자리는 여기다. 기다리기 판단은 person_wait의 사람 트랙만).
     # 0.3 m는 손님이 서는 자리(HumanLayer로 앞면에서 0.3~0.4 m, tof.yaml stop_distance 근거)보다 안쪽이라 평소 손님 앞 정지는
     # 상태 기계가 먼저 하고, 이것은 그보다 가까이 들어온 것(갑자기 끼어든 사람·상자)만 막는다
     polygons: ["FrontStop", "FootprintApproach"]
     FrontStop:
       type: "polygon"
-      action_type: "stop"
+      action_type: "limit"
+      linear_limit: 0.0
+      angular_limit: 1.0  # rad/s, spin 복구 기본 속도. 제자리 회전 때 앞 모서리는 범퍼 선에서 0.14 m 더 나온다(외접 반경 0.39)
       points: "[[0.55, 0.30], [0.55, -0.30], [0.25, -0.30], [0.25, 0.30]]"   # base_footprint 기준, 반폭 0.30 = robot_half_width
       min_points: 3      # ToF 8x8에서 사람·상자는 수십 점. 햇빛 튐 한두 점으로는 서지 않게
       sources_names: ["tof_cloud", "scan"]   # 2-7 센서 역할표의 안전 정지 열(ToF·라이다)

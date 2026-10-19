@@ -19,6 +19,16 @@ person_wait:
     approach_range: 3.0        # m, 카메라(하반신 모델)가 사람을 믿을 만하게 보는 거리
     cpa_radius: 0.6            # m, 사람 진행 직선이 범퍼에서 이 안을 지나면 진로 위로 다가옴(전제 2-1)
     min_speed: 0.2             # m/s, 이보다 느리면 서 있음(걷기 ~1 m/s, 검출 떨림은 이보다 작음)
+    # 서 있다고 본 사람이 다시 움직인다고 볼 때만 쓰는 높은 기준과 지속 시간. 10-19 손님 연기 시험에서 서 있는 손님의
+    # 정지 시간이 경보 때마다 15 s로 다시 시작했다(검출 떨림·끊김으로 타이머가 풀림)
+    moving_speed: 0.3          # m/s
+    moving_hold_sec: 1.0       # s
     release_sec: 0.5           # s, 구역이 빈 채 이만큼 지나면 출발. 긴 끊김은 트랙 쪽 grace(intent_lost_grace_time) 몫이라 짧게
     service_sec: 15.0          # s, T_service. 쓰레기 버리는 시간(2-7 결정 10-19). 지나면 비켜서기(R6) 또는 경보
     alarm_period_sec: 30.0     # s, 비켜설 자리 없이 계속 기다릴 때 경보 간격(2-7)
+    # 코앞 손님은 카메라 화면 밖(옆·아래)이라 트랙이 끊긴다(experiments/2026-10-19_person_wait: ToF 0.5 m 안·구역 트랙 0인
+    # 순간 박스가 아예 없는 프레임이 대부분). 끊기기 직전 recent_track_sec 안에 구역 안 트랙이 track_lost_range 안에 있었고
+    # ToF(/tof/obstacle_ahead, tof.yaml stop_distance 0.5 m)가 막혔으면 계속 기다린다. ToF가 비면 바로 출발(타이머 없음)
+    tof_topic: /tof/obstacle_ahead
+    recent_track_sec: 3.0      # s, 카메라가 놓친 뒤 손님이 범퍼까지 오는 시간(0.7 m/s로 1 m 남짓) + 여유
+    track_lost_range: 1.0      # m, 범퍼에서. 이보다 가까우면 카메라가 사람을 놓치기 시작한다

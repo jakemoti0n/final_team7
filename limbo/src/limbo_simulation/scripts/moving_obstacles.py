@@ -144,6 +144,12 @@ class Person:
 
     def goal(self, robot, t):
         """지금 향할 점. approach형은 로봇이 가까우면 로봇이 목표"""
+        if self.type == 'approach' and robot is not None and self.served:
+            # 로봇이 알아보는 거리 밖으로 떠나야 다음 방문으로 본다. 집 자리에 닿을 때 풀면, 서 있는 로봇 곁으로
+            # 돌아와 다시 다가가기를 끝없이 되풀이한다 (2026-10-19 손님 연기 시험: 로봇이 150 s 동안 못 떠남)
+            if math.dist((self.x, self.y), robot) > APPROACH_DISTANCE:
+                self.served = False
+                self.waiting_until = None
         if self.type == 'approach' and robot is not None and not self.served:
             d = math.dist((self.x, self.y), robot)
             if d < APPROACH_DISTANCE:
@@ -193,8 +199,6 @@ class Person:
             self.goal_index += 1
         elif self.loop:
             self.goal_index = 0
-        self.served = False
-        self.waiting_until = None
 
     def _goal_force(self, goal):
         dx, dy = goal[0] - self.x, goal[1] - self.y

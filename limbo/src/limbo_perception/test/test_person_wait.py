@@ -160,3 +160,34 @@ def test_transitions_are_recorded_for_logging():
         (1.5, pw.WAITING, pw.DRIVING, 'zone_clear'),
         (2.0, pw.DRIVING, pw.NOT_READY, 'not_ready'),
     ]
+
+
+def test_speed_jitter_does_not_restart_service_time():
+    """서 있는 손님 속도가 0.2~0.3 m/s로 떨리거나 0.3 이상이 1 s 안으로 튀어도 서비스 시간은 이어진다."""
+    machine = _ready_machine()
+    _run(machine, 1.0, 6.0, [STANDING_IN_ZONE])
+    _run(machine, 6.0, 8.0, [(1.0, 0.0, 0.25, 0.0)])     # 떨림: 정지 기준과 움직임 기준 사이
+    _run(machine, 8.0, 8.5, [(1.0, 0.0, 0.5, 0.0)])      # 0.5 s 튐
+    status = _run(machine, 8.5, 10.0, [STANDING_IN_ZONE])[-1]
+    assert status.state == pw.WAITING and status.stationary_sec > 8.8
+    statuses = _run(machine, 10.0, 11.5, [(1.0, 0.0, 0.5, 0.0)])   # 1 s 넘게 움직임 → 풀림
+    assert statuses[-1].stationary_sec == 0.0
+
+
+def test_guest_lost_by_camera_at_bumper_is_held_by_tof_until_tof_clears():
+    """코앞 손님이 화면 밖으로 빠져 트랙이 끊겨도 ToF가 막혀 있으면 계속 기다리고(시간 제한 없음), ToF가 비면 바로 간다."""
+    machine = _ready_machine()
+    _run(machine, 1.0, 3.0, [(0.4, 0.0, 0.0, 0.0)])               # 범퍼 0.4 m 앞 손님
+    statuses = _run(machine, 3.0, 13.0, [], tof_blocked=True)      # 트랙 끊김, ToF 막힘 10 s
+    assert {s.state for s in statuses} == {pw.WAITING}
+    assert statuses[-1].reason == 'zone_track_lost_tof'
+    status = machine.on_tick(13.0, [], ready=True, tof_blocked=False)
+    assert status.state == pw.DRIVING and status.reason == 'tof_clear'
+
+
+def test_tof_alone_does_not_hold_without_a_recent_close_track():
+    """트랙이 멀리(1.0 m 밖) 있었거나 오래전이면 ToF 막힘은 장애물이라 기다림을 잇지 않는다(2-7 원칙 1)."""
+    machine = _ready_machine()
+    _run(machine, 1.0, 3.0, [(1.3, 0.0, 0.0, 0.0)])               # 구역 안이지만 범퍼에서 1.3 m
+    statuses = _run(machine, 3.0, 4.0, [], tof_blocked=True)
+    assert statuses[-1].state == pw.DRIVING and machine.transitions[-1].reason == 'zone_clear'
