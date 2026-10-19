@@ -1,10 +1,17 @@
 # LIMBO Dashboard
 
-FastAPI 수신 서버와 React/TypeScript 운영 UI. 구현 기준은 [Dashboard PRD](docs/PRD.md), 수신 계약의 단일 기준은 [Bridge PRD §3](../relay_prog/docs/PRD.md)다. 기존 `limbo/`, `relay_prog/` 프로그램을 수정하지 않는다.
+FastAPI 수신·관제 서버와 React/TypeScript 관제 화면(LIMBO 관제). 처음 구현 기준은 [Dashboard PRD](docs/PRD.md)이고, 그 뒤 추가한 관제 기능(일시정지·순찰 재개, 지도, 순찰 상태, 상태 요약)의 설계는 [관제 화면 설계](../docs/CONTROL_SCREEN.md), 텔레메트리 v2와 명령 계약은 [관제 계약 초안](../docs/CONTROL_API_DRAFT.md)이 기준이다. 텔레메트리 v1 계약은 [Bridge PRD §3](../relay_prog/docs/PRD.md)을 따른다. PRD와 달라진 점은 [관제 화면 설계의 「PRD와 달라지는 것」](../docs/CONTROL_SCREEN.md#prd와-달라지는-것)에 정리되어 있고, 변경 이력은 [CHANGELOG](../docs/CHANGELOG.md) (24)~(29), (32)에 있다.
+
 
 - `/`: 실제 수신 화면. 순찰 상태에 따라 주행 시작·정지·재개가 한 버튼에 나타나며 waypoint 편집을 지원한다.
 - `/demo`: 독립 Mock 공급자. 실제 서버 API/WebSocket에 접속하지 않는다. 가상 데이터·알림·명령 결과는 이 페이지의 메모리에만 존재한다.
 - 서버 자체는 ROS2 Python 패키지를 가져오지 않는다. 주행 시작을 사용하려면 ROS 2 Jazzy와 빌드된 `limbo_patrol`, Bridge가 필요하다. 한 로봇, 단일 프로세스, 메모리 최신 상태 및 최근 알림 100건을 지원한다. 서버 재시작 시 관제 상태가 초기화되며 브라우저 새로고침은 서버 이력을 지우지 않는다.
+
+- `/`: 실제 관제 화면. 맨 위 상태 한 줄 요약(정상 / 확인 필요 / 연결 끊김), 순찰·이동 카드, 지도(로봇 위치·방향, 순찰 경로, 다음 목표, 로봇 따라가기), **일시정지·순찰 재개** 버튼, 접어 둔 「센서 수신 상세」(토픽 4개), 알림으로 구성된다. 두 버튼은 서버 명령 API를 거쳐 Bridge가 순찰 노드의 `/patrol/pause`·`/patrol/resume` 서비스를 부르는 **실제 제어**다. 프로그램 재시작 버튼은 없다.
+- `/demo`: 독립 Mock 공급자. 실제 서버 API/WebSocket에 접속하지 않는다. 가상 데이터·순찰·위치·알림·명령 결과는 이 페이지의 메모리에만 존재한다.
+- 서버는 ROS2 설치 없이 실행된다. 한 로봇, 단일 프로세스, 메모리 최신 상태, 마지막 명령 하나, 최근 알림 100건을 지원한다. 서버 재시작 시 초기화되며 브라우저 새로고침은 서버 이력을 지우지 않는다.
+- 순찰 상태·위치·제어는 텔레메트리 **v2**를 보내는 Bridge(`relay_prog`)와 순찰 노드(`limbo_patrol`)가 있어야 동작한다. v1 송신기만 연결하면 순찰 카드·지도 위 로봇은 비어 있고, 순찰 재개는 잠긴다. 일시정지는 눌러서 요청을 만들 수 있지만 v1 송신기는 명령을 가져가지 않으므로 실행되지 않는다(「버튼 잠금」 참고).
+
 
 ## 명령 실행 디렉터리
 
@@ -52,7 +59,7 @@ cd /home/itkwon/limbo_ros2_workspace/final_team7/dashboard
 ```
 
 실제 수신: <http://127.0.0.1:8000/> · 가상 제어: <http://127.0.0.1:8000/demo>.
-종료는 `Ctrl+C`. 서버는 빌드된 UI를 직접 제공한다. `--workers`는 반드시 1이며, 상태 공유 저장소가 없으므로 다중 worker를 사용하지 않는다. 외부 인터넷 공개·인증·실제 로봇 제어는 범위 밖이다.
+종료는 `Ctrl+C`. 서버는 빌드된 UI를 직접 제공한다. `--workers`는 반드시 1이며, 상태 공유 저장소와 명령 대기열이 프로세스 메모리에 있으므로 다중 worker를 사용하지 않는다. 외부 인터넷 공개·인증은 범위 밖이다. 인증이 없으므로 화면에 접속할 수 있는 사람은 누구나 일시정지·재개를 누를 수 있다. 서버를 `127.0.0.1` 밖으로 열 때 이 점을 고려한다.
 
 개발 시에는 위 일반 실행 서버를 종료하고 다음 두 터미널을 사용한다.
 
@@ -107,6 +114,13 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 | `browser_delay_s` | 3초. 1초 갱신 간격보다 커야 함 |
 | `linear_threshold_mps` / `angular_threshold_radps` | 0.05 m/s / 절대값 0.05 rad/s |
 | `alert_limit` | 100, 1~100 |
+| `command_ttl_s` | 5초. 이 안에 Bridge가 가져가지 않으면 `expired`(실행 안 함) |
+| `command_response_timeout_s` | 5초. 전달(또는 claim) 후 로봇 응답 제한, 넘으면 `no_response` |
+| `command_confirm_timeout_s` | 5초. 응답 후 순찰 상태로 확인하는 제한, 넘으면 `unconfirmed` |
+| `map_yaml` | `limbo/src/limbo_navigation/maps/human_test_map.yaml`. 생략하면 지도 API가 404 |
+| `waypoints_yaml` | `limbo/src/limbo_patrol/config/test_waypoints.yaml`. 지도 위 순찰 경로 |
+
+`map_yaml`·`waypoints_yaml`은 절대경로이거나 **저장소 루트 기준** 상대경로다. 지도는 8비트 P5 PGM만 읽으며 서버 시작 때 한 번만 읽는다. 읽기에 실패하면 서버는 그대로 뜨고 로그에 `map not loaded`를 남기며, 화면에는 「서버에 지도가 설정되지 않았습니다」가 보인다. 지도나 waypoint를 바꾸면 서버를 다시 실행한다.
 
 적용 설정은 서버 스냅샷으로 UI에 전달된다. 토픽별 기준은 실제 발행 주기를 측정한 뒤 조정한다. motion freshness는 odom 지연 기준을 motion 자체 age에 적용한다. ROS 헤더는 freshness 판정에 사용하지 않는다. 현재 세션의 마지막 유효 속도는 별도로 보존하고 현재 값이 없으면 `마지막 수신 값`으로만 표시한다.
 
@@ -115,36 +129,53 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 - 브라우저 연결: WebSocket 종료·오류 또는 상태 갱신 지연 시 현재 상태를 확인 불가로 덮어 표시한다. 1·2·4·8·10초 간격으로 재접속하고 전체 스냅샷을 받은 뒤 복구한다. 서버 내부 Bridge 판정은 바꾸지 않는다.
 - 시각은 UTC 기록을 Asia/Seoul로 표시하며, 브라우저는 서버 age에 `performance.now()` 경과만 더한다. 탭 복귀 시 현재 표시를 보류하고 HTTP 전체 상태를 다시 조회한다.
 - `—`는 미수신/미확인이다. 유효한 0은 `0.00 m/s`다. 수신 중은 데이터 도착 여부이며 센서 성능 판정이 아니다. 속도 0이나 Bridge 재연결은 명령 성공 근거가 아니다.
+- 상태 한 줄 요약: 서버 문제·로봇 연결 끊김이면 `연결 끊김`, 연결 확인 중·수신 지연이나 수신 중이 아닌 토픽이 있으면 `확인 필요`(해당 토픽 이름 표시), 그 외는 `정상`.
+- 순찰 카드: v2 `patrol.state`(위치 확인 중·순찰 중·멈추는 중·일시정지·순찰 완료·순찰 실패)와 다음 목표를 보인다. 연결이 원활하지 않으면 회색 `(마지막 상태)`로 표시한다. 받은 적은 있는데 상태가 비면 `순찰 상태 확인 불가`(순찰 노드 꺼짐)다. 순찰 노드가 사유로 이동 실패를 알리면 `순찰 중 · 이동 다시 시도 (n/m)` 또는 `이동 실패 · 확인 후 재개`로 바꾸고, 서버가 알림도 남긴다(순찰이 다시 진행되면 닫힘).
+- 지도: 로봇 위치는 v2 `pose`(지도 좌표)로 그리며, 원은 위치 표준편차의 2배다. pose age가 odom 지연 기준 이상이거나 연결이 불확실하면 `위치 확인 불가 · 마지막 위치`로 흐리게 표시한다. 「로봇 따라가기」는 로봇 중심 10 m 범위를 보인다.
+- 버튼 잠금: 서버 문제나 로봇 연결이 `연결됨`이 아니면 둘 다 잠긴다. 처리 중인 요청이 있어도 잠긴다. 일시정지는 순찰 노드가 이미 `paused`·`pausing`이라고 알린 경우만 잠그며, **순찰 상태를 모를 때(v1 연결, 순찰 노드 꺼짐)는 열어 둔다**(멈추는 쪽은 막지 않음). 순찰 재개는 순찰 노드의 `has_resumable_task`가 참일 때만 열린다(속도로 추정하지 않음).
+- 명령 결과: 서버 단계 `queued → delivered → accepted → confirmed`를 화면의 3단계(서버 접수·로봇 응답·상태 확인)로 보인다. **성공은 서버가 `confirmed`라고 판정한 것만**이다. 서버는 명령 이후 Bridge가 센 순찰 상태 수신 횟수가 늘고, 재개는 `patrolling`, 일시정지는 `paused`이면서 odom 기준 정지 속도일 때 확인한다. 그 밖의 결과는 `rejected`·`service_unavailable`·`expired`(실패), `no_response`·`unconfirmed`·`connection_lost`(확인 불가)다. 자동 재전송하지 않으며 결과는 1분 뒤 한 줄로 접힌다.
 
 ## 인터페이스와 구조
 
 | 경로 | 역할 |
 |---|---|
-| `POST /api/v1/telemetry` | 공통 v1 계약 그대로, 최대 UTF-8 8192바이트 |
-| `GET /api/v1/state` | 전체 현재 판정, 마지막 값, 설정, 알림 |
-| `WS /api/v1/stream` | 연결 즉시, 새 유효 수신 시, 1초 타이머마다 전체 상태 |
+| `POST /api/v1/telemetry` | 텔레메트리 v1 또는 v2(`patrol`·`pose` 추가), 최대 UTF-8 8192바이트 |
+| `GET /api/v1/state` | 전체 현재 판정, 마지막 값, 순찰·위치, 마지막 명령, 설정, 알림 |
+| `WS /api/v1/stream` | 연결 즉시, 새 유효 수신·명령 변화 시, 1초 타이머마다 전체 상태 |
+| `POST /api/v1/commands` | 화면 → 서버. `{"command":"pause"\|"resume"}`. 202와 요청 정보, 처리 중이면 409 `command_in_progress`, 로봇 연결이 `connected`가 아니면 409 `bridge_not_connected` |
+| `GET /api/v1/commands/next` | Bridge → 서버. `robot_id`, `bridge_session_id`, `wait_s`(최대 10초 long poll). 명령이 있으면 `request_id`·`command`·`ttl_ms`, 없으면 204. 현재 세션에 한 번만 내준다 |
+| `POST /api/v1/commands/{request_id}/claim` | Bridge가 서비스를 부르기 직전 아직 유효한지 확인. 허락되면 응답 제한을 이 시각부터 다시 센다. 끝난 명령이면 409 `command_closed` |
+| `POST /api/v1/commands/{request_id}/result` | Bridge의 결과 보고(`accepted`·`rejected`·`no_response`·`service_unavailable`·`expired`). 끝난 명령의 늦은 보고는 결과를 바꾸지 않는다 |
+| `GET /api/v1/map` | 지도 메타데이터(해상도·원점·크기·waypoint). 지도 미설정 시 404 `map_not_configured` |
+| `GET /api/v1/map.png` | SLAM PGM을 변환한 회색조 PNG |
 | `GET /healthz` | `{"status":"ok"}`, 서버 생존 확인만 의미 |
 
-스냅샷에는 `server_run_id`, `revision`, `server_utc`, `robot_id`, `bridge`, `topics`, `motion`, `alerts`, `settings`가 포함된다. `motion.current`와 `motion.last_valid`, 토픽 `receive_hz`와 `last_receive_hz`를 구분한다. 이전 run의 revision과 새 서버 revision을 비교하지 않는다.
+명령 API 본문도 텔레메트리와 같이 `application/json`, 8192바이트 이하만 받는다. 명령은 한 번에 하나만 처리하며 마지막 명령은 다음 명령 전까지 스냅샷에 남는다.
 
-스키마는 누락·추가 필드, 숫자 강제 변환, bool 숫자, NaN/Infinity, 음수 범위, 비UTC 시각, null 관계를 검사한다. 오류 코드는 Bridge PRD를 따른다. 종료된 세션은 최근 100개만 기억한다. 느린 WebSocket에는 대기 스냅샷 한 개만 유지하고 전송이 3초 이상 막히면 연결을 닫는다. UI 빌드가 없으면 `/`와 `/demo`는 안내 JSON과 503을 반환한다.
+스냅샷에는 `server_run_id`, `revision`, `server_utc`, `robot_id`, `bridge`, `topics`, `motion`, `alerts`, `settings`, `patrol`, `pose`, `command`, `map_available`이 포함된다. v1 Bridge면 `patrol`·`pose`는 null이다. `motion.current`와 `motion.last_valid`, 토픽 `receive_hz`와 `last_receive_hz`를 구분한다. `patrol`·`pose`·`command`의 `age_s`는 서버가 잰 값이며 브라우저 시계와 비교하지 않는다. 이전 run의 revision과 새 서버 revision을 비교하지 않는다.
+
+스키마는 누락·추가 필드, 숫자 강제 변환, bool 숫자, NaN/Infinity, 음수 범위, 비UTC 시각, null 관계를 검사한다. v2는 `patrol`·`pose`가 모두 있어야 하고 v1은 둘 다 없어야 한다. motion은 최신 odom과 같은 시각·age여야 한다. 오류 코드는 Bridge PRD를 따른다. 종료된 세션은 최근 100개만 기억한다. 느린 WebSocket에는 대기 스냅샷 한 개만 유지하고 전송이 3초 이상 막히면 연결을 닫는다. UI 빌드가 없으면 `/`와 `/demo`는 안내 JSON과 503을 반환한다.
 
 아래 파일 구조의 기준 디렉터리는 `dashboard/`다.
 
 ```text
-server/models.py     계약 및 설정 검증
-server/state.py      시계·세션·판정·알림
-server/app.py        FastAPI, 주기 갱신, HTTP/WebSocket, 정적 UI
+server/models.py     텔레메트리 v1·v2, 명령, 설정 검증
+server/state.py      시계·세션·판정·알림, 명령 단계·확인 판정, 순찰 이동 실패 알림
+server/mapdata.py    지도 PGM → PNG 변환, waypoint 읽기
+server/app.py        FastAPI, 주기 갱신, HTTP/WebSocket, 명령·지도 API, 정적 UI
 ui/src/live.ts       실제 공급자와 브라우저 연결 감시
-ui/src/demo.ts       별도 가상 상태·알림 공급자
-ui/src/commands.ts   요청 ID 기반 3단계 명령 상태 머신
-ui/src/App.tsx       공통 화면·재사용 카드·상태·제어·모달
+ui/src/control.ts    실제 제어: 명령 전송, 서버 단계 → 화면 3단계, 버튼 잠금 사유
+ui/src/map.ts        지도 좌표 → 그림 좌표 변환
+ui/src/demo.ts       별도 가상 상태·순찰·위치·알림 공급자, 데모 지도
+ui/src/commands.ts   명령 이름·결과 문구, 데모용 요청 ID 기반 3단계 상태 머신
+ui/src/App.tsx       공통 화면·상태 요약·순찰·지도·제어·모달
+tests/               서버 시험 (test_server.py 수신, test_control.py 명령·v2·지도)
 tools/               개발용 송신기 및 통합 검증 도구
 ```
 
 ## 가상 송신기로 독립 검증
 
-가상 송신기는 개발 도구다. **실제 Bridge와 함께 같은 서버에 보내지 않는다.** v1 계약에는 실제/가상 출처 필드가 없으므로 수신 화면은 전송자의 진위를 판별할 수 없다. 반드시 Bridge가 연결되지 않은 전용 서버를 사용한다. `/demo`와는 별개의 테스트다.
+가상 송신기는 개발 도구다. **텔레메트리 v1만 보내므로** 순찰 카드·지도 위 로봇·실제 제어는 검증하지 않는다. 순찰 상태가 없으므로 순찰 재개는 잠기지만 일시정지는 눌러서 서버에 요청을 만들 수 있다. 그러나 송신기는 `commands/next`로 명령을 가져가거나 실행하지 않으므로, 그 요청은 `command_ttl_s`(5초) 뒤 `expired`(「정지 요청 실패: 로봇에 제때 전달되지 않아 실행 안 함」)로 끝난다. 이 부분은 서버 시험 `tests/test_control.py`, UI 단위 시험, `/demo`, 실제 Bridge 통합으로 확인한다. **실제 Bridge와 함께 같은 서버에 보내지 않는다.** v1 계약에는 실제/가상 출처 필드가 없으므로 수신 화면은 전송자의 진위를 판별할 수 없다. 반드시 Bridge가 연결되지 않은 전용 서버를 사용한다. `/demo`와는 별개의 테스트다.
 
 첫 번째 터미널에서 위 「실행·종료」 명령으로 테스트 서버를 8000에 실행한 뒤, **두 번째 터미널**에서 아래 명령을 실행한다. 송신기 실행 디렉터리도 `/home/itkwon/limbo_ros2_workspace/final_team7/dashboard`다. 두 시나리오는 각각 20초씩 순서대로 실행된다.
 
@@ -174,7 +205,7 @@ cd /home/itkwon/limbo_ros2_workspace/final_team7/dashboard
 
 ## 가상 제어 검증
 
-`/demo` 상단에서 화면 상태, 가상 순찰 상태, **각 명령별** 결과와 두 제한 시간을 선택한다. 전송 완료는 비동기 0.1초, 로봇 응답은 그 후 0.5초, 확인 이벤트는 응답 후 1초다. 기본 응답/확인 제한 시간은 각각 5초다.
+`/demo` 상단에서 화면 상태(정상 수신·일부 토픽 지연·로봇 상태 수신 지연·로봇 연결 끊김·최초 접속·서버 연결 문제), 가상 순찰 상태, **일시정지·순찰 재개 각각의** 결과와 두 제한 시간을 선택한다. 데모 지도는 그림 없이 `test_waypoints.yaml`과 같은 배치의 순찰 지점만 그리며, 가상 로봇은 순찰 중일 때 1초에 0.5 m씩 다음 지점으로 움직인다. 일시정지에 성공하면 가상 순찰이 `일시정지`로 바뀐다. 전송 완료는 비동기 0.1초, 로봇 응답은 그 후 0.5초, 확인 이벤트는 응답 후 1초다. 기본 응답/확인 제한 시간은 각각 5초다.
 
 성공, 명시적 거절, 응답 없음, 응답 후 상태 확인 없음 및 제한 시간 후 늦은 결과를 제공한다. `진행 중 연결 끊기`는 요청 결과를 확인 불가로 마감한다. 시나리오 변경/초기화는 진행 요청·타이머·알림을 취소한다. 결과는 다음 요청까지 유지된다. 이전 ID, 종료된 요청의 이벤트는 무시하고 자동 재전송하지 않는다. 순찰 재개 여부는 별도의 가상 순찰 상태로 판단하며 속도와 관계없다.
 
@@ -210,7 +241,7 @@ E2E는 테스트용 FastAPI를 127.0.0.1:8017에서 자동 실행한다. 기존 
 
 ## 기존 Bridge 통합
 
-첫 번째 터미널에서는 위 「실행·종료」 명령으로 `dashboard` 디렉터리에서 Dashboard를 8000에 실행한다. **두 번째 터미널에서는 저장소 루트 `/home/itkwon/limbo_ros2_workspace/final_team7`로 이동한 뒤** 아래 명령으로 기존 Bridge를 실행한다. 기존 로봇과 같은 ROS_DOMAIN_ID/discovery 환경을 사용하며, 기존 Mock receiver와 가상 송신기는 종료한다. 아래 명령은 기존 Bridge가 설치되어 있다는 전제다.
+첫 번째 터미널에서는 위 「실행·종료」 명령으로 `dashboard` 디렉터리에서 Dashboard를 8000에 실행한다. **두 번째 터미널에서는 저장소 루트 `/home/itkwon/limbo_ros2_workspace/final_team7`로 이동한 뒤** 아래 명령으로 Bridge를 실행한다. 기존 로봇과 같은 ROS_DOMAIN_ID/discovery 환경을 사용하며, 기존 Mock receiver와 가상 송신기는 종료한다. 아래 명령은 `limbo/`와 `relay_prog/`가 빌드되어 있다는 전제다. Bridge는 순찰 상태 메시지 `limbo_interfaces/msg/PatrolState`를 쓰므로 **Jazzy → `limbo/` 설치본 → `relay_prog/` 설치본** 순서로 source한다(빠뜨리면 `ModuleNotFoundError: No module named 'limbo_interfaces'`). 자세한 빌드·문제 해결은 [relay_prog README](../relay_prog/README.md)를 따른다.
 
 ```bash
 cd /home/itkwon/limbo_ros2_workspace/final_team7
@@ -219,6 +250,8 @@ source limbo/install/setup.bash
 source relay_prog/install/setup.bash
 ros2 run limbo_telemetry_bridge bridge --config relay_prog/src/limbo_telemetry_bridge/config/bridge.yaml
 ```
+
+Bridge는 텔레메트리 v2(센서 4개 + `/patrol/state` 순찰 상태 + TF `map → base_footprint` 위치, `/amcl_pose` 불확실성)를 보내고, `commands/next`를 long poll로 기다렸다가 `/patrol/pause`·`/patrol/resume`(`std_srvs/srv/Trigger`)을 부른다. 따라서 순찰 카드·지도 위치·버튼까지 보려면 시뮬레이션(또는 실물)에서 navigation과 순찰 노드가 함께 실행 중이어야 한다. 순찰 노드가 꺼져 있으면 순찰 카드는 `순찰 상태 확인 불가`, 명령은 `service_unavailable`로 끝난다. 토픽·서비스 이름과 제한 시간은 `bridge.yaml`의 `control:` 항목에서 바꾼다.
 
 다른 서버 주소를 사용할 경우 기존 설정을 저장소 루트 기준 `dashboard/artifacts/bridge.yaml` 등에 복사하고 그 파일의 `server_url`을 변경하여 `--config`로 전달한다. Bridge 프로그램이나 기존 설정을 변경할 필요가 없다.
 
@@ -232,6 +265,6 @@ PYTHONDONTWRITEBYTECODE=1 CHROME_PATH=/opt/google/chrome/chrome \
   relay_prog/venvs/bridge/bin/python dashboard/tools/validate_bridge.py --domain 91
 ```
 
-Node.js가 PATH에 없으면 `--node /absolute/path/to/node`를 추가한다. 도구는 임시 서버 포트, 임시 Bridge 설정, 별도 ROS 도메인 및 `dashboard/artifacts/` 로그를 사용하고 종료 시 자식 프로세스를 정리한다. 헤더 0·역행, 0 속도·회전·무효 odom·재수신을 확인하고 발행 직후부터 브라우저 표시 확인까지 2초 미만인지 측정한다. 실제 Gazebo 주행이나 실물 로봇 검증을 대신하지 않는다.
+Node.js가 PATH에 없으면 `--node /absolute/path/to/node`를 추가한다. 도구는 임시 서버 포트, 임시 Bridge 설정, 별도 ROS 도메인 및 `dashboard/artifacts/` 로그를 사용하고 종료 시 자식 프로세스를 정리한다. 헤더 0·역행, 0 속도·회전·무효 odom·재수신을 확인하고 발행 직후부터 브라우저 표시 확인까지 2초 미만인지 측정한다. 실제 Gazebo 주행이나 실물 로봇 검증을 대신하지 않는다. 이 도구는 v1 시절에 만든 것으로 센서 수신·속도 표시만 확인하며, 순찰 상태·위치·일시정지/재개는 검증하지 않는다. 제어 기능의 시뮬레이션 시험 절차와 결과는 [관제 화면 설계 A](../docs/CONTROL_SCREEN.md#a-일시정지순찰-재개)에 있다.
 
-검증 결과 및 미검증 항목은 [검증 보고서](docs/VALIDATION.md)에 구분해 기록한다.
+검증 결과 및 미검증 항목은 [검증 보고서](docs/VALIDATION.md)에 구분해 기록한다. 이 보고서는 v1 기준이며, 관제 기능 추가 뒤의 시험 기록은 [CHANGELOG](../docs/CHANGELOG.md)와 [관제 화면 설계](../docs/CONTROL_SCREEN.md)에 있다.
