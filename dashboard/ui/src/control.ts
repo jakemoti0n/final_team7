@@ -76,3 +76,17 @@ export class LiveControl {
     if (this.local?.base === base) { this.local = { base, result }; this.changed() }
   }
 }
+
+export type DriveAction = 'start' | 'pause' | 'resume'
+/** A single control follows the patrol state reported by the Bridge. */
+export function driveControl(view: View, request: RequestResult | null, patrolExited = false): { action: DriveAction; reason: string } {
+  const lock = lockReason(view, request)
+  if (patrolExited) return { action: 'start', reason: lock }
+  const patrol = view.snapshot?.patrol
+  if (patrol?.state === 'paused') return { action: 'resume', reason: resumeReason(view, lock) }
+  if (patrol?.state === 'patrolling') return { action: 'pause', reason: pauseReason(view, lock) }
+  if (patrol?.state === 'waiting_localization' || patrol?.state === 'pausing')
+    return { action: 'pause', reason: lock || (patrol.state === 'pausing' ? '정지 요청을 처리하고 있습니다' : '위치 확인 중에는 정지할 수 없습니다') }
+  if (!patrol) return { action: 'start', reason: lock || '순찰 상태를 확인할 수 없습니다' }
+  return { action: 'start', reason: lock }
+}

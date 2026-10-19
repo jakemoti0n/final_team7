@@ -13,5 +13,7 @@
   "angular_threshold_radps": 0.05,
   "alert_limit": 100,
   "map_yaml": "limbo/src/limbo_navigation/maps/human_test_map.yaml",
-  "waypoints_yaml": "limbo/src/limbo_patrol/config/test_waypoints.yaml"
+  "waypoints_yaml": "limbo/src/limbo_patrol/config/test_waypoints.yaml",
+  "patrol_ros_domain_id": 97,
+  "patrol_use_sim_time": true
 }

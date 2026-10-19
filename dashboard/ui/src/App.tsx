@@ -2,8 +2,8 @@ import { useEffect, useReducer, useState, type ReactNode } from 'react'
 import { LiveProvider } from './live'
 import { MockProvider, demoMap, scenarios, type Patrol, type Scenario } from './demo'
 import { commandNames, resultLabels, type Command, type Outcome, type RequestResult } from './commands'
-import { LiveControl, lockReason, pauseReason, resumeReason } from './control'
-import { headingDeg, isMapInfo, toPixel, uncertaintyPx, type MapInfo } from './map'
+import { LiveControl, driveControl } from './control'
+import { fromPixel, headingDeg, isMapInfo, toPixel, uncertaintyPx, type MapInfo, type Waypoint } from './map'
 import { names, topicKeys, type Provider, type Snapshot, type View } from './types'
 
 export function ageText(age: number | null, delta = 0) {
@@ -27,9 +27,6 @@ function Badge({ status, tone: forced, children }: { status: string; tone?: Tone
 function Card({ title, children, className = '' }: { title: string; children: ReactNode; className?: string }) {
   return <section className={`card ${className}`} aria-label={title}><h2 className="card-heading">{title}</h2>{children}</section>
 }
-function CommandButton({ command, disabled, busy, onClick, describedBy }: { command: Command; disabled: boolean; busy: boolean; onClick?: () => void; describedBy: string }) {
-  return <button className={`command ${command}`} disabled={disabled} aria-busy={busy} aria-describedby={describedBy} onClick={onClick}><span aria-hidden="true">{command === 'pause' ? '■' : '▷'}</span>{busy ? resultLabels[command].pending : commandNames[command]}</button>
-}
 /** 요청 후 경과 초. 서버 명령은 서버가 잰 값 + 받은 뒤 지난 시간, 화면 자체 결과는 브라우저 시계 */
 function requestAge(result: RequestResult, delta: number) {
   return result.age_s != null ? result.age_s + delta : Math.max(0, (Date.now() - Date.parse(result.at)) / 1000)
@@ -48,20 +45,187 @@ function ResultBox({ result, delta }: { result: RequestResult; delta: number }) 
     <small>요청 시각 {timeText(result.at)} · {ageText(age)}</small>{result.id !== '—' && <small className="request-id">요청 ID {result.id}</small>}
   </div>
 }
-function Controls({ demo, live, view, delta }: { demo: MockProvider | null; live: LiveControl | null; view: View; delta: number }) {
+const waypointLocked = (view: View) => ['waiting_localization', 'patrolling', 'pausing', 'paused'].includes(view.snapshot?.patrol?.state ?? '')
+const waypointLockHint = '주행 완료 후 변경 가능합니다'
+type WaypointMode = { kind: 'add' } | { kind: 'move'; index: number }
+type WaypointDocument = { revision: string; waypoints: Waypoint[]; file: string; applies: string }
+type WaypointChange = { action: 'add'; waypoint: Waypoint } | { action: 'move'; name: string; x: number; y: number } | { action: 'delete'; name: string } | { action: 'rename'; name: string; new_name: string } | { action: 'reorder'; order: string[] }
+function WaypointPanel({ demo, map, document, problem, locked, onChange, mode, picked, setMode, setPicked }: {
+  demo: MockProvider | null; map: MapInfo | null; document: WaypointDocument | null; problem: string | null; locked: boolean
+  onChange: (change: WaypointChange) => Promise<void>; mode: WaypointMode | null; picked: [number, number] | null
+  setMode: (mode: WaypointMode | null) => void; setPicked: (point: [number, number] | null) => void
+}) {
+  const [name, setName] = useState('')
+  const [type, setType] = useState<'pass' | 'stop'>('stop')
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [renameIndex, setRenameIndex] = useState<number | null>(null)
+  const [renameDraft, setRenameDraft] = useState('')
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [overIndex, setOverIndex] = useState<number | null>(null)
+  const waypoints = map?.waypoints ?? []
+  useEffect(() => { if (locked) { setMode(null); setPicked(null); setRenameIndex(null); setDragIndex(null); setOverIndex(null) } }, [locked, setMode, setPicked])
+  const begin = (next: WaypointMode) => { setRenameIndex(null); setMode(next); setPicked(null); setMessage(''); if (next.kind === 'add') { setName(`WP-${waypoints.length + 1}`); setType('stop') } }
+  const apply = async (change: WaypointChange, success: string) => {
+    if (locked) { setMessage(waypointLockHint); return }
+    setBusy(true); setMessage('')
+    try {
+      if (demo) {
+        const updated = change.action === 'add' ? [...waypoints, change.waypoint]
+          : change.action === 'move' ? waypoints.map(w => w.name === change.name ? { ...w, x: change.x, y: change.y } : w)
+            : change.action === 'delete' ? waypoints.filter(w => w.name !== change.name)
+              : change.action === 'rename' ? waypoints.map(w => w.name === change.name ? { ...w, name: change.new_name } : w)
+                : change.order.map(name => waypoints.find(w => w.name === name)!)
+        demo.setWaypoints(updated)
+      } else await onChange(change)
+      setMode(null); setPicked(null); setRenameIndex(null); setMessage(`${success}${demo ? ' 데모 경로에 반영했습니다.' : ' 저장했습니다. 순찰 노드를 다시 시작하면 적용됩니다.'}`)
+    } catch (err) { setMessage(err instanceof Error ? err.message : 'Waypoint 변경에 실패했습니다.') }
+    finally { setBusy(false) }
+  }
+  const save = () => {
+    if (!mode || !picked) return
+    const [x, y] = picked
+    if (mode.kind === 'add') {
+      const label = name.trim()
+      if (!label || label.length > 32 || waypoints.some(w => w.name.toLowerCase() === label.toLowerCase())) {
+        setMessage('이름은 1~32자이며 기존 지점과 달라야 합니다.'); return
+      }
+      void apply({ action: 'add', waypoint: { name: label, type, x, y } }, `${label} 지점을`)
+    } else {
+      const target = waypoints[mode.index]
+      if (target) void apply({ action: 'move', name: target.name, x, y }, `${target.name} 지점의 위치를`)
+    }
+  }
+  const saveName = () => {
+    if (renameIndex === null) return
+    const target = waypoints[renameIndex]
+    const next = renameDraft.trim()
+    if (!target) return
+    if (!next || next.length > 32 || waypoints.some((w, i) => i !== renameIndex && w.name.toLowerCase() === next.toLowerCase())) {
+      setMessage('이름은 1~32자이며 기존 지점과 달라야 합니다.'); return
+    }
+    if (next === target.name) { setRenameIndex(null); return }
+    void apply({ action: 'rename', name: target.name, new_name: next }, `${target.name} 지점의 이름을 ${next}(으)로 변경해`)
+  }
+  const dropAt = (index: number) => {
+    if (dragIndex === null || locked || busy || (!demo && !document)) return
+    const from = dragIndex
+    setDragIndex(null); setOverIndex(null)
+    if (from === index) return
+    const updated = [...waypoints]
+    const [moved] = updated.splice(from, 1)
+    updated.splice(index, 0, moved)
+    if (updated[updated.length - 1].type !== 'stop') {
+      setMessage('마지막 지점은 정지 지점이어야 합니다.'); return
+    }
+    void apply({ action: 'reorder', order: updated.map(w => w.name) }, `${moved.name} 지점의 순서를 변경해`)
+  }
+  return <section className="waypoint-panel" aria-label="Waypoint 목록" title={locked ? waypointLockHint : undefined}>
+    <div className="waypoint-heading"><strong>Waypoint 목록</strong><span>{waypoints.length}개</span></div>
+    <p className="muted">{demo ? '데모 경로입니다. 변경 내용은 새로고침하면 초기화됩니다.' : document ? `${document.file}에 저장됩니다. 변경된 경로는 다음 순찰 시작 시 적용됩니다.` : problem || 'Waypoint 설정을 불러오는 중입니다.'}</p>
+    {waypoints.length ? <ol className="waypoint-list">{waypoints.map((w, i) => <li key={w.name} className={overIndex === i && dragIndex !== i ? 'drag-over' : ''} onDragOver={event => { if (dragIndex !== null && !locked && !busy) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setOverIndex(i) } }} onDragLeave={() => { if (overIndex === i) setOverIndex(null) }} onDrop={event => { event.preventDefault(); dropAt(i) }}>
+      <span className="waypoint-row-main"><span className="waypoint-name"><strong>{w.name}</strong><small>{w.type === 'stop' ? '정지' : '통과'} · {w.x.toFixed(2)}, {w.y.toFixed(2)} m</small></span></span>
+      <span className="waypoint-actions"><span title={locked ? waypointLockHint : undefined}><button type="button" disabled={locked || busy || (!demo && !document)} onClick={() => { setMode(null); setPicked(null); setRenameIndex(i); setRenameDraft(w.name); setMessage('') }}>이름 변경</button></span><span title={locked ? waypointLockHint : undefined}><button type="button" disabled={locked || busy || (!demo && !document)} onClick={() => begin({ kind: 'move', index: i })}>위치 교체</button></span><span title={locked ? waypointLockHint : undefined}><button type="button" disabled={locked || busy || (!demo && !document) || (!demo && (waypoints.length === 1 || i === waypoints.length - 1))} onClick={() => void apply({ action: 'delete', name: w.name }, `${w.name} 지점을 삭제해`)}>삭제</button></span></span><span className="waypoint-drag-wrap" title={locked ? waypointLockHint : '끌어서 순서 변경'}><button className="waypoint-drag" type="button" draggable={!locked && !busy && (demo !== null || document !== null)} disabled={locked || busy || (!demo && !document)} aria-label={`${w.name} 순서 끌어서 변경`} title="끌어서 순서 변경" onDragStart={event => { setDragIndex(i); event.dataTransfer.setData('text/plain', w.name); event.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => { setDragIndex(null); setOverIndex(null) }}>⋮⋮</button></span>
+      {renameIndex === i && !locked && <div className="waypoint-rename"><label>새 이름<input value={renameDraft} maxLength={32} onChange={event => setRenameDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') saveName(); if (event.key === 'Escape') setRenameIndex(null) }} /></label><button type="button" disabled={locked || busy} onClick={saveName}>저장</button><button type="button" disabled={busy} onClick={() => setRenameIndex(null)}>취소</button></div>}
+    </li>)}</ol> : <p className="muted">저장된 지점이 없습니다.</p>}
+    <small>순서를 바꾸려면 ⋮⋮ 표시를 다른 지점으로 끌어 놓으세요.</small>
+    <span title={locked ? waypointLockHint : undefined}><button className="waypoint-add" type="button" disabled={locked || busy || !map || (!demo && !document)} onClick={() => begin({ kind: 'add' })}>+ 새 지점 만들기</button></span>
+    {mode && !locked && <div className="waypoint-editor"><p>{mode.kind === 'add' ? '새 지점의 이름과 종류를 정하고 지도에서 위치를 선택하세요. 통과 지점은 마지막 정지 지점 앞에 들어갑니다.' : `${waypoints[mode.index]?.name ?? '지점'}의 새 위치를 지도에서 선택하세요.`}</p>
+      {mode.kind === 'add' && <div className="waypoint-fields"><label>이름<input value={name} maxLength={32} onChange={e => setName(e.target.value)} /></label><label>종류<select value={type} onChange={e => setType(e.target.value as 'pass' | 'stop')}><option value="stop">정지</option><option value="pass">통과</option></select></label></div>}
+      <p role="status">{picked ? `선택한 위치: ${picked[0].toFixed(2)}, ${picked[1].toFixed(2)} m` : '지도에서 위치를 클릭하세요.'}</p>
+      <div className="waypoint-actions"><button type="button" disabled={locked || !picked || busy} onClick={save}>{busy ? '저장 중…' : '저장'}</button><button type="button" disabled={busy} onClick={() => { setMode(null); setPicked(null) }}>취소</button></div></div>}
+    {message && <p className="waypoint-message" role="status">{message}</p>}
+    {!demo && <small>마지막 정지 지점은 삭제할 수 없습니다. 다른 정지 지점을 추가한 뒤 삭제하세요.</small>}
+  </section>
+}
+function Controls({ demo, live, view, delta, map, waypointDocument, waypointProblem, changeWaypoint, waypointMode, picked, setWaypointMode, setPicked }: { demo: MockProvider | null; live: LiveControl | null; view: View; delta: number; map: MapInfo | null; waypointDocument: WaypointDocument | null; waypointProblem: string | null; changeWaypoint: (change: WaypointChange) => Promise<void>; waypointMode: WaypointMode | null; picked: [number, number] | null; setWaypointMode: (mode: WaypointMode | null) => void; setPicked: (point: [number, number] | null) => void }) {
   const request = demo ? demo.machine.current : live!.current(view)
-  const pending = request?.result === 'pending'
-  const lock = demo ? demo.lockReason : lockReason(view, request)
-  const pause = demo ? demo.pauseReason : pauseReason(view, lock)
-  const resume = demo ? demo.resumeReason : resumeReason(view, lock)
-  const send = (command: Command) => demo ? demo.request(command) : void live!.send(view, command)
+  const [starting, setStarting] = useState<'idle' | 'launching' | 'waiting' | 'started' | 'failed'>('idle')
+  const [startMessage, setStartMessage] = useState('')
+  const [startLog, setStartLog] = useState('')
+  const [startPatrolCount, setStartPatrolCount] = useState(0)
+  const [launchStatus, setLaunchStatus] = useState<'idle' | 'running' | 'exited' | 'stopping'>('idle')
+  const [stopping, setStopping] = useState(false)
+  const [stopMessage, setStopMessage] = useState('')
+  const patrolExited = !demo && launchStatus === 'exited'
+  const { action, reason } = driveControl(view, request, patrolExited || starting === 'launching' || starting === 'waiting')
+  const active = !patrolExited && waypointLocked(view)
+  useEffect(() => {
+    if (starting === 'waiting' && active && (view.snapshot?.patrol?.update_count ?? 0) > startPatrolCount) { setStarting('started'); setStartMessage('순찰 노드의 상태를 수신했습니다.') }
+  }, [active, starting, startPatrolCount, view.snapshot?.patrol?.update_count])
+  useEffect(() => {
+    if (starting !== 'waiting' || demo) return
+    let done = false
+    let attempts = 0
+    const timer = setInterval(async () => {
+      if (done) return
+      attempts++
+      const status = await fetch('/api/v1/patrol/launch').then(r => r.ok ? r.json() : null).catch(() => null)
+      if (done) return
+      if (status?.status === 'exited') {
+        setStarting('failed')
+        setStartMessage(`순찰 노드가 종료되었습니다${status.exit_code == null ? '' : ` (종료 코드 ${status.exit_code})`}. 로그: ${status.log || startLog}`)
+      } else if (attempts >= 30) {
+        setStarting('failed')
+        setStartMessage(`순찰 시작 상태를 확인하지 못했습니다. 로그: ${startLog}`)
+      }
+    }, 1000)
+    return () => { done = true; clearInterval(timer) }
+  }, [starting, demo, startLog])
+  const start = async () => {
+    if (demo) { demo.startPatrol(); setStarting('started'); setStartMessage('데모 순찰을 시작했습니다.'); return }
+    setStartPatrolCount(view.snapshot?.patrol?.update_count ?? 0)
+    setStopMessage('')
+    setStarting('launching'); setStartMessage('순찰 노드를 시작하고 있습니다.')
+    try {
+      const response = await fetch('/api/v1/patrol/start', { method: 'POST', signal: AbortSignal.timeout(5000) })
+      const body = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(({ bridge_not_connected: 'Bridge 연결을 확인한 뒤 시작하세요.', patrol_already_running: '이미 순찰 노드가 실행 중입니다.', patrol_state_unavailable: '순찰 상태를 확인할 수 없습니다.', ros_domain_not_configured: 'Dashboard의 ROS_DOMAIN_ID 설정이 필요합니다.' } as Record<string, string>)[body?.error?.code] || body?.error?.message || `시작 요청 실패 (${response.status})`)
+      setStartLog(body?.log || '')
+      setLaunchStatus('running')
+      setStarting('waiting'); setStartMessage('순찰 노드를 실행했습니다. 상태 보고를 기다립니다.')
+    } catch (err) { setStarting('failed'); setStartMessage(err instanceof Error ? err.message : '순찰 시작 요청에 실패했습니다.') }
+  }
+  useEffect(() => {
+    if (demo) return
+    let cancelled = false
+    const refresh = async () => {
+      const status = await fetch('/api/v1/patrol/launch').then(r => r.ok ? r.json() : null).catch(() => null)
+      if (!cancelled && status?.status) setLaunchStatus(current => current === 'stopping' && status.status === 'running' ? current : status.status)
+    }
+    void refresh()
+    const timer = setInterval(() => void refresh(), 2000)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [demo])
+  const stop = async () => {
+    if (demo) { demo.stopPatrol(); setStopMessage('데모 순찰을 종료했습니다.'); return }
+    setStopping(true); setStopMessage('순찰 노드를 종료하고 있습니다.')
+    try {
+      const response = await fetch('/api/v1/patrol/stop', { method: 'POST', signal: AbortSignal.timeout(5000) })
+      const body = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(body?.error?.code === 'patrol_not_running' ? 'Dashboard가 시작한 순찰 노드가 실행 중이지 않습니다.' : body?.error?.message || `종료 요청 실패 (${response.status})`)
+      setLaunchStatus('stopping')
+      setStarting('idle'); setStartMessage('')
+      setStopMessage('순찰 노드에 종료 신호를 보냈습니다.')
+    } catch (err) { setStopMessage(err instanceof Error ? err.message : '순찰 종료 요청에 실패했습니다.') }
+    finally { setStopping(false) }
+  }
+  useEffect(() => {
+    if (launchStatus === 'exited' && stopMessage === '순찰 노드에 종료 신호를 보냈습니다.')
+      setStopMessage('순찰 노드가 종료되었습니다. 다시 시작할 수 있습니다.')
+  }, [launchStatus, stopMessage])
+  const busy = request?.result === 'pending' || starting === 'launching' || starting === 'waiting'
+  const disabled = !!reason || busy || (!demo && launchStatus === 'stopping')
+  const label = action === 'start' ? '주행 시작' : action === 'pause' ? '주행 정지' : '주행 재개'
+  const send = () => { if (action === 'start') void start(); else { setStartMessage(''); if (demo) demo.request(action); else void live!.send(view, action) } }
   return <Card title="로봇 제어" className="controls">
-    <div className="control-body"><p id="control-reason" role="status" className="muted">{pause || (demo ? '가상 로봇에 제어 요청을 보낼 수 있습니다.' : '순찰을 그 자리에서 멈추거나, 멈춘 곳부터 이어서 순찰합니다.')}</p>
-      <CommandButton command="pause" disabled={!!pause} busy={pending && request?.command === 'pause'} describedBy="control-reason" onClick={() => send('pause')} />
-      {request?.command === 'pause' && <ResultBox key={request.id} result={request} delta={delta} />}
-      <CommandButton command="resume" disabled={!!resume} busy={pending && request?.command === 'resume'} describedBy="resume-reason" onClick={() => send('resume')} />
-      <p id="resume-reason" className="muted">{resume || (demo ? '일시 중단된 가상 순찰 작업을 재개합니다.' : '멈춘 지점부터 순찰을 이어서 합니다.')}</p>
-      {request?.command === 'resume' && <ResultBox key={request.id} result={request} delta={delta} />}
+    <div className="control-body"><p id="control-reason" role="status" className="muted">{reason || (action === 'start' ? '저장된 waypoint 경로로 새 순찰을 시작합니다.' : action === 'pause' ? '현재 순찰을 일시정지합니다.' : '멈춘 지점부터 순찰을 이어서 합니다.')}</p>
+      <button className={`command ${action === 'pause' ? 'pause' : 'resume'}`} disabled={disabled} aria-busy={busy} aria-describedby="control-reason" onClick={send}><span aria-hidden="true">{action === 'pause' ? '■' : '▷'}</span>{busy ? action === 'start' ? '주행 시작 중' : action === 'pause' ? '정지 요청 중' : '재개 요청 중' : label}</button>
+      <button className="patrol-stop" type="button" disabled={stopping || (demo ? !active : launchStatus !== 'running')} onClick={() => void stop()}>{stopping ? '순찰 종료 중' : '순찰 종료'}</button>
+      {stopMessage && <p className="muted" role="status">{stopMessage}</p>}
+      {request && <ResultBox key={request.id} result={request} delta={delta} />}
+      {startMessage && <p className="muted" role="status">{startMessage}</p>}
+      <WaypointPanel demo={demo} map={map} document={waypointDocument} locked={active || launchStatus === 'running' || launchStatus === 'stopping' || starting === 'launching' || starting === 'waiting' || stopping} problem={waypointProblem} onChange={changeWaypoint} mode={waypointMode} picked={picked} setMode={setWaypointMode} setPicked={setPicked} />
     </div>
   </Card>
 }
@@ -86,7 +250,7 @@ function PatrolCard({ view }: { view: View }) {
     <p className="muted">{!patrol ? '순찰 상태 수신 대기' : old ? '로봇과 연결이 원활하지 않아 지금 상태는 알 수 없습니다' : lost ? '순찰 프로그램이 꺼져 있거나 상태를 알 수 없습니다' : state === 'failed' && patrol.reason ? `사유: ${patrol.reason}` : shown?.note ? shown.note : `마지막 상태 변경 ${timeText(patrol.last_received_at)}`}</p></Card>
 }
 const FOLLOW_SPAN_M = 10   // 로봇 따라가기: 로봇 중심 가로세로 10 m
-function MapCard({ map, view, delta }: { map: MapInfo | null; view: View; delta: number }) {
+function MapCard({ map, view, delta, onPick }: { map: MapInfo | null; view: View; delta: number; onPick?: (point: [number, number]) => void }) {
   const [follow, setFollow] = useState(false)
   const pose = view.snapshot?.pose
   const patrol = view.serverProblem ? null : view.snapshot?.patrol
@@ -100,7 +264,14 @@ function MapCard({ map, view, delta }: { map: MapInfo | null; view: View; delta:
   const box = follow && has ? [rx - span / 2, ry - span / 2, span, span] : [0, 0, map.width, map.height]
   const unit = Math.max(box[2], box[3]) / 100   // 표시 크기는 보이는 범위 기준 (확대해도 점·글자가 커지지 않게)
   return <Card title="지도" className="map-card">
-    <div className="map-frame"><svg viewBox={box.join(' ')} role="img" aria-label="순찰 지도와 로봇 위치">
+    <div className={`map-frame ${onPick ? 'editing' : ''}`}><svg viewBox={box.join(' ')} role="img" aria-label="순찰 지도와 로봇 위치" onClick={event => {
+      if (!onPick) return
+      const svg = event.currentTarget, matrix = svg.getScreenCTM()
+      if (!matrix) return
+      const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
+      if (point.x < 0 || point.x > map.width || point.y < 0 || point.y > map.height) return
+      onPick(fromPixel(map, point.x, point.y))
+    }}>
       {map.image ? <image href={map.image} width={map.width} height={map.height} className="map-image" /> : <rect width={map.width} height={map.height} className="map-blank" />}
       <polyline points={points.map(p => p.join(',')).join(' ')} className="route" strokeWidth={unit * .4} strokeDasharray={`${unit * 1.4} ${unit}`} />
       {map.waypoints.map((w, i) => { const [x, y] = points[i]; const tone = i === next ? 'next' : patrol && i < patrol.waypoint_index ? 'passed' : ''
@@ -112,6 +283,7 @@ function MapCard({ map, view, delta }: { map: MapInfo | null; view: View; delta:
     </svg></div>
     <div className="map-legend"><span role="status">{!has ? '로봇 위치 수신 대기' : stale ? `위치 확인 불가 · 마지막 위치 ${ageText(pose!.age_s, delta)}` : `위치 수신 ${ageText(pose!.age_s, delta)}${pose!.position_std_m != null ? ` · 오차 약 ±${(2 * pose!.position_std_m).toFixed(2)} m` : ''}`}</span>
       <button className="map-toggle" aria-pressed={follow} disabled={!has} onClick={() => setFollow(f => !f)}>{follow ? '전체 지도 보기' : '로봇 따라가기'}</button>
+      {onPick && <span className="map-pick-hint">지도에서 지점 위치를 클릭하세요</span>}
       <span className="legend-keys"><span><i className="key next" />다음 목표</span><span><i className="key stop" />정지 지점</span><span><i className="key pass" />통과 지점</span></span></div>
   </Card>
 }
@@ -166,15 +338,50 @@ export default function App() {
   const [now, setNow] = useState(performance.now())
   const [, redraw] = useReducer((n: number) => n + 1, 0)
   const [live] = useState(() => demo ? null : new LiveControl(redraw))
-  const [map, setMap] = useState<MapInfo | null>(demo ? demoMap : null)
+  const [liveMap, setLiveMap] = useState<MapInfo | null>(null)
+  const [waypointDocument, setWaypointDocument] = useState<WaypointDocument | null>(null)
+  const [waypointProblem, setWaypointProblem] = useState<string | null>(null)
+  const [waypointMode, setWaypointMode] = useState<WaypointMode | null>(null)
+  const [picked, setPicked] = useState<[number, number] | null>(null)
+  const map = demo ? { ...demoMap, waypoints: demo.waypoints } : liveMap
   useEffect(() => { const unsub = provider.subscribe(setView); provider.start(); const timer = setInterval(() => setNow(performance.now()), 200); return () => { clearInterval(timer); unsub(); provider.dispose() } }, [provider])
   const mapAvailable = !!view.snapshot?.map_available
   useEffect(() => {
-    if (demo || map || !mapAvailable) return
+    if (demo || liveMap || !mapAvailable) return
     const controller = new AbortController()
-    fetch('/api/v1/map', { signal: controller.signal }).then(r => r.ok ? r.json() : null).then(value => { if (isMapInfo(value)) setMap(value) }).catch(() => {})
+    fetch('/api/v1/map', { signal: controller.signal }).then(r => r.ok ? r.json() : null).then(value => { if (isMapInfo(value)) setLiveMap(value) }).catch(() => {})
     return () => controller.abort()
-  }, [demo, map, mapAvailable])
+  }, [demo, liveMap, mapAvailable])
+  useEffect(() => {
+    if (demo || !liveMap) return
+    const controller = new AbortController()
+    fetch('/api/v1/waypoints', { signal: controller.signal }).then(r => { if (!r.ok) throw new Error(r.status === 404 ? 'Waypoint API를 사용할 수 없습니다. Dashboard 서버를 다시 시작하고 설정을 확인하세요.' : 'Waypoint 목록을 읽지 못했습니다.'); return r.json() }).then(value => {
+      if (value && Array.isArray(value.waypoints) && typeof value.revision === 'string') {
+        setWaypointDocument(value)
+        setWaypointProblem(null)
+        setLiveMap(current => current ? { ...current, waypoints: value.waypoints } : current)
+      }
+    }).catch(err => { if (!controller.signal.aborted) setWaypointProblem(err instanceof Error ? err.message : 'Waypoint 목록을 읽지 못했습니다.') })
+    return () => controller.abort()
+  }, [demo, !!liveMap])
+  const changeWaypoint = async (change: WaypointChange) => {
+    if (!waypointDocument) throw new Error('Waypoint 설정을 불러오지 못했습니다.')
+    let response: Response
+    try {
+      response = await fetch('/api/v1/waypoints', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: waypointDocument.revision, ...change }) })
+    } catch { throw new Error('서버에 연결할 수 없습니다.') }
+    if (!response.ok) {
+      if (response.status === 409) {
+        const latest = await fetch('/api/v1/waypoints').then(r => r.ok ? r.json() : null).catch(() => null)
+        if (latest) { setWaypointDocument(latest); setLiveMap(current => current ? { ...current, waypoints: latest.waypoints } : current) }
+      }
+      const body = await response.json().catch(() => null)
+      throw new Error(body?.error?.code === 'patrol_active' ? waypointLockHint : body?.error?.code === 'revision_conflict' ? '다른 곳에서 경로가 변경되어 목록을 새로 불러왔습니다. 확인 후 다시 시도하세요.' : body?.error?.message || 'Waypoint 변경에 실패했습니다.')
+    }
+    const updated: WaypointDocument = await response.json()
+    setWaypointDocument(updated)
+    setLiveMap(current => current ? { ...current, waypoints: updated.waypoints } : current)
+  }
   const state = view.snapshot
   const summary = overall(view)
   const delta = Math.max(0, (now - view.receivedMono) / 1000)
@@ -194,7 +401,7 @@ export default function App() {
         <Card title="이동"><div className="movement" role="status"><Badge status={motionStatus} />{!view.serverProblem && state?.motion.rotating && <span>회전 중</span>}
           <div className={`speed ${retained ? 'muted' : ''}`}><strong>{value ? value.linear_speed_mps.toFixed(2) : '—'}</strong><span>m/s</span>{retained && <Badge status="unknown">마지막 수신 값</Badge>}</div></div>
           <p className="muted">{value ? `주행 정보 ${timeText(value.last_received_at)} 기준 추정값` : '유효한 주행 정보 수신 대기'} · 멈춰 있다고 일시정지가 확인된 것은 아닙니다</p></Card></div>
-      <div className="body-grid"><MapCard map={map} view={view} delta={delta} /><Controls demo={demo} live={live} view={view} delta={delta} /></div>
+      <div className="body-grid"><MapCard map={map} view={view} delta={delta} onPick={waypointMode ? setPicked : undefined} /><Controls demo={demo} live={live} view={view} delta={delta} map={map} waypointDocument={waypointDocument} waypointProblem={waypointProblem} changeWaypoint={changeWaypoint} waypointMode={waypointMode} picked={picked} setWaypointMode={setWaypointMode} setPicked={setPicked} /></div>
       <Card title="최근 알림" className="alerts">{state?.alerts.length ? <ul>{state.alerts.map(alert => <AlertRow key={alert.id} alert={alert} />)}</ul> : <p className="empty">최근 알림이 없습니다</p>}</Card>
       <Reception state={state} serverProblem={view.serverProblem} delta={delta} />
       <footer>{demo ? '데모의 상태 확인은 가상 이벤트에 기반합니다.' : 'LIMBO-01 · 수신 정보 기반 관제'}<span>표시 시각 Asia/Seoul</span></footer>

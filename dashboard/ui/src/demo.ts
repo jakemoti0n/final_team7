@@ -1,6 +1,6 @@
 import { CommandMachine, resultLabels, type Command, type Outcome, type RequestResult } from './commands'
 import { topicKeys, type Snapshot, type Provider, type View, type Alert, type PatrolInfo, type PoseInfo } from './types'
-import type { MapInfo } from './map'
+import type { MapInfo, Waypoint } from './map'
 
 export type Scenario = 'normal' | 'partial' | 'delayed' | 'disconnected' | 'initial' | 'server'
 export const scenarios: Record<Scenario, string> = { normal: '정상 수신', partial: '일부 토픽 지연', delayed: '로봇 상태 수신 지연', disconnected: '로봇 연결 끊김', initial: '최초 접속', server: '서버 연결 문제' }
@@ -16,6 +16,7 @@ export class MockProvider implements Provider {
   scenario: Scenario = 'normal'
   patrol: Patrol = 'patrolling'
   outcomes: Record<Command, Outcome> = { pause: 'success', resume: 'success' }
+  waypoints: Waypoint[] = demoMap.waypoints.map(w => ({ ...w }))
   private target = 2
   private x = -.2
   private y = 3.6
@@ -41,6 +42,16 @@ export class MockProvider implements Provider {
   // This preserves the current request to exercise connection loss mid-flight.
   disconnect() { this.scenario = 'disconnected'; this.scenarioAt = new Date().toISOString(); this.machine.disconnect(); this.update() }
   setPatrol(value: Patrol) { this.patrol = value; this.update() }
+  startPatrol() { this.target = 0; this.patrol = 'patrolling'; this.update() }
+  stopPatrol() { this.patrol = 'empty'; this.update() }
+  setWaypoints(waypoints: Waypoint[]) {
+    const targetName = this.waypoints[this.target]?.name
+    this.waypoints = waypoints.map(w => ({ ...w }))
+    const matching = this.waypoints.findIndex(w => w.name === targetName)
+    this.target = matching >= 0 ? matching : this.waypoints.length ? Math.min(this.target, this.waypoints.length - 1) : 0
+    if (!this.waypoints.length) this.patrol = 'empty'
+    this.update()
+  }
   private alert(message: string, severity: Alert['severity'], active = false): Alert {
     return { id: crypto.randomUUID(), key: 'demo', at: new Date().toISOString(), severity, message: `데모 · ${message}`, kind: active ? 'problem' : 'control', active }
   }
@@ -62,15 +73,15 @@ export class MockProvider implements Provider {
   request(command: Command) { if (command === 'pause' ? this.pauseReason : this.resumeReason) return; this.machine.start(command, this.outcomes[command]) }
   // 순찰 중이면 1초에 0.5 m씩 다음 지점으로 (끝까지 가면 처음부터)
   private move() {
-    if (this.patrol !== 'patrolling') return
-    const w = demoMap.waypoints[this.target], dx = w.x - this.x, dy = w.y - this.y, d = Math.hypot(dx, dy)
+    if (this.patrol !== 'patrolling' || !this.waypoints.length) return
+    const w = this.waypoints[this.target], dx = w.x - this.x, dy = w.y - this.y, d = Math.hypot(dx, dy)
     this.yaw = Math.atan2(dy, dx)
-    if (d <= .5) { this.x = w.x; this.y = w.y; this.target = (this.target + 1) % demoMap.waypoints.length }
+    if (d <= .5) { this.x = w.x; this.y = w.y; this.target = (this.target + 1) % this.waypoints.length }
     else { this.x += dx / d * .5; this.y += dy / d * .5 }
   }
   private patrolInfo(at: string, age: number): PatrolInfo | null {
     if (this.patrol === 'unknown') return null
-    const w = demoMap.waypoints, done = this.patrol === 'empty'
+    const w = this.waypoints, done = this.patrol === 'empty' || !w.length
     return { state: done ? 'completed' : this.patrol as 'paused' | 'patrolling', waypoint_index: done ? w.length : this.target, waypoint_count: w.length, waypoint_name: done ? '' : w[this.target].name,
       has_resumable_task: this.patrol === 'paused', reason: done ? 'mission completed' : '', update_count: this.revision, last_received_at: at, age_s: age }
   }

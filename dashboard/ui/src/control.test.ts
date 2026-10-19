@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { LiveControl, fromServer, lockReason, pauseReason, resumeReason, stageShapes } from './control'
+import { LiveControl, driveControl, fromServer, lockReason, pauseReason, resumeReason, stageShapes } from './control'
 import { headingDeg, isMapInfo, toPixel, uncertaintyPx } from './map'
 import { MockProvider } from './demo'
 import { overall, patrolLabel } from './App'
@@ -90,4 +90,14 @@ it('patrol card: retrying and stopped after navigation failure are shown apart f
   expect(patrolLabel('paused', 'navigation failed')).toMatchObject({ label: '이동 실패 · 확인 후 재개', tone: 'warn' })
   expect(patrolLabel('paused', 'paused by request')).toMatchObject({ label: '일시정지', note: '' })
   expect(patrolLabel('patrolling', 'lap 2 started')).toMatchObject({ label: '순찰 중', tone: 'good' })
+})
+
+it('one drive control maps state to start, stop, and resume', () => {
+  expect(driveControl(view(), null)).toEqual({ action: 'resume', reason: '' })
+  expect(driveControl(view(s => { s.patrol!.state = 'patrolling' }), null)).toEqual({ action: 'pause', reason: '' })
+  expect(driveControl(view(s => { s.patrol!.state = 'patrolling' }), null, true)).toEqual({ action: 'start', reason: '' })
+  expect(driveControl(view(s => { s.patrol!.state = 'completed' }), null)).toEqual({ action: 'start', reason: '' })
+  expect(driveControl(view(s => { s.patrol!.state = null; s.patrol!.update_count = 0 }), null)).toEqual({ action: 'start', reason: '' })
+  expect(driveControl(view(s => { s.patrol!.state = null; s.patrol!.update_count = 3 }), null)).toEqual({ action: 'start', reason: '' })
+  expect(driveControl(view(s => { s.patrol = null }), null).reason).toContain('확인할 수 없습니다')
 })

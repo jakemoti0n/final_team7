@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager, suppress
 import json
 import logging
 import os
+
+import yaml
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
@@ -11,8 +13,10 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from . import mapdata
+from .waypoints import WaypointFile, WaypointError
+from .patrol_launch import PatrolLauncher, LaunchError
 from .models import CommandClaim, CommandRequest, CommandResult, Settings, Telemetry, uuid_string
-from .state import Store
+from .state import Store, FINAL
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -49,6 +53,14 @@ def create_app(settings=None, store=None):
         except (OSError, ValueError, KeyError, TypeError) as exc:
             logging.error("map not loaded: %s", exc)
 
+    waypoint_file = None
+    if settings.waypoints_yaml and map_meta is not None:
+        path = Path(settings.waypoints_yaml)
+        waypoint_file = WaypointFile(path if path.is_absolute() else ROOT.parent / path, map_meta)
+    waypoint_lock = asyncio.Lock()
+    patrol_launcher = PatrolLauncher(waypoint_file, settings.patrol_ros_domain_id, ROOT.parent / "limbo") if waypoint_file else None
+    patrol_start_lock = asyncio.Lock()
+
     def publish():
         state = store.snapshot()
         for queue in tuple(subscribers):
@@ -72,6 +84,7 @@ def create_app(settings=None, store=None):
 
     app = FastAPI(lifespan=lifespan)
     app.state.store, app.state.subscribers = store, subscribers
+    app.state.patrol_launcher = patrol_launcher
 
     @app.exception_handler(Exception)
     async def internal_error(request, exc):
@@ -113,6 +126,46 @@ def create_app(settings=None, store=None):
         command_signal.set()
         publish()
         return JSONResponse(body, status_code=202)
+
+    @app.get("/api/v1/patrol/launch")
+    async def patrol_launch_status():
+        if patrol_launcher is None:
+            return error(404, "waypoints_not_configured", "Set map_yaml and waypoints_yaml")
+        return patrol_launcher.status()
+
+    @app.post("/api/v1/patrol/start")
+    async def start_patrol():
+        if patrol_launcher is None:
+            return error(404, "waypoints_not_configured", "Set map_yaml and waypoints_yaml")
+        async with patrol_start_lock:
+            if store.connection()[0] != "connected":
+                return error(409, "bridge_not_connected", "Bridge is not connected")
+            if store.command and store.command["stage"] not in FINAL:
+                return error(409, "command_in_progress", "Another command is still in progress")
+            patrol = store.payload.get("patrol") if store.payload else None
+            if patrol is None:
+                return error(409, "patrol_state_unavailable", "Bridge must report patrol state before starting")
+            if (patrol["state"] in ("waiting_localization", "patrolling", "pausing", "paused")
+                    and patrol_launcher.status()["status"] != "exited"):
+                return error(409, "patrol_already_running", "Patrol is already active")
+            try:
+                result = patrol_launcher.start(settings.patrol_use_sim_time)
+            except LaunchError as exc:
+                return error(409 if exc.code == "patrol_already_running" else 503, exc.code, str(exc))
+            except (OSError, ValueError, yaml.YAMLError) as exc:
+                logging.error("patrol not started: %s", exc)
+                return error(503, "patrol_launch_failed", "Patrol route or environment is unavailable")
+            return JSONResponse(result, status_code=202)
+
+    @app.post("/api/v1/patrol/stop")
+    async def stop_patrol():
+        if patrol_launcher is None:
+            return error(404, "waypoints_not_configured", "Set map_yaml and waypoints_yaml")
+        async with patrol_start_lock:
+            try:
+                return JSONResponse(patrol_launcher.stop(), status_code=202)
+            except LaunchError as exc:
+                return error(409 if exc.code == "patrol_not_running" else 503, exc.code, str(exc))
 
     @app.get("/api/v1/commands/next")
     async def next_command(robot_id: str = "", bridge_session_id: str = "", wait_s: float = 0.):
@@ -174,7 +227,44 @@ def create_app(settings=None, store=None):
     async def map_info():
         if map_meta is None:
             return error(404, "map_not_configured", "Set map_yaml in the server config")
+        if waypoint_file is not None:
+            try:
+                return {**map_meta, "waypoints": [dict(name=str(w["name"]), type=str(w["type"]), x=float(w["x"]), y=float(w["y"])) for w in waypoint_file.document()["waypoints"]]}
+            except (OSError, ValueError, yaml.YAMLError) as exc:
+                logging.error("waypoints not loaded: %s", exc)
+                return error(503, "waypoints_unavailable", "Waypoint file cannot be read")
         return map_meta
+
+    @app.get("/api/v1/waypoints")
+    async def get_waypoints():
+        if waypoint_file is None:
+            return error(404, "waypoints_not_configured", "Set map_yaml and waypoints_yaml")
+        try:
+            return waypoint_file.document()
+        except (OSError, ValueError, yaml.YAMLError) as exc:
+            logging.error("waypoints not loaded: %s", exc)
+            return error(503, "waypoints_unavailable", "Waypoint file cannot be read")
+
+    @app.put("/api/v1/waypoints")
+    async def change_waypoints(request: Request):
+        if waypoint_file is None:
+            return error(404, "waypoints_not_configured", "Set map_yaml and waypoints_yaml")
+        raw, problem = await read_json(request)
+        if problem:
+            return problem
+        async with waypoint_lock:
+            patrol = store.payload.get("patrol") if store.payload else None
+            launch_status = patrol_launcher.status()["status"] if patrol_launcher is not None else "idle"
+            active_patrol = patrol and patrol["state"] in ("waiting_localization", "patrolling", "pausing", "paused")
+            if launch_status == "running" or (active_patrol and (launch_status != "exited" or patrol_launcher._other_patrol_running())):
+                return error(409, "patrol_active", "Waypoint changes are available after patrol finishes")
+            try:
+                return waypoint_file.change(raw)
+            except WaypointError as exc:
+                return error(409 if exc.code in ("revision_conflict", "invalid_route", "not_found") else 422, exc.code, str(exc))
+            except (OSError, yaml.YAMLError) as exc:
+                logging.error("waypoints not saved: %s", exc)
+                return error(503, "waypoints_unavailable", "Waypoint file cannot be saved")
 
     @app.get("/api/v1/map.png")
     async def map_image():

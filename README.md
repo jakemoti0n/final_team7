@@ -81,7 +81,7 @@ ros2 run limbo_patrol patrol_node --ros-args -p use_sim_time:=true
 
 → 로봇이 waypoint를 차례로 돌고 마지막에 "Patrol mission completed"가 찍힌다. 순찰 중 상태는 `/patrol/state`로 나온다.
 
-### 5. 관제 화면 (일시정지·재개 버튼, 지도 위 로봇 위치)
+### 5. 관제 화면 (주행 시작·정지·재개 버튼, 지도 위 로봇 위치)
 
 터미널 셋. 처음 한 번은 설치가 필요하다 ([dashboard/README.md](dashboard/README.md), [relay_prog/README.md](relay_prog/README.md) "설치").
 
@@ -91,7 +91,7 @@ cd ~/limbo/relay_prog && source /opt/ros/jazzy/setup.bash && source install/setu
   ros2 run limbo_telemetry_bridge bridge --config src/limbo_telemetry_bridge/config/bridge.yaml           # ② Bridge (로봇 → 서버)
 ```
 
-→ 브라우저에서 <http://127.0.0.1:8000/> 을 열면 지도 위 로봇 위치, 순찰 상태, **일시정지 / 재개** 버튼이 보인다. 버튼을 누르면 로봇이 멈추고, 재개하면 하던 순찰을 이어 간다. 설계는 [docs/CONTROL_SCREEN.md](docs/CONTROL_SCREEN.md).
+→ 브라우저에서 <http://127.0.0.1:8000/> 을 열면 지도 위 로봇 위치, 순찰 상태, **주행 시작 / 정지 / 재개** 단일 버튼이 보인다. 시작은 설정된 waypoint 파일로 `patrol_node`를 실행하고, 정지는 순찰을 일시정지하며, 재개는 하던 순찰을 이어 간다. 설계는 [docs/CONTROL_SCREEN.md](docs/CONTROL_SCREEN.md).
 
 ---
 
