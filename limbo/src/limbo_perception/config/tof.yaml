@@ -1,9 +1,8 @@
-# ToF 근접 센서 (VL53L5CX 8x8, 범퍼 높이 전면 중앙). "코앞에 무언가 있음"을 내고,
-# ToF가 막혔고 직전에 다가오던 사람을 봤거나 라이다 앞에 사람 덩어리가 있으면 /person_blocking을 참으로 둔다 (R5)
+# ToF 근접 센서 (VL53L5CX 8x8, 범퍼 높이 전면 중앙). "코앞에 무언가 있음"(/tof/obstacle_ahead)과 가장 가까운 점(/tof/nearest)만 낸다.
+# 사람인지 모르는 장애물 신호라 사람 기다리기에는 쓰지 않는다(설계 2-7). 코앞 안전 정지는 nav2_params.yaml collision_monitor가 /tof/points로 한다
 tof_node:
   ros__parameters:
     points_topic: /tof/points
-    person_topic: /person_detector/person_position_base
     base_frame: base_link
     # 로봇이 사람 앞에서 서는 자리에서 정한 값이다(튜닝 아님): HumanLayer 치명 반경 0.25 m(nav2_params.yaml
     # human_layer.lethal_radius) + inflation(로봇 내접 반경까지 253) → 앞면이 사람 몸에서 약 0.3~0.4 m,
@@ -11,41 +10,3 @@ tof_node:
     stop_distance: 0.50        # m, 센서 앞면부터
     min_obstacle_height: 0.03  # m, base_link z. 바닥 반사 거름
     confirm_frames: 3          # 연속 프레임 같아야 바뀜 (10 Hz면 0.3 s)
-    # /person_blocking 래치
-    memory_sec: 5.0            # s, 막히기 직전 이 시간 안에 본 사람만 (늘리지 않는다: 사라진 사람이 오래 남음)
-    person_min_distance: 0.8   # m, 카메라가 사람을 잘 잡는 앞쪽 거리 (1.5 m 안은 거의 못 봄)
-    person_max_distance: 3.0
-    person_half_width: 1.0
-    clear_sec: 1.0             # s, ToF가 이만큼 계속 비면 풂
-    max_hold_sec: 60.0         # s, 상한(다가옴 이력·카메라가 본 사람). 넘으면 풀어서 보통 복구로
-    # 덩어리만 근거(옆·뒤에서 와서 선 사람, 느린 사람, 카메라 밖 사람)일 때 상한. 사람인지 확인 못 한 물체 앞
-    # 최소 예의 시간이다(손님 응대 시간이 아님). 넘으면 ToF가 빌 때까지 다시 안 잡아 상자 앞 무한 대기를 막는다
-    blob_only_hold_sec: 5.0
-    camera_match_radius: 1.0   # m, 카메라가 본 사람이 덩어리 중심에서 이 안이면 사람으로 확인(보행 1 m/s × 검출 끊김 1 s)
-    world_frame: odom          # 카메라 사람(predictions)과 덩어리를 맞춰 보는, 로봇이 움직여도 고정인 좌표계
-    # /person_approaching: 진로 위로 다가오는 사람이면 그 자리 정지, 와서 서 있으면(ToF 막힘) 유지 (전제 2-1)
-    predictions_topic: /person_detector/predictions
-    approach_cpa_radius: 0.6     # m, 사람 속도 방향 직선이 로봇에서 이 안을 지나면 진로 위 (전제 2-1)
-    approach_max_range: 3.0      # m, 카메라가 사람을 믿을 만하게 보는 거리
-    approach_min_speed: 0.2      # m/s, 이보다 느리면 방향을 안 믿음 (서 있는 사람은 다가오는 사람이 아님)
-    approach_seen_hold_sec: 1.0  # s, 검출이 잠깐 끊겨도 다가오는 중으로 봄
-    approach_release_sec: 1.0    # s, 다가옴도 ToF도 이만큼 없으면 다시 출발
-    approach_max_hold_sec: 60.0  # s, 상한(카메라·ToF가 근거일 때)
-    # 정지 유지 근거가 라이다 덩어리뿐인 채로 이만큼 지나면 출발. 지도에 없는 물체가 띠에 남아 사람이 떠난 뒤에도
-    # 안 풀리는 것을 막는다. 손님이 ToF(0.5 m) 밖 1 m쯤에 서서 쓰레기를 버리는 시간을 덮도록 blocking 5 s보다 길게
-    approach_blob_only_hold_sec: 15.0
-    # 라이다 앞 사람 덩어리 (Q5·Q9): 정지 뒤 ToF 밖에 선 손님 유지 + 옆에서 와서 선 사람의 코앞 막힘 근거.
-    # /scan은 라이다 높이 띠라 30 cm 상자는 안 잡힌다
-    scan_topic: /scan
-    map_topic: /map
-    map_margin_cells: 2        # 지도 점유 칸에서 이 칸 수(× 지도 해상도) 안의 점은 벽으로 보고 버림. 칸 단위라 지도가 바뀌어도 맞음.
-                               # 띠만으로는 복도 벽 모서리가 걸려 사람이 떠나도 정지가 60 s 안 풀렸다
-    # "앞 띠" = 로봇 앞에 그린 진로 구역(폭 2×(robot_half_width+person_radius), 길이 blob_max_range).
-    # 멈춘 뒤 "손님이 아직 앞에 있나"를 라이다로 볼 때만 쓴다. MPPI의 prune_distance(전역 경로를 앞 몇 m까지
-    # 잘라 따라갈지)와는 이름만 비슷하고 다른 것이다. 일반 장애물은 Nav2 costmap이 따로 본다
-    robot_half_width: 0.30     # m, 로봇 중심선에서 가장 바깥(바퀴 바깥면 = wheel_separation/2 + wheel_width/2 = 0.295). 로봇이 바뀌면 이것만
-    person_radius: 0.25        # m, 사람 몸 반경(HumanLayer lethal_radius와 같은 값). 띠 반폭 = robot_half_width + person_radius
-    blob_max_range: 1.5        # m, 범퍼 앞부터. ToF(0.5 m) 밖, 카메라가 못 보는 1.5 m 안에 선 손님까지
-    blob_neighbor_gap: 0.15    # m, 각도 순 이웃 점 간격이 이 안이면 한 덩어리 (사람 몸통 안에서 끊기지 않을 만큼)
-    person_min_width: 0.15     # m, 사람 몸통 폭 하한(옆으로 선 몸 두께). 기둥·잡음 제외. 로봇과 무관한 사람 치수
-    person_max_width: 0.60     # m, 사람 몸통 폭 상한(어깨폭 + 팔). 벽·큰 상자 제외

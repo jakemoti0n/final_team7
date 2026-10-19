@@ -1,4 +1,4 @@
-"""RGB-D 기하 계산: bounding box depth, pixel → 3D (ROS 의존 없음)."""
+"""기하 계산: RGB-D bounding box depth·pixel → 3D, 라이다 점 덩어리, 다가옴 최근접점 (ROS 의존 없음)."""
 
 from dataclasses import dataclass
 
@@ -244,3 +244,123 @@ class DepthJumpFilter:
         for track_id in [k for k, s in self._tracks.items()
                          if stamp - s[2] > self.max_age_s]:
             del self._tracks[track_id]
+
+
+# 아래는 라이다 점 전처리(지도 벽 걸러내기·사람 크기 덩어리)와 다가옴 계산이다. 예전 tof_node 래치에서 썼고,
+# 덩어리 판정은 라이다 다리 검출기(R9)의 입력으로, closest_approach는 사람 기다리기 상태 기계가 쓴다 (설계 2-7)
+
+
+@dataclass
+class BlobConfig:
+    """라이다 앞 '사람 덩어리' 판정. 폭은 사람 몸통 치수, 띠는 로봇 치수에서 온다(로봇마다 노드가 계산)."""
+
+    half_width: float = 0.55      # m, 로봇 중심선 좌우 = 로봇 반폭 + 사람 반경 (덩어리 중심 기준)
+    max_range: float = 1.5        # m, 범퍼 앞부터. ToF(0.5 m) 밖에 선 손님까지
+    neighbor_gap: float = 0.15    # m, 각도 순 이웃 점 간격이 이 안이면 같은 덩어리
+    min_width: float = 0.15       # m, 사람 몸통 최소 폭 (기둥·잡음 제외)
+    max_width: float = 0.60       # m, 사람 몸통 최대 폭 (벽·큰 상자 제외)
+
+
+def filter_map_points(points_map_xy, grid, margin_cells=2):
+    """
+    지도 좌표 점(N×2) 중 지도 점유 칸에서 margin_cells칸 밖인 것만 True인 마스크.
+
+    벽 점을 버린다(사람이 떠난 뒤 복도 벽 모서리가 앞 띠에 걸려 정지가 안 풀렸다).
+    지도 밖·미지 칸의 점은 남긴다(지도에 없는 것이 사람·상자다).
+    """
+    points = np.asarray(points_map_xy, dtype=float).reshape(-1, 2)
+    near = grid.near_occupied(margin_cells)
+    col, row = grid.cells(points)
+    inside = (col >= 0) & (col < grid.width) & (row >= 0) & (row < grid.height)
+    keep = np.ones(len(points), dtype=bool)
+    keep[inside] = ~near[row[inside], col[inside]]
+    return keep
+
+
+class MapGrid:
+    """OccupancyGrid 값(행=y)과 원점·해상도. 점유(>= occupied) 칸을 margin칸 넓힌 마스크를 캐시한다."""
+
+    def __init__(self, data, width, height, resolution, origin_x, origin_y, origin_yaw=0.0,
+                 occupied=50):
+        self.width, self.height, self.resolution = width, height, resolution
+        self.origin = (origin_x, origin_y, origin_yaw)
+        self.occupied = np.asarray(data, dtype=np.int16).reshape(height, width) >= occupied
+        self._near = {}
+
+    def cells(self, points_xy):
+        ox, oy, yaw = self.origin
+        dx, dy = points_xy[:, 0] - ox, points_xy[:, 1] - oy
+        c, s = np.cos(yaw), np.sin(yaw)
+        gx, gy = c * dx + s * dy, -s * dx + c * dy
+        return (np.floor(gx / self.resolution).astype(int),
+                np.floor(gy / self.resolution).astype(int))
+
+    def near_occupied(self, margin_cells):
+        if margin_cells not in self._near:
+            m = int(margin_cells)
+            near = self.occupied.copy()
+            padded = np.pad(self.occupied, m)
+            for di in range(-m, m + 1):
+                for dj in range(-m, m + 1):
+                    if di * di + dj * dj <= m * m:
+                        near |= padded[m + di:m + di + self.height, m + dj:m + dj + self.width]
+            self._near[margin_cells] = near
+        return self._near[margin_cells]
+
+
+def person_blob_ahead(points_base, origin_x, config):
+    """
+    base_link 평면 점(N×2 이상)에서 범퍼(origin_x) 앞 띠 안의 사람 크기 덩어리를 찾는다.
+
+    점을 각도 순으로 놓고 이웃 간격 neighbor_gap 안이면 한 덩어리로 묶는다. 띠로 자르기 전에 묶어서
+    띠 밖까지 이어진 벽·큰 상자는 전체 폭으로 재어 버린다. 덩어리 중심이 띠 안이고 폭이
+    min_width~max_width면 사람 후보. 반환: (있음, 중심 x, 중심 y, 폭), 여럿이면 가장 가까운 것.
+    """
+    none = (False, None, None, None)
+    if len(points_base) == 0:
+        return none
+    points = np.asarray(points_base, dtype=float).reshape(len(points_base), -1)[:, :2]
+    points = points[np.isfinite(points).all(axis=1)]
+    if len(points) < 2:
+        return none
+    points = points[np.argsort(np.arctan2(points[:, 1], points[:, 0]), kind='stable')]
+    gaps = np.linalg.norm(np.diff(points, axis=0), axis=1)
+    breaks = np.flatnonzero(gaps > config.neighbor_gap) + 1
+    best = none
+    for blob in np.split(points, breaks):
+        if len(blob) < 2:
+            continue
+        width = float(np.linalg.norm(blob[-1] - blob[0]))
+        cx, cy = blob.mean(axis=0)
+        ahead = cx - origin_x
+        if (config.min_width <= width <= config.max_width and 0.0 < ahead <= config.max_range and
+                abs(cy) <= config.half_width and (best[0] is False or cx < best[1])):
+            best = (True, float(cx), float(cy), width)
+    return best
+
+
+def closest_approach(px, py, vx, vy):
+    """로봇(원점)에 대한 사람 위치·속도로 (최근접까지 시간 s, 최근접 거리 m). 멀어지면 시간 <= 0."""
+    speed2 = vx * vx + vy * vy
+    if speed2 == 0.0:
+        return 0.0, (px * px + py * py) ** 0.5
+    t = -(px * vx + py * vy) / speed2
+    cx, cy = px + vx * t, py + vy * t
+    return t, (cx * cx + cy * cy) ** 0.5
+
+
+def tracks_ahead_of_bumper(people, robot_x, robot_y, robot_yaw, bumper_x):
+    """
+    고정 좌표계(odom) 사람 (x, y, vx, vy) 목록을 로봇 축 기준 (범퍼 앞 x, y, vx, vy)로 바꾼다.
+
+    위치는 로봇 위치를 빼고 로봇 방향으로 돌린 뒤 x에서 범퍼 위치를 뺀다(기다리기 구역은 범퍼 앞부터 잰다).
+    속도는 돌리기만 하고 로봇 속도를 빼지 않는다: 사람 자신의 속도라야 로봇이 서 있는 사람에게 다가가는 것을
+    "사람이 다가옴"으로 잘못 보지 않는다.
+    """
+    c, s = np.cos(robot_yaw), np.sin(robot_yaw)
+    tracks = []
+    for x, y, vx, vy in people:
+        dx, dy = x - robot_x, y - robot_y
+        tracks.append((float(c * dx + s * dy - bumper_x), float(-s * dx + c * dy),
+                       float(c * vx + s * vy), float(-s * vx + c * vy)))
+    return tracks

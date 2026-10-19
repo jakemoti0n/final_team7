@@ -1,5 +1,7 @@
 """ROS 없이 돌아가는 추적·예측·의도 로직 단위 테스트."""
 
+import math
+
 from limbo_perception import geometry, intent, motion, tracking
 import numpy as np
 
@@ -278,3 +280,97 @@ def test_depth_jump_filter_accepts_new_value_after_track_was_gone():
     f = geometry.DepthJumpFilter(jump_m=1.0, confirm_frames=3, max_age_s=1.0)
     f.update(7, 0.7, 0.0)
     assert f.update(7, 3.2, 2.0) == (3.2, False)
+
+
+# 라이다 점 덩어리·지도 벽 걸러내기(R9 전처리용)와 다가옴 최근접점 (예전 tof_node에서 옮김)
+SENSOR_X = 0.25
+
+
+def test_closest_approach():
+    t, d = geometry.closest_approach(3.0, 0.3, -1.0, 0.0)    # 앞에서 곧장 다가옴
+    assert math.isclose(t, 3.0) and math.isclose(d, 0.3)
+    t, d = geometry.closest_approach(3.0, 0.0, 1.0, 0.0)     # 멀어짐
+    assert t < 0
+
+
+def _arc(cx, cy, width, n=12):
+    """라이다가 본 몸통 앞면: 중심 (cx, cy), 좌우 폭 width인 점 n개."""
+    return [[cx, cy - width / 2 + width * i / (n - 1)] for i in range(n)]
+
+
+def _wall(x0, x1, y, step=0.03):
+    """y에 놓인 벽 (x0~x1)."""
+    n = int((x1 - x0) / step) + 1
+    return [[x0 + step * i, y] for i in range(n)]
+
+
+BLOB = geometry.BlobConfig()
+
+
+def _blob(points):
+    return geometry.person_blob_ahead(points, SENSOR_X, BLOB)
+
+
+def test_blob_ahead_finds_a_person_sized_cluster_in_the_path():
+    found, cx, cy, width = geometry.person_blob_ahead(_arc(1.2, 0.1, 0.4), SENSOR_X, BLOB)
+    assert found and math.isclose(cx, 1.2) and math.isclose(cy, 0.1) and math.isclose(width, 0.4)
+    assert _blob(_arc(1.2, 0.0, 1.0))[0] is False    # 폭 1.0 m 상자
+    assert _blob(_arc(1.2, 0.0, 0.05))[0] is False   # 기둥·잡음
+    assert _blob(_arc(2.0, 0.0, 0.4))[0] is False    # 1.75 m 앞
+    assert _blob(_arc(-0.5, 0.0, 0.4))[0] is False   # 뒤
+    assert _blob(_arc(1.2, 0.8, 0.4))[0] is False    # 진로 밖
+    assert _blob([[math.inf, 0.0], [math.nan, 0.0]])[0] is False
+    assert _blob([])[0] is False
+
+
+def test_wall_running_through_the_band_is_not_a_person():
+    # 띠 안에 걸친 벽 모서리 조각도 띠 밖까지 이어진 전체 폭으로 재므로 사람이 아니다
+    assert _blob(_wall(0.4, 3.0, -0.5))[0] is False
+
+
+def _corridor_map(resolution=0.05):
+    """폭 1.8 m 복도: y = -0.9, +0.9에 벽, x -1~4 m."""
+    width, height = int(5.0 / resolution), int(2.4 / resolution)
+    data = [0] * (width * height)
+    for row in (int(0.3 / resolution), int(2.1 / resolution)):
+        for col in range(width):
+            data[row * width + col] = 100
+    return geometry.MapGrid(data, width, height, resolution, -1.0, -1.2)
+
+
+def test_map_filter_drops_wall_points_and_keeps_the_rest():
+    grid = _corridor_map()
+    wall = _wall(0.4, 2.0, -0.88)                       # 벽면 (지도 칸 안)
+    person = _arc(1.2, 0.0, 0.4)
+    points = wall + person + [[10.0, 10.0]]             # 지도 밖 점은 남김
+    keep = geometry.filter_map_points(points, grid)
+    assert not keep[:len(wall)].any()
+    assert keep[len(wall):].all()
+    near = geometry.filter_map_points([[1.0, -0.8], [1.0, -0.6]], grid)   # 벽에서 1칸 안 / 4칸 밖
+    assert list(near) == [False, True]
+
+
+def test_wall_points_alone_are_not_a_person_after_map_filter():
+    grid = _corridor_map()
+    points = _wall(0.4, 1.0, -0.88) + _wall(0.4, 1.0, 0.88)   # 벽 모서리 조각만
+    kept = [p for p, k in zip(points, geometry.filter_map_points(points, grid)) if k]
+    assert _blob(kept)[0] is False
+
+
+def test_wall_and_person_leave_only_the_person():
+    grid = _corridor_map()
+    points = _wall(0.4, 0.75, -0.88) + _arc(1.0, -0.2, 0.45)
+    kept = [p for p, k in zip(points, geometry.filter_map_points(points, grid)) if k]
+    found, cx, cy, width = geometry.person_blob_ahead(kept, SENSOR_X, BLOB)
+    assert found and math.isclose(cx, 1.0) and math.isclose(cy, -0.2) and math.isclose(width, 0.45)
+
+
+def test_tracks_ahead_of_bumper_rotates_position_and_velocity_only():
+    # 로봇 (1, 2)에서 북쪽(+y)을 봄. 사람은 북쪽 2 m에서 남쪽으로 1 m/s → 로봇 축으로 앞 2 m, 다가옴
+    (x, y, vx, vy), = geometry.tracks_ahead_of_bumper(
+        [(1.0, 4.0, 0.0, -1.0)], 1.0, 2.0, math.pi / 2, 0.25)
+    assert math.isclose(x, 1.75) and abs(y) < 1e-9
+    assert math.isclose(vx, -1.0) and abs(vy) < 1e-9
+    # 서 있는 사람은 로봇이 다가가도 속도 0 그대로 (로봇 속도를 빼지 않음)
+    (_, _, vx, vy), = geometry.tracks_ahead_of_bumper([(3.0, 0.0, 0.0, 0.0)], 0.0, 0.0, 0.0, 0.25)
+    assert vx == 0.0 and vy == 0.0

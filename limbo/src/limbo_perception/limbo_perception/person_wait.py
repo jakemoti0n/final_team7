@@ -14,7 +14,7 @@ WAITING을 타이머로 끝내는 전이는 없다. 오래 기다리면 경보(a
 
 from dataclasses import dataclass
 
-from limbo_perception.tof import closest_approach
+from limbo_perception.geometry import closest_approach
 
 NOT_READY = 'NOT_READY'
 DRIVING = 'DRIVING'

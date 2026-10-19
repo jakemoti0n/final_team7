@@ -52,11 +52,11 @@ bt_navigator:
       plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
     navigate_through_poses:
       plugin: "nav2_bt_navigator::NavigateThroughPosesNavigator"
-    # Nav2 기본 트리 사본: 진로 위로 다가오는 사람이나 사람 때문에 코앞이 막혔으면 경로 추종·계획 실패에도 멈춰 기다린다
-    # (behavior_trees/, 판단은 tof_node /person_approaching·/person_blocking, PROJECT.md 2-1·2-2, R5)
+    # Nav2 기본 트리 사본: 사람 때문에 기다려야 하면 경로 추종·계획 실패에도 멈춰 기다린다
+    # (behavior_trees/, 판단은 person_wait 노드 /person_wait 하나, PROJECT.md 2-7)
     default_nav_to_pose_bt_xml: $(find-pkg-share limbo_navigation)/behavior_trees/limbo_navigate_to_pose_w_replanning_and_recovery.xml
     default_nav_through_poses_bt_xml: $(find-pkg-share limbo_navigation)/behavior_trees/limbo_navigate_through_poses_w_replanning_and_recovery.xml
-    plugin_lib_names: ["limbo_is_person_blocking_condition_bt_node"]
+    plugin_lib_names: ["limbo_is_waiting_for_person_condition_bt_node"]
 
     error_code_names:
       - compute_path_error_code
@@ -778,7 +778,20 @@ collision_monitor:
     stop_pub_timeout: 2.0
     # Polygons represent zone around the robot for "stop", "slowdown" and "limit" action types,
     # and robot footprint for "approach" action type.
-    polygons: ["FootprintApproach"]
+    # FrontStop: 코앞 안전 정지. 범퍼(x 0.25, 차체 앞면 0.245) 앞 0.3 m × 로봇 폭 안에 점이 min_points 넘게 있으면 속도 0.
+    # 사람인지 따지지 않는다(설계 2-7: "ToF가 사람을 잡는" 자리는 여기다. 기다리기 판단은 person_wait의 사람 트랙만).
+    # 0.3 m는 손님이 서는 자리(HumanLayer로 앞면에서 0.3~0.4 m, tof.yaml stop_distance 근거)보다 안쪽이라 평소 손님 앞 정지는
+    # 상태 기계가 먼저 하고, 이것은 그보다 가까이 들어온 것(갑자기 끼어든 사람·상자)만 막는다
+    polygons: ["FrontStop", "FootprintApproach"]
+    FrontStop:
+      type: "polygon"
+      action_type: "stop"
+      points: "[[0.55, 0.30], [0.55, -0.30], [0.25, -0.30], [0.25, 0.30]]"   # base_footprint 기준, 반폭 0.30 = robot_half_width
+      min_points: 3      # ToF 8x8에서 사람·상자는 수십 점. 햇빛 튐 한두 점으로는 서지 않게
+      sources_names: ["tof_cloud", "scan"]   # 2-7 센서 역할표의 안전 정지 열(ToF·라이다)
+      visualize: True
+      polygon_pub_topic: "front_stop"
+      enabled: True
     FootprintApproach:
       type: "polygon"
       action_type: "approach"
@@ -786,9 +799,10 @@ collision_monitor:
       time_before_collision: 1.2
       simulation_time_step: 0.1
       min_points: 6
+      sources_names: ["mid360_cloud", "rgbd_cloud"]   # FrontStop 추가 전과 같은 관측원(동작 유지)
       visualize: True
       enabled: True
-    observation_sources: ["mid360_cloud", "rgbd_cloud"]
+    observation_sources: ["mid360_cloud", "rgbd_cloud", "tof_cloud", "scan"]
     mid360_cloud:
       type: "pointcloud"
       topic: "/mid360/points_filtered"
@@ -810,6 +824,24 @@ collision_monitor:
 
       min_range: 0.05
 
+      source_timeout: 2.0
+      enabled: true
+
+    # ToF: 카메라·라이다가 못 보는 범퍼 높이 코앞(낮은 상자, 사람 다리). 바닥 반사는 tof.yaml과 같은 높이로 거른다
+    tof_cloud:
+      type: "pointcloud"
+      topic: "/tof/points"
+      min_height: 0.03
+      max_height: 1.00
+      min_range: 0.02
+      source_timeout: 2.0
+      enabled: true
+
+    # 라이다 수평 스캔(self_filter 뒤): 몸체 높이의 사람·벽
+    scan:
+      type: "scan"
+      topic: "/scan"
+      min_range: 0.10
       source_timeout: 2.0
       enabled: true
 

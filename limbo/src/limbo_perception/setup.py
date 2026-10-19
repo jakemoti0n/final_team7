@@ -10,7 +10,8 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/config', ['config/person_detector.yaml', 'config/tof.yaml']),
+        ('share/' + package_name + '/config',
+            ['config/person_detector.yaml', 'config/tof.yaml', 'config/person_wait.yaml']),
         # 팀원이 학습한 하반신 모델 (person_detector.yaml 기본 모델)
         ('share/' + package_name + '/models', ['models/leg_512.pt']),
     ],
@@ -29,6 +30,7 @@ setup(
         'console_scripts': [
             'person_detector = limbo_perception.person_detector:main',
             'tof_node = limbo_perception.tof_node:main',
+            'person_wait = limbo_perception.person_wait_node:main',
         ],
     },
 )
