@@ -3,7 +3,8 @@
 사람을 인식하고 피하면서 실내를 순찰하는 쓰레기통 로봇. ROS 2 Jazzy + Gazebo Harmonic + Nav2.
 
 - 센서: Livox MID-360 (3D LiDAR + 내장 IMU), RGB-D 카메라
-- 사람 인식: YOLO(yolo11n) + depth로 사람 위치 추정, 칼만 필터로 추적, 2초 앞 경로 예측
+- 사람 인식: YOLO + depth로 사람 위치 추정, 칼만 필터로 추적, 2초 앞 경로 예측
+  - 모델은 팀원이 학습한 하반신 모델(`limbo_perception/models/leg_512.pt`, person·leg 2클래스)이 기본이라 가까워 다리만 보이는 사람도 잡는다. 기존 yolo11n으로 돌리려면 `person_detector.yaml`의 `yolo.model`·`classes`·`imgsz`를 주석대로 바꾼다
 - 주행: Nav2 (AMCL 위치 추정, MPPI 컨트롤러, 사람 예측 경로에 cost를 주는 `human_layer`)
 
 | 문서 | 언제 보나 |

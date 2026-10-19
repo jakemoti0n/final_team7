@@ -6,8 +6,10 @@ ROS 입출력(구독, 발행, TF, 파라미터)과 YOLO 호출만 여기서 하�
 """
 
 from dataclasses import dataclass
+import os
 from typing import Optional
 
+from ament_index_python.packages import get_package_share_directory
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PointStamped
 from limbo_interfaces.msg import PersonPredictionArray
@@ -21,7 +23,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Int32MultiArray
 import tf2_geometry_msgs  # noqa: F401  PointStamped용 tf2 변환 등록
 from tf2_ros import Buffer, TransformException, TransformListener
 from ultralytics import YOLO
@@ -35,6 +37,8 @@ APPROACH_INTENT_TOPIC = '/person_detector/approach_intent'
 NEAREST_OPTICAL_TOPIC = '/person_detector/person_position'
 NEAREST_BASE_TOPIC = '/person_detector/person_position_base'
 NEAREST_ODOM_TOPIC = '/person_detector/person_position_odom'
+# 시험 기록용: frame마다 [person 박스 수, leg 박스 수, 합친 뒤 남은 박스 수]
+BOX_COUNTS_TOPIC = '/person_detector/box_counts'
 
 PUBLISH_QUEUE = 10
 EXECUTOR_THREADS = 2
@@ -94,6 +98,8 @@ class PersonDetector(Node):
             PointStamped, NEAREST_BASE_TOPIC, PUBLISH_QUEUE)
         self.person_odom_pub = self.create_publisher(
             PointStamped, NEAREST_ODOM_TOPIC, PUBLISH_QUEUE)
+        self.box_counts_pub = self.create_publisher(
+            Int32MultiArray, BOX_COUNTS_TOPIC, PUBLISH_QUEUE)
 
         # 같은 시점의 RGB와 depth를 짝지어 받아야 사람 위치가 어긋나지 않는다
         self.rgb_sub = message_filters.Subscriber(
@@ -123,7 +129,8 @@ class PersonDetector(Node):
         self.robot_frame = p('robot_frame', 'base_link').value
         self.odom_frame = p('odom_frame', 'odom').value
         self.camera_frame = p('camera_frame', 'rgbd_camera_optical_link').value
-        self.model_path = p('yolo.model', 'yolo11n.pt').value
+        self.model_path = self._resolve_model_path(
+            p('yolo.model', 'yolo11n.pt').value)
         self.yolo_tracker = p('yolo.tracker', 'botsort.yaml').value
         # 사람으로 볼 클래스 번호. COCO 모델은 0(person)뿐, 하반신 모델은 0(person)·1(leg)
         self.yolo_classes = list(p('yolo.classes', [0]).value)
@@ -133,6 +140,11 @@ class PersonDetector(Node):
         self.leg_class = p('merge.leg_class', 1).value
         self.leg_inside_ratio = p('merge.leg_inside_ratio', 0.7).value
         self.leg_iou = p('merge.leg_iou', 0.5).value
+        self.leg_pair_gap_ratio = p('merge.leg_pair_gap_ratio', 1.5).value
+        self.leg_pair_vertical_overlap = p(
+            'merge.leg_pair_vertical_overlap', 0.5).value
+        # depth는 몸 겉면까지라 사람 중심으로 이만큼 민다 (human_layer lethal_radius와 같은 값)
+        self.person_radius = p('person_radius', 0.25).value
 
         self.yolo_confidence = p('yolo.confidence', 0.3).value
         self.sync_queue_size = p('sync.queue_size', 5).value
@@ -206,6 +218,19 @@ class PersonDetector(Node):
                 i.intent_lost_grace_time).value,
         )
 
+    @staticmethod
+    def _resolve_model_path(path):
+        """
+        상대 경로가 이 패키지 share 폴더에 있으면 그 경로로 바꾼다 (예: models/leg_512.pt).
+
+        없으면 그대로 둔다 (yolo11n.pt처럼 ultralytics가 찾거나 받는 이름).
+        """
+        if os.path.isabs(path):
+            return path
+        share_path = os.path.join(
+            get_package_share_directory('limbo_perception'), path)
+        return share_path if os.path.exists(share_path) else path
+
     def camera_info_callback(self, msg):
         self.intrinsics = geometry.CameraIntrinsics.from_k(msg.k)
 
@@ -271,9 +296,14 @@ class PersonDetector(Node):
         classes = boxes.cls.int().cpu().tolist()
         xyxy = [tuple(int(v) for v in b) for b in boxes.xyxy.cpu().numpy()]
         kept = geometry.merge_leg_boxes(
-            xyxy, classes, self.leg_class, self.leg_inside_ratio, self.leg_iou)
-        return [Detection(xyxy[i], raw_track_ids[i],
-                          leg=classes[i] == self.leg_class) for i in kept]
+            xyxy, classes, self.leg_class, self.leg_inside_ratio, self.leg_iou,
+            self.leg_pair_gap_ratio, self.leg_pair_vertical_overlap)
+        legs = sum(c == self.leg_class for c in classes)
+        self.box_counts_pub.publish(
+            Int32MultiArray(data=[len(classes) - legs, legs, len(kept)]))
+        return [Detection(box, raw_track_ids[i],
+                          leg=classes[i] == self.leg_class)
+                for i, box in kept]
 
     def _process_detection(self, detection, depth_image, stamp, current_time,
                            robot_xy, matched_person_ids):
@@ -287,6 +317,9 @@ class PersonDetector(Node):
         u = (x1 + x2) / 2.0
         v = (y1 + y2) / 2.0
         x, y, z = geometry.pixel_to_optical_point(u, v, depth, self.intrinsics)
+        # depth → 3D 직후에 민다: 카메라→사람 방향을 바로 아는 곳이고, 이후 base·odom 변환과
+        # 추적·예측·nearest 위치 토픽이 모두 같은 보정된 점을 쓴다
+        x, y, z = geometry.push_to_body_center(x, y, z, self.person_radius)
 
         result = PersonResult(
             detection=detection,

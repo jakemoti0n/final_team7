@@ -394,7 +394,7 @@ def generate_launch_description():
         DeclareLaunchArgument('gui', default_value='true'),
         # 주행 평가를 CSV로 남기려면 record:=true (limbo_evaluation/nav_recorder)
         DeclareLaunchArgument('record', default_value='false'),
-        # 사람 인식 모델을 바꿔 시험하려면 person_model:=<.pt 경로> (예: 하반신 모델). 비우면 yaml의 모델
+        # 사람 인식 모델을 바꿔 시험하려면 person_model:=<.pt 경로> (예: 기존 yolo11n.pt). 비우면 yaml의 모델
         DeclareLaunchArgument('person_model', default_value=''),
         # 로봇 모델: v14(기본, 쓰레기통 로봇 45x45x70) 또는 legacy(이전 모델, 비교용)
         DeclareLaunchArgument('robot', default_value='v14'),

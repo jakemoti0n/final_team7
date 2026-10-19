@@ -5,9 +5,11 @@ from rclpy.time import Time
 from tf2_ros import Buffer, TransformListener
 from limbo_interfaces.msg import PersonPredictionArray
 from geometry_msgs.msg import PoseArray
-from std_msgs.msg import String
+from std_msgs.msg import String, Int32MultiArray
 rclpy.init(); n = Node('leg_rec'); buf = Buffer(); TransformListener(buf, n)
-pending, frames, gt, names = [], [], [], ['']
+pending, frames, gt, names, boxes = [], [], [], [''], []
+# 박스 수 [person, leg, 합친 뒤 남은 수] (3차부터, 노드가 /person_detector/box_counts로 냄)
+n.create_subscription(Int32MultiArray, '/person_detector/box_counts', lambda m: boxes.append(list(m.data)), 50)
 n.create_subscription(PersonPredictionArray, '/person_detector/predictions', lambda m: pending.append((m, time.time())), 50)
 n.create_subscription(PoseArray, '/sim/people', lambda m: gt.append((Time.from_msg(m.header.stamp).nanoseconds * 1e-9, [(p.position.x, p.position.y) for p in m.poses])), 50)
 n.create_subscription(String, '/sim/people_names', lambda m: names.__setitem__(0, m.data), 10)
@@ -30,4 +32,4 @@ while not stop[0]:
                        'p': [(p.person_id, tx + c * p.current_position.x - s * p.current_position.y, ty + s * p.current_position.x + c * p.current_position.y)
                              for p in m.predictions]})
     pending = keep
-json.dump({'frames': frames, 'gt': gt, 'names': names[0]}, open(sys.argv[1], 'w')); print(f'frames {len(frames)} gt {len(gt)}')
+json.dump({'frames': frames, 'gt': gt, 'names': names[0], 'boxes': boxes}, open(sys.argv[1], 'w')); print(f'frames {len(frames)} gt {len(gt)}')

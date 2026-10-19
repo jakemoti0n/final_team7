@@ -1,4 +1,4 @@
-"""rec.py 녹화에서 겹침 비율과 위치 오차를 거리(1.5 m 안/밖)·방향(카메라 앞뒤/옆)으로 나눔. 사용법: err.py <json> ...
+"""rec.py 녹화에서 겹침 비율·박스 수(3차부터)와 위치 오차를 거리(1.5 m 안/밖)·방향(카메라 앞뒤/옆)으로 나눔. 사용법: err.py <json> ...
 앞뒤 오차가 음수면 예측이 정답(사람 중심)보다 카메라 쪽에 있다는 뜻."""
 import json, math, bisect, statistics as st, sys
 for p in sys.argv[1:]:
@@ -18,3 +18,7 @@ for p in sys.argv[1:]:
             E[b].append(math.hypot(ex, ey)); rad[b].append(ex * ux + ey * uy); lat[b].append(abs(-ex * uy + ey * ux))
     m = lambda v: f"{st.median(v):.2f}" if v else '-'
     print(p.split('/')[-1][:-5], f"겹침 {100*dup/det:.0f}% | 1.5m안 오차 {m(E['n'])} (앞뒤 {m(rad['n'])}, 옆 {m(lat['n'])}, n={len(E['n'])}) | 밖 {m(E['f'])} (앞뒤 {m(rad['f'])}, 옆 {m(lat['f'])})")
+    B = D.get('boxes')
+    if B:  # 3차부터: 박스 수. leg 2개 이상 & person 0인 frame, 합쳐서 박스가 줄어든 frame
+        legs2 = sum(1 for p_, l, k in B if p_ == 0 and l >= 2); fewer = sum(1 for p_, l, k in B if k < p_ + l)
+        print(f"  박스 frame {len(B)}: person 없이 leg≥2 {legs2} ({100*legs2/len(B):.0f}%), 합쳐서 줄어듦 {fewer} ({100*fewer/len(B):.0f}%)")

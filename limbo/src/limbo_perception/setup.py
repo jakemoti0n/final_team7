@@ -11,7 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/config', ['config/person_detector.yaml', 'config/tof.yaml']),
-        # 팀원이 학습한 하반신 모델 (person_model:=로 바꿔 끼워 시험)
+        # 팀원이 학습한 하반신 모델 (person_detector.yaml 기본 모델)
         ('share/' + package_name + '/models', ['models/leg_512.pt']),
     ],
     install_requires=['setuptools'],

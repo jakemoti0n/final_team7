@@ -160,9 +160,13 @@ def test_person_depth_full_body_is_unchanged():
 LEG = 1
 
 
-def _merge(boxes, classes):
+def _merge_boxes(boxes, classes):
     return geometry.merge_leg_boxes(
         boxes, classes, leg_class=LEG, leg_inside_ratio=0.7, leg_iou=0.5)
+
+
+def _merge(boxes, classes):
+    return [i for i, _ in _merge_boxes(boxes, classes)]
 
 
 def test_merge_drops_leg_box_inside_person_box():
@@ -214,3 +218,27 @@ def test_person_depth_single_leg_box_measures_the_leg():
 
     leg = geometry.person_depth(depth, 0, 0, 40, 100, config, leg=True)
     assert abs(leg - 1.2) < 0.01
+
+
+def test_merge_joins_two_legs_side_by_side():
+    # 가까운 사람의 두 다리가 따로 잡힘 → 둘을 감싼 박스 하나
+    left = (100, 200, 140, 470)
+    right = (165, 210, 200, 465)
+    assert _merge_boxes([left, right], [LEG, LEG]) == [(0, (100, 200, 200, 470))]
+
+
+def test_merge_keeps_legs_of_two_distant_people():
+    # 멀리 떨어진 두 사람의 다리 하나씩 → 합치지 않음
+    left = (100, 200, 140, 470)
+    right = (400, 200, 440, 470)
+    assert _merge_boxes([left, right], [LEG, LEG]) == [(0, left), (1, right)]
+
+
+def test_push_to_body_center_moves_away_from_camera():
+    # 정면 2 m 겉면 → 2.25 m. 높이(y)는 그대로
+    x, y, z = geometry.push_to_body_center(0.0, 0.3, 2.0, 0.25)
+    assert (abs(x) < 1e-9, y, abs(z - 2.25) < 1e-9) == (True, 0.3, True)
+    # 비스듬한 점은 같은 방향으로 수평 거리만 0.25 m 늘어남
+    x, y, z = geometry.push_to_body_center(0.6, 0.0, 0.8, 0.25)
+    assert abs(np.hypot(x, z) - 1.25) < 1e-9
+    assert abs(x / z - 0.75) < 1e-9

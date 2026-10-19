@@ -89,14 +89,19 @@ def _intersection(a, b):
                   min(a[2], b[2]), min(a[3], b[3])))
 
 
-def merge_leg_boxes(boxes, classes, leg_class, leg_inside_ratio, leg_iou):
+def merge_leg_boxes(boxes, classes, leg_class, leg_inside_ratio, leg_iou,
+                    pair_gap_ratio=1.5, pair_vertical_overlap=0.5):
     """
-    같은 사람에 붙은 박스를 하나로 줄이고 남길 박스 번호(입력 순서)를 반환한다.
+    같은 사람에 붙은 박스를 하나로 줄이고 (원래 번호, 박스) 목록을 반환한다.
 
     하반신 모델은 한 사람에 person 박스와 leg 박스를 같이 낼 때가 많다.
     추적기는 한 사람에 박스 하나만 붙이므로, 남는 박스가 새 사람이 되지 않게 한다.
     - leg 면적의 leg_inside_ratio 이상이 어떤 person 박스 안이면 leg를 버린다
     - person 없이 남은 leg는 사람으로 쓴다. leg끼리 IoU가 leg_iou 이상이면 큰 것만 남긴다
+    - 다리 하나씩 따로 잡힌 leg 둘(가로로 나란함)은 둘을 감싸는 박스 하나로 합친다.
+      나란함 = 박스 중심 가로 간격이 두 박스 폭 합의 pair_gap_ratio배 이내이고
+      세로로 겹친 길이가 짧은 쪽 높이의 pair_vertical_overlap 이상.
+      합친 박스의 번호는 큰 leg의 번호(그 leg의 추적 ID를 쓴다)
     """
     people = [b for b, c in zip(boxes, classes) if c != leg_class]
     legs = sorted((i for i, c in enumerate(classes) if c == leg_class),
@@ -115,8 +120,57 @@ def merge_leg_boxes(boxes, classes, leg_class, leg_inside_ratio, leg_iou):
             continue
         kept_legs.append(i)
 
-    kept = set(kept_legs)
-    return [i for i, c in enumerate(classes) if c != leg_class or i in kept]
+    # 큰 leg부터, 나란한 leg 중 가로로 가장 가까운 것과 짝짓는다
+    leg_boxes = {}
+    paired = set()
+    for i in kept_legs:
+        if i in paired:
+            continue
+        partners = [k for k in kept_legs
+                    if k != i and k not in paired
+                    and _side_by_side(boxes[i], boxes[k], pair_gap_ratio,
+                                      pair_vertical_overlap)]
+        if not partners:
+            leg_boxes[i] = boxes[i]
+            continue
+        k = min(partners, key=lambda k: _center_gap(boxes[i], boxes[k]))
+        paired.update((i, k))
+        a, b = boxes[i], boxes[k]
+        leg_boxes[i] = (min(a[0], b[0]), min(a[1], b[1]),
+                        max(a[2], b[2]), max(a[3], b[3]))
+
+    return [(i, boxes[i] if c != leg_class else leg_boxes[i])
+            for i, c in enumerate(classes)
+            if c != leg_class or i in leg_boxes]
+
+
+def _center_gap(a, b):
+    return abs((a[0] + a[2]) - (b[0] + b[2])) / 2.0
+
+
+def _side_by_side(a, b, gap_ratio, vertical_overlap):
+    """두 박스가 한 사람의 두 다리처럼 가로로 나란한가."""
+    width_sum = (a[2] - a[0]) + (b[2] - b[0])
+    if _center_gap(a, b) > gap_ratio * width_sum:
+        return False
+    overlap = min(a[3], b[3]) - max(a[1], b[1])
+    shorter = min(a[3] - a[1], b[3] - b[1])
+    return shorter > 0 and overlap >= vertical_overlap * shorter
+
+
+def push_to_body_center(x, y, z, radius):
+    """
+    광학(optical) frame 점을 카메라에서 멀어지는 수평 방향으로 radius만큼 민다.
+
+    depth는 사람 몸의 카메라 쪽 겉면까지 거리라서, 사람 중심은 그보다 몸 반경만큼 뒤에 있다.
+    optical frame에서 수평면은 x(오른쪽)·z(앞), y(아래)는 높이라 그대로 둔다
+    (카메라가 수평으로 달려 있다는 전제).
+    """
+    horizontal = np.hypot(x, z)
+    if horizontal <= 0.0 or radius == 0.0:
+        return x, y, z
+    scale = (horizontal + radius) / horizontal
+    return x * scale, y, z * scale
 
 
 def _iou(a, b):
