@@ -12,6 +12,7 @@ import time
 from limbo_interfaces.msg import PersonPredictionArray
 import numpy as np
 import rclpy
+from rclpy._rclpy_pybind11 import RCLError
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
@@ -139,6 +140,8 @@ def main(args=None):
         rclpy.spin(node)
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
+    except RCLError:
+        pass   # launch가 끝나며 컨텍스트가 먼저 닫힌 경우(종료 경쟁), 오류가 아님
     finally:
         node.destroy_node()
         rclpy.try_shutdown()

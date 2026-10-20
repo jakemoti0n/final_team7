@@ -37,3 +37,4 @@ person_wait:
     odom_topic: /odometry/filtered
     stall_speed: 0.05          # m/s, 이보다 느리면 서 있는 것
     stall_sec: 2.0             # s, Nav2 진전 검사(10 s)보다 먼저 걸려 사람 앞 복구를 막는다
+    blocked_zone_margin: 0.45  # m, 막혔을 때 사람 여부를 볼 구역 여유 = inflation_radius. 옆 0.75 m에 선 사람도 로봇을 막는다

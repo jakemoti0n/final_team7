@@ -228,3 +228,15 @@ def test_tof_alone_does_not_hold_without_a_recent_close_track():
     _run(machine, 1.0, 3.0, [(1.3, 0.0, 0.0, 0.0)], robot_speed=0.0)   # 구역 안이지만 범퍼에서 1.3 m
     statuses = _run(machine, 3.0, 4.0, [], tof_blocked=True)
     assert statuses[-1].state == pw.DRIVING and machine.transitions[-1].reason == 'zone_clear'
+
+
+def test_person_beside_path_that_blocks_a_stalled_robot_is_waited_for_not_recovered():
+    """옆 0.75 m에 선 사람(진로 폭 밖, 팽창 폭 안) 때문에 로봇이 막히면 복구가 아니라 기다리고, 그 사람이 서 있는 한 풀지 않는다."""
+    machine = _blocked_machine()
+    beside = (0.8, 0.75, 0.0, 0.0)
+    status = machine.on_tick(0.1, [beside], ready=True, robot_speed=0.0)
+    assert status.state == pw.WAITING and status.reason == 'blocked_in_zone'
+    statuses = _run(machine, 0.2, 5.0, [beside], robot_speed=0.0)
+    assert {s.state for s in statuses} == {pw.WAITING}
+    status = _run(machine, 5.0, 6.0, [(0.8, 2.0, 0.0, 0.0)])[-1]      # 사람이 멀리 비킴
+    assert status.state == pw.DRIVING

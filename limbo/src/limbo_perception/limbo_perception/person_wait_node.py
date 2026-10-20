@@ -63,7 +63,8 @@ class PersonWaitNode(Node):
             recent_track_sec=p('recent_track_sec', 3.0).value,
             track_lost_range=p('track_lost_range', 1.0).value,
             stall_speed=p('stall_speed', 0.05).value,
-            stall_sec=p('stall_sec', 2.0).value))
+            stall_sec=p('stall_sec', 2.0).value,
+            blocked_zone_margin=p('blocked_zone_margin', 0.45).value))
         self.base_frame = p('base_frame', 'base_link').value
         self.map_frame = p('map_frame', 'map').value
         self.bumper_frame = p('bumper_frame', 'tof_link').value

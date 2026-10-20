@@ -47,6 +47,10 @@ class WaitConfig:
     # 미만으로 stall_sec 지속. Nav2 진전 검사(10 s)보다 먼저 걸려 사람 앞 복구를 막는다
     stall_speed: float = 0.05       # m/s
     stall_sec: float = 2.0          # s
+    # 막혔을 때 "사람 때문인가"를 볼 구역은 진로 폭이 아니라 costmap이 사람을 막는 폭이다: 사람 치명 반경 + 팽창 반경
+    # (nav2_params inflation_radius 0.45). 옆 0.75 m에 선 사람도 로봇을 막는데 진로 폭(0.55)만 보면 "사람 없음"으로 보고
+    # 복구(회전)를 돌렸다(10-20 복도 시험, 2-2 위반). 다가옴 판정·평소 구역은 그대로
+    blocked_zone_margin: float = 0.45  # m
 
     @property
     def zone_half_width(self):
@@ -108,6 +112,7 @@ class PersonWait:
         self.moving_since = None       # 정지 중 구역 안 트랙이 moving_speed 이상으로 움직이기 시작한 시각
         self.close_track_at = None     # 구역 안 트랙이 track_lost_range 안에 마지막으로 보인 시각
         self.stalled_since = None      # 로봇 속도가 stall_speed 미만이기 시작한 시각(None이면 움직이는 중)
+        self.blocked_entry = False     # 막혀서(blocked_in_zone) 기다리는 중이면 넓은 구역으로 본다
         self.tof_hold = False          # 트랙이 끊긴 손님을 ToF로 이어서 기다리는 중
         self.next_alarm_at = None
         self.transitions = []          # Transition 목록. 노드가 새로 생긴 것만 로그로 찍는다
@@ -142,9 +147,10 @@ class PersonWait:
         if any(is_approaching(track, c) for track in tracks):
             self._go(t, WAITING, 'approaching')
             return self._status(t, 'approaching', tracks)
-        if any(in_zone(track, c) for track in tracks) and self._stalled(t):
-            # 서 있는 사람이 구역 안에 있고 로봇이 실제로 막혔다: 사람 때문에 막힘(2-2) → 복구 대신 기다린다
+        if any(in_zone(track, c, c.blocked_zone_margin) for track in tracks) and self._stalled(t):
+            # 서 있는 사람이 (팽창까지 친) 구역 안에 있고 로봇이 실제로 막혔다: 사람 때문에 막힘(2-2) → 복구 대신 기다린다
             self._go(t, WAITING, 'blocked_in_zone')
+            self.blocked_entry = True
             self._update_stationary(t, self._zone_tracks(tracks))   # 서비스 시간은 선 순간부터 잰다
             return self._status(t, 'blocked_in_zone', tracks)
         return self._status(t, 'clear', tracks)
@@ -224,9 +230,12 @@ class PersonWait:
                 t - self.close_track_at <= self.config.recent_track_sec)
 
     def _zone_tracks(self, tracks):
-        """기다리는 중에는 넓힌 구역으로 본다(들어올 때보다 나갈 때 경계가 멀어야 안 떤다)."""
+        """기다리는 중에는 넓힌 구역으로 본다(들어올 때보다 나갈 때 경계가 멀어야 안 떤다). 막혀서 기다리면 팽창 폭까지."""
+        margin = self.config.zone_exit_margin
+        if self.blocked_entry:
+            margin = max(margin, self.config.blocked_zone_margin + self.config.zone_exit_margin)
         return [track for track in tracks
-                if in_zone(track, self.config, self.config.zone_exit_margin)]
+                if in_zone(track, self.config, margin)]
 
     def _update_stationary(self, t, zone_tracks):
         """
@@ -256,6 +265,8 @@ class PersonWait:
         self.state, self.state_since = new_state, t
         self.clear_since = None
         self.tof_hold = False
+        if new_state != WAITING:
+            self.blocked_entry = False
         if new_state != WAITING:
             self.stationary_since = self.moving_since = None
             self.next_alarm_at = None
