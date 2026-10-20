@@ -12,6 +12,7 @@
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | 에러가 났을 때. 증상 → 원인 → 해결 |
 | [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | 아직 못 고친 문제인지 확인할 때 |
 | [docs/PROJECT.md](docs/PROJECT.md) | 프로젝트 개요와 할 일 |
+| [docs/REAL_ROBOT_BRINGUP.md](docs/REAL_ROBOT_BRINGUP.md) | Jetson·센서·구동부를 실물 주행으로 연결할 때 |
 
 ---
 
