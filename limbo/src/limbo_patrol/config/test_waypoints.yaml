@@ -1,5 +1,5 @@
 waypoints:
-- name: A
+- name: Start
   type: pass
   x: 6.02609402901786
   y: 4.909063616071429
@@ -53,9 +53,9 @@ waypoints:
   y: 0.10379576683044434
   yaw: 0
   wait_sec: 0
-- name: J
+- name: End
   type: stop
-  x: 0.8289951086044312
-  y: -0.005552530288696289
+  x: 0.862433314732141
+  y: -0.025400669642856144
   yaw: -179.0
   wait_sec: 0

@@ -49,6 +49,21 @@ corepack pnpm build
 
 `corepack`이 없다면 Node.js 설치 환경에서 `npm install --global pnpm@10.17.1`로 pnpm을 설치하고 아래 `corepack pnpm` 대신 `pnpm`을 사용한다. 이 전역 설치 명령은 실행 디렉터리와 무관하다. Python 직접 의존성은 `dashboard/requirements.txt`, 검증된 전체 버전은 `dashboard/requirements.lock`, UI 버전은 `dashboard/ui/package.json`과 `dashboard/ui/pnpm-lock.yaml`로 고정한다. 패키지 설치에는 네트워크가 필요하며 실행 시 외부 폰트나 CDN에 접속하지 않는다.
 
+## Dashboard와 Bridge 한 번에 실행
+
+UI 빌드와 `limbo_bringup`·`limbo_telemetry_bridge` 빌드가 끝난 뒤, 저장소 루트에서 다음처럼 실행한다. `start_dashboard.launch.py`가 FastAPI 서버(127.0.0.1:8000)와 telemetry Bridge를 함께 관리한다. 별도 UI 개발 서버는 필요 없다.
+
+```bash
+cd ~/limbo
+source /opt/ros/jazzy/setup.bash
+source limbo/install/setup.bash
+ros2 launch limbo_bringup start_dashboard.launch.py
+```
+
+서버가 준비되면 기본 브라우저에서 `http://127.0.0.1:8000/`을 자동으로 연다. 자동 열기를 끄려면 `open_browser:=false`를 붙인다.
+
+종료는 해당 터미널에서 `Ctrl+C`. 한 프로세스가 먼저 끝나도 launch가 다른 프로세스를 정리한다. 기존 Dashboard 서버나 Bridge가 실행 중이면 먼저 종료해야 한다. 기본 경로는 이 저장소의 `dashboard/`와 `relay_prog/`이며, 다른 배치에서는 `repo_root:=/absolute/path/to/repo`를 지정한다. `ros_domain_id` 기본값은 launch 파일에 지정된 `97`이다. 다른 도메인을 사용할 때는 `ros_domain_id:=번호`로 바꾸고, Dashboard의 `patrol_ros_domain_id` 설정도 같은 값으로 유지한다.
+
 ## 실행·종료
 
 UI 빌드 완료 후, **서버는 `dashboard/ui`가 아닌 `dashboard` 디렉터리에서 실행한다.** 이 서버 하나가 빌드된 실제 화면과 데모 화면을 모두 제공하므로 일반 실행에는 별도 UI 터미널이 필요 없다.

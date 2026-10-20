@@ -58,6 +58,17 @@ build_limbo
 cd ~/limbo/limbo && rm -rf build/<그 패키지> install/<그 패키지> && build_limbo
 ```
 
+Dashboard와 telemetry Bridge는 별도 터미널에서 한 번에 실행할 수 있다 (UI와 두 ROS 작업공간을 먼저 빌드):
+
+```bash
+cd ~/limbo
+source /opt/ros/jazzy/setup.bash
+source limbo/install/setup.bash
+ros2 launch limbo_bringup start_dashboard.launch.py
+```
+
+이 명령은 Dashboard 서버와 Bridge를 함께 시작하며 `Ctrl+C`로 함께 종료한다. 자세한 설정은 [dashboard/README.md](dashboard/README.md)를 참고한다.
+
 ### 3. 시뮬레이션 띄우기
 
 ```bash
