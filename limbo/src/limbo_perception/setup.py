@@ -31,6 +31,7 @@ setup(
             'person_detector = limbo_perception.person_detector:main',
             'tof_node = limbo_perception.tof_node:main',
             'person_wait = limbo_perception.person_wait_node:main',
+            'person_filter = limbo_perception.person_filter:main',
         ],
     },
 )

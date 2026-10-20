@@ -465,7 +465,25 @@ global_costmap:
       # 경로 계획기도 지도에 없는 장애물(낮은 상자 등)을 알아야 처음부터 돌아가는 경로를 그린다.
       # 로컬에만 있으면 경로가 장애물을 관통하고, MPPI가 그 앞에서 머뭇거리다 장애물이 시야에서 빠져 잊히면 부딪혔다.
       # 대신 좁은 복도를 사람이 막으면 경로 계획이 실패하고 재시도한다 (docs/KNOWN_ISSUES.md)
-      plugins: ["static_layer", "stvl_layer", "inflation_layer"]
+      plugins: ["static_layer", "stvl_layer", "human_layer", "inflation_layer"]
+      # 사람(설계 전제 2-8 규칙 1): 전역은 사람을 센서 점이 아니라 트랙으로 본다. STVL은 person_filter가 사람 점을 뺀
+      # 점구름(*_nopeople)을 받고, HumanLayer는 사람 현재 위치를 치명이 아닌 "통행료"로 칠한다(예측 경로 없음).
+      # 뜻: 그 사람 한 명을 피하려고 몇 m까지 돌아가는가 — 서 있는 사람 3 m, 걷는 사람 0.5 m (10-20 결정).
+      # 실제 회피·정지는 지역 costmap(치명)·안전 정지·기다리기가 한다. 전역 치명은 군중(사람 50명)에서 길을 없앴다
+      human_layer:
+        plugin: "limbo_navigation::HumanLayer"
+        enabled: true
+        max_prediction_age: 1.0
+        current_lethal: false
+        use_predictions: false
+        standing_speed: 0.2        # m/s, person_wait의 min_speed와 같음
+        standing_peak_cost: 200.0  # 반경 0.8·sigma 0.35와 함께 ≈ 돌아갈 가치 3 m
+        standing_radius: 0.8
+        standing_sigma: 0.35
+        walking_peak_cost: 60.0    # 반경 0.5·sigma 0.22 ≈ 0.5 m
+        walking_radius: 0.5
+        walking_sigma: 0.22
+        min_cost: 10.0
 
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
@@ -528,7 +546,7 @@ global_costmap:
 
           data_type: PointCloud2
 
-          topic: /mid360/points_filtered
+          topic: /mid360/points_filtered_nopeople
 
           marking: true
           clearing: false
@@ -597,7 +615,7 @@ global_costmap:
 
           data_type: PointCloud2
 
-          topic: /rgbd_camera/points
+          topic: /rgbd_camera/points_nopeople
 
           marking: true
           clearing: false

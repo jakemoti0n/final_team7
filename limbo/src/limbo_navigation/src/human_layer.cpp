@@ -70,7 +70,21 @@ void HumanLayer::readParameters()
   read("max_prediction_time", config_.max_prediction_time);
   read("min_cost", config_.min_cost);
   read("max_prediction_age", config_.max_prediction_age);
-  paint_radius_ = std::max(config_.radius, config_.lethal_radius);
+  auto read_bool = [&](const char * name, bool & value) {
+      declareParameter(name, rclcpp::ParameterValue(value));
+      node->get_parameter(name_ + "." + name, value);
+    };
+  read_bool("current_lethal", config_.current_lethal);
+  read_bool("use_predictions", config_.use_predictions);
+  read("standing_speed", config_.standing_speed);
+  read("standing_peak_cost", config_.standing_peak_cost);
+  read("standing_radius", config_.standing_radius);
+  read("standing_sigma", config_.standing_sigma);
+  read("walking_peak_cost", config_.walking_peak_cost);
+  read("walking_radius", config_.walking_radius);
+  read("walking_sigma", config_.walking_sigma);
+  paint_radius_ = std::max({config_.radius, config_.lethal_radius,
+      config_.current_lethal ? 0.0 : std::max(config_.standing_radius, config_.walking_radius)});
 }
 
 void HumanLayer::predictionCallback(const PredictionArray::SharedPtr msg)
@@ -177,10 +191,25 @@ void HumanLayer::paintPerson(
   nav2_costmap_2d::Costmap2D & grid, const CellRange & range,
   const limbo_interfaces::msg::PersonPrediction & person)
 {
-  // 현재 위치: 사람이 지금 서 있는 곳이라 항상 치명
-  paintCircle(
-    grid, range, person.current_position.x, person.current_position.y,
-    true, config_.near_peak_cost);
+  if (!config_.current_lethal) {
+    // 전역 "통행료" 모드(2-8): 현재 위치만, 치명 아님. 서 있는 사람은 로봇이 갈 때까지 거기 있을 확률이 높아 비싸고,
+    // 걷는 사람은 곧 비키니 싸다. 예측 경로는 쓰지 않는다(군중에서 길을 없앰)
+    const double speed = std::hypot(person.velocity.x, person.velocity.y);
+    const bool standing = speed < config_.standing_speed;
+    paintCircle(
+      grid, range, person.current_position.x, person.current_position.y, false,
+      standing ? config_.standing_peak_cost : config_.walking_peak_cost,
+      standing ? config_.standing_radius : config_.walking_radius,
+      standing ? config_.standing_sigma : config_.walking_sigma);
+    if (!config_.use_predictions) {
+      return;
+    }
+  } else {
+    // 현재 위치: 사람이 지금 서 있는 곳이라 항상 치명
+    paintCircle(
+      grid, range, person.current_position.x, person.current_position.y,
+      true, config_.near_peak_cost, config_.radius, config_.sigma);
+  }
 
   const std::size_t count =
     std::min(person.predicted_positions.size(), person.time_offsets.size());
@@ -190,7 +219,7 @@ void HumanLayer::paintPerson(
       continue;
     }
     const auto & p = person.predicted_positions[i];
-    paintCircle(grid, range, p.x, p.y, t <= config_.lethal_time, peakCostAt(t));
+    paintCircle(grid, range, p.x, p.y, t <= config_.lethal_time, peakCostAt(t), config_.radius, config_.sigma);
   }
 }
 
@@ -198,18 +227,18 @@ void HumanLayer::paintPerson(
 // 기존 비용(정적 지도·STVL)은 낮추지 않는다
 void HumanLayer::paintCircle(
   nav2_costmap_2d::Costmap2D & grid, const CellRange & range,
-  double x, double y, bool lethal, double peak_cost)
+  double x, double y, bool lethal, double peak_cost, double radius, double sigma)
 {
   unsigned int center_mx, center_my;
   if (!grid.worldToMap(x, y, center_mx, center_my)) {
     return;
   }
-  const int cell_radius = static_cast<int>(std::ceil(paint_radius_ / grid.getResolution()));
+  const int cell_radius = static_cast<int>(std::ceil(radius / grid.getResolution()));
   const int start_x = std::max(range.min_i, static_cast<int>(center_mx) - cell_radius);
   const int end_x = std::min(range.max_i, static_cast<int>(center_mx) + cell_radius + 1);
   const int start_y = std::max(range.min_j, static_cast<int>(center_my) - cell_radius);
   const int end_y = std::min(range.max_j, static_cast<int>(center_my) + cell_radius + 1);
-  const double two_sigma_sq = 2.0 * config_.sigma * config_.sigma;
+  const double two_sigma_sq = 2.0 * sigma * sigma;
 
   for (int my = start_y; my < end_y; ++my) {
     for (int mx = start_x; mx < end_x; ++mx) {
@@ -220,7 +249,7 @@ void HumanLayer::paintCircle(
       double cost;
       if (lethal && distance <= config_.lethal_radius) {
         cost = nav2_costmap_2d::LETHAL_OBSTACLE;
-      } else if (distance <= config_.radius) {
+      } else if (distance <= radius) {
         cost = peak_cost * std::exp(-(distance * distance) / two_sigma_sq);
         if (cost < config_.min_cost) {
           continue;

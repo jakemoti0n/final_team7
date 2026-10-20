@@ -363,6 +363,15 @@ def generate_launch_description():
 
     # 사람 기다리기 상태 기계 → /person_wait. BT 조건 IsWaitingForPerson이 이것만 본다 (PROJECT.md 2-7).
     # 시각은 카메라 예측 메시지에서 가져와 sim time(/clock 구독)이 필요 없다
+    # 사람 트랙 반경 안의 점을 뺀 점구름(*_nopeople). 전역 costmap STVL만 이것을 쓴다 (PROJECT.md 2-8 규칙 1)
+    person_filter = Node(
+        package='limbo_perception',
+        executable='person_filter',
+        name='person_filter',
+        output='screen',
+        parameters=[{'use_sim_time': True}]
+    )
+
     person_wait = Node(
         package='limbo_perception',
         executable='person_wait',
@@ -451,6 +460,7 @@ def generate_launch_description():
 
         detector,
         tof,
+        person_filter,
         person_wait,
         nav_recorder,
     ])
