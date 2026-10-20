@@ -10,6 +10,21 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-20 (120) 기다리기 4단계: 서 있는 사람은 막혔을 때만, 안전 정지는 충돌 임박만, 준비 전 트랙 버림. 피팅 금지 규칙
+
+**할 일**
+- `limbo_perception`·`limbo_navigation` 재빌드. `person_wait.yaml`에 `odom_topic`·`stall_speed`·`stall_sec` 추가, `nav2_params.yaml` collision_monitor에서 `FrontStop`·`scan` 관측원 제거
+
+**변경**
+- `person_wait.py`: DRIVING → WAITING의 구역 안 정지 트랙 진입을 "로봇이 실제로 막혔을 때"(`/odometry/filtered` 속도 0.05 m/s 미만 2 s)만으로(`blocked_in_zone`). 서 있는 사람은 그 자체로 손님이 아니다(2-7). 단위 시험 3개 추가(막힘·옆 사람·오도메트리 없음), 기존 사례는 막힌 로봇 전제로 갱신
+- `nav2_params.yaml`: 범퍼 앞 0.3 m 고정 정지 구역(FrontStop) 제거, approach 모델(1.2 s 앞 footprint) 관측원에 ToF 추가. 벽 옆 제자리 회전을 안 막음
+- `person_wait_node.py`: 준비(TF 2 s) 전에 온 트랙 메시지는 버림(시작 직후 가짜 코앞 트랙)
+- `docs/PROJECT.md`: 2-7 전이 문구(①다가옴 ②막혔을 때 구역 안 정지), 안전 정지 문구, 6절 "피팅 금지" 규칙. `docs/KNOWN_ISSUES.md`: 60 s 정지 항목 해결 표시, "서로 양보 교착" 신규
+
+**확인**(`experiments/2026-10-19_person_wait/` 4단계, 각 1회)
+- 상자+벽 옆 사람 4/4(벽 옆 사람 옆을 멈춤 없이 지나감), 손님 4/4(정지 7.1 s 뒤 출발), 앞에 서는 사람 3/3(막힌 뒤 대기 → ToF 비면 출발, 벽 앞 갇힘 없음). 복구·충돌 0
+- 복도 1/3: 비켜 주는 시뮬 사람이 로봇 옆에 서고 로봇은 막혀 대기, 둘 다 안 움직여 225 s(경보 8번). 설계대로 작동한 결과이며 시뮬 사람을 고쳐 통과시키지 않음. 출구는 R6
+
 ## 2026-10-19 (119) 사람 기다리기 재설계(2-7) 1~3단계: 상태 기계 하나·`/person_wait`·`IsWaitingForPerson`, 래치 제거, 안전 정지 분리
 
 **할 일**
