@@ -1,0 +1,9 @@
+{
+  "world": "zz_cross",
+  "map": "aischool_2f_map",
+  "robot": "limbo",
+  "people": [
+    {"name": "walker_yield", "type": "yield", "speed": 0.7, "waypoints": [[-2.5, -1.0], [-2.5, 1.5]], "loop": true},
+    {"name": "walker_noyield", "type": "no_yield", "speed": 0.7, "waypoints": [[-6.0, 10.1], [1.9, 10.1]], "loop": true}
+  ]
+}
