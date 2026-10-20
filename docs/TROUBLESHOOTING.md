@@ -201,6 +201,12 @@
 - **해결**: ROS·gz 프로세스가 하나도 없을 때 `ros2 daemon stop` 후 `rm -f /dev/shm/fastrtps_*`. `sim_ctl.sh stop`이 그 조건에서 자동으로 한다. 잔존 프로세스는 `ps -eo pid,lstart,args`로 런치 시각별로 보고 **PID로** 끈다(패턴으로 모아 죽이면 자기 셸까지 죽음)
 - **확인**: 정리 뒤 같은 회차(`patrol_trial.sh rec2`)가 1번에 시작해 완주. 오전에 "확인할 후보"로 적었던 가설이 이렇게 확정됨
 
+### 주행 중 70~90 s에 Nav2 전체가 내려감(heartbeat 끊김) — 옆에서 돌린 측정 스크립트의 OOM — 2026-10-20
+- **증상**: 군중 월드 3회차가 모두 목표 1에서 66~83 s에 `Goal failed`. 로그에 `CRITICAL FAILURE: SERVER amcl IS DOWN after not receiving a heartbeat for 4000 ms`(회차마다 amcl·controller_server 등 다른 노드), 직전에 `Control loop missed its desired rate`, `Lookup would require extrapolation into the future`, `Robot to stop due to invalid source`. 설정을 안 바꾼 회차(A)까지 똑같이 실패했고 직전 같은 설정 회차(r2_crowd)는 완주
+- **원인**: 같이 띄운 측정 스크립트 `tools/sim_trials/stvl_trail.py`(첫 판)가 지도 벽 전체(충장로 수백만 칸)와 치명 칸 사이 거리 행렬을 만들어 RSS 28.8 GB까지 커짐 → 커널 OOM(`journalctl -k`: `Out of memory: Killed process 24340 (python3) anon-rss:28843812kB`). 죽기 전까지 메모리 압박으로 시뮬·Nav2 노드가 멈칫해 bond heartbeat 4 s를 넘김. 세 회차 다 스크립트 시작(70 s) 직후에 무너진 것이 단서였음
+- **해결**: 벽 판정을 지도를 2칸 팽창시켜 조회하는 방식으로(메모리 110 MB, 0.08 s). 거리 행렬은 사람(수십 점)에만 씀
+- **확인**: 고친 뒤 같은 세 회차 재실행(아래 실험 기록). 교훈: 시뮬 옆에서 무엇이든 돌릴 때는 `free -g`로 메모리를 보고, 회차가 **설정과 무관하게 같은 시각에** 무너지면 설정이 아니라 옆 프로세스를 의심
+
 ### slam_toolbox 위치 추정 모드가 뜨자마자 내려가고 Nav2까지 무너짐 — 2026-10-14
 - **증상**: `localization:=slam`으로 띄우면 `CRITICAL FAILURE: SERVER slam_toolbox IS DOWN after not receiving a heartbeat for 4000 ms` → lifecycle manager가 slam_toolbox를 내리고, `map→odom`이 사라져 controller_server가 abort(-6). 시험 도구가 3번 다 실패
 - **원인**: slam_toolbox가 24 MB 포즈그래프를 읽고 스캔을 맞추는 동안 bond heartbeat를 4 s 넘게 못 보냄. 그 전엔 포즈그래프 파일 경로가 `install/.../maps`인데 파일은 `src/.../maps`에만 있어 `DeserializePoseGraph: Failed to read file`(maps는 복사 설치)
