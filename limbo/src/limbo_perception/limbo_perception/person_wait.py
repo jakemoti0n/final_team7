@@ -267,6 +267,10 @@ class PersonWait:
         self.tof_hold = False
         if new_state != WAITING:
             self.blocked_entry = False
+        if new_state == DRIVING:
+            # 기다리느라 서 있던 시간은 "막힘"이 아니다. 출발한 뒤 다시 2 s를 재야 한다. 안 그러면 대기가 끝나는 순간
+            # 옆 1 m 안에 누가 서 있기만 해도 바로 blocked_in_zone으로 되돌아가 군중에서 대기가 꼬리를 물었다(10-20)
+            self.stalled_since = None
         if new_state != WAITING:
             self.stationary_since = self.moving_since = None
             self.next_alarm_at = None

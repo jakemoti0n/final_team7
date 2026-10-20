@@ -240,3 +240,17 @@ def test_person_beside_path_that_blocks_a_stalled_robot_is_waited_for_not_recove
     assert {s.state for s in statuses} == {pw.WAITING}
     status = _run(machine, 5.0, 6.0, [(0.8, 2.0, 0.0, 0.0)])[-1]      # 사람이 멀리 비킴
     assert status.state == pw.DRIVING
+
+
+def test_stall_timer_restarts_after_a_wait_ends():
+    """기다리느라 서 있던 시간은 막힘이 아니다. 대기가 끝난 뒤 2 s를 새로 재기 전엔 옆에 선 사람 때문에 기다리지 않는다."""
+    machine = _ready_machine()
+    bystander = (1.0, 0.9, 0.0, 0.0)          # 옆 0.9 m에 선 사람(팽창 폭 안, 진로 폭 밖)
+    machine.on_tick(0.1, [(2.0, 0.0, -0.5, 0.0), bystander], ready=True, robot_speed=0.3)
+    assert machine.state == pw.WAITING        # 다가오는 사람 → 대기
+    _run(machine, 0.2, 1.0, [bystander], robot_speed=0.0)   # 다가오던 사람은 떠남, 구역(평소 폭)은 비어 있음
+    assert machine.state == pw.DRIVING        # release_sec 뒤 출발
+    statuses = _run(machine, 1.0, 2.6, [bystander], robot_speed=0.0)   # 출발 뒤 아직 2 s 안: 막힘 아님
+    assert {s.state for s in statuses} == {pw.DRIVING}
+    status = _run(machine, 2.6, 3.5, [bystander], robot_speed=0.0)[-1]  # 출발 뒤 2 s 넘게 못 움직임
+    assert status.state == pw.WAITING and machine.transitions[-1].reason == 'blocked_in_zone'
