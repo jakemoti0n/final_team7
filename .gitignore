@@ -3,6 +3,7 @@ install/
 log/
 venvs/
 __pycache__/
+*.venv
 *.pyc
 *.bak
 *~
