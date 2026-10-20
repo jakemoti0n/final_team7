@@ -3,7 +3,8 @@
 사람을 인식하고 피하면서 실내를 순찰하는 쓰레기통 로봇. ROS 2 Jazzy + Gazebo Harmonic + Nav2.
 
 - 센서: Livox MID-360 (3D LiDAR + 내장 IMU), RGB-D 카메라
-- 사람 인식: YOLO(yolo11n) + depth로 사람 위치 추정, 칼만 필터로 추적, 2초 앞 경로 예측
+- 사람 인식: YOLO 하반신 모델(`limbo_perception/models/leg_512.pt`, 가까워 다리만 보이는 사람도 잡음) + depth로 사람 위치 추정(몸 중심 보정), 칼만 필터로 추적, 2초 앞 경로 예측
+- 사람 앞에서 기다리기: `person_wait` 상태 기계가 사람 트랙만 보고 "다가오는 손님이면 멈춤, 떠나면 출발"을 정하고 `/person_wait` 하나로 냄. BT는 이것만 본다 (설계 PROJECT.md 2-7)
 - 주행: Nav2 (AMCL 위치 추정, MPPI 컨트롤러, 사람 예측 경로에 cost를 주는 `human_layer`)
 
 | 문서 | 언제 보나 |
@@ -121,8 +122,8 @@ GUI=false ~/limbo/tools/demo_patrol.sh                                          
 # 이전 로봇 모델(0.45 m 정사각형)로 (Nav2 외곽·팽창 값도 예전 값으로)
 ros2 launch limbo_bringup start_simulation.launch.py robot:=legacy
 
-# 사람 인식 모델 바꿔 시험 (yaml은 그대로)
-ros2 launch limbo_bringup start_simulation.launch.py person_model:=$HOME/limbo/human-leg/runs/person_leg_stage1/weights/best.pt
+# 사람 인식 모델 바꿔 시험 (기본은 하반신 모델. 기존 COCO 모델로 돌리려면 person_detector.yaml의 classes·imgsz도 주석대로)
+ros2 launch limbo_bringup start_simulation.launch.py person_model:=yolo11n.pt
 
 # 주행 평가 기록: Goal이 끝날 때마다 ~/limbo_results/nav_<월드>_<시각>.csv에 한 줄
 ros2 launch limbo_bringup start_simulation.launch.py record:=true
@@ -239,8 +240,8 @@ ros2 service call /collision_monitor/toggle nav2_msgs/srv/Toggle "{enable: false
 | `limbo_description` | 로봇 모델 (URDF): 실제 로봇 v14(기본), 이전 모델 `urdf/legacy/`. Gazebo 센서(MID-360 LiDAR·IMU, RGB-D 카메라) |
 | `limbo_simulation` | Gazebo 월드, ros_gz 브리지 설정, `tools/aischool_2f/`(도면 사진 → 월드·지도 생성) |
 | `limbo_navigation` | Nav2 설정(`nav2_params.yaml`), AMCL, EKF, 지도, 사람 cost 플러그인 `human_layer` |
-| `limbo_perception` | `person_detector`: YOLO 사람 인식·추적·경로 예측 |
-| `limbo_interfaces` | 사람 예측 메시지 `PersonPrediction(Array)`, 순찰 상태 `PatrolState` |
+| `limbo_perception` | `person_detector`: YOLO 사람 인식·추적·경로 예측. `person_wait`: 사람 앞에서 기다릴지 정하는 상태 기계. `tof_node`: 코앞 거리 센서 점군 |
+| `limbo_interfaces` | 사람 예측 메시지 `PersonPrediction(Array)`, 기다리기 상태 `PersonWait`, 순찰 상태 `PatrolState` |
 | `limbo_patrol` | waypoint 순찰. 일시정지·재개 서비스 |
 | `limbo_monitor` | `wheel_slip_monitor`: 바퀴 헛돎 감지 |
 | `limbo_evaluation` | `nav_recorder`: Goal마다 주행 평가 지표를 CSV로 기록 (시뮬레이션 전용) |
@@ -267,7 +268,8 @@ ros2 service call /collision_monitor/toggle nav2_msgs/srv/Toggle "{enable: false
 
 | 파일 | 내용 |
 |---|---|
-| `limbo_perception/config/person_detector.yaml` | YOLO confidence, 추적, 예측 시간, 접근 의도 판단 |
+| `limbo_perception/config/person_detector.yaml` | YOLO 모델·클래스·입력 크기, confidence, 추적, 예측 시간, 접근 의도 판단 |
+| `limbo_perception/config/person_wait.yaml` | 기다리기: 구역 크기(로봇 반폭+사람 반경), 다가옴 판정, 서비스 시간 15 s, 경보 간격 |
 | `limbo_navigation/config/nav2_params.yaml` | Nav2 전체 (MPPI, costmap, collision monitor 등) |
 | `limbo_navigation/config/amcl.yaml` | AMCL, 초기 위치 |
 | `limbo_navigation/config/ekf.yaml` | 바퀴 odom + IMU 융합 |

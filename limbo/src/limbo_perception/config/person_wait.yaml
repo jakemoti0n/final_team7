@@ -1,0 +1,38 @@
+# 사람 기다리기 상태 기계 (person_wait_node, 설계 PROJECT.md 2-7). 근거는 사람 트랙뿐이다.
+# 값의 뜻·근거는 limbo_perception/person_wait.py WaitConfig와 같다. 튜닝은 여기서만
+person_wait:
+  ros__parameters:
+    predictions_topic: /person_detector/predictions
+    map_topic: /map
+    base_frame: base_link
+    map_frame: map
+    # 구역은 범퍼 앞부터 잰다. 범퍼 자리는 ToF 링크(URDF tof_joint x 0.25, 차체 앞면 0.245 바로 앞)를 TF로 읽고,
+    # TF가 없으면 bumper_x를 쓴다
+    bumper_frame: tof_link
+    bumper_x: 0.25             # m, base_link에서 범퍼 앞면
+    ready_hold_sec: 2.0        # s, map→base_link TF가 이만큼 끊김 없이 조회돼야 준비(시작 직후 자기 몸·위치 추정 전 판단 막기)
+    tracks_timeout_sec: 0.5    # s, 트랙 메시지가 이만큼 안 오면 사람 없음으로 본다(카메라 노드가 죽었을 때 마지막 사람에 묶이지 않게)
+    robot_half_width: 0.30     # m, 로봇 중심선에서 가장 바깥(바퀴 바깥면 = wheel_separation/2 + wheel_width/2 = 0.295). 로봇이 바뀌면 이것만
+    person_radius: 0.25        # m, 사람 몸 반경(HumanLayer lethal_radius와 같은 값). 구역 반폭 = robot_half_width + person_radius
+    zone_length: 1.5           # m, 범퍼 앞. ToF(0.5 m) 밖 1 m쯤에 서서 쓰레기를 버리는 손님까지 덮는다
+    zone_exit_margin: 0.2      # m, 나갈 때만 구역을 이만큼 넓힘. 경계에 선 사람 때문에 대기·출발을 오가지 않게
+    approach_range: 3.0        # m, 카메라(하반신 모델)가 사람을 믿을 만하게 보는 거리
+    cpa_radius: 0.6            # m, 사람 진행 직선이 범퍼에서 이 안을 지나면 진로 위로 다가옴(전제 2-1)
+    min_speed: 0.2             # m/s, 이보다 느리면 서 있음(걷기 ~1 m/s, 검출 떨림은 이보다 작음)
+    # 서 있다고 본 사람이 다시 움직인다고 볼 때만 쓰는 높은 기준과 지속 시간. 10-19 손님 연기 시험에서 서 있는 손님의
+    # 정지 시간이 경보 때마다 15 s로 다시 시작했다(검출 떨림·끊김으로 타이머가 풀림)
+    moving_speed: 0.3          # m/s
+    moving_hold_sec: 1.0       # s
+    release_sec: 0.5           # s, 구역이 빈 채 이만큼 지나면 출발. 긴 끊김은 트랙 쪽 grace(intent_lost_grace_time) 몫이라 짧게
+    service_sec: 15.0          # s, T_service. 쓰레기 버리는 시간(2-7 결정 10-19). 지나면 비켜서기(R6) 또는 경보
+    alarm_period_sec: 30.0     # s, 비켜설 자리 없이 계속 기다릴 때 경보 간격(2-7)
+    # 코앞 손님은 카메라 화면 밖(옆·아래)이라 트랙이 끊긴다(실험 기록). 끊기기 직전 recent_track_sec 안에 구역 안 트랙이 track_lost_range 안에 있었고
+    # ToF(/tof/obstacle_ahead, tof.yaml stop_distance 0.5 m)가 막혔으면 계속 기다린다. ToF가 비면 바로 출발(타이머 없음)
+    tof_topic: /tof/obstacle_ahead
+    recent_track_sec: 3.0      # s, 카메라가 놓친 뒤 손님이 범퍼까지 오는 시간(0.7 m/s로 1 m 남짓) + 여유
+    track_lost_range: 1.0      # m, 범퍼에서. 이보다 가까우면 카메라가 사람을 놓치기 시작한다
+    # 서 있는 사람은 그 자체로 손님이 아니다(2-7). 구역 안에 서 있는 사람 때문에 기다리는 것은 로봇이 실제로 막혔을 때뿐
+    # (2-2 "사람 때문에 막힘"). 10-19 상자 벤치에서 벽 옆에 서 있는 사람이 구역 가장자리에 걸려 영영 기다린 일의 교정
+    odom_topic: /odometry/filtered
+    stall_speed: 0.05          # m/s, 이보다 느리면 서 있는 것
+    stall_sec: 2.0             # s, Nav2 진전 검사(10 s)보다 먼저 걸려 사람 앞 복구를 막는다

@@ -6,8 +6,11 @@ ROS 입출력(구독, 발행, TF, 파라미터)과 YOLO 호출만 여기서 하�
 """
 
 from dataclasses import dataclass
+import json
+import os
 from typing import Optional
 
+from ament_index_python.packages import get_package_share_directory
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PointStamped
 from limbo_interfaces.msg import PersonPredictionArray
@@ -21,7 +24,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 import tf2_geometry_msgs  # noqa: F401  PointStamped용 tf2 변환 등록
 from tf2_ros import Buffer, TransformException, TransformListener
 from ultralytics import YOLO
@@ -35,9 +38,11 @@ APPROACH_INTENT_TOPIC = '/person_detector/approach_intent'
 NEAREST_OPTICAL_TOPIC = '/person_detector/person_position'
 NEAREST_BASE_TOPIC = '/person_detector/person_position_base'
 NEAREST_ODOM_TOPIC = '/person_detector/person_position_odom'
+# 시험 기록용(JSON 문자열): frame마다 카메라 시각 t, YOLO 박스 [클래스, x1, y1, x2, y2, 신뢰도],
+# 합친 뒤 남은 박스 [x1, y1, x2, y2, leg 여부]
+BOXES_TOPIC = '/person_detector/boxes'
 
 PUBLISH_QUEUE = 10
-YOLO_PERSON_CLASS = 0  # COCO
 EXECUTOR_THREADS = 2
 TF_WARN_PERIOD_SEC = 2.0
 
@@ -46,6 +51,7 @@ TF_WARN_PERIOD_SEC = 2.0
 class Detection:
     box: tuple  # (x1, y1, x2, y2) pixel
     raw_track_id: int
+    leg: bool = False  # 하반신 모델의 leg 클래스 박스
 
 
 @dataclass
@@ -72,6 +78,12 @@ class PersonDetector(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.model = YOLO(self.model_path)
+        used = {c: self.model.names.get(c) for c in self.yolo_classes}
+        self.get_logger().info(
+            f'모델 {self.model_path} 클래스 {used} '
+            f'(전체 {len(self.model.names)}개), 입력 크기 {self.yolo_imgsz}')
+        self.depth_jump_filter = geometry.DepthJumpFilter(
+            jump_m=self.jump_reject_m)
         self.track_manager = tracking.TrackManager(
             self.tracker_config, logger=self.get_logger())
         self.intrinsics = None
@@ -90,6 +102,8 @@ class PersonDetector(Node):
             PointStamped, NEAREST_BASE_TOPIC, PUBLISH_QUEUE)
         self.person_odom_pub = self.create_publisher(
             PointStamped, NEAREST_ODOM_TOPIC, PUBLISH_QUEUE)
+        self.boxes_pub = self.create_publisher(
+            String, BOXES_TOPIC, PUBLISH_QUEUE)
 
         # 같은 시점의 RGB와 depth를 짝지어 받아야 사람 위치가 어긋나지 않는다
         self.rgb_sub = message_filters.Subscriber(
@@ -119,13 +133,30 @@ class PersonDetector(Node):
         self.robot_frame = p('robot_frame', 'base_link').value
         self.odom_frame = p('odom_frame', 'odom').value
         self.camera_frame = p('camera_frame', 'rgbd_camera_optical_link').value
-        self.model_path = p('yolo.model', 'yolo11n.pt').value
+        self.model_path = self._resolve_model_path(
+            p('yolo.model', 'yolo11n.pt').value)
         self.yolo_tracker = p('yolo.tracker', 'botsort.yaml').value
+        # 사람으로 볼 클래스 번호. COCO 모델은 0(person)뿐, 하반신 모델은 0(person)·1(leg)
+        self.yolo_classes = list(p('yolo.classes', [0]).value)
+        # 추론 입력 크기(px). 모델을 학습한 크기에 맞춘다 (yolo11n 640, 하반신 모델 512)
+        self.yolo_imgsz = p('yolo.imgsz', 640).value
+        # 하반신 모델의 leg 클래스 번호와, 같은 사람의 person·leg 박스를 하나로 합치는 기준
+        self.leg_class = p('merge.leg_class', 1).value
+        self.leg_inside_ratio = p('merge.leg_inside_ratio', 0.7).value
+        self.leg_iou = p('merge.leg_iou', 0.5).value
+        self.leg_pair_gap_ratio = p('merge.leg_pair_gap_ratio', 1.5).value
+        self.leg_pair_vertical_overlap = p(
+            'merge.leg_pair_vertical_overlap', 0.5).value
 
         self.yolo_confidence = p('yolo.confidence', 0.3).value
         self.sync_queue_size = p('sync.queue_size', 5).value
         self.sync_slop = p('sync.slop', 0.03).value
         self.tf_timeout = Duration(seconds=p('tf_timeout', 0.1).value)
+        # 화면 좌우 끝에 조금만 걸친 사람 박스는 depth가 뒤쪽 배경을 재므로 거리 계산에서 뺀다
+        self.edge_margin_px = p('edge_margin_px', 2).value
+        self.edge_min_width_px = p('edge_min_width_px', 40).value
+        # 같은 트랙의 depth가 한 프레임에 이만큼 넘게 튀면 그 값을 버림 (3프레임 연속이면 채택)
+        self.jump_reject_m = p('jump_reject_m', 1.0).value
 
         d = geometry.DepthConfig()
         self.depth_config = geometry.DepthConfig(
@@ -133,6 +164,11 @@ class PersonDetector(Node):
             min_depth=p('depth.min_depth', d.min_depth).value,
             max_depth=p('depth.max_depth', d.max_depth).value,
             percentile=p('depth.percentile', d.percentile).value,
+            leg_roi_margin_x=p(
+                'depth.leg_roi_margin_x', d.leg_roi_margin_x).value,
+            leg_percentile=p('depth.leg_percentile', d.leg_percentile).value,
+            leg_radius=p('leg_radius', d.leg_radius).value,
+            person_box_radius=p('person_box_radius', d.person_box_radius).value,
         )
 
         t = tracking.TrackerConfig()
@@ -191,6 +227,19 @@ class PersonDetector(Node):
                 i.intent_lost_grace_time).value,
         )
 
+    @staticmethod
+    def _resolve_model_path(path):
+        """
+        상대 경로가 이 패키지 share 폴더에 있으면 그 경로로 바꾼다 (예: models/leg_512.pt).
+
+        없으면 그대로 둔다 (yolo11n.pt처럼 ultralytics가 찾거나 받는 이름).
+        """
+        if os.path.isabs(path):
+            return path
+        share_path = os.path.join(
+            get_package_share_directory('limbo_perception'), path)
+        return share_path if os.path.exists(share_path) else path
+
     def camera_info_callback(self, msg):
         self.intrinsics = geometry.CameraIntrinsics.from_k(msg.k)
 
@@ -209,7 +258,7 @@ class PersonDetector(Node):
 
         matched_person_ids = set()
         results = []
-        for detection in self._detect(frame):
+        for detection in self._detect(frame, msg.header.stamp):
             result = self._process_detection(
                 detection, depth_image, msg.header.stamp, current_time,
                 robot_xy, matched_person_ids)
@@ -231,16 +280,18 @@ class PersonDetector(Node):
         self._publish_nearest(results)
 
         self.track_manager.cleanup(current_time)
+        self.depth_jump_filter.cleanup(current_time)
 
         output_msg = self.bridge.cv2_to_imgmsg(annotated_frame, encoding='bgr8')
         output_msg.header = msg.header
         self.image_pub.publish(output_msg)
 
-    def _detect(self, frame):
-        """YOLO + BoT-SORT 결과 중 track ID가 붙은 사람 box만 반환한다."""
+    def _detect(self, frame, stamp):
+        """YOLO + BoT-SORT 결과 중 track ID가 붙은 사람 box만, 한 사람에 하나씩 반환한다."""
         result = self.model.track(
             source=frame,
-            classes=[YOLO_PERSON_CLASS],
+            classes=self.yolo_classes,
+            imgsz=self.yolo_imgsz,
             conf=self.yolo_confidence,
             persist=True,  # BoT-SORT가 이전 frame의 tracking 상태를 이어 쓰게 한다
             tracker=self.yolo_tracker,
@@ -252,25 +303,53 @@ class PersonDetector(Node):
             return []
 
         raw_track_ids = boxes.id.int().cpu().tolist()
-        detections = []
-        for box, raw_track_id in zip(boxes, raw_track_ids):
-            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-            detections.append(Detection(
-                (int(x1), int(y1), int(x2), int(y2)), raw_track_id))
-        return detections
+        classes = boxes.cls.int().cpu().tolist()
+        xyxy = [tuple(int(v) for v in b) for b in boxes.xyxy.cpu().numpy()]
+        kept = geometry.merge_leg_boxes(
+            xyxy, classes, self.leg_class, self.leg_inside_ratio, self.leg_iou,
+            self.leg_pair_gap_ratio, self.leg_pair_vertical_overlap)
+        confs = boxes.conf.cpu().tolist()
+        self.boxes_pub.publish(String(data=json.dumps({
+            't': stamp.sec + stamp.nanosec * 1e-9,
+            'boxes': [[c, *b, round(f, 3)]
+                      for c, b, f in zip(classes, xyxy, confs)],
+            'kept': [[*box, int(classes[i] == self.leg_class)]
+                     for i, box in kept],
+        })))
+        return [Detection(box, raw_track_ids[i],
+                          leg=classes[i] == self.leg_class)
+                for i, box in kept]
 
     def _process_detection(self, detection, depth_image, stamp, current_time,
                            robot_xy, matched_person_ids):
         """Depth → 3D → odom → Kalman → 움직임/의도/예측. depth가 없으면 None."""
         x1, y1, x2, y2 = detection.box
+        if geometry.clipped_at_edge(
+                detection.box, depth_image.shape[1],
+                self.edge_margin_px, self.edge_min_width_px):
+            self.get_logger().debug(
+                f'화면 끝에 걸친 좁은 박스 {detection.box} 거리 계산 제외')
+            return None
         depth = geometry.person_depth(
-            depth_image, x1, y1, x2, y2, self.depth_config)
+            depth_image, x1, y1, x2, y2, self.depth_config, leg=detection.leg)
         if depth is None:
             return None
+        measured = depth
+        depth, rejected = self.depth_jump_filter.update(
+            detection.raw_track_id, depth, current_time)
+        if rejected:
+            self.get_logger().debug(
+                f'트랙 {detection.raw_track_id} depth {measured:.2f} m 튐 → '
+                f'직전 {depth:.2f} m 유지')
 
         u = (x1 + x2) / 2.0
         v = (y1 + y2) / 2.0
         x, y, z = geometry.pixel_to_optical_point(u, v, depth, self.intrinsics)
+        # depth → 3D 직후에 민다: 카메라→사람 방향을 바로 아는 곳이고, 이후 base·odom 변환과
+        # 추적·예측·nearest 위치 토픽이 모두 같은 보정된 점을 쓴다
+        x, y, z = geometry.push_to_body_center(
+            x, y, z,
+            geometry.body_center_radius(self.depth_config, detection.leg))
 
         result = PersonResult(
             detection=detection,

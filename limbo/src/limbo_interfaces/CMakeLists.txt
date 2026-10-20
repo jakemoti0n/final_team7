@@ -20,6 +20,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/PersonPrediction.msg"
   "msg/PersonPredictionArray.msg"
   "msg/PatrolState.msg"
+  "msg/PersonWait.msg"
   DEPENDENCIES
     builtin_interfaces
     std_msgs

@@ -44,7 +44,7 @@ bt_navigator:
     robot_base_frame: base_link
     odom_topic: /odom
     bt_loop_duration: 10
-    default_server_timeout: 100   # 20 ms(기본)는 시작 직후 부하에서 계획·추종 서버 응답을 놓쳐 목표를 바로 포기함 (2026-10-15 손님 장면 0/4)
+    default_server_timeout: 100   # 20 ms(기본)는 시작 직후 부하에서 계획·추종 서버 응답을 놓쳐 목표를 바로 포기함 (2026-10-15 손님 벤치 0/4)
     wait_for_service_timeout: 1000
     action_server_result_timeout: 900.0
     navigators: ["navigate_to_pose", "navigate_through_poses"]
@@ -52,11 +52,11 @@ bt_navigator:
       plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
     navigate_through_poses:
       plugin: "nav2_bt_navigator::NavigateThroughPosesNavigator"
-    # Nav2 기본 트리 사본: 진로 위로 다가오는 사람이나 사람 때문에 코앞이 막혔으면 경로 추종·계획 실패에도 멈춰 기다린다
-    # (behavior_trees/, 판단은 tof_node /person_approaching·/person_blocking, PROJECT.md 2-1·2-2, R5)
+    # Nav2 기본 트리 사본: 사람 때문에 기다려야 하면 경로 추종·계획 실패에도 멈춰 기다린다
+    # (behavior_trees/, 판단은 person_wait 노드 /person_wait 하나, PROJECT.md 2-7)
     default_nav_to_pose_bt_xml: $(find-pkg-share limbo_navigation)/behavior_trees/limbo_navigate_to_pose_w_replanning_and_recovery.xml
     default_nav_through_poses_bt_xml: $(find-pkg-share limbo_navigation)/behavior_trees/limbo_navigate_through_poses_w_replanning_and_recovery.xml
-    plugin_lib_names: ["limbo_is_person_blocking_condition_bt_node"]
+    plugin_lib_names: ["limbo_is_waiting_for_person_condition_bt_node"]
 
     error_code_names:
       - compute_path_error_code
@@ -108,7 +108,7 @@ controller_server:
       iteration_count: 1
       # 2026-10-14 1.7 → 2.5: MPPI는 예측 시간(4 s) 안에 갈 수 있는 경로만 보므로 1.7 m면 0.425 m/s가 사실상 상한이 됨.
       # 2.5(= 상한 0.6 × 4 s 이상)로 충장로 직선 0.42 → 0.58 m/s, 사람 있는 복도·홀에서도 충돌 0·사람 거리 동일에 시간 −22~27 %
-      # (10-13 충장로·10-14 사람 있는 복도 시뮬레이션 비교). 상한 0.75는 MPPI 경고가 늘어 보류
+      # (실험 기록). 상한 0.75는 MPPI 경고가 늘어 보류
       prune_distance: 2.5
       # 경로가 되돌아 꺾이는 곳(순찰 통과 지점 A에서 180° 되돌기)은 꺾이는 점까지만 경로를 자른다.
       # prune_distance 2.5로 늘린 뒤 되돌이 구간이 잘린 경로 안에 같이 들어와 MPPI가 그 1.2 m 앞에서 서 버림
@@ -198,7 +198,7 @@ local_costmap:
       robot_base_frame: base_link
       # v14: 몸체 0.45 m + 바퀴 폭 0.59 m → 앞뒤 0.50 × 좌우 0.59 m (실제 크기), 여유 없음.
       # 받은 trash_robot_sim 값(0.63 m + 여유 0.02)으로는 0.9 m 문·1.3 m 책상 통로에서 MPPI가 경로를 못 찾았다
-      # (10-13 좁은 통로 시험). 이전 모델(robot:=legacy)은 launch에서 0.45 m 정사각형 + 여유 0.02로 바꿔 넣는다
+      # (실험 기록). 이전 모델(robot:=legacy)은 launch에서 0.45 m 정사각형 + 여유 0.02로 바꿔 넣는다
       footprint: "[[0.25, 0.295], [0.25, -0.295], [-0.25, -0.295], [-0.25, 0.295]]"
       footprint_padding: 0.0
       rolling_window: true
@@ -455,7 +455,7 @@ global_costmap:
 
       # v14: 몸체 0.45 m + 바퀴 폭 0.59 m → 앞뒤 0.50 × 좌우 0.59 m (실제 크기), 여유 없음.
       # 받은 trash_robot_sim 값(0.63 m + 여유 0.02)으로는 0.9 m 문·1.3 m 책상 통로에서 MPPI가 경로를 못 찾았다
-      # (10-13 좁은 통로 시험). 이전 모델(robot:=legacy)은 launch에서 0.45 m 정사각형 + 여유 0.02로 바꿔 넣는다
+      # (실험 기록). 이전 모델(robot:=legacy)은 launch에서 0.45 m 정사각형 + 여유 0.02로 바꿔 넣는다
       footprint: "[[0.25, 0.295], [0.25, -0.295], [-0.25, -0.295], [-0.25, 0.295]]"
       footprint_padding: 0.0
 
@@ -778,6 +778,11 @@ collision_monitor:
     stop_pub_timeout: 2.0
     # Polygons represent zone around the robot for "stop", "slowdown" and "limit" action types,
     # and robot footprint for "approach" action type.
+    # 안전 정지(설계 2-7 센서 역할표): 사람인지 따지지 않고, 움직이는 방향으로 충돌이 임박할 때만 선다(approach 모델,
+    # 명령 속도로 time_before_collision 동안 footprint를 밀어 보고 점이 들어오면 정지). ToF 점군을 관측원에 넣어
+    # 카메라·라이다가 못 보는 범퍼 높이 코앞(낮은 상자, 사람 다리)도 전진할 때 잡는다.
+    # 범퍼 앞 고정 구역(FrontStop, 0.3 m)은 쓰지 않는다: 복도 끝에서 벽을 0.3 m 앞에 두고 돌아서는 평소 주행과 겹쳐
+    # 제자리 회전까지 막혀 120 s 갇혔다(실험 기록). 회전·후진은 approach가 막지 않는다
     polygons: ["FootprintApproach"]
     FootprintApproach:
       type: "polygon"
@@ -786,9 +791,10 @@ collision_monitor:
       time_before_collision: 1.2
       simulation_time_step: 0.1
       min_points: 6
+      sources_names: ["mid360_cloud", "rgbd_cloud", "tof_cloud"]   # ToF는 2-7 안전 정지 열
       visualize: True
       enabled: True
-    observation_sources: ["mid360_cloud", "rgbd_cloud"]
+    observation_sources: ["mid360_cloud", "rgbd_cloud", "tof_cloud"]
     mid360_cloud:
       type: "pointcloud"
       topic: "/mid360/points_filtered"
@@ -812,6 +818,18 @@ collision_monitor:
 
       source_timeout: 2.0
       enabled: true
+
+    # ToF: 카메라·라이다가 못 보는 범퍼 높이 코앞(낮은 상자, 사람 다리). 바닥 반사는 tof.yaml과 같은 높이로 거른다
+    tof_cloud:
+      type: "pointcloud"
+      topic: "/tof/points"
+      min_height: 0.03
+      max_height: 1.00
+      min_range: 0.02
+      source_timeout: 2.0
+      enabled: true
+
+    # 라이다 수평 스캔(self_filter 뒤): 몸체 높이의 사람·벽
 
 docking_server:
   ros__parameters:

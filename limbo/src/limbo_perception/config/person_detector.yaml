@@ -2,8 +2,27 @@
 # 토픽·좌표계 이름은 튜닝 대상이 아니라 코드 기본값을 쓴다.
 person_detector:
   ros__parameters:
+    # 기본은 팀원이 학습한 하반신 모델(가까워 다리만 보이는 사람도 잡음).
+    # 기존 모델로 돌리려면 model: yolo11n.pt, classes: [0], imgsz: 640
+    # (또는 런치 인자 person_model:=yolo11n.pt와 classes·imgsz 변경)
     yolo:
+      model: models/leg_512.pt  # 상대 경로는 limbo_perception share 폴더 기준으로 찾음
       confidence: 0.3
+      classes: [0, 1]       # 사람으로 볼 클래스 번호 (하반신 모델 0=person, 1=leg. yolo11n은 [0])
+      imgsz: 512            # 추론 입력 크기 px (하반신 모델 512, yolo11n 640)
+
+    # 하반신 모델은 한 사람에 person·leg 박스를 같이 내므로 추적 전에 하나로 합친다 (yolo11n에는 leg가 없어 영향 없음)
+    merge:
+      leg_class: 1
+      leg_inside_ratio: 0.7 # leg 면적의 이 비율 이상이 person 박스 안이면 leg를 버림
+      leg_iou: 0.5          # person 없이 남은 leg끼리 IoU가 이 이상이면 큰 것만 남김
+      # 다리 하나씩 따로 잡힌 leg 둘을 하나로: 중심 가로 간격 ≤ 이 배수 × 두 폭 합, 세로 겹침 ≥ 짧은 쪽 높이 × 비율
+      leg_pair_gap_ratio: 1.5
+      leg_pair_vertical_overlap: 0.5
+
+    # depth는 몸의 카메라 쪽 겉면까지라, 카메라→사람 방향으로 이만큼 밀어 몸 중심으로 (m). 0이면 보정 없음
+    leg_radius: 0.25         # leg 박스: 다리 앞면 → 몸 중심 (human_layer lethal_radius와 같은 값)
+    person_box_radius: 0.12  # person 박스: 몸통 가운데 영역 depth → 몸 두께 절반
 
     sync:
       queue_size: 5
@@ -11,11 +30,19 @@ person_detector:
 
     tf_timeout: 0.1         # sec
 
+    # 화면 좌우 끝(이 px 안)에 닿고 폭이 이보다 좁은 박스는 거리 계산에서 뺌 (사람이 조금만 걸치면 depth가 뒤쪽 벽을 잼)
+    edge_margin_px: 2
+    edge_min_width_px: 40     # px (320 폭 기준 12 %)
+    # 같은 트랙의 depth가 한 프레임에 이만큼 넘게 튀면 그 값을 버리고 직전 값 유지 (3프레임 연속이면 새 값 채택)
+    jump_reject_m: 1.0        # m
+
     depth:
       roi_margin: 0.30      # box 각 변에서 잘라낼 비율 (배경 제외)
       min_depth: 0.1        # m
       max_depth: 5.0        # m
       percentile: 25.0      # 중앙 영역 depth 중 가까운 쪽 25% 값 (50이면 중앙값. 다리만 보일 때 배경을 잴 수 있음)
+      leg_roi_margin_x: 0.05  # leg 박스는 가로를 거의 다 씀 (두 다리가 양옆, 가운데는 다리 사이 틈)
+      leg_percentile: 10.0    # leg 박스는 더 가까운 쪽 값 (틈으로 보이는 배경을 잡지 않게)
 
     tracking:
       reassociate_max_age: 3.0        # sec

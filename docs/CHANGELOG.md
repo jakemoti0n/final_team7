@@ -8,6 +8,26 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-20 (39) 사람 앞에서 기다리기를 상태 기계 하나로 재설계(2-7), 하반신 검출 모델을 기본으로, 안전 정지 분리
+
+**할 일**
+- `build_limbo` 전체 재빌드(새 메시지 `PersonWait`, 새 노드 `person_wait`, BT 플러그인 교체, 모델 파일). pull 뒤 `git log -1`이 이 항목과 맞는지 확인
+- 기존 COCO 모델로 돌리려면 `person_detector.yaml` 주석대로(`model: yolo11n.pt`, `classes: [0]`, `imgsz: 640`)
+
+**변경**
+- **기다리기 재설계**(PROJECT.md 2-7): 래치 두 개(`/person_blocking`·`/person_approaching`)와 BT 조건 두 개를 상태 기계 `person_wait`(`limbo_perception/person_wait.py`, ROS 없는 순수 모듈 + `person_wait_node.py`)와 토픽 `/person_wait`(`limbo_interfaces/PersonWait`), BT 조건 `IsWaitingForPerson` 하나로. 근거는 사람 트랙뿐: ① 진로 위로 다가오는 사람(최근접점 0.6 m 안, 3 m 안) → 멈춤 ② 구역(범퍼 앞 1.5 m × 로봇 반폭+사람 반경) 안에 서 있는 사람은 로봇이 실제로 막혔을 때(속도 0.05 m/s 미만 2 s)만 → 멈춤. 사람이 구역을 벗어나면 0.5 s 뒤 출발. 서 있는 채 15 s(서비스 시간)가 지나면 비켜서기(예정), 자리 없으면 계속 기다리며 30 s마다 경보(WARN). **타이머로 기다림을 끝내는 전이는 없다**. 코앞에서 카메라가 사람을 놓치면(화면 밖) 직전 3 s 안 트랙 + ToF 막힘으로 이어 기다리고 ToF가 비면 즉시 출발. 전이마다 INFO 한 줄("WAITING ← DRIVING: approaching, tracks 1 …")로 "왜 멈췄나/갔나"가 설명됨
+- BT: 계획 중 대기·추종 중 정지·복구 전 조건 세 자리를 `IsWaitingForPerson`으로. `FollowPathOrWait` 반복 상한 60 → 사실상 무한(타이머는 출구가 아님)
+- `tof_node`: 점군 처리만(`/tof/obstacle_ahead`·`/tof/nearest`·`/tof/points`). 래치·`/scan`·`/map` 구독 삭제. `tof.yaml`에서 래치 파라미터 삭제
+- 안전 정지: `collision_monitor` approach 모델(명령 속도로 1.2 s 앞 footprint를 밀어 보고 충돌 임박 시 정지) 관측원에 ToF 점군 추가. 사람 여부와 무관. 고정 구역 정지는 쓰지 않음(벽 옆 제자리 회전과 겹쳐 갇힘)
+- **하반신 모델**(`limbo_perception/models/leg_512.pt`, 팀원 학습, classes 0 person·1 leg, 입력 512)을 기본으로. `person_detector.py`: 클래스·입력 크기 파라미터, 같은 사람의 person·leg 박스 합치기(`geometry.merge_leg_boxes`), 두 다리 따로 잡힌 박스 합치기, leg 박스 깊이 샘플링(가로 여백 5 %·percentile 10), 몸 중심 보정(leg 0.25 m·몸 전체 0.12 m), 화면 가장자리에 잘린 박스는 거리 계산 제외, 거리 급변(1 m) 거르기. 진단 토픽 `/person_detector/boxes`
+- `geometry.py`: 지도 벽 걸러내기·사람 몸통 폭 덩어리·최근접점 함수 보존(라이다 다리 검출 전처리용). 단위 시험 `test_person_wait.py`(18개)·`test_logic.py` 갱신, `test_tof.py` 정리. 총 59개 통과
+- 문서: PROJECT.md 2-7·결정 이력·6절 피팅 금지, KNOWN_ISSUES(60 s 정지 해결 표시, 서로 양보 교착), TROUBLESHOOTING(래치 교훈)
+
+**확인**(시뮬레이션, 카메라 0.60 m·0°)
+- 하반신 모델: 1.5 m 안 검출 0~49 % → 71~95 %, 멈춘 손님 0 → 62~93 %, 한 사람에 박스 2개 0~5 %, ID 바뀜 기존 수준, 위치 오차 중앙값 0.07~0.21 m, 추론 3.7 → 4.0 ms
+- 기다리기: 손님 4/4(정지 7 s 뒤 떠나면 출발), 상자+벽 옆 사람 4/4(벽 옆 사람 옆을 멈춤 없이 지나감, 상자 최소 0.25 m), 옆에서 와서 앞에 서는 사람 3/3(막힌 뒤 대기 → ToF 비면 출발). 복구·충돌 0, 60 s 정지 0
+- 남은 것: 사람이 옆에 서고 로봇도 막혀 둘 다 기다리는 교착(KNOWN_ISSUES), 출구는 비켜서기(예정)
+
 ## 2026-10-19 (38) dashboard README: v1 연결에서도 일시정지는 열린다고 버튼 잠금 설명 고침
 
 **변경**
