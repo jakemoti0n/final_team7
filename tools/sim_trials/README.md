@@ -33,3 +33,4 @@ python3 trial_summary.py ~/limbo_bags/sim_trials/logs/trial_*.csv
 | `record_drive.sh` + `slip_replay.py` | 헛돎 판단 재현 (스캔·odom·정답 위치 녹화 후 정답과 비교) |
 | `record_frames.py` + `compare_models.py`, `false_person.py` | 사람 인식 모델 비교 (YOLO만) |
 | `pred_record.py` + `pred_compare.py`, `stop_pos_err.py` | 사람 인식 전체 비교 (멈춘 사람 끊김·ID·위치 오차) |
+| `stvl_trail.py` | 지역 STVL이 걷는 사람 뒤에 남기는 치명 꼬리 측정 (시뮬 떠 있을 때, 사람 실제 위치 기준) |

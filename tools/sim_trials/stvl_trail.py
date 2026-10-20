@@ -1,0 +1,74 @@
+"""지역 STVL 층이 걷는 사람 뒤에 남기는 치명 꼬리를 잰다. 사용법: 시뮬이 떠 있을 때 python3 stvl_trail.py [초, 기본 60]
+
+`/local_costmap/stvl_layer`의 치명 칸 가운데 정적 지도 벽(0.12 m 안)이 아닌 것을, 시뮬레이션 사람 실제 위치(`/sim/people`)까지의
+거리로 나눠 4초마다 한 줄씩 찍는다. 사람 반경(0.5 m)보다 먼 칸이 꾸준히 나오면 그것이 꼬리(voxel_decay 기억)다.
+왜 지도 벽을 빼나: 거리 양쪽 건물 벽이 치명 칸의 대부분이라 사람 자취가 묻힌다. 왜 실제 위치인가: 검출 트랙은 시야 밖 사람을 못 보니
+"검출 못 한 사람"과 "꼬리"를 가르려면 정답이 필요하다(시뮬 전용).
+"""
+import sys, time, numpy as np, rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
+from nav_msgs.msg import OccupancyGrid
+from geometry_msgs.msg import PoseArray
+from tf2_ros import Buffer, TransformListener
+
+BINS = [0, 0.5, 1.0, 1.5, 2.5, 100]   # 사람까지 거리 구간(m). 0.5 = person_filter 반경
+WALL_M = 0.12                          # 이 거리 안에 지도 벽이 있으면 벽으로 본다(격자 0.05 m 두 칸 + 여유)
+
+
+def grid(g):
+    return np.array(g.data, dtype=np.int16).reshape(g.info.height, g.info.width), g.info
+
+
+def cells(g, cond):
+    a, i = grid(g); ys, xs = np.where(cond(a))
+    return np.c_[i.origin.position.x + (xs + 0.5) * i.resolution, i.origin.position.y + (ys + 0.5) * i.resolution]
+
+
+def nearest(pts, ref):
+    if len(pts) == 0 or len(ref) == 0:
+        return np.full(len(pts), np.inf)
+    out = np.empty(len(pts))
+    for j in range(0, len(pts), 2000):   # 메모리: 칸 수 × 기준점 수 행렬을 한 번에 만들지 않는다
+        q = pts[j:j + 2000]
+        out[j:j + 2000] = np.min(np.hypot(q[:, 0, None] - ref[None, :, 0], q[:, 1, None] - ref[None, :, 1]), axis=1)
+    return out
+
+
+def main():
+    secs = float(sys.argv[1]) if len(sys.argv) > 1 else 60
+    rclpy.init(); n = Node('stvl_trail'); m = {}
+    latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE)
+    n.create_subscription(OccupancyGrid, '/local_costmap/stvl_layer', lambda g: m.__setitem__('stvl', g), latched)
+    n.create_subscription(OccupancyGrid, '/map', lambda g: m.__setitem__('map', g), latched)
+    n.create_subscription(PoseArray, '/sim/people', lambda g: m.__setitem__('people', g), 10)
+    buf = Buffer(); TransformListener(buf, n)
+    walls = None; t0 = time.time()
+    print('t(s)  로봇 위치      4.5 m 안 사람  비벽 치명 칸 | 사람까지 ' + ' '.join(f'{a}-{b}' for a, b in zip(BINS[:-1], BINS[1:])))
+    while time.time() - t0 < secs:
+        t = time.time()
+        while time.time() - t < 10 and not all(k in m for k in ('stvl', 'map', 'people')):
+            rclpy.spin_once(n, timeout_sec=0.2)
+        if not all(k in m for k in ('stvl', 'map', 'people')):
+            print('토픽 없음:', [k for k in ('stvl', 'map', 'people') if k not in m]); continue
+        if walls is None:
+            walls = cells(m['map'], lambda a: a >= 50)
+        try:
+            tb = buf.lookup_transform('map', 'base_footprint', rclpy.time.Time())
+            rx, ry = tb.transform.translation.x, tb.transform.translation.y
+        except Exception:
+            rx = ry = float('nan')
+        ppl = np.array([[p.position.x, p.position.y] for p in m['people'].poses]).reshape(-1, 2)
+        pts = cells(m['stvl'], lambda a: a >= 99)
+        pts = pts[nearest(pts, walls) >= WALL_M]
+        hist = np.histogram(nearest(pts, ppl), bins=BINS)[0]
+        near_people = int(np.sum(np.hypot(ppl[:, 0] - rx, ppl[:, 1] - ry) < 4.5)) if len(ppl) else 0
+        print(f'{time.time() - t0:4.0f}  ({rx:6.1f},{ry:5.1f})  {near_people:2d}명  {len(pts):5d} | ' + ' '.join(f'{h:4d}' for h in hist), flush=True)
+        for k in ('stvl', 'people'):
+            m.pop(k, None)
+        time.sleep(4)
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
