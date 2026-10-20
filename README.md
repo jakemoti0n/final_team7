@@ -102,10 +102,12 @@ cd ~/limbo/dashboard && .venv/bin/python -m uvicorn server.app:app --host 127.0.
 cd ~/limbo/relay_prog && source /opt/ros/jazzy/setup.bash && source install/setup.bash && \
   ros2 run limbo_telemetry_bridge bridge --config src/limbo_telemetry_bridge/config/bridge.yaml           # ② Bridge (로봇 → 서버)
 ```
+명령어 통합 완료 ros2 launch limbo_dashboard start_dashboard.launch.py 를 통해 실행 가능
 
 → 브라우저에서 <http://127.0.0.1:8000/> 을 열면 지도 위 로봇 위치, 순찰 상태, **주행 시작 / 정지 / 재개** 단일 버튼이 보인다. 시작은 설정된 waypoint 파일로 `patrol_node`를 실행하고, 정지는 순찰을 일시정지하며, 재개는 하던 순찰을 이어 간다. 설계는 [docs/CONTROL_SCREEN.md](docs/CONTROL_SCREEN.md).
 
 ---
+
 
 ## 자주 쓰는 변형
 
