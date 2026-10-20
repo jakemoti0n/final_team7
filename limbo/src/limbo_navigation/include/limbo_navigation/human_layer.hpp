@@ -35,14 +35,15 @@ struct HumanCostConfig
   double max_prediction_age{1.0};
   // --- 전역 costmap용 "통행료" 모드 (설계 전제 2-8 규칙 1). 지역은 기본값(치명 + 예측 경로) 그대로.
   // current_lethal=false면 현재 위치를 치명이 아닌 가우시안으로만 칠한다. 봉우리·반경은 서 있는 사람/걷는 사람이 다르다:
-  // 뜻은 "그 사람 한 명을 피하려고 몇 m까지 돌아가는가"(서 있음 3 m, 걷는 중 0.5 m. NavFn 칸당 기본 50 + 비용×0.8로 환산)
+  // 반경은 사람 반경 + 로봇 반폭(로봇 중심이 들어가면 닿는 거리). 봉우리의 뜻은 "그 사람을 피하려고 몇 m까지 돌아가는가"
+  // (NavFn 칸당 기본 50 + 비용×0.8로 환산. 서 있음 150·0.55 m ≈ 1.2 m, 걷는 중 50·0.5 m ≈ 0.4 m)
   bool current_lethal{true};
   bool use_predictions{true};
   double standing_speed{0.2};        // m/s, 이보다 느리면 서 있는 사람
-  double standing_peak_cost{200.0};
-  double standing_radius{0.8};
-  double standing_sigma{0.35};
-  double walking_peak_cost{60.0};
+  double standing_peak_cost{150.0};
+  double standing_radius{0.55};
+  double standing_sigma{0.25};
+  double walking_peak_cost{50.0};
   double walking_radius{0.5};
   double walking_sigma{0.22};
 };

@@ -477,10 +477,12 @@ global_costmap:
         current_lethal: false
         use_predictions: false
         standing_speed: 0.2        # m/s, person_wait의 min_speed와 같음
-        standing_peak_cost: 200.0  # 반경 0.8·sigma 0.35와 함께 ≈ 돌아갈 가치 3 m
-        standing_radius: 0.8
-        standing_sigma: 0.35
-        walking_peak_cost: 60.0    # 반경 0.5·sigma 0.22 ≈ 0.5 m
+        # 반경은 "로봇 중심이 들어가면 사람에 닿는 거리" = 사람 반경 0.25 + 로봇 반폭 0.30 (지역 costmap이 사람을 막는 폭과 같음).
+        # 처음 0.8 m("3 m 돌아갈 가치")로 두자 폭 2~3 m 홀에서 전역 경로가 벽에 붙어 지역이 갈 길을 잃고 멈췄다(10-20)
+        standing_peak_cost: 150.0  # 반경 0.55·sigma 0.25와 함께 ≈ 돌아갈 가치 1.2 m
+        standing_radius: 0.55
+        standing_sigma: 0.25
+        walking_peak_cost: 50.0    # 반경 0.5·sigma 0.22 ≈ 0.4 m
         walking_radius: 0.5
         walking_sigma: 0.22
         min_cost: 10.0
