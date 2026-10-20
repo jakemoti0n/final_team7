@@ -60,6 +60,8 @@ source limbo/install/setup.bash
 ros2 launch limbo_bringup start_dashboard.launch.py
 ```
 
+서버가 준비되면 기본 브라우저에서 `http://127.0.0.1:8000/`을 자동으로 연다. 자동 열기를 끄려면 `open_browser:=false`를 붙인다.
+
 종료는 해당 터미널에서 `Ctrl+C`. 한 프로세스가 먼저 끝나도 launch가 다른 프로세스를 정리한다. 기존 Dashboard 서버나 Bridge가 실행 중이면 먼저 종료해야 한다. 기본 경로는 이 저장소의 `dashboard/`와 `relay_prog/`이며, 다른 배치에서는 `repo_root:=/absolute/path/to/repo`를 지정한다. `ros_domain_id` 기본값은 launch 파일에 지정된 `97`이다. 다른 도메인을 사용할 때는 `ros_domain_id:=번호`로 바꾸고, Dashboard의 `patrol_ros_domain_id` 설정도 같은 값으로 유지한다.
 
 ## 실행·종료

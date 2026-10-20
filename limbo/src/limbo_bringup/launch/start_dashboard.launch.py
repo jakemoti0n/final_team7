@@ -5,7 +5,7 @@ from pathlib import Path
 from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, EmitEvent, ExecuteProcess,
                             OpaqueFunction, RegisterEventHandler)
-from launch.event_handlers import OnProcessExit
+from launch.event_handlers import OnProcessExit, OnProcessIO
 from launch.events import Shutdown
 from launch.substitutions import LaunchConfiguration
 
@@ -20,6 +20,7 @@ def _repository_root():
 def _start_processes(context):
     root = Path(LaunchConfiguration('repo_root').perform(context)).expanduser().resolve()
     domain_id = LaunchConfiguration('ros_domain_id').perform(context)
+    open_browser = LaunchConfiguration('open_browser').perform(context).lower() in ('true', '1', 'yes')
     dashboard_dir = root / 'dashboard'
     dashboard_python = dashboard_dir / '.venv/bin/python'
     ui_index = dashboard_dir / 'ui/dist/index.html'
@@ -50,7 +51,29 @@ def _start_processes(context):
         cwd=str(root), additional_env=environment, output='screen',
         name='telemetry_bridge',
     )
+    browser_output = bytearray()
+    browser_opened = False
+
+    def open_browser_when_ready(event):
+        nonlocal browser_opened
+        if not open_browser or browser_opened:
+            return None
+        browser_output.extend(event.text)
+        if b'Uvicorn running on http://127.0.0.1:8000' not in browser_output:
+            del browser_output[:-512]
+            return None
+        browser_opened = True
+        return ExecuteProcess(
+            cmd=['xdg-open', 'http://127.0.0.1:8000/'],
+            output='screen', name='dashboard_browser',
+        )
+
     return [
+        RegisterEventHandler(OnProcessIO(
+            target_action=dashboard,
+            on_stdout=open_browser_when_ready,
+            on_stderr=open_browser_when_ready,
+        )),
         dashboard,
         bridge,
         RegisterEventHandler(OnProcessExit(
@@ -70,5 +93,7 @@ def generate_launch_description():
                               description='Directory containing dashboard/, limbo/, and relay_prog/'),
         DeclareLaunchArgument('ros_domain_id', default_value='97',
                               description='ROS domain shared with the running robot or simulation'),
+        DeclareLaunchArgument('open_browser', default_value='true',
+                              description='Open the Dashboard in the default browser when ready'),
         OpaqueFunction(function=_start_processes),
     ])
