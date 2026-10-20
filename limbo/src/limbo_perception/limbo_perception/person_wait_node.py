@@ -17,7 +17,7 @@ import time
 from builtin_interfaces.msg import Time as TimeMsg
 from limbo_interfaces.msg import PersonPredictionArray, PersonWait as PersonWaitMsg
 from limbo_perception import geometry, person_wait
-from nav_msgs.msg import OccupancyGrid
+from nav_msgs.msg import OccupancyGrid, Odometry
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
@@ -61,7 +61,9 @@ class PersonWaitNode(Node):
             service_sec=p('service_sec', 15.0).value,
             alarm_period_sec=p('alarm_period_sec', 30.0).value,
             recent_track_sec=p('recent_track_sec', 3.0).value,
-            track_lost_range=p('track_lost_range', 1.0).value))
+            track_lost_range=p('track_lost_range', 1.0).value,
+            stall_speed=p('stall_speed', 0.05).value,
+            stall_sec=p('stall_sec', 2.0).value))
         self.base_frame = p('base_frame', 'base_link').value
         self.map_frame = p('map_frame', 'map').value
         self.bumper_frame = p('bumper_frame', 'tof_link').value
@@ -78,6 +80,8 @@ class PersonWaitNode(Node):
         self.clock = None             # (메시지 시각, 받은 벽시계): 상태 기계 시각의 기준
         self.last_t = None
         self.tof = (False, None)       # (/tof/obstacle_ahead, 받은 벽시계)
+        self.odom = (None, None)       # (로봇 전진 속도 m/s, 받은 벽시계)
+        self.ready_wall = None         # 처음 준비된 벽시계. 그 전에 온 트랙 메시지는 버린다(시작 직후 가짜 코앞 트랙)
         self.pull_over_available = False
         self.pull_over_done = False
         self.logged = 0
@@ -95,6 +99,8 @@ class PersonWaitNode(Node):
             self.on_predictions, 10)
         self.create_subscription(
             Bool, p('tof_topic', '/tof/obstacle_ahead').value, self.on_tof, 10)
+        self.create_subscription(
+            Odometry, p('odom_topic', '/odometry/filtered').value, self.on_odom, 10)
         self.create_subscription(Bool, '/pull_over/available', self.on_pull_over_available, 10)
         self.create_subscription(Bool, '/pull_over/done', self.on_pull_over_done, 10)
 
@@ -105,6 +111,10 @@ class PersonWaitNode(Node):
 
     def on_tof(self, msg):
         self.tof = (msg.data, time.monotonic())
+
+    def on_odom(self, msg):
+        v = msg.twist.twist.linear
+        self.odom = (math.hypot(v.x, v.y), time.monotonic())
 
     def on_pull_over_available(self, msg):
         self.pull_over_available = msg.data
@@ -166,14 +176,21 @@ class PersonWaitNode(Node):
         if self.clock is None:
             return   # 트랙 공급자(카메라)가 아직 없음: 시각 기준도 없다
         ready = self.is_ready(wall)
-        fresh = self.tracks_wall is not None and wall - self.tracks_wall <= self.tracks_timeout_sec
+        if ready and self.ready_wall is None:
+            self.ready_wall = wall
+        fresh = (self.tracks_wall is not None
+                 and wall - self.tracks_wall <= self.tracks_timeout_sec
+                 and self.ready_wall is not None and self.tracks_wall >= self.ready_wall)
         tracks = self.tracks if fresh else []
         t = self.now(wall)
         tof_blocked, tof_wall = self.tof
         tof_fresh = tof_wall is not None and wall - tof_wall <= self.tracks_timeout_sec
         tof_blocked = tof_blocked and tof_fresh
+        speed, odom_wall = self.odom
+        if odom_wall is None or wall - odom_wall > self.tracks_timeout_sec:
+            speed = None   # 오도메트리가 없으면 막힘을 모른다(= 서 있는 사람 때문에 기다리지 않음)
         status = self.machine.on_tick(
-            t, tracks, ready, self.pull_over_available, self.pull_over_done, tof_blocked)
+            t, tracks, ready, self.pull_over_available, self.pull_over_done, tof_blocked, speed)
         self.log_changes(status, tracks)
         self.publish(t, status)
 

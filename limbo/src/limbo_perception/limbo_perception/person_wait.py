@@ -41,6 +41,12 @@ class WaitConfig:
     # 기다린다. ToF만으로는 기다리기를 시작하지 못한다(2-7 원칙 1). ToF가 비면 바로 출발한다(타이머 없음)
     recent_track_sec: float = 3.0   # s
     track_lost_range: float = 1.0   # m, 범퍼에서. 카메라가 사람을 놓치기 시작하는 거리
+    # 구역 안에 서 있는 사람은 그 자체로는 손님이 아니다(2-7: 손님은 다가오는 사람). 벽 옆에 서 있는 사람 옆을
+    # 지나갈 때 구역 가장자리에 걸려 영영 기다린 일이 있었다(10-19 상자 벤치). 서 있는 사람 때문에 기다리는 것은
+    # Nav2가 돌아가지 못해 로봇이 실제로 막혔을 때뿐이다(2-2 "사람 때문에 막힘"). 막힘 = 로봇 속도가 stall_speed
+    # 미만으로 stall_sec 지속. Nav2 진전 검사(10 s)보다 먼저 걸려 사람 앞 복구를 막는다
+    stall_speed: float = 0.05       # m/s
+    stall_sec: float = 2.0          # s
 
     @property
     def zone_half_width(self):
@@ -101,16 +107,18 @@ class PersonWait:
         self.stationary_since = None   # 구역 안 트랙이 전부 정지이기 시작한 시각
         self.moving_since = None       # 정지 중 구역 안 트랙이 moving_speed 이상으로 움직이기 시작한 시각
         self.close_track_at = None     # 구역 안 트랙이 track_lost_range 안에 마지막으로 보인 시각
+        self.stalled_since = None      # 로봇 속도가 stall_speed 미만이기 시작한 시각(None이면 움직이는 중)
         self.tof_hold = False          # 트랙이 끊긴 손님을 ToF로 이어서 기다리는 중
         self.next_alarm_at = None
         self.transitions = []          # Transition 목록. 노드가 새로 생긴 것만 로그로 찍는다
 
     def on_tick(self, t, tracks, ready, pull_over_available=False, pull_over_done=False,
-                tof_blocked=False):
+                tof_blocked=False, robot_speed=None):
         """
         tracks: 범퍼 앞 기준 (rel_x, rel_y, vx, vy) 목록(속도는 로봇 축, m/s).
 
         tof_blocked: ToF가 코앞(stop_distance 안)을 막힘으로 봄. 트랙이 끊긴 손님을 이어 기다릴 때만 쓴다.
+        robot_speed: 로봇 전진 속도 크기(m/s). 서 있는 사람 때문에 막혔는지 볼 때만 쓴다. None이면 모름(= 안 막힘).
         """
         if self.state_since is None:
             self.state_since = t
@@ -122,6 +130,7 @@ class PersonWait:
             self._go(t, DRIVING, 'ready')
             return self._status(t, 'ready')
         self._note_close_track(t, tracks)
+        self._update_stall(t, robot_speed)
         if self.state == DRIVING:
             return self._tick_driving(t, tracks)
         if self.state == WAITING:
@@ -133,11 +142,21 @@ class PersonWait:
         if any(is_approaching(track, c) for track in tracks):
             self._go(t, WAITING, 'approaching')
             return self._status(t, 'approaching', tracks)
-        if any(in_zone(track, c) for track in tracks):
-            self._go(t, WAITING, 'in_zone')
+        if any(in_zone(track, c) for track in tracks) and self._stalled(t):
+            # 서 있는 사람이 구역 안에 있고 로봇이 실제로 막혔다: 사람 때문에 막힘(2-2) → 복구 대신 기다린다
+            self._go(t, WAITING, 'blocked_in_zone')
             self._update_stationary(t, self._zone_tracks(tracks))   # 서비스 시간은 선 순간부터 잰다
-            return self._status(t, 'in_zone', tracks)
+            return self._status(t, 'blocked_in_zone', tracks)
         return self._status(t, 'clear', tracks)
+
+    def _update_stall(self, t, robot_speed):
+        if robot_speed is None or robot_speed > self.config.stall_speed:
+            self.stalled_since = None
+        elif self.stalled_since is None:
+            self.stalled_since = t
+
+    def _stalled(self, t):
+        return self.stalled_since is not None and t - self.stalled_since >= self.config.stall_sec
 
     def _tick_waiting(self, t, tracks, pull_over_available, tof_blocked=False):
         c = self.config
