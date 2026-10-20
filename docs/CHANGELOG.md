@@ -10,6 +10,22 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-19 (119) 사람 기다리기 재설계(2-7) 1~3단계: 상태 기계 하나·`/person_wait`·`IsWaitingForPerson`, 래치 제거, 안전 정지 분리
+
+**할 일**
+- 전체 재빌드(venv colcon). 새 메시지 `limbo_interfaces/PersonWait`, 새 노드 `person_wait`, BT 플러그인 교체. `tof_node`는 점군 처리만 남음(`tof.yaml`에서 래치 파라미터 삭제)
+- 미달 셋(아래)은 다음 커밋에서 보완
+
+**변경**
+- 1단계 `person_wait.py`: ROS 없는 순수 상태 기계(NOT_READY/DRIVING/WAITING/PULL_OVER). 설정은 치수에서 유도(구역 반폭 = 로봇 반폭 0.30 + 사람 반경 0.25, 구역 1.5 m, 신뢰 거리 3.0 m, 서비스 15 s, 경보 30 s). 타이머로 대기를 끝내는 전이 없음. 단위 시험 15개
+- 2단계 `person_wait_node.py`: 트랙을 범퍼 기준 상대 위치로(속도는 회전만, 로봇 속도 안 뺌), 준비 신호 = 지도 + `map→base_link` TF 2 s. BT 세 자리(계획 중 대기·추종 중 정지·복구 전)를 `IsWaitingForPerson` 하나로. `collision_monitor`에 범퍼 앞 0.3 m `FrontStop`(ToF+라이다). `PersonBlocking`·`ApproachWatch`·띠 판정·`/person_blocking`·`/person_approaching`·옛 BT 플러그인 삭제. 벽 걸러내기·덩어리 판정·최근접점은 `geometry.py`로 보존
+- 3단계 보완: BT `FollowPathOrWait`·`ComputePathOrWait` 반복 상한 60 → 사실상 무한(타이머는 출구가 아님). 코앞에서 카메라 트랙이 끊길 때(모델이 코앞 다리를 못 봄, 프레임으로 확인) "직전 3 s 안 구역 트랙 1.0 m 안 + ToF 막힘이면 대기 유지, ToF 비면 즉시 해제". 정지 판정 여유(0.2 미만 정지, 0.3 이상 1 s 지속 시 해제). 손님 시나리오 복귀 자리를 진로 밖으로, `moving_obstacles.py` served 해제를 로봇 3 m 밖으로. FrontStop은 stop → limit(전진 0, 회전 허용)
+- `docs/PROJECT.md` 2-7 확정(서비스 15 s 뒤 비켜서기, 자리 없으면 계속 기다림 + 경보, 천천히 지나가기 없음), 결정 이력. `docs/TROUBLESHOOTING.md`에 래치 교훈
+
+**확인**(`experiments/2026-10-19_person_wait/`)
+- 손님 12/12(멈춤·출발 전이 로그로 설명, 복구 0), 사람 두 명 복도 9/9(대기 최대 4.3 s, 60 s 정지 0), 앞에 서는 사람 8/9(선 10 s 동안 기다렸다 ToF 비면 출발), 상자 9/12(상자 때문의 대기 0·접촉 0). 충돌 전부 0
+- 미달 셋: ① 벽 옆에 서 있는 사람에게 `in_zone`으로 영영 대기(설계는 다가옴만 손님) ② 복도 끝 벽 앞 0.3 m 안전 정지가 제자리 회전과 겹쳐 갇힘 ③ 시작 직후 준비 전 메시지로 가짜 코앞 트랙
+
 ## 2026-10-19 (118) 하반신 모델 3~5차: 몸 중심 보정(박스 종류별 반경), 두 다리 합치기, 화면 가장자리 박스·거리 튐 거르기, 기본 모델을 하반신으로
 
 **할 일**
