@@ -1,6 +1,8 @@
 """rec.py 녹화 분석. 사용법: ana.py <json> ..."""
-import json, math, bisect, statistics as st, sys
-MATCH, HFOV = 1.0, math.radians(36)
+import json, math, bisect, os, statistics as st, sys
+# HFOV=30 ana.py ... 로 시야 기준을 ±30°로 좁혀 셀 수 있다 (기본 ±36° = 카메라 가로 시야 끝, 반쯤 잘린 사람도 셈)
+MATCH, HFOV = 1.0, math.radians(float(os.environ.get("HFOV", 36)))
+HFOV_MIN = math.radians(float(os.environ.get("HFOV_MIN", 0)))  # HFOV_MIN=30 HFOV=36: 화면 가장자리(30~36°)에 걸친 사람만 셈
 def ana(path):
     D = json.load(open(path)); names = D['names'].split(','); gt = sorted(D['gt']); gts = [g[0] for g in gt]; fr = sorted(D['frames'], key=lambda f: f['t'])
     def gt_at(t):
@@ -21,7 +23,7 @@ def ana(path):
             det = bool(per[k])
             if per[k]:
                 per[k].sort(); errs.append(per[k][0][0]); ids[k].append(per[k][0][1]); dup += len(per[k]) > 1
-            if b > HFOV or d > 5: continue
+            if b > HFOV or b < HFOV_MIN or d > 5: continue
             key = '0-1.5' if d < 1.5 else '1.5-3' if d < 3 else '3-5'
             bins[key][0] += det; bins[key][1] += 1
             if d < 3 and speed(f['t'], k) < 0.05: stopv[k].append((f['t'], det))

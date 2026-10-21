@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 사용법: [PREFIX=leg2] [DIAG=<png 폴더>] [MODEL=<.pt>] run.sh <base|cand|porto> <approach|corr> <회차>  (yaml은 시작 때 내용으로 되돌림)
+# 사용법: [PREFIX=leg2] [DIAG=<png 폴더>] [MODEL=<.pt>] run.sh <base|cand|porto> <approach|corr|crowd> <회차>  (yaml은 시작 때 내용으로 되돌림)
 set +u
 H=$(cd "$(dirname "$0")" && pwd); T=~/limbo/tools/sim_trials; R=~/limbo; LOGS=~/limbo_bags/sim_trials/logs
 Y=$R/limbo/src/limbo_perception/config/person_detector.yaml
@@ -7,7 +7,10 @@ export ROS_DOMAIN_ID=97 GOAL_TIMEOUT=90
 L=${PREFIX:-leg}_${1}_${2}_$3; B=$(mktemp); cp $Y $B
 # zz_social_* 월드는 저장소 experiments 폴더에만 있어 설치 폴더에 복사해야 Gazebo가 찾는다 (10-20: 없어서 3번 다 시작 실패)
 D=$R/experiments/2026-10-14_social_people/worlds; cp $D/zz_social_*.sdf $D/zz_social_*_movers.json $R/limbo/install/limbo_simulation/share/limbo_simulation/worlds/
-if [ $2 = approach ]; then export WORLD=zz_social_approach MAP=aischool_2f_map; ROUTE=hall; else export WORLD=aischool_2f_social MAP=aischool_2f_map; ROUTE=people2; fi
+if [ $2 = approach ]; then export WORLD=zz_social_approach MAP=aischool_2f_map; ROUTE=hall
+# crowd: 충장로 200 m 거리 + 소셜 포스 사람 50명(experiments/2026-10-20_chungjang_crowd/gen_crowd.py 산출물, 설치 폴더에만 있음). 100 m 왕복, 목표당 600 s
+elif [ $2 = crowd ]; then export WORLD=chungjang_crowd MAP=chungjang_map GOAL_TIMEOUT=600; ROUTE=street; NAV_TIMEOUT=1500
+else export WORLD=aischool_2f_social MAP=aischool_2f_map; ROUTE=people2; fi
 # 3차부터 yaml 기본이 하반신 모델(cand). base는 기존 yolo11n으로 바꿔 돌림
 if [ $1 = base ]; then
   sed -i 's/^      classes: \[0, 1\] /      classes: [0] /; s/^      imgsz: 512 /      imgsz: 640 /' $Y
@@ -27,7 +30,7 @@ python3 $H/rec.py $H/$L.json > $H/$L.rec.log 2>&1 & RP=$!
 # DIAG=<폴더>면 오검출 자리가 보일 때 박스 그린 RGB를 PNG로 저장 (diag.py)
 if [ -n "$DIAG" ]; then python3 $H/diag.py $DIAG > $H/$L.diag.log 2>&1 & DP=$!; fi
 sleep 2
-timeout 900 python3 $T/nav_route.py $ROUTE > $LOGS/trial_$L.nav.log 2>&1
+timeout ${NAV_TIMEOUT:-900} python3 $T/nav_route.py $ROUTE > $LOGS/trial_$L.nav.log 2>&1
 sleep 2; kill -INT $RP; wait $RP; [ -n "$DP" ] && { kill -INT $DP; wait $DP; cat $H/$L.diag.log; }
 $T/sim_ctl.sh stop
 cp $B $Y; rm -f $B
