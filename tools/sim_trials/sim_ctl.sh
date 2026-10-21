@@ -3,6 +3,8 @@
 # 시뮬레이션(기본은 시나리오 월드, WORLD·MAP 환경변수로 바꿈)을 자기 프로세스 그룹으로 띄우고, 끌 때는 그 그룹만 정리한다.
 # 시작할 때 부하가 몰려 Nav2 lifecycle이 시간 초과로 실패하는 경우가 있어 최대 3번 다시 띄운다
 D=$(cd "$(dirname "$0")" && pwd); LOGS=~/limbo_bags/sim_trials/logs; mkdir -p $LOGS; PIDFILE=$LOGS/sim.pgid
+# LIMBO_WS=<작업 공간>으로 다른 빌드(예: ktj worktree ~/limbo_ktj/limbo)를 띄울 수 있다. 정리 패턴도 그 경로를 본다
+WS=${LIMBO_WS:-$HOME/limbo/limbo}
 
 stop_sim() {
   G=$(cat $PIDFILE 2>/dev/null)
@@ -22,7 +24,7 @@ stop_sim() {
 # AMCL이 스캔을 전부 버리고 시작이 3번 다 실패함). 이 컴퓨터에서 시뮬레이션은 한 번에 하나라는 전제
 sweep_nodes() {
   # 명령줄이 노드 실행 파일로 시작하는 것만(셸이 이 문자열을 인자로 들고 있어도 안 잡힘)
-  local pat='^ *[0-9]+ (/usr/bin/python3 /opt/ros/jazzy/bin/ros2 bag record|/home/kim/limbo/limbo/install/(robot_self_filter|limbo_drive|limbo_perception|limbo_evaluation|limbo_monitor|limbo_patrol)/lib/|/opt/ros/jazzy/lib/(ros_gz_bridge|robot_state_publisher|robot_localization|nav2_|opennav_docking|rviz2|pointcloud_to_laserscan|slam_toolbox)|/opt/ros/jazzy/lib/ros_gz_sim/create|/home/kim/limbo/venvs/[^ ]+/bin/python /home/kim/limbo/limbo/install/(limbo_perception|limbo_evaluation|limbo_monitor)/|python3 /home/kim/limbo/limbo/install/limbo_simulation/share/limbo_simulation/scripts/|/usr/bin/python3 /opt/ros/jazzy/bin/ros2 launch limbo_bringup)'
+  local pat='^ *[0-9]+ (/usr/bin/python3 /opt/ros/jazzy/bin/ros2 bag record|'"$WS"'/install/(robot_self_filter|limbo_drive|limbo_perception|limbo_evaluation|limbo_monitor|limbo_patrol)/lib/|/opt/ros/jazzy/lib/(ros_gz_bridge|robot_state_publisher|robot_localization|nav2_|opennav_docking|rviz2|pointcloud_to_laserscan|slam_toolbox)|/opt/ros/jazzy/lib/ros_gz_sim/create|/home/kim/limbo/venvs/[^ ]+/bin/python '"$WS"'/install/(limbo_perception|limbo_evaluation|limbo_monitor)/|python3 '"$WS"'/install/limbo_simulation/share/limbo_simulation/scripts/|/usr/bin/python3 /opt/ros/jazzy/bin/ros2 launch limbo_bringup)'
   local pids=$(ps -eo pid,args | grep -E "$pat" | awk '{print $1}')
   [ -z "$pids" ] && return
   echo "남은 노드 정리: $pids"
@@ -31,12 +33,12 @@ sweep_nodes() {
 
 start_once() {   # 0: 준비됨, 1: 실패
   local LOG=$1
-  source /opt/ros/jazzy/setup.bash; source ~/limbo/limbo/install/setup.bash; source ~/limbo/venvs/limbo_yolo/bin/activate
+  source /opt/ros/jazzy/setup.bash; source $WS/install/setup.bash; source ~/limbo/venvs/limbo_yolo/bin/activate
   # 화면·GPU 설정은 이미 있으면 그대로 쓴다 (컴퓨터마다 다름). 기본값은 NVIDIA 노트북(PRIME) 기준
   export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-97} DISPLAY=${DISPLAY:-:1}
   export __NV_PRIME_RENDER_OFFLOAD=${__NV_PRIME_RENDER_OFFLOAD:-1} __GLX_VENDOR_LIBRARY_NAME=${__GLX_VENDOR_LIBRARY_NAME:-nvidia}
   [ -n "$XAUTHORITY" ] || export XAUTHORITY=/run/user/$(id -u)/gdm/Xauthority
-  cd ~/limbo/limbo
+  cd $WS
   setsid ros2 launch limbo_bringup start_simulation.launch.py world:=${WORLD:-aischool_2f_scenarios} map:=${MAP:-aischool_2f_map} gui:=false record:=true ${EXTRA_ARGS} \
     > $LOG 2>&1 < /dev/null &
   echo $! > $PIDFILE

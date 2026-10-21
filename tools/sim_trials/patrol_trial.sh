@@ -8,7 +8,7 @@ WAYPOINTS=${2:-aischool_waypoints.yaml}
 export WORLD=${WORLD:-aischool_2f} MAP=${MAP:-aischool_2f_map}
 T0=$(date +%s)
 $D/sim_ctl.sh start patrol_$1 || { $D/sim_ctl.sh stop; echo "patrol_$1 START_FAIL" >> $LOGS/patrol_results.txt; exit 1; }
-source /opt/ros/jazzy/setup.bash; source ~/limbo/limbo/install/setup.bash; export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-97}; cd /tmp
+source /opt/ros/jazzy/setup.bash; source ${LIMBO_WS:-$HOME/limbo/limbo}/install/setup.bash; export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-97}; cd /tmp
 rm -rf $LOGS/patrol_$1_bag
 # 액션 상태(/navigate_through_poses/_action/status)는 숨김 토픽이라 --include-hidden-topics가 있어야 녹화된다
 ros2 bag record --include-hidden-topics -s mcap -o $LOGS/patrol_$1_bag /cmd_vel_nav /cmd_vel_smoothed /cmd_vel /collision_monitor_state \
