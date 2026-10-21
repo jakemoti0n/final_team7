@@ -13,7 +13,7 @@ setup(
         ('share/' + package_name + '/config',
             ['config/person_detector.yaml', 'config/tof.yaml', 'config/person_wait.yaml']),
         # 팀원이 학습한 하반신 모델 (person_detector.yaml 기본 모델)
-        ('share/' + package_name + '/models', ['models/leg_512.pt']),
+        ('share/' + package_name + '/models', ['models/leg_512.pt', 'models/leg_640.pt']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

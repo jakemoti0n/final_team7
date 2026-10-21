@@ -5,6 +5,7 @@ person_detector:
     # 기본은 팀원이 학습한 하반신 모델(가까워 다리만 보이는 사람도 잡음).
     # 기존 모델로 돌리려면 model: yolo11n.pt, classes: [0], imgsz: 640
     # (또는 런치 인자 person_model:=yolo11n.pt와 classes·imgsz 변경)
+    # 640으로 다시 학습한 models/leg_640.pt도 들어 있음 (클래스 같음, imgsz: 640으로 바꿔서 씀). 실차 비교 뒤 기본값 결정
     yolo:
       model: models/leg_512.pt  # 상대 경로는 limbo_perception share 폴더 기준으로 찾음
       confidence: 0.3
