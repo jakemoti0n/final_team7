@@ -8,6 +8,28 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-22 (44) 벽·검은 면을 사람으로 보는 오인식 수정: 큰 박스 평면·무늬 판정 + person 박스 실제 폭 하한 — 회귀 통과
+
+**할 일**
+- pull 뒤 `build_limbo`(limbo_perception 코드·yaml). 모델·문턱은 그대로(leg_640, 0.3)
+- 벽 오인식이 또 보이면 `/person_detector/boxes`의 `surface` 항목과 주석 영상의 회색 박스를 확인 (TROUBLESHOOTING 2026-10-22)
+
+**변경**
+- `geometry.py`: `SurfaceConfig`·`surface_check`(화면 15 % 이상 박스의 가운데 깊이가 역깊이 평면에 3 cm 안 95 % 이상 + 명암 라플라시안 편차 6 미만 → 면), `physical_width_m`·`too_narrow_for_person`(person 박스 실제 폭 < 0.15 m → 사람 아님, 박스 끝 ±2 px 여유, leg 제외)
+- `person_detector.py`: 박스마다 면 판정을 먼저 해 버린 것은 추적에 안 넣음. 진단 토픽 `/person_detector/boxes`를 `_detect`가 아니라 프레임 처리 끝에 발행하고 `surface` 목록 추가. 깊이 계산 뒤 폭 하한. `surface.*`·`min_person_width_m` 파라미터
+- `visualization.draw_surface`: 버린 박스를 회색으로
+- `person_detector.yaml`: `surface:` 절(min_box_area_ratio 0.15, inner_margin 0.30, plane_tol_m 0.03, min_planar_ratio 0.95, max_texture 6.0, min_valid_pixels 50), `min_person_width_m 0.15`
+- `test_logic.py`: 면 판정 7개(평평한 검은 벽, 비스듬한 벽, 가장자리 단차 있는 판, 벽 앞 두 다리, 둥근 몸통+옷 무늬, 벽에 기댄 사람, 작은 박스·깊이 없음), 폭 하한 1개
+
+**원인과 근거**(TROUBLESHOOTING 2026-10-22에 상세)
+- 하반신 모델이 크고 어두운 균일한 사각형을 person으로 봄. 보고된 장면을 모델에 넣으면 leg_640 0.34(문턱 넘음)·leg_512 0.25, 뒤집으면 둘 다 넘음 → 공통 약점. 문턱을 0.4로 올리면 가까운 손님 박스의 11~15 %를 잃어 택하지 않음
+- 10-19 비교 녹화에는 사람 검출률만 있고 사람 없는 곳의 박스(오탐)는 재지 않았음
+
+**확인**(ktj 이 커밋, 시뮬)
+- 같은 녹화 프레임에 오프라인 적용: 노드가 사람으로 봤던 검은 판 박스(신뢰도 0.85) 평면 1.00·무늬 0.0 → 버림. 사람 장면(aischool_2f_scenarios 90 s) person 박스 469개 중 잘못 버린 것 0, 큰 박스 151개 평면 최대 0.84·무늬 최소 3.0
+- 회귀 세트(41과 같음): 손님 홀 왕복 4/4 × 3(복구 0, 구간 12 s), 상자 4/4 × 2(상자 최소 0.29·0.32 m, 복구 5·7), 순찰 3/3(180·185·186 s). 상자 1회차는 서 있는 사람 앞에서 기다리기 상태가 안 풀린 것(41에 적힌 ktj 기다리기 상태 기계 문제, 그때 사람은 정상 추적 중) → 재시험 2회 통과
+- 패키지 시험 67개 통과(flake8·pep257 포함)
+
 ## 2026-10-22 (43) split-sim 수정: 네트워크 실측 반영(포인트클라우드 850 Mbit/s), Nav2 컴포지션 인자 `nav2_composition`, 유선 필수
 
 **할 일**

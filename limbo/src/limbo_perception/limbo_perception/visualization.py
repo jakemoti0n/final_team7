@@ -5,6 +5,7 @@ from geometry_msgs.msg import Point
 from visualization_msgs.msg import Marker, MarkerArray
 
 BOX_COLOR = (0, 255, 0)
+SURFACE_COLOR = (160, 160, 160)  # 벽·문 같은 면으로 보고 버린 박스 (진단용)
 PATH_COLOR = (1.0, 0.5, 0.0, 1.0)  # r, g, b, a
 PATH_WIDTH = 0.05
 PATH_HEIGHT = 0.1
@@ -70,3 +71,12 @@ def prediction_markers(predictions, frame_id, stamp):
         marker_array.markers.append(marker)
 
     return marker_array
+
+
+def draw_surface(frame, box, planar_ratio, texture):
+    """면으로 판정해 버린 박스를 회색으로 그린다 (잘못 버렸는지 눈으로 확인하는 용도)."""
+    x1, y1, x2, y2 = box
+    cv2.rectangle(frame, (x1, y1), (x2, y2), SURFACE_COLOR, 1)
+    cv2.putText(frame, f'surface plane:{planar_ratio:.2f} tex:{texture:.1f}',
+                (x1, min(frame.shape[0] - 5, y2 + 15)),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.45, SURFACE_COLOR, 1)

@@ -11,6 +11,7 @@ import os
 from typing import Optional
 
 from ament_index_python.packages import get_package_share_directory
+import cv2
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PointStamped
 from limbo_interfaces.msg import PersonPredictionArray
@@ -155,6 +156,9 @@ class PersonDetector(Node):
         # 화면 좌우 끝에 조금만 걸친 사람 박스는 depth가 뒤쪽 배경을 재므로 거리 계산에서 뺀다
         self.edge_margin_px = p('edge_margin_px', 2).value
         self.edge_min_width_px = p('edge_min_width_px', 40).value
+        # person 박스의 실제 폭이 이보다 좁으면 사람이 아니다 (문틀·기둥·판 가장자리 띠).
+        # leg 박스는 제외 (geometry.too_narrow_for_person)
+        self.min_person_width_m = p('min_person_width_m', 0.15).value
         # 같은 트랙의 depth가 한 프레임에 이만큼 넘게 튀면 그 값을 버림 (3프레임 연속이면 채택)
         self.jump_reject_m = p('jump_reject_m', 1.0).value
 
@@ -169,6 +173,20 @@ class PersonDetector(Node):
             leg_percentile=p('depth.leg_percentile', d.leg_percentile).value,
             leg_radius=p('leg_radius', d.leg_radius).value,
             person_box_radius=p('person_box_radius', d.person_box_radius).value,
+        )
+
+        # 벽·문·가구 면을 사람으로 본 큰 박스 걸러내기 (geometry.SurfaceConfig 설명 참고)
+        sc = geometry.SurfaceConfig()
+        self.surface_config = geometry.SurfaceConfig(
+            min_box_area_ratio=p(
+                'surface.min_box_area_ratio', sc.min_box_area_ratio).value,
+            inner_margin=p('surface.inner_margin', sc.inner_margin).value,
+            plane_tol_m=p('surface.plane_tol_m', sc.plane_tol_m).value,
+            min_planar_ratio=p(
+                'surface.min_planar_ratio', sc.min_planar_ratio).value,
+            max_texture=p('surface.max_texture', sc.max_texture).value,
+            min_valid_pixels=p(
+                'surface.min_valid_pixels', sc.min_valid_pixels).value,
         )
 
         t = tracking.TrackerConfig()
@@ -258,7 +276,19 @@ class PersonDetector(Node):
 
         matched_person_ids = set()
         results = []
-        for detection in self._detect(frame, msg.header.stamp):
+        detections, diagnostics = self._detect(frame, msg.header.stamp)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if detections else None
+        for detection in detections:
+            # 벽·문·가구의 큰 면에 뜬 박스는 사람이 아니다 (가운데 깊이가 평면 + 무늬 없음). 추적에 넣지 않는다
+            is_surface, planar, texture = geometry.surface_check(
+                depth_image, gray, detection.box, self.surface_config,
+                self.depth_config)
+            if is_surface:
+                diagnostics['surface'].append(
+                    [*detection.box, round(planar, 3), round(texture, 2)])
+                visualization.draw_surface(
+                    annotated_frame, detection.box, planar, texture)
+                continue
             result = self._process_detection(
                 detection, depth_image, msg.header.stamp, current_time,
                 robot_xy, matched_person_ids)
@@ -272,6 +302,7 @@ class PersonDetector(Node):
                     result.motion_state, result.approach_intent,
                     result.approach_duration))
 
+        self.boxes_pub.publish(String(data=json.dumps(diagnostics)))
         self._publish_predictions(
             [r.prediction for r in results if r.prediction is not None],
             msg.header.stamp)
@@ -287,7 +318,7 @@ class PersonDetector(Node):
         self.image_pub.publish(output_msg)
 
     def _detect(self, frame, stamp):
-        """YOLO + BoT-SORT 결과 중 track ID가 붙은 사람 box만, 한 사람에 하나씩 반환한다."""
+        """YOLO + BoT-SORT 결과 중 track ID가 붙은 사람 box만, 한 사람에 하나씩. 진단 토픽용 dict도 같이 돌려준다."""
         result = self.model.track(
             source=frame,
             classes=self.yolo_classes,
@@ -299,8 +330,9 @@ class PersonDetector(Node):
         )[0]
 
         boxes = result.boxes
+        empty = {'t': stamp.sec + stamp.nanosec * 1e-9, 'boxes': [], 'kept': [], 'surface': []}
         if boxes is None or not boxes.is_track or boxes.id is None:
-            return []
+            return [], empty
 
         raw_track_ids = boxes.id.int().cpu().tolist()
         classes = boxes.cls.int().cpu().tolist()
@@ -309,16 +341,17 @@ class PersonDetector(Node):
             xyxy, classes, self.leg_class, self.leg_inside_ratio, self.leg_iou,
             self.leg_pair_gap_ratio, self.leg_pair_vertical_overlap)
         confs = boxes.conf.cpu().tolist()
-        self.boxes_pub.publish(String(data=json.dumps({
+        diagnostics = {
             't': stamp.sec + stamp.nanosec * 1e-9,
             'boxes': [[c, *b, round(f, 3)]
                       for c, b, f in zip(classes, xyxy, confs)],
             'kept': [[*box, int(classes[i] == self.leg_class)]
                      for i, box in kept],
-        })))
+            'surface': [],   # 면으로 보고 버린 박스 [x1, y1, x2, y2, 평면 비율, 무늬 값] (image_callback이 채움)
+        }
         return [Detection(box, raw_track_ids[i],
                           leg=classes[i] == self.leg_class)
-                for i, box in kept]
+                for i, box in kept], diagnostics
 
     def _process_detection(self, detection, depth_image, stamp, current_time,
                            robot_xy, matched_person_ids):
@@ -341,6 +374,15 @@ class PersonDetector(Node):
             self.get_logger().debug(
                 f'트랙 {detection.raw_track_id} depth {measured:.2f} m 튐 → '
                 f'직전 {depth:.2f} m 유지')
+
+        if geometry.too_narrow_for_person(
+                detection.box, depth, self.intrinsics.fx,
+                self.min_person_width_m, detection.leg):
+            self.get_logger().debug(
+                f'박스 {detection.box} 실제 폭 '
+                f'{geometry.physical_width_m(detection.box, depth, self.intrinsics.fx):.2f} m '
+                f'< {self.min_person_width_m} m → 사람 아님')
+            return None
 
         u = (x1 + x2) / 2.0
         v = (y1 + y2) / 2.0
