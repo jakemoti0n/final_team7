@@ -1,0 +1,13 @@
+    <!-- 따라가기 운용자 밴드: 양쪽 발목의 형광 분홍 고리. moving_obstacles.py가 운용자 위치로 같이 옮긴다 (movers.json "band") -->
+    <model name="operator_band">
+      <static>true</static>
+      <pose>1.8 0 0.15 0 0 0</pose>
+      <link name="link">
+        <visual name="left"><pose>0 0.10 0 0 0 0</pose>
+          <geometry><cylinder><radius>0.075</radius><length>0.08</length></cylinder></geometry>
+          <material><ambient>1 0 0.8 1</ambient><diffuse>1 0 0.8 1</diffuse><emissive>0.9 0 0.7 1</emissive></material></visual>
+        <visual name="right"><pose>0 -0.10 0 0 0 0</pose>
+          <geometry><cylinder><radius>0.075</radius><length>0.08</length></cylinder></geometry>
+          <material><ambient>1 0 0.8 1</ambient><diffuse>1 0 0.8 1</diffuse><emissive>0.9 0 0.7 1</emissive></material></visual>
+      </link>
+    </model>

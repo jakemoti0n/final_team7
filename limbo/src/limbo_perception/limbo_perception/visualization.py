@@ -36,6 +36,18 @@ def draw_detection(frame, box, raw_track_id, person_id, distance, speed,
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, BOX_COLOR, 2)
 
 
+OPERATOR_COLOR = (255, 0, 255)  # 분홍·자홍 (밴드 색과 같은 계열)
+
+
+def draw_operator(frame, box, reason, band_pixels, similarity):
+    """따라가기 대상(운용자)으로 판정한 박스를 굵게 덧그린다."""
+    x1, y1, x2, y2 = box
+    cv2.rectangle(frame, (x1, y1), (x2, y2), OPERATOR_COLOR, 3)
+    text = f'OPERATOR {reason} band:{band_pixels} sig:{similarity:.2f}'
+    cv2.putText(frame, text, (x1, min(frame.shape[0] - 5, y2 + 15)),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.45, OPERATOR_COLOR, 2)
+
+
 def _point(x, y, z):
     point = Point()
     point.x = float(x)

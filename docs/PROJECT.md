@@ -31,7 +31,7 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 | `limbo_description` | 로봇 모델. v14 기본, 이전 모델은 `robot:=legacy` | `urdf/limbo.urdf.xacro`, `urdf/limbo.gazebo.xacro`(구동 플러그인 속도 상한 0.6) |
 | `limbo_simulation` | Gazebo 월드·사람·생성기 | `worlds/*.sdf`(물리 스텝 2 ms), `tools/aischool_2f/`, `tools/chungjang/`(lab), `scripts/moving_obstacles.py`(lab) |
 | `limbo_navigation` | Nav2 설정 전체, AMCL·EKF, 지도, 사람 비용 플러그인 | `config/nav2_params.yaml`(MPPI `vx_max` 0.6, `prune_distance` 1.7), `src/human_layer.cpp` |
-| `limbo_perception` | YOLO 사람 인식·추적·2초 예측 → `/person_detector/predictions` | `person_detector.py`, `config/person_detector.yaml` |
+| `limbo_perception` | YOLO 사람 인식·추적·2초 예측 → `/person_detector/predictions`, 사람 기다리기 상태 기계(`/person_wait`), 따라가기 운용자 재식별(`/follow/target`, lab) | `person_detector.py`, `person_wait.py`, `appearance.py`, `config/person_detector.yaml` |
 | `limbo_patrol` | waypoint 순찰, 일시정지·재개 서비스, 상태 토픽 | `patrol_node.py`, `config/*_waypoints.yaml` |
 | `limbo_monitor` | 바퀴 헛돎 감시 (취소 기능은 임시로 꺼 둠) | |
 | `limbo_evaluation` | Goal마다 주행 지표 CSV (`record:=true`) | `nav_recorder`, `~/limbo_results/` |
@@ -161,6 +161,20 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 **열린 질문(회의)**
 - 규칙 1의 돌아갈 가치 3 m / 0.5 m가 자연스러운지(군중 시뮬·실물에서 봄)와 지역 사람 팽창 반경(사람이 불편하지 않은 거리, 실물에서 정함)
 - 접촉 ③: 폰 보는 사람(no_yield) 비율 25 %가 현실보다 과한지. 사람 모델은 시험 통과를 위해 고치지 않는다(6절)
+
+### 2-9. 따라가기는 "등록한 한 사람"을 따라가고, 못 알아보면 선다 — 2026-10-22, 1단계(재식별)까지
+
+**무엇**: 직원(정해진 운용자)이 로봇을 데리고 이동할 때 쓰는 모드. 순찰과 배타적이고, 시작은 명령(관제·버튼)으로 하며 등록된 사람이 지나간다고 저절로 따라가지 않는다. 설계 전체는 실험 기록 `2026-10-22_follow_operator`.
+
+**원칙**
+1. **대상은 그때 앞에 있는 사람이 아니라 미리 등록한 한 사람이다.** `/follow/enroll`로 등록하고(로봇 앞 0.5~2.5 m에 밴드 찬 사람 한 명), 서명은 파일에 남아 노드를 다시 띄워도 유지된다.
+2. **사람을 가르는 근거는 그 사람만 가진 신호에서 온다.** 카메라가 0.6 m라 얼굴은 없고 하반신뿐이다. 주 근거는 발목·종아리의 **형광 밴드**(색 범위 + 깊이 마스크), 보조는 **같은 트랙 번호**(밴드가 2 s 안에 가려졌을 때). 하반신 색 서명은 사람을 **가르지 못한다**(유니폼 직원·시뮬 actor처럼 옷이 같으면 끝) — 같은 번호라도 옷 색이 등록과 다르면 거부하는 용도로만 쓴다. 1단계에서 서명으로 다른 트랙에 갈아타는 규칙이 바꿔치기 7건을 전부 만들었고, 밴드+깊이 마스크는 4300 프레임에서 0건이었다.
+3. **못 알아보면 잘못 따라가지 말고 선다.** 놓치면 마지막 위치로 가서 기다리고(2단계), 5 s 넘으면 대상 해제 + 경보. 2-7의 "타이머는 출구가 아니라 경보"와 같은 태도다.
+4. **기다리기(2-7)는 따라가기 중에도 돈다.** 판단 주체는 하나다. 운용자 트랙만 기다리기 구역에서 제외하고(2단계), 다른 사람이 앞을 막으면 여전히 기다린다.
+
+**실제로는**: `person_detector`가 `/follow/target`(odom, 근거 `band | band_multi | track | signature_mismatch | lost | lost_timeout`)을 프레임마다 낸다. 주행(2단계: 사람에서 1.2 m 떨어진 목표점, Nav2 `follow_point` 꼴 트리, 순찰 pause)과 관제 버튼(3단계)은 아직 없다. YOLO를 OAK-D에 넣더라도 `_detect()` 경계 아래는 같아서 이 판정은 그대로 간다.
+
+**하지 말 것**: 색 서명·추적 ID만으로 "이 사람이 운용자"라고 정하는 것. 로봇 속도 0.6 m/s보다 빨리 걷는 운용자를 따라가려고 속도 상한을 올리는 것(2-4).
 
 ---
 

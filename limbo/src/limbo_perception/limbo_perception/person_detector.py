@@ -8,23 +8,29 @@ ROS 입출력(구독, 발행, TF, 파라미터)과 YOLO 호출만 여기서 하�
 from dataclasses import dataclass
 import json
 import os
+import threading
+import time
 from typing import Optional
 
 from ament_index_python.packages import get_package_share_directory
+import cv2
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PointStamped
-from limbo_interfaces.msg import PersonPredictionArray
-from limbo_perception import geometry, intent, motion, tracking, visualization
+from limbo_interfaces.msg import FollowTarget, PersonPredictionArray
+from limbo_perception import (appearance, geometry, intent, motion, tracking,
+                              visualization)
 from limbo_perception.messages import prediction_array
 import message_filters
 import numpy as np
 import rclpy
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import Bool, String
+from std_srvs.srv import Trigger
 import tf2_geometry_msgs  # noqa: F401  PointStamped용 tf2 변환 등록
 from tf2_ros import Buffer, TransformException, TransformListener
 from ultralytics import YOLO
@@ -41,10 +47,15 @@ NEAREST_ODOM_TOPIC = '/person_detector/person_position_odom'
 # 시험 기록용(JSON 문자열): frame마다 카메라 시각 t, YOLO 박스 [클래스, x1, y1, x2, y2, 신뢰도],
 # 합친 뒤 남은 박스 [x1, y1, x2, y2, leg 여부]
 BOXES_TOPIC = '/person_detector/boxes'
+# 따라가기 대상(운용자) 판정 → follow 노드 (PROJECT.md 2-9). 등록·해제는 서비스
+FOLLOW_TARGET_TOPIC = '/follow/target'
+FOLLOW_ENROLL_SERVICE = '/follow/enroll'
+FOLLOW_FORGET_SERVICE = '/follow/forget'
 
 PUBLISH_QUEUE = 10
 EXECUTOR_THREADS = 2
 TF_WARN_PERIOD_SEC = 2.0
+ENROLL_WAIT_SEC = 2.0  # 등록 서비스가 다음 카메라 프레임의 판정을 기다리는 상한
 
 
 @dataclass
@@ -66,6 +77,11 @@ class PersonResult:
     approach_intent: bool = False
     approach_duration: float = 0.0
     prediction: Optional[motion.PredictedPerson] = None
+    # 따라가기 재식별용 겉모습 (appearance.py)
+    base_point: Optional[PointStamped] = None
+    track: Optional[tracking.TrackObservation] = None
+    band_pixels: int = 0
+    signature: Optional[np.ndarray] = None
 
 
 class PersonDetector(Node):
@@ -82,6 +98,25 @@ class PersonDetector(Node):
         self.get_logger().info(
             f'모델 {self.model_path} 클래스 {used} '
             f'(전체 {len(self.model.names)}개), 입력 크기 {self.yolo_imgsz}')
+
+        # 따라가기 운용자: 등록 서명은 파일에 남아 노드를 다시 띄워도 유지된다
+        self.identity = appearance.OperatorIdentity(
+            self.band_config, self.identity_config,
+            signature=self._load_signature())
+        self.follow_lock = threading.Lock()
+        self.enroll_event = None     # 등록 요청이 들어오면 Event, 다음 프레임에서 처리
+        self.enroll_result = (False, '')
+        self.follow_pub = self.create_publisher(
+            FollowTarget, FOLLOW_TARGET_TOPIC, PUBLISH_QUEUE)
+        # 등록 서비스는 다음 카메라 프레임의 판정을 기다린다. 기본 콜백 그룹(상호 배제)에 두면 기다리는 동안
+        # 카메라 콜백이 못 돌아 영영 안 온다 → 서비스만 다른 그룹 (실행기 스레드 2개 중 하나를 쓴다)
+        self.service_group = MutuallyExclusiveCallbackGroup()
+        self.create_service(Trigger, FOLLOW_ENROLL_SERVICE, self.on_enroll,
+                            callback_group=self.service_group)
+        self.create_service(Trigger, FOLLOW_FORGET_SERVICE, self.on_forget,
+                            callback_group=self.service_group)
+        if self.identity.enrolled:
+            self.get_logger().info(f'운용자 등록 서명 불러옴: {self.enroll_file}')
         self.depth_jump_filter = geometry.DepthJumpFilter(
             jump_m=self.jump_reject_m)
         self.track_manager = tracking.TrackManager(
@@ -227,6 +262,125 @@ class PersonDetector(Node):
                 i.intent_lost_grace_time).value,
         )
 
+        # 따라가기 운용자 재식별 (appearance.py)
+        self.enroll_file = os.path.expanduser(
+            p('follow.enroll_file', '~/.limbo/follow_operator.json').value)
+        b = appearance.BandConfig()
+        self.band_config = appearance.BandConfig(
+            hue_min=p('follow.band.hue_min', b.hue_min).value,
+            hue_max=p('follow.band.hue_max', b.hue_max).value,
+            sat_min=p('follow.band.sat_min', b.sat_min).value,
+            val_min=p('follow.band.val_min', b.val_min).value,
+            min_pixels=p('follow.band.min_pixels', b.min_pixels).value,
+            depth_tol=p('follow.band.depth_tol', b.depth_tol).value,
+        )
+        c = appearance.IdentityConfig()
+        self.identity_config = appearance.IdentityConfig(
+            signature_min=p('follow.identity.signature_min', c.signature_min).value,
+            hold_sec=p('follow.identity.hold_sec', c.hold_sec).value,
+            lost_sec=p('follow.identity.lost_sec', c.lost_sec).value,
+            gate_m=p('follow.identity.gate_m', c.gate_m).value,
+            enroll_min_x=p('follow.identity.enroll_min_x', c.enroll_min_x).value,
+            enroll_max_x=p('follow.identity.enroll_max_x', c.enroll_max_x).value,
+            enroll_half_width=p(
+                'follow.identity.enroll_half_width', c.enroll_half_width).value,
+            signature_update=p(
+                'follow.identity.signature_update', c.signature_update).value,
+        )
+
+    # ---- 따라가기 운용자 등록·판정 ----
+
+    def _load_signature(self):
+        try:
+            data = json.load(open(self.enroll_file))
+            return np.array(data['signature'], dtype=np.float32)
+        except (OSError, ValueError, KeyError):
+            return None
+
+    def _save_signature(self):
+        os.makedirs(os.path.dirname(self.enroll_file), exist_ok=True)
+        json.dump({'signature': self.identity.signature.tolist(),
+                   'bins': list(self.band_config.signature_bins),
+                   'saved_at': time.strftime('%Y-%m-%d %H:%M:%S')},
+                  open(self.enroll_file, 'w'))
+
+    def on_enroll(self, request, response):
+        """로봇 앞에 선 밴드 찬 사람을 운용자로 등록한다. 판정은 다음 카메라 프레임에서 한다."""
+        event = threading.Event()
+        with self.follow_lock:
+            self.enroll_event = event
+        if not event.wait(ENROLL_WAIT_SEC):
+            with self.follow_lock:
+                self.enroll_event = None
+            response.success, response.message = False, 'no_camera_frame'
+            return response
+        response.success, response.message = self.enroll_result
+        self.get_logger().info(f'운용자 등록 {response.success}: {response.message}')
+        return response
+
+    def on_forget(self, request, response):
+        with self.follow_lock:
+            self.identity.forget()
+        try:
+            os.remove(self.enroll_file)
+        except OSError:
+            pass
+        response.success, response.message = True, 'forgotten'
+        self.get_logger().info('운용자 등록 해제')
+        return response
+
+    def _update_follow(self, results, current_time, stamp):
+        """이번 프레임의 사람 트랙에서 운용자를 고르고 /follow/target을 낸다. 운용자 결과(없으면 None)를 돌려준다."""
+        candidates = []
+        by_id = {}
+        for r in results:
+            if r.track is None or r.base_point is None:
+                continue
+            candidates.append(appearance.Candidate(
+                r.person_id, r.track.x, r.track.y, r.track.vx, r.track.vy,
+                r.base_point.point.x, r.base_point.point.y,
+                r.band_pixels, r.signature))
+            by_id[r.person_id] = r
+
+        with self.follow_lock:
+            if self.enroll_event is not None:
+                self.enroll_result = self.identity.enroll(candidates, current_time)
+                if self.enroll_result[0]:
+                    self._save_signature()
+                self.enroll_event.set()
+                self.enroll_event = None
+            decision = self.identity.decide(candidates, current_time)
+
+        msg = FollowTarget()
+        msg.header.stamp = stamp
+        msg.header.frame_id = self.odom_frame
+        msg.enrolled = decision.enrolled
+        msg.found = decision.found
+        msg.person_id = int(decision.person_id)
+        msg.position.x, msg.position.y = float(decision.x), float(decision.y)
+        msg.velocity.x, msg.velocity.y = float(decision.vx), float(decision.vy)
+        msg.reason = decision.reason
+        msg.band_pixels = int(decision.band_pixels)
+        msg.similarity = float(decision.similarity)
+        msg.since_band_sec = float(decision.since_band_sec)
+        msg.lost_sec = float(decision.lost_sec)
+        self.follow_pub.publish(msg)
+        return (by_id.get(decision.person_id), decision) if decision.found else (None, decision)
+
+    def _appearance(self, frame_hsv, depth_image, box, depth):
+        """박스 안에서 사람 깊이 ±tol 픽셀만 골라(깊이 마스크) 밴드 픽셀 수와 색 서명을 계산한다."""
+        x1, y1, x2, y2 = box
+        h, w = depth_image.shape[:2]
+        x1, x2 = max(0, x1), min(w, x2)
+        y1, y2 = max(0, y1), min(h, y2)
+        if x2 <= x1 or y2 <= y1:
+            return 0, None
+        mask = appearance.depth_mask(
+            depth_image[y1:y2, x1:x2], depth, self.band_config.depth_tol)
+        hsv = frame_hsv[y1:y2, x1:x2]
+        return (appearance.band_pixels(hsv, mask, self.band_config),
+                appearance.color_signature(hsv, mask, self.band_config))
+
     @staticmethod
     def _resolve_model_path(path):
         """
@@ -255,13 +409,15 @@ class PersonDetector(Node):
 
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         annotated_frame = frame.copy()
+        # 운용자 밴드·색 서명은 HSV로 본다. 프레임당 한 번만 바꾼다 (320×240, 1 ms 미만)
+        frame_hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
         matched_person_ids = set()
         results = []
         for detection in self._detect(frame, msg.header.stamp):
             result = self._process_detection(
-                detection, depth_image, msg.header.stamp, current_time,
-                robot_xy, matched_person_ids)
+                detection, depth_image, frame_hsv, msg.header.stamp,
+                current_time, robot_xy, matched_person_ids)
             if result is None:
                 continue
             results.append(result)
@@ -271,6 +427,13 @@ class PersonDetector(Node):
                 visualization.display_state(
                     result.motion_state, result.approach_intent,
                     result.approach_duration))
+
+        operator, decision = self._update_follow(
+            results, current_time, msg.header.stamp)
+        if operator is not None:
+            visualization.draw_operator(
+                annotated_frame, operator.detection.box, decision.reason,
+                decision.band_pixels, decision.similarity)
 
         self._publish_predictions(
             [r.prediction for r in results if r.prediction is not None],
@@ -320,8 +483,8 @@ class PersonDetector(Node):
                           leg=classes[i] == self.leg_class)
                 for i, box in kept]
 
-    def _process_detection(self, detection, depth_image, stamp, current_time,
-                           robot_xy, matched_person_ids):
+    def _process_detection(self, detection, depth_image, frame_hsv, stamp,
+                           current_time, robot_xy, matched_person_ids):
         """Depth → 3D → odom → Kalman → 움직임/의도/예측. depth가 없으면 None."""
         x1, y1, x2, y2 = detection.box
         if geometry.clipped_at_edge(
@@ -356,8 +519,12 @@ class PersonDetector(Node):
             distance=np.sqrt(x * x + y * y + z * z),
             optical_point=self._point(self.camera_frame, stamp, x, y, z),
         )
+        # 운용자 재식별용: 깊이는 보정 전 측정값(밴드·옷 픽셀의 depth와 같은 기준)
+        result.band_pixels, result.signature = self._appearance(
+            frame_hsv, depth_image, detection.box, depth)
 
         base_point = self._transform(result.optical_point, self.robot_frame)
+        result.base_point = base_point
         result.odom_point = self._transform(
             result.optical_point, self.odom_frame)
         if result.odom_point is None:
@@ -368,6 +535,7 @@ class PersonDetector(Node):
             result.odom_point.point.x, result.odom_point.point.y,
             current_time, matched_person_ids)
         result.person_id = obs.person_id
+        result.track = obs
         result.speed = float(np.sqrt(obs.vx * obs.vx + obs.vy * obs.vy))
 
         if not obs.stable:

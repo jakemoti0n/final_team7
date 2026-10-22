@@ -73,3 +73,23 @@ person_detector:
       approach_hold_time: 0.5       # sec
       intent_min_hold_time: 2.0     # sec
       intent_lost_grace_time: 1.0   # sec
+
+    # 따라가기 대상(운용자) 재식별 (PROJECT.md 2-9). 운용자는 등록한 한 사람(직원), 형광 밴드가 주 근거
+    follow:
+      enroll_file: ~/.limbo/follow_operator.json   # 등록한 서명 저장 위치 (노드를 다시 띄워도 등록이 남음)
+      band:
+        hue_min: 140          # OpenCV H(0~179). 기본 분홍·자홍 밴드: 피부색·청바지·실내 벽과 안 겹침
+        hue_max: 175
+        sat_min: 100
+        val_min: 80
+        min_pixels: 10        # 320×240에서 4~5 m의 밴드 하나가 20~40 px
+        depth_tol: 0.35       # m, 사람 깊이 ± 이 안의 픽셀만 그 사람의 것으로 봄 (앞사람 박스에 낀 뒷사람 밴드 제외)
+      identity:
+        signature_min: 0.6    # 밴드가 안 보일 때 같은 트랙을 이어 믿으려면 등록 서명과 이만큼 비슷해야 함 (낮으면 거부)
+        hold_sec: 2.0         # 밴드 없이 같은 트랙 번호만으로 버티는 시간 (서명이 같아도 다른 트랙으로는 안 옮김)
+        lost_sec: 5.0         # 이 시간 넘게 못 찾으면 대상 해제 (등록은 유지)
+        gate_m: 0.8           # 마지막 위치를 등속 외삽한 점에서 이 거리 안의 트랙만 후보
+        enroll_min_x: 0.5     # 등록은 로봇 앞 이 범위(base_link x, |y|) 안의 밴드 찬 사람 한 명
+        enroll_max_x: 2.5
+        enroll_half_width: 0.8
+        signature_update: 0.05  # 밴드로 확인된 프레임마다 서명을 이만큼 섞어 갱신 (조명 적응)

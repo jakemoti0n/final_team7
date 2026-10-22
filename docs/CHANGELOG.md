@@ -10,6 +10,25 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-22 (129) 따라가기 1단계: 등록한 운용자(발목 형광 밴드) 재식별 `/follow/target` — 시뮬 가로지르기 장면 바꿔치기 0, 맞게 찾음 98 %
+
+**할 일**
+- `build_limbo`(새 메시지 `limbo_interfaces/FollowTarget`, `limbo_perception` 의존 `std_srvs`)
+
+**변경**
+- 설계 전제 PROJECT.md **2-9**: 따라가기는 "등록한 한 사람(직원)"을 따라가고, 근거는 그 사람만 가진 신호(형광 밴드 + 깊이 마스크, 보조로 같은 트랙 번호)이며, 못 알아보면 잘못 따라가지 말고 선다. 색 서명은 옷이 같은 사람을 못 가르므로 거부 용도로만
+- `limbo_perception/appearance.py`(새, ROS 없음): 깊이 마스크(사람 깊이 ±0.35 m 픽셀만 = 세그멘테이션 역할), 밴드 색 픽셀 수(HSV 범위), 하반신 H×S 색 서명(선형 보간 히스토그램)과 유사도, 운용자 판정 `OperatorIdentity`(등록·밴드 → 2 s 안 같은 트랙(서명 거부) → 놓침 → 5 s 뒤 대상 해제)
+- `person_detector.py`: 검출마다 밴드·서명 계산, `/follow/enroll`·`/follow/forget`(Trigger, 별도 콜백 그룹 — 기본 그룹에 두면 등록이 기다리는 동안 카메라 콜백이 못 돌아 늘 실패), 서명 파일 `~/.limbo/follow_operator.json`, `/follow/target`(`FollowTarget`: odom 위치·속도·근거·밴드 px·유사도) 발행, 주석 영상에 OPERATOR 표시
+- `config/person_detector.yaml` `follow:` 절(밴드 색 범위·최소 px·깊이 허용, 서명 문턱 0.6·hold 2 s·lost 5 s·게이트 0.8 m·등록 구역 0.5~2.5 m)
+- 시뮬 `moving_obstacles.py`: 사람 spec `band`(월드 모델 이름)이면 그 모델을 발목 높이로 같이 옮김(set_pose_vector). 실험 월드 `zz_follow`는 `run.sh`가 소셜 월드 사본 + `band_model.sdf`로 만듦
+- 단위 시험 `test/test_appearance.py` 7개
+
+**확인**(`experiments/2026-10-22_follow_operator/`, 로봇은 서 있고 운용자 0.5 m/s 고리 + 가로지르는 사람 2명, 등록 뒤 180 s씩)
+- 1회차(서명으로 다른 트랙에 갈아타는 규칙 있음): 맞게 찾음 98 %, 바꿔치기 7구간(합 4 s) — 전부 `signature` 근거로 시작, 밴드 근거 0건 → 규칙 제거
+- 2회차(제거 뒤): 보임 2111 프레임 중 맞게 찾음 98 %, 놓침 2 %(최대 0.7 s), **바꿔치기 0**. 근거 band 2176·band_multi 13·track 9
+- 자원(같은 장면 대조): 인식 노드 CPU 170 % vs 165 %(+5 %p, 추가 계산 프레임당 2.3 ms), RSS·GPU 같음. 사람 3명 장면이라 기존 100~109 %보다 높은 건 장면 탓
+- 다음(2단계, 승인 뒤): follow 노드(사람에서 1.2 m 목표점, Nav2 follow_point 꼴 트리, 순찰 pause), 기다리기에서 운용자 트랙 제외
+
 ## 2026-10-21 (128) 시뮬 도구 LIMBO_WS: 다른 작업 공간 빌드(ktj worktree)로 벤치를 돌릴 수 있게. ktj 기본 모델 leg_640 전환 회귀 통과
 
 **할 일**

@@ -14,7 +14,9 @@ json:
   "map": "aischool_2f_map"                      — 벽 반발용 지도 (limbo_navigation/maps). 없으면 벽 힘 없음
   "robot": "limbo"                              — 로봇 모델 이름 (pose/info에서 위치를 읽음)
   "people": [{"name": actor 이름, "type": "yield" | "no_yield" | "approach",
-              "speed": m/s, "waypoints": [[x, y], ...], "loop": true, "wait": 초(approach가 로봇 앞에 머무는 시간)}]
+              "speed": m/s, "waypoints": [[x, y], ...], "loop": true, "wait": 초(approach가 로봇 앞에 머무는 시간),
+              "band": 월드 안 모델 이름(선택)}]
+  band: 따라가기 운용자 표시용. 그 이름의 모델(형광 밴드, 월드 SDF에 static으로 둔다)을 사람 발목 높이에 같이 옮긴다 (set_pose_vector)
   유형:  yield     — 보통 사람. 로봇을 사람처럼 피해 간다
          no_yield  — 로봇을 안 보는 사람(폰 보는 사람). 로봇에서 밀려나는 힘이 없다. 로봇이 알아서 피하거나 멈춰야 한다
          approach  — 손님. 로봇이 approach_distance 안에 들어오면 로봇 쪽으로 와서 stop_distance에 멈춰 wait초 머문 뒤 제 갈 길을 간다
@@ -37,6 +39,7 @@ ACTOR_TOPIC = '/limbo/actor_poses'
 PEOPLE_TOPIC = '/sim/people'          # geometry_msgs/PoseArray, map 기준
 PEOPLE_NAMES_TOPIC = '/sim/people_names'   # std_msgs/String, 쉼표로 이은 이름 (PoseArray와 같은 순서)
 ACTOR_Z = 1.0            # 사람 메시 원점(골반) 높이. 월드 시간표 actor와 같음
+BAND_Z = 0.15            # 운용자 밴드 모델 높이(발목)
 
 # 소셜 포스 (Helbing 1995 꼴). 힘은 가속도(m/s²). 거리는 몸 가장자리 사이로 잰다
 PERSON_RADIUS = 0.3
@@ -132,6 +135,7 @@ class Person:
         self.waypoints = [tuple(w) for w in spec['waypoints']]
         self.loop = spec.get('loop', True)
         self.wait = spec.get('wait', 5.0)
+        self.band = spec.get('band')     # 같이 옮길 밴드 모델 이름 (따라가기 운용자), 없으면 None
         self.x, self.y = self.waypoints[0]
         self.vx = self.vy = 0.0
         self.yaw = 0.0
@@ -288,6 +292,19 @@ def people_poses(people):
     return msg
 
 
+def band_poses(people):
+    """밴드를 찬 사람의 발목 자리로 밴드 모델을 옮기는 set_pose_vector 요청."""
+    request = Pose_V()
+    for p in people:
+        if not p.band:
+            continue
+        pose = request.pose.add()
+        pose.name = p.band
+        pose.position.x, pose.position.y, pose.position.z = p.x, p.y, BAND_Z
+        pose.orientation.z, pose.orientation.w = math.sin(p.yaw / 2), math.cos(p.yaw / 2)
+    return request
+
+
 class RosPeoplePublisher:
     """사람 위치를 ROS 토픽으로 낸다. spin 없이 publish만 하므로 gz 루프와 같이 돌 수 있다"""
 
@@ -369,6 +386,8 @@ def main():
             for p in people:
                 p.step(dt, t, sim['robot'], [q for q in people if q is not p], walls)
             actor_pub.publish(people_poses(people))
+            if any(p.band for p in people):
+                node.request(service, band_poses(people), Pose_V, Boolean, 200)
             if ros_pub is not None:
                 ros_pub.publish(people, t)
         time.sleep(1.0 / RATE_HZ)
