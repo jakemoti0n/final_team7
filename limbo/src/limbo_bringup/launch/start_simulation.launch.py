@@ -381,6 +381,16 @@ def generate_launch_description():
                     {'use_sim_time': False}]
     )
 
+    # 따라가기: 등록한 운용자(/follow/target)를 일정 거리 두고 따라감. /follow/start·stop 서비스, /follow/state (PROJECT.md 2-9)
+    follow_node = Node(
+        package='limbo_follow',
+        executable='follow_node',
+        name='follow_node',
+        output='screen',
+        parameters=[os.path.join(get_package_share_directory('limbo_follow'), 'config', 'follow.yaml'),
+                    {'use_sim_time': True}]
+    )
+
     # 주행 평가 기록 (record:=true일 때만). Goal이 끝날 때마다 ~/limbo_results/에 CSV 한 줄
     nav_recorder = Node(
         package='limbo_evaluation',
@@ -462,5 +472,6 @@ def generate_launch_description():
         tof,
         person_filter,
         person_wait,
+        follow_node,
         nav_recorder,
     ])

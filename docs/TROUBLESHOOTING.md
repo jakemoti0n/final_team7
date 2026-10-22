@@ -201,6 +201,13 @@
 - **해결**: ROS·gz 프로세스가 하나도 없을 때 `ros2 daemon stop` 후 `rm -f /dev/shm/fastrtps_*`. `sim_ctl.sh stop`이 그 조건에서 자동으로 한다. 잔존 프로세스는 `ps -eo pid,lstart,args`로 런치 시각별로 보고 **PID로** 끈다(패턴으로 모아 죽이면 자기 셸까지 죽음)
 - **확인**: 정리 뒤 같은 회차(`patrol_trial.sh rec2`)가 1번에 시작해 완주. 오전에 "확인할 후보"로 적었던 가설이 이렇게 확정됨
 
+### 시뮬레이션이 연속 실패(`get_state service is not available`), 정상 기동한 회차도 TF `TF_OLD_DATA` 수천 건·`Detected jump back in time`·ROS `/clock`이 gz 시계보다 90 s 뒤처짐 — 2026-10-22
+- **증상**: 따라가기 2단계 시험에서 `sim_ctl.sh start`가 3번 연속 실패(`lifecycle_manager_localization/navigation: Failed to change state for node: planner_server. Exception: get_state service is not available!`). 기동이 된 회차도 시작 20 s부터 `tof_node`·`amcl`·`ekf_node`가 `TF_OLD_DATA ignoring data from the past for frame left_wheel_link`를 초당 수십 건 내고 `Detected jump back in time. Clearing TF buffer`가 수백 건, ROS `/clock` 87 s일 때 gz 시계 180 s. 기준 월드(`aischool_2f_social`)로 바꿔도 같음 → 코드·월드가 아니라 환경 문제
+- **원인**: `/dev/shm/fastrtps_*`가 107 → 233개로 계속 늘어 있었음. **`timeout 5 ros2 service call …`, `timeout 8 ros2 topic hz/echo …`처럼 `timeout`으로 죽인 ros2 CLI 호출**이 하나마다 Fast DDS 공유 메모리 조각을 남긴다(CLI도 DDS 참가자라 SIGKILL된 노드와 같음). 시험 스크립트가 서비스가 뜰 때까지 1 s마다 CLI를 부르고 죽이기를 수십 번 반복했고, 진단용 `topic hz`도 여럿 죽였다. 이번엔 10-14의 `Failed init_port` 메시지 없이 **발견 실패와 메시지 지연**으로만 나타났다
+- **해결**: ① 시뮬·ROS 프로세스가 없을 때 `ros2 daemon stop; rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_*`(`sim_ctl.sh stop`이 하는 것과 같음). ② 시험 스크립트의 서비스 호출·토픽 발행을 `experiments/2026-10-22_follow_operator/svc.py`(rclpy 클라이언트, 제 시간 안에 `destroy_node`·`shutdown`)로 바꿔 `timeout`에 죽는 CLI를 없앰. 진단할 때도 `timeout ros2 topic …`을 쓰지 않고 파이썬 구독자를 쓴다
+- **확인**: 정리 뒤 첫 기동 성공, 기동 40 s 동안 `TF_OLD_DATA` 0·`jump back` 0, 등록·따라가기 시작 정상
+- **덤**: `pgrep -f "<노드 경로>"`는 그 문자열을 인자로 든 자기 셸도 잡는다(이날 또 한 번, `kill $P`로 자기 셸 종료). PID는 `ps -eo pid,args | awk '$2 ~ /…$/'`처럼 실행 파일 칸으로 고른다
+
 ### 주행 중 70~90 s에 Nav2 전체가 내려감(heartbeat 끊김) — 옆에서 돌린 측정 스크립트의 OOM — 2026-10-20
 - **증상**: 군중 월드 3회차가 모두 목표 1에서 66~83 s에 `Goal failed`. 로그에 `CRITICAL FAILURE: SERVER amcl IS DOWN after not receiving a heartbeat for 4000 ms`(회차마다 amcl·controller_server 등 다른 노드), 직전에 `Control loop missed its desired rate`, `Lookup would require extrapolation into the future`, `Robot to stop due to invalid source`. 설정을 안 바꾼 회차(A)까지 똑같이 실패했고 직전 같은 설정 회차(r2_crowd)는 완주
 - **원인**: 같이 띄운 측정 스크립트 `tools/sim_trials/stvl_trail.py`(첫 판)가 지도 벽 전체(충장로 수백만 칸)와 치명 칸 사이 거리 행렬을 만들어 RSS 28.8 GB까지 커짐 → 커널 OOM(`journalctl -k`: `Out of memory: Killed process 24340 (python3) anon-rss:28843812kB`). 죽기 전까지 메모리 압박으로 시뮬·Nav2 노드가 멈칫해 bond heartbeat 4 s를 넘김. 세 회차 다 스크립트 시작(70 s) 직후에 무너진 것이 단서였음

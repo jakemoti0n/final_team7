@@ -33,6 +33,7 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 | `limbo_navigation` | Nav2 설정 전체, AMCL·EKF, 지도, 사람 비용 플러그인 | `config/nav2_params.yaml`(MPPI `vx_max` 0.6, `prune_distance` 1.7), `src/human_layer.cpp` |
 | `limbo_perception` | YOLO 사람 인식·추적·2초 예측 → `/person_detector/predictions`, 사람 기다리기 상태 기계(`/person_wait`), 따라가기 운용자 재식별(`/follow/target`, lab) | `person_detector.py`, `person_wait.py`, `appearance.py`, `config/person_detector.yaml` |
 | `limbo_patrol` | waypoint 순찰, 일시정지·재개 서비스, 상태 토픽 | `patrol_node.py`, `config/*_waypoints.yaml` |
+| `limbo_follow` (lab) | 등록한 운용자 따라가기: `/follow/start·stop`, 목표점 갱신(`/goal_update`), `/follow/state` | `follow_node.py`, `follow.py`, `config/follow.yaml`, 트리는 `limbo_navigation/behavior_trees/limbo_follow.xml` |
 | `limbo_monitor` | 바퀴 헛돎 감시 (취소 기능은 임시로 꺼 둠) | |
 | `limbo_evaluation` | Goal마다 주행 지표 CSV (`record:=true`) | `nav_recorder`, `~/limbo_results/` |
 | `dashboard/`, `relay_prog/` | 관제 화면(서버·UI)과 로봇↔서버 Bridge | 설계 `docs/CONTROL_SCREEN.md`, `docs/CONTROL_API_DRAFT.md` |
@@ -172,7 +173,11 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 3. **못 알아보면 잘못 따라가지 말고 선다.** 놓치면 마지막 위치로 가서 기다리고(2단계), 5 s 넘으면 대상 해제 + 경보. 2-7의 "타이머는 출구가 아니라 경보"와 같은 태도다.
 4. **기다리기(2-7)는 따라가기 중에도 돈다.** 판단 주체는 하나다. 운용자 트랙만 기다리기 구역에서 제외하고(2단계), 다른 사람이 앞을 막으면 여전히 기다린다.
 
-**실제로는**: `person_detector`가 `/follow/target`(odom, 근거 `band | band_multi | track | signature_mismatch | lost | lost_timeout`)을 프레임마다 낸다. 주행(2단계: 사람에서 1.2 m 떨어진 목표점, Nav2 `follow_point` 꼴 트리, 순찰 pause)과 관제 버튼(3단계)은 아직 없다. YOLO를 OAK-D에 넣더라도 `_detect()` 경계 아래는 같아서 이 판정은 그대로 간다.
+**실제로는**
+- 재식별(1단계): `person_detector`가 `/follow/target`(odom, 근거 `band | band_multi | track | signature_mismatch | lost | lost_timeout`)을 프레임마다 낸다. YOLO를 OAK-D에 넣더라도 `_detect()` 경계 아래는 같아서 이 판정은 그대로 간다.
+- 주행(2단계, 10-22): `limbo_follow/follow_node`가 `/follow/start·stop`을 받고 순찰을 pause한 뒤 NavigateToPose를 `limbo_follow.xml`로 돌린다. 목표점은 **운용자에서 1.5 m 앞**(카메라가 0.6 m 높이라 1.2 m 안의 하반신은 안 보임, HumanLayer 치명+팽창 0.7 m 밖)을 `/goal_update`로 4 Hz 갱신, 가까우면 로봇 자리. 컨트롤러는 따라가기용 MPPI `FollowOperator`(목표 근처 감속 문턱 0.4 m, 예측 1.6 s — 기본 `FollowPath`로는 경로 끝이 늘 1~2 m 앞이라 0.25 m/s에 머물렀다). 놓치면 가까이(≤1.5 m)선 자세 그대로 서고, 멀리선 마지막 자리에서 가던 방향으로 1.5 m 더 간 점으로 가서 모퉁이 너머를 본다. 15 s 넘게 못 찾으면 끝내고 경보. `person_wait`는 `/follow/state`의 운용자 트랙만 구역에서 뺀다.
+- 시뮬 결과(실험 기록 2단계 fw8): 홀→복도 모퉁이 2개→위쪽 복도 19 m를 운용자 0.5 m/s로 완주, 평균 거리 2.08 m, 충돌 0, 가로지르는 사람 기다리기 정상. 모퉁이 도착이 1 m 늦으면 운용자가 카메라 범위 5 m 밖으로 나가 끝나는 경계가 있다(fw7).
+- 관제 버튼·상태 표시(3단계)는 아직 없다.
 
 **하지 말 것**: 색 서명·추적 ID만으로 "이 사람이 운용자"라고 정하는 것. 로봇 속도 0.6 m/s보다 빨리 걷는 운용자를 따라가려고 속도 상한을 올리는 것(2-4).
 

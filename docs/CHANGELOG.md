@@ -10,6 +10,26 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-22 (130) 따라가기 2단계(주행): `limbo_follow` 노드 + `limbo_follow.xml` + 따라가기용 MPPI — 시뮬 홀·복도 모퉁이 2개 19 m 완주, 평균 거리 2.08 m, 충돌 0
+
+**할 일**
+- `build_limbo`(새 패키지 `limbo_follow`, 새 메시지 `FollowState`). 런치가 `follow_node`를 띄운다
+
+**변경**
+- 새 패키지 `limbo_follow`: `follow_node.py`(`/follow/start·stop` Trigger, 순찰 `/patrol/pause` 호출, NavigateToPose를 `behavior_tree=limbo_follow.xml`로, `/goal_update` 목표점 갱신 5 Hz 틱, `/follow/state` 5 Hz), `follow.py`(ROS 없음: 운용자에서 follow_distance 앞 목표점, 가다 서다 판정, 내다보기 목표; 단위 시험 5개), `config/follow.yaml`
+- `limbo_navigation/behavior_trees/limbo_follow.xml`: Nav2 `follow_point` 꼴(GoalUpdater·TruncatePath) + `IsWaitingForPerson`(2-7) + 계획·추종 실패는 복구 없이 잠깐 쉬고 다시. 추종 성공 뒤 0.5 s 쉼(안 쉬면 20 Hz로 액션이 다시 걸려 MPPI가 매 tick 초기화)
+- `nav2_params.yaml`: 따라가기용 컨트롤러 `FollowOperator`(FollowPath 사본, GoalCritic·PathFollowCritic threshold_to_consider 1.4 → 0.4, time_steps 80 → 32). 기본 `FollowPath`로는 경로 끝이 늘 1~2 m 앞이라 "목표 근처 감속"에 묶여 0.25 m/s. 순찰 컨트롤러는 그대로
+- `limbo_interfaces/FollowState.msg`(state·active·target_id·distance·reason·elapsed·lost_sec), `person_wait_node.py`: `/follow/state` active면 운용자 트랙을 기다리기 구역에서 제외
+- `limbo_bringup` 런치에 `follow_node` 추가. `moving_obstacles.py`: 사람 spec `start_on`(ROS 토픽 신호까지 첫 자리에 서 있음)
+- lab 기본 하반신 모델 leg_512 → **leg_640**(dev 변경 기록 41과 같음). 가까운 거리 검출 때문
+- PROJECT.md 2-9 "실제로는"에 2단계 반영, 1절 표에 `limbo_follow`. TROUBLESHOOTING: `timeout`으로 죽인 ros2 CLI가 DDS 공유 메모리 조각을 쌓아 기동 실패·시계 역행(해결 `svc.py`)
+
+**확인**(`experiments/2026-10-22_follow_operator/` 2단계, 장면 `zz_follow2`: 운용자 0.5 m/s 홀 → 복도(모퉁이 2) → 위쪽 복도 19 m, 홀에 가로지르는 사람 1명, 8회차)
+- fw8(채택 설정): 완주, 평균 거리 2.08 m(0.8~2.5 m 안 78 %), 놓침 2회 최대 6.8 s(모퉁이, 가던 방향 1.5 m 내다보기로 복귀), 운용자가 선 뒤 1.67 m에서 90 s 안정, 충돌 0, 가로지르는 사람 기다리기 7.5 s
+- 회차별로 고친 것: 출발 신호 유실(구독자 대기) → 놓침 판정을 마지막 본 시각 기준 → 따라가기용 컨트롤러(0.20 → 0.30 m/s) → 예측 1.6 s(복도 0.5~0.6 m/s) → 가까운 놓침은 제자리 → 가다 서다 히스테리시스 제거(평균 거리 3.3 → 1.8 m) → 유지 거리 1.5 m(1.2 m 안은 카메라가 못 봄) → 내다보기 1.5 m
+- 경계: 모퉁이 도착이 0.5~1 m 늦으면(fw7) 운용자가 카메라 범위 5 m 밖으로 나가 15 s 뒤 정지. 운용자가 0.5 m/s보다 빠르면 못 따라감(상한 0.6)
+- 다음(3단계, 승인 뒤): 관제 시작·정지 버튼과 상태 표시. 남은 손질: 서 있는 동안 FollowPath 재호출(2 Hz 초기화), person_wait 제외를 트랙 번호 대신 판정으로
+
 ## 2026-10-22 (129) 따라가기 1단계: 등록한 운용자(발목 형광 밴드) 재식별 `/follow/target` — 시뮬 가로지르기 장면 바꿔치기 0, 맞게 찾음 98 %
 
 **할 일**

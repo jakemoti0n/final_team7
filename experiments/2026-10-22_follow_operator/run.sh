@@ -26,7 +26,7 @@ WORLD=zz_follow MAP=aischool_2f_map $T/sim_ctl.sh start $L || { echo "시뮬 시
 REC=$!
 # 운용자가 등록 구역(앞 0.5~2.5 m)을 지날 때 등록이 된다. 될 때까지 1 s마다 다시 요청 (최대 90 s)
 for i in $(seq 1 90); do
-  r=$(timeout 5 ros2 service call /follow/enroll std_srvs/srv/Trigger 2>/dev/null | grep -o "success=[A-Za-z]*, message='[^']*'")
+  r=$(python3 $E/svc.py call /follow/enroll 5 2>/dev/null)
   echo "$(date +%H:%M:%S) enroll: $r"
   echo "$r" | grep -q "success=True" && break
   sleep 1

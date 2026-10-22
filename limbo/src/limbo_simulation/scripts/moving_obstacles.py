@@ -15,8 +15,9 @@ json:
   "robot": "limbo"                              — 로봇 모델 이름 (pose/info에서 위치를 읽음)
   "people": [{"name": actor 이름, "type": "yield" | "no_yield" | "approach",
               "speed": m/s, "waypoints": [[x, y], ...], "loop": true, "wait": 초(approach가 로봇 앞에 머무는 시간),
-              "band": 월드 안 모델 이름(선택)}]
+              "band": 월드 안 모델 이름(선택), "start_on": ROS 토픽 이름(선택)}]
   band: 따라가기 운용자 표시용. 그 이름의 모델(형광 밴드, 월드 SDF에 static으로 둔다)을 사람 발목 높이에 같이 옮긴다 (set_pose_vector)
+  start_on: 첫 waypoint에 서 있다가 그 토픽(std_msgs/Empty)에 메시지가 오면 걷기 시작한다 (시험 스크립트가 등록·시작을 마친 뒤 신호)
   유형:  yield     — 보통 사람. 로봇을 사람처럼 피해 간다
          no_yield  — 로봇을 안 보는 사람(폰 보는 사람). 로봇에서 밀려나는 힘이 없다. 로봇이 알아서 피하거나 멈춰야 한다
          approach  — 손님. 로봇이 approach_distance 안에 들어오면 로봇 쪽으로 와서 stop_distance에 멈춰 wait초 머문 뒤 제 갈 길을 간다
@@ -136,6 +137,8 @@ class Person:
         self.loop = spec.get('loop', True)
         self.wait = spec.get('wait', 5.0)
         self.band = spec.get('band')     # 같이 옮길 밴드 모델 이름 (따라가기 운용자), 없으면 None
+        self.start_on = spec.get('start_on')   # 이 ROS 토픽에 신호가 올 때까지 첫 자리에 서 있음
+        self.started = self.start_on is None
         self.x, self.y = self.waypoints[0]
         self.vx = self.vy = 0.0
         self.yaw = 0.0
@@ -168,6 +171,9 @@ class Person:
         return self.waypoints[self.goal_index]
 
     def step(self, dt, t, robot, others, walls):
+        if not self.started:             # 출발 신호 전: 첫 자리에 서 있음
+            self.vx = self.vy = 0.0
+            return
         goal = self.goal(robot, t)
         if goal is None:
             self.vx = self.vy = 0.0
@@ -318,6 +324,16 @@ class RosPeoplePublisher:
         self.name_pub = self.node.create_publisher(String, PEOPLE_NAMES_TOPIC, 10)
         self.PoseArray, self.String = PoseArray, String
         self.names = ','.join(p.name for p in people)
+        self.rclpy = rclpy
+        # start_on 토픽: 신호가 오면 그 토픽을 기다리던 사람들이 걷기 시작한다
+        from std_msgs.msg import Empty
+        for topic in sorted({p.start_on for p in people if p.start_on}):
+            waiting = [p for p in people if p.start_on == topic]
+            self.node.create_subscription(
+                Empty, topic, lambda _msg, ws=waiting: [setattr(p, 'started', True) for p in ws], 10)
+
+    def spin_once(self):
+        self.rclpy.spin_once(self.node, timeout_sec=0.0)
 
     def publish(self, people, t):
         msg = self.PoseArray()
@@ -369,6 +385,10 @@ def main():
             ros_pub = RosPeoplePublisher(people)
         except Exception as e:       # ROS 없이 gz만 띄운 경우
             print(f'ROS 사람 위치 발행 안 함: {e}', flush=True)
+            for p in people:
+                if not p.started:
+                    print(f'{p.name}: start_on 토픽을 못 받아 바로 출발', flush=True)
+                    p.started = True
     service = f'/world/{world}/set_pose_vector'
     while sim['t'] is None:      # Gazebo가 뜰 때까지 기다린다
         time.sleep(0.5)
@@ -389,6 +409,7 @@ def main():
             if any(p.band for p in people):
                 node.request(service, band_poses(people), Pose_V, Boolean, 200)
             if ros_pub is not None:
+                ros_pub.spin_once()
                 ros_pub.publish(people, t)
         time.sleep(1.0 / RATE_HZ)
 

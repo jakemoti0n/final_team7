@@ -15,7 +15,7 @@ import math
 import time
 
 from builtin_interfaces.msg import Time as TimeMsg
-from limbo_interfaces.msg import PersonPredictionArray, PersonWait as PersonWaitMsg
+from limbo_interfaces.msg import FollowState, PersonPredictionArray, PersonWait as PersonWaitMsg
 from limbo_perception import geometry, person_wait
 from nav_msgs.msg import OccupancyGrid, Odometry
 import rclpy
@@ -85,6 +85,7 @@ class PersonWaitNode(Node):
         self.ready_wall = None         # 처음 준비된 벽시계. 그 전에 온 트랙 메시지는 버린다(시작 직후 가짜 코앞 트랙)
         self.pull_over_available = False
         self.pull_over_done = False
+        self.follow_exclude_id = -1    # 따라가는 운용자 트랙 번호 (/follow/state active일 때), 없으면 -1
         self.logged = 0
         self.pub = self.create_publisher(PersonWaitMsg, '/person_wait', 10)
         self._subscribe(p)
@@ -102,6 +103,8 @@ class PersonWaitNode(Node):
             Bool, p('tof_topic', '/tof/obstacle_ahead').value, self.on_tof, 10)
         self.create_subscription(
             Odometry, p('odom_topic', '/odometry/filtered').value, self.on_odom, 10)
+        # 따라가기 중이면 운용자 트랙은 기다리기 대상이 아니다(내 운용자 때문에 서지 않음, PROJECT.md 2-9). 다른 사람은 그대로
+        self.create_subscription(FollowState, '/follow/state', self.on_follow_state, 10)
         self.create_subscription(Bool, '/pull_over/available', self.on_pull_over_available, 10)
         self.create_subscription(Bool, '/pull_over/done', self.on_pull_over_done, 10)
 
@@ -109,6 +112,9 @@ class PersonWaitNode(Node):
         if not self.map_received:
             self.get_logger().info(f'map {msg.info.width}x{msg.info.height} received')
         self.map_received = True
+
+    def on_follow_state(self, msg):
+        self.follow_exclude_id = msg.target_id if msg.active else -1
 
     def on_tof(self, msg):
         self.tof = (msg.data, time.monotonic())
@@ -130,7 +136,7 @@ class PersonWaitNode(Node):
         except TransformException:
             return
         people = [(q.current_position.x, q.current_position.y, q.velocity.x, q.velocity.y)
-                  for q in msg.predictions]
+                  for q in msg.predictions if q.person_id != self.follow_exclude_id]
         offset = pose.transform.translation
         self.tracks = geometry.tracks_ahead_of_bumper(
             people, offset.x, offset.y, yaw_of(pose.transform.rotation), self.bumper_x)

@@ -72,7 +72,7 @@ controller_server:
     failure_tolerance: 0.3
     progress_checker_plugins: ["progress_checker"]
     goal_checker_plugins: ["general_goal_checker"] # "precise_goal_checker"
-    controller_plugins: ["FollowPath"]
+    controller_plugins: ["FollowPath", "FollowOperator"]
     use_realtime_priority: false
 
     # Progress checker parameters
@@ -187,6 +187,99 @@ controller_server:
       #   enabled: true
       #   twirling_cost_power: 1
       #   twirling_cost_weight: 10.0
+    # 따라가기(limbo_follow.xml의 ControllerSelector default_controller)용 MPPI. 위 FollowPath와 같고 두 값만 다르다:
+    # GoalCritic·PathFollowCritic threshold_to_consider 1.4 → 0.4, time_steps 80 → 32. 따라갈 때 목표점은 늘 0.6~1.8 m 앞에 있어
+    # 1.4 m면 항상 "목표 근처 감속" 모드이고 4 s 예측은 전속 궤적이 경로 끝을 넘어, 운용자 0.5 m/s를 못 따라갔다(2단계 2·3회차 평균 0.20~0.26 m/s).
+    # FollowPath 값을 바꾸면 여기도 같이 본다 (PROJECT.md 2-9)
+    FollowOperator:
+      plugin: "nav2_mppi_controller::MPPIController"
+      # 예측 시간 1.6 s(32 × 0.05). FollowPath의 4 s로는 0.6 m/s 궤적이 2.4 m를 가는데 따라가기 경로 끝은 늘 1~2 m 앞이라
+      # 전속 궤적이 모두 경로 끝을 넘어 벌점을 받아 평균 0.26 m/s에 머물렀다(2단계 3회차). 짧은 예측은 가까운 사람·벽만 보지만
+      # 따라가기 속도(≤0.6 m/s)와 사람 치명 반경+팽창(0.7 m)에는 충분하다
+      time_steps: 32
+      model_dt: 0.05
+      batch_size: 2000
+      # 우리 프로젝트에서는 횡이동은 없어 y축 설정값 제외함
+      ax_max: 1.0
+      ax_min: -1.0
+      az_max: 4.0
+      vx_std: 0.2
+      vx_max: 0.6
+      vx_min: 0.0
+      wz_std: 0.8
+      wz_max: 1.8
+      iteration_count: 1
+      prune_distance: 2.5
+      enforce_path_inversion: true
+      inversion_xy_tolerance: 0.2
+      inversion_yaw_tolerance: 0.4
+      transform_tolerance: 0.5
+      temperature: 0.2
+      gamma: 0.015
+      motion_model: "DiffDrive"
+      visualize: false
+      regenerate_noises: true
+      TrajectoryVisualizer:
+        trajectory_step: 5
+        time_step: 3
+      AckermannConstraints:
+        min_turning_r: 0.2
+      critics: [
+        "ConstraintCritic", "CostCritic", "GoalCritic",
+        "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic",
+        "PathAngleCritic", "PreferForwardCritic"]
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 0.4
+      GoalAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 0.5
+      PreferForwardCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 0.5
+      CostCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 6.0
+        near_collision_cost: 253
+        critical_cost: 300.0
+        consider_footprint: true
+        collision_cost: 1000000.0
+        near_goal_distance: 1.0
+        trajectory_point_step: 2
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 8.0
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 4
+        threshold_to_consider: 0.5
+        offset_from_furthest: 20
+        use_path_orientations: false
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 9.0
+        offset_from_furthest: 5
+        threshold_to_consider: 0.4
+      PathAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 2.0
+        offset_from_furthest: 4
+        threshold_to_consider: 0.5
+        max_angle_to_furthest: 1.0
+        mode: 0
 
 local_costmap:
   local_costmap:
