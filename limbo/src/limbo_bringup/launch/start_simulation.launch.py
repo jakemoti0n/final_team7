@@ -52,6 +52,12 @@ def generate_launch_description():
     # robot:=legacy면 이전 모델(0.45 m 정사각형, 높이 약 0.7 m), 아니면 v14 (기본)
     is_legacy = ["'", LaunchConfiguration('robot'), "' == 'legacy'"]
 
+    # role:=sim / robot / all(기본). 두 대로 나눠 돌릴 때 쓴다: PC는 Gazebo·센서 가공(sim), Jetson은 실물에서 돌릴 것만(robot).
+    # 나누는 기준은 "실물에서 Jetson이 돌릴 것"이다. 포인트클라우드→/scan 가공은 실물에서 라이다 드라이버 쪽 일이라 sim에 둔다.
+    role = LaunchConfiguration('role')
+    on_sim = IfCondition(PythonExpression(["'", role, "' in ('all', 'sim')"]))
+    on_robot = IfCondition(PythonExpression(["'", role, "' in ('all', 'robot')"]))
+
     urdf_file = PathJoinSubstitution([
         limbo_description_dir,
         'urdf',
@@ -89,7 +95,8 @@ def generate_launch_description():
             'robot': LaunchConfiguration('robot'),
             'camera_z': LaunchConfiguration('camera_z'),
             'camera_pitch_deg': LaunchConfiguration('camera_pitch_deg'),
-        }.items()
+        }.items(),
+        condition=on_sim,
     )
 
 
@@ -124,7 +131,8 @@ def generate_launch_description():
             'lidar_sensor_type': '0',
             'zero_for_removed_points': 'false',
             'use_sim_time': 'true',
-        }.items()
+        }.items(),
+        condition=on_sim,
     )
 
 
@@ -142,6 +150,7 @@ def generate_launch_description():
 
     # 바퀴 odom(전진 속도) + IMU(회전 속도)를 합쳐 odom → base_footprint TF를 낸다
     ekf = Node(
+        condition=on_robot,
         package='robot_localization',
         executable='ekf_node',
         name='ekf_filter_node',
@@ -151,6 +160,7 @@ def generate_launch_description():
 
     # 바퀴는 도는데 로봇이 안 움직이면(헛돎) Nav2 Goal을 취소해 위치 추정이 틀어지는 걸 막는다
     wheel_slip_monitor = Node(
+        condition=on_robot,
         package='limbo_monitor',
         executable='wheel_slip_monitor',
         name='wheel_slip_monitor',
@@ -166,6 +176,7 @@ def generate_launch_description():
     )
 
     pointcloud_to_laserscan = Node(
+        condition=on_sim,
         package='pointcloud_to_laserscan',
         executable='pointcloud_to_laserscan_node',
         name='pointcloud_to_laserscan',
@@ -214,7 +225,8 @@ def generate_launch_description():
             'map': PathJoinSubstitution(
                 [limbo_navigation_dir, 'maps', [LaunchConfiguration('map'), '.yaml']]
             ),
-        }.items()
+        }.items(),
+        condition=on_robot,
     )
 
 
@@ -314,7 +326,7 @@ def generate_launch_description():
             }.items()
         )]
 
-    navigation = OpaqueFunction(function=make_navigation)
+    navigation = OpaqueFunction(function=make_navigation, condition=on_robot)
 
 
     # ============================================================
@@ -322,6 +334,7 @@ def generate_launch_description():
     # ============================================================
 
     rviz = Node(
+        condition=on_sim,
         package='rviz2',
         executable='rviz2',
         name='rviz2',
@@ -350,10 +363,11 @@ def generate_launch_description():
             parameters=parameters
         )]
 
-    detector = OpaqueFunction(function=make_detector)
+    detector = OpaqueFunction(function=make_detector, condition=on_robot)
 
     # ToF 근접 센서 → /tof/obstacle_ahead·/tof/nearest (관제·로그용). 코앞 안전 정지는 collision_monitor가 /tof/points로 한다
     tof = Node(
+        condition=on_robot,
         package='limbo_perception',
         executable='tof_node',
         name='tof_node',
@@ -364,6 +378,7 @@ def generate_launch_description():
     # 사람 기다리기 상태 기계 → /person_wait. BT 조건 IsWaitingForPerson이 이것만 본다 (PROJECT.md 2-7).
     # 시각은 카메라 예측 메시지에서 가져와 sim time(/clock 구독)이 필요 없다
     person_wait = Node(
+        condition=on_robot,
         package='limbo_perception',
         executable='person_wait',
         name='person_wait',
@@ -378,7 +393,7 @@ def generate_launch_description():
         executable='nav_recorder',
         name='nav_recorder',
         output='screen',
-        condition=IfCondition(LaunchConfiguration('record')),
+        condition=IfCondition(PythonExpression(["'", LaunchConfiguration('record'), "' == 'true' and '", role, "' in ('all', 'robot')"])),
         parameters=[
             os.path.join(
                 get_package_share_directory('limbo_evaluation'),
@@ -414,6 +429,9 @@ def generate_launch_description():
         DeclareLaunchArgument('camera_pitch_deg', default_value='0'),
         # 위치 추정: amcl(기본) / slam(slam_toolbox 위치 추정, maps/<map>_posegraph 필요) / mapping(slam_toolbox 지도 작성)
         DeclareLaunchArgument('localization', default_value='amcl'),
+        # 두 대로 나눠 돌릴 때: PC에서 role:=sim (Gazebo·센서 가공·rviz), Jetson에서 role:=robot (EKF·AMCL·Nav2·인식).
+        # 같은 ROS_DOMAIN_ID, ROS_LOCALHOST_ONLY=0. robot 쪽은 PC의 /clock을 따른다. 기본 all은 지금처럼 한 대에서 전부
+        DeclareLaunchArgument('role', default_value='all'),
 
         # 바로 Gazebo 실행
         gazebo,
@@ -434,7 +452,7 @@ def generate_launch_description():
         # /scan 생성 후 위치 추정(AMCL 또는 slam_toolbox) 실행
         TimerAction(
             period=8.0,
-            actions=[OpaqueFunction(function=make_localization)]
+            actions=[OpaqueFunction(function=make_localization, condition=on_robot)]
         ),
 
         # localization 준비 후 Nav2 실행

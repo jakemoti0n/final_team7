@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- 공유기가 멀티캐스트를 막아 두 대가 서로 못 찾을 때. address를 상대 컴퓨터 IP로 바꾸고 양쪽 모두
+     export FASTRTPS_DEFAULT_PROFILES_FILE=<이 파일> 을 한 터미널에서 런치한다 (split-sim 스킬 "막히면 1") -->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <participant profile_name="limbo_unicast_peers" is_default_profile="true">
+    <rtps>
+      <builtin>
+        <initialPeersList>
+          <locator><udpv4><address>192.168.0.10</address></udpv4></locator>
+        </initialPeersList>
+      </builtin>
+    </rtps>
+  </participant>
+</profiles>

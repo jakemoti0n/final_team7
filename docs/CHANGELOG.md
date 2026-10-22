@@ -8,6 +8,24 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-22 (42) 시뮬을 두 대로 나눠 돌리는 `role` 런치 인자 + 안내 스킬 `split-sim` — Jetson 부하 시험용, Jetson 검증 전
+
+**할 일**
+- pull 뒤 `build_limbo`(런치 파일은 심링크 설치라 빌드 없이도 되지만, 다른 브랜치를 쓰던 컴퓨터는 전체 빌드가 필요)
+- Jetson 부하 시험을 맡은 사람은 `.claude/skills/split-sim/SKILL.md`를 처음부터 따라 한다. Claude Code를 쓰면 `/split-sim`으로 같은 안내가 뜬다
+- 기본값 `role:=all`은 지금까지와 같아 다른 사람의 사용법은 바뀌지 않음
+
+**변경**
+- `start_simulation.launch.py`: `role` 인자 추가. `sim`은 Gazebo·robot_state_publisher·브리지·self_filter·pointcloud_to_laserscan·rviz만, `robot`은 EKF·wheel_slip_monitor·AMCL·Nav2·person_detector·tof_node·person_wait(·nav_recorder)만. 나누는 기준은 "실물에서 Jetson이 돌릴 것"
+- `.claude/skills/split-sim/`: 안내(SKILL.md), 붙었는지 확인 `scripts/check_split.sh`, 양쪽 부하 측정 `scripts/load_watch.sh`, 멀티캐스트가 막힌 공유기용 `assets/fastdds_peers.xml`. 에이전트 규칙: 자잘한 결정은 작업자, 중대한 결정은 작업자를 거쳐 PM
+
+**배경**
+- Jetson Orin Nano 한 대에 시뮬 전체를 올리면 real-time factor 0.56, /scan 1~2 Hz, load average 20, 메모리 부족, AMCL TF 시각 불일치(2026-10-22 팀원 보고). 원인은 Gazebo 센서 렌더링(라이다 43,200 광선 10 Hz)이 6코어·8 GB를 다 쓰는 것. Jetson은 실물에서 로봇 스택만 돌리므로 Gazebo는 PC에 두고 재는 것이 맞다
+
+**확인**(이 노트북 한 대에서 role:=sim과 role:=robot을 따로 띄움, aischool_2f_scenarios)
+- 역할별로 뜬 프로세스가 위 표와 같음. robot 쪽 /scan 7.3~7.8 Hz 수신, bt_navigator active, map→base_footprint TF 나옴, AMCL TF 경고 0건(90 s), 정리 후 남은 프로세스 없음
+- Jetson + PC 두 대 구성은 아직 안 돌려 봄. 결과는 스킬의 "보고 형식"대로 받아 다음 기록에 적는다
+
 ## 2026-10-21 (41) 기본 하반신 모델을 leg_640(입력 640)으로 — 회귀 세트 통과(손님 4/4×3, 상자 4/4, 순찰 3/3)
 
 **할 일**
