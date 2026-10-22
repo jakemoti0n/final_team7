@@ -323,6 +323,9 @@ def generate_launch_description():
                 'use_sim_time': 'true',
                 'autostart': 'true',
                 'params_file': params_file,
+                # True면 Nav2 노드들을 한 프로세스(컨테이너)로 띄운다. 두 대로 나눠 돌릴 때(role:=robot) 포인트클라우드를
+                # 프로세스마다 한 벌씩(3벌, 약 850 Mbit/s) 받지 않고 한 벌(약 330 Mbit/s)만 받게 하려고 쓴다
+                'use_composition': LaunchConfiguration('nav2_composition'),
             }.items()
         )]
 
@@ -432,6 +435,8 @@ def generate_launch_description():
         # 두 대로 나눠 돌릴 때: PC에서 role:=sim (Gazebo·센서 가공·rviz), Jetson에서 role:=robot (EKF·AMCL·Nav2·인식).
         # 같은 ROS_DOMAIN_ID, ROS_LOCALHOST_ONLY=0. robot 쪽은 PC의 /clock을 따른다. 기본 all은 지금처럼 한 대에서 전부
         DeclareLaunchArgument('role', default_value='all'),
+        # Nav2를 한 프로세스로(컴포지션). 기본 False는 지금과 같음. role:=robot(Jetson)에서는 True 권장 (split-sim 스킬 2절)
+        DeclareLaunchArgument('nav2_composition', default_value='False'),
 
         # 바로 Gazebo 실행
         gazebo,

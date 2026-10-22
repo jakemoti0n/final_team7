@@ -8,6 +8,19 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-22 (43) split-sim 수정: 네트워크 실측 반영(포인트클라우드 850 Mbit/s), Nav2 컴포지션 인자 `nav2_composition`, 유선 필수
+
+**할 일**
+- pull 뒤 `build_limbo`. 한 대 구성(기본 `nav2_composition:=False`)은 바뀌지 않음
+- Jetson 시험은 `.claude/skills/split-sim/SKILL.md` 수정본대로 (유선 1 GbE, Jetson은 `nav2_composition:=True`)
+
+**변경**
+- `start_simulation.launch.py`: `nav2_composition` 인자(기본 False) → nav2 `navigation_launch.py`의 `use_composition`으로 전달
+- `split-sim/SKILL.md`: 네트워크 표를 실측으로 교체(42의 "약 50 Mbit/s"는 카메라 영상만 센 값이었음), 브랜치 전제, 유선 필수, 2절 명령에 `nav2_composition:=True`, 3절에 대역폭 확인, 에이전트 규칙에 "문서에 적힌 것은 묻지 않는다"
+
+**배경**(팀원 실측, PC에서 role:=sim만 띄우고 `ros2 topic bw`, aischool_2f)
+- /rgbd_camera/points 213 Mbit/s, /mid360/points_filtered 50, 카메라 컬러+깊이 65, 나머지 합계 1 미만. Nav2를 기본대로 프로세스 3개로 띄우면 코스트맵·collision_monitor가 포인트클라우드를 3벌 받아 약 850 Mbit/s → 컴포지션으로 1벌(약 330)로 줄이고 유선으로. 실물에서는 센서와 Nav2가 같은 본체라 생기지 않는 부담
+
 ## 2026-10-22 (42) 시뮬을 두 대로 나눠 돌리는 `role` 런치 인자 + 안내 스킬 `split-sim` — Jetson 부하 시험용, Jetson 검증 전
 
 **할 일**

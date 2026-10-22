@@ -18,11 +18,25 @@ Jetson은 실물에서 **로봇 스택만** 돌리는 컴퓨터다. 그래서 Ga
 | `robot` | EKF, wheel_slip_monitor, AMCL(map_server), Nav2, person_detector(YOLO), tof_node, person_wait | Jetson |
 | `all` (기본) | 전부 | 한 대 (지금까지와 같음) |
 
-네트워크로 오가는 것: PC→Jetson /clock, /scan, /odom, /imu, /joint_states, TF, 카메라 컬러·깊이(약 50 Mbit/s), /tof/points. Jetson→PC /cmd_vel.
+네트워크로 오가는 것(PC에서 role:=sim만 띄워 `ros2 topic bw`로 실측, 2026-10-22):
+
+| 토픽 | 받는 쪽 | 양 |
+|---|---|---|
+| /rgbd_camera/points (카메라 포인트클라우드) | Nav2 코스트맵·collision_monitor | 213 Mbit/s |
+| /mid360/points_filtered (라이다 포인트클라우드) | Nav2 코스트맵·collision_monitor | 50 Mbit/s |
+| 카메라 컬러+깊이 영상 | person_detector | 65 Mbit/s |
+| /scan, /odom, /imu, /joint_states, /tof/points, TF, /clock | AMCL·EKF 등 | 합쳐 1 Mbit/s 미만 |
+| /cmd_vel (Jetson→PC) | Gazebo | 무시할 수준 |
+
+Nav2를 기본대로 프로세스 3개(controller·planner·collision_monitor)로 띄우면 포인트클라우드를 **3벌** 받아 약 850 Mbit/s가 된다.
+그래서 Jetson에서는 **`nav2_composition:=True`**(Nav2를 한 프로세스로)로 띄워 한 벌(약 330 Mbit/s)만 받고, 연결은 **유선 1 GbE 필수**다. Wi-Fi로는 안 된다.
+실물에서는 센서와 Nav2가 같은 본체라 이 트래픽이 네트워크를 타지 않는다. 이 부담은 분리 시험에서만 생긴다.
 
 ## 이 스킬을 따르는 에이전트에게
 
 - 아래 순서대로 하고, 각 단계의 "→" 결과가 나오는지 확인한 뒤 다음으로 간다. 건너뛰지 않는다.
+- **이 문서에 적힌 것은 이미 결정된 것이다.** 적힌 명령·값·구성(유선, 컴포지션, 월드)은 묻지 말고 그대로 하고, 측정 결과가
+  문서의 기대와 다를 때만 묻는다. 문서에 없는 걸 발견하면 먼저 측정해서 숫자를 들고 묻는다.
 - 결정은 두 단계다. **자잘한 것은 작업자(지금 함께 있는 팀원)가 정하고, 중대한 것은 작업자를 거쳐 PM(ktj 담당)이 정한다.**
   에이전트는 어느 쪽이든 혼자 정하지 않는다. 조용히 우회하면 PM이 결정할 기회를 잃고 팀원마다 다른 구성이 생긴다.
 - 자잘한 결정(작업자에게 물어 바로 답을 받는다): 로그 파일 위치·이름, 측정 시간(2분 이상이면 됨), 로봇을 순찰로 움직일지 RViz Goal로 움직일지,
@@ -46,10 +60,11 @@ Jetson은 실물에서 **로봇 스택만** 돌리는 컴퓨터다. 그래서 Ga
 
 ## 0. 준비물
 
+- **브랜치**: 두 대 모두 `ktj`의 변경 기록 43 이상(`git log --oneline -3`에 "변경 기록 43"). `role`·`nav2_composition` 인자와 이 스킬이 거기 있다. dev에는 아직 없다.
 - PC: 이 저장소가 빌드돼 있고 Gazebo가 뜨는 컴퓨터(README "처음부터 돌려 보기"). NVIDIA면 `export __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia`.
 - Jetson: Ubuntu 24.04 + ROS 2 Jazzy, 이 저장소를 README 1·2절대로 설치·빌드. Gazebo 패키지(`ros-jazzy-ros-gz`)는 없어도 된다(로봇 쪽 노드·빌드가 참조하지 않음). 이미 깔려 있어도 상관없다.
   YOLO용 venv에서 `requirements.txt`의 torch가 ARM에 안 깔리면 멈추고 작업자에게 [PM 확인 필요]로 묻는다(Jetson용 torch 휠을 쓸지는 PM이 정함).
-- 두 대가 **같은 공유기**에 있고 서로 ping이 된다. 가능하면 유선. `~/.bashrc`의 `limbo` 별칭이 `ROS_DOMAIN_ID=97`을 잡는다(README 1절). 두 대 모두 97.
+- 두 대가 **같은 공유기에 유선(1 GbE)으로** 붙어 있고 서로 ping이 된다. 포인트클라우드 약 330 Mbit/s가 지나가므로 Wi-Fi로는 안 된다. `~/.bashrc`의 `limbo` 별칭이 `ROS_DOMAIN_ID=97`을 잡는다(README 1절). 두 대 모두 97.
 - `ROS_LOCALHOST_ONLY`가 설정돼 있으면 안 된다: `echo $ROS_LOCALHOST_ONLY` → 비어 있어야 한다.
 
 두 대가 서로 보이는지 먼저 확인한다(각각 다른 터미널에서):
@@ -76,10 +91,11 @@ PC가 뜬 뒤에 한다(Jetson 노드는 PC의 /clock·TF를 받아야 시작된
 
 ```bash
 limbo
-ros2 launch limbo_bringup start_simulation.launch.py role:=robot world:=aischool_2f map:=aischool_2f_map gui:=false
+ros2 launch limbo_bringup start_simulation.launch.py role:=robot nav2_composition:=True world:=aischool_2f map:=aischool_2f_map gui:=false
 ```
 
 → 30~60초 뒤 로그에 Nav2 lifecycle "Managed nodes are active"가 찍히고, PC의 RViz에 지도 위 로봇과 코스트맵이 보인다.
+`nav2_composition:=True`는 Nav2를 한 프로세스로 띄워 포인트클라우드를 한 벌만 받게 한다(위 표). 빼면 3벌을 받아 유선도 포화된다.
 
 ## 3. 붙었는지 확인
 
@@ -98,6 +114,8 @@ limbo && bash .claude/skills/split-sim/scripts/check_split.sh
 | /clock | 수백 Hz |
 | bt_navigator | active |
 | TF map→base_footprint | Translation 줄이 나옴 (AMCL 동작) |
+
+대역폭도 Jetson에서 한 번 본다: `ros2 topic bw /rgbd_camera/points` → 약 200 Mbit/s, `ros2 topic bw /scan` → 끊김 없이 주기대로. 둘 중 하나가 크게 낮으면 "막히면 2".
 
 ## 4. 부하 재기 (양쪽에서 같은 것을 2분)
 
