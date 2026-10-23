@@ -9,5 +9,7 @@ ultralytics==8.4.158
 # ROS cv_bridge(numpy 1.x 기준 빌드)와 충돌 방지를 위해 고정
 numpy==1.26.4
 opencv-python==4.10.0.84
+# 실물 OAK-D Lite (oak_camera 노드, camera:=oak). 3.x는 API가 달라 2.x로 고정 (tools/oak/requirements.txt와 같음)
+depthai<3
 # 최신 pip가 설치하는 setuptools 80 이상은 colcon과 충돌한다
 setuptools<80

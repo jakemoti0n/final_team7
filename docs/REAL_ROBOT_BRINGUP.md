@@ -156,7 +156,7 @@ ros2 topic echo /mid360/points --once
 | `/rgbd_camera/points` | `sensor_msgs/PointCloud2`, Nav2 장애물·충돌 감시 입력 |
 | `rgbd_camera_optical_link` | 영상과 깊이의 광학 프레임. TF가 실제 카메라 설치 위치를 나타냄 |
 
-4. 깊이 이미지 `encoding`과 단위를 확인한다. Limbo의 사람 위치 계산은 **미터 단위 깊이**를 기대한다. OAK 출력이 `16UC1` 밀리미터라면 중간 노드에서 미터로 변환하거나 사람 검출 코드에 명시적으로 단위 처리를 넣어야 한다. 영상/깊이/CameraInfo의 `header.stamp` 차이도 확인한다. 현재 검출기 동기화 허용 폭은 약 **0.03초**다.
+4. 깊이 이미지 `encoding`과 단위를 확인한다. 사람 위치 계산은 `16UC1`(mm)이면 m로 바꿔 쓴다(변경 기록 46). 그 밖의 encoding은 m로 본다. 저장소의 `oak_camera` 노드(`camera:=oak`)를 쓰면 이 계약대로 컬러·깊이·CameraInfo와 카메라 안 모델 결과(`/oak/detections`)가 나온다. 포인트클라우드는 아직 내지 않는다. 영상/깊이/CameraInfo의 `header.stamp` 차이도 확인한다. 현재 검출기 동기화 허용 폭은 약 **0.03초**다.
 
 ```bash
 ros2 topic list

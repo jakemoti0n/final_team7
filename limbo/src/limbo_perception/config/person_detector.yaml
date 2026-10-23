@@ -2,13 +2,18 @@
 # 토픽·좌표계 이름은 튜닝 대상이 아니라 코드 기본값을 쓴다.
 person_detector:
   ros__parameters:
+    # 검출 출처: yolo(이 노드가 YOLO를 돌림, 시뮬 기본) / oak(OAK 카메라 안 모델 결과를 받음).
+    # 런치 인자 camera:=oak이면 person_detector_oak.yaml이 덧씌워 oak가 된다
+    detector:
+      source: yolo
+
     # 기본은 팀원이 학습한 하반신 모델(가까워 다리만 보이는 사람도 잡음). 입력 크기는 학습 크기와 맞춘다
     # - leg_640 (기본, 입력 640): 가까운 거리 검출이 leg_512와 같거나 높고 먼 거리·군중은 같음 (변경 기록 41)
     # - 이전 기본 leg_512로 돌리려면 model: models/leg_512.pt, imgsz: 512
     # - 기존 COCO 모델로 돌리려면 model: yolo11n.pt, classes: [0], imgsz: 640 (또는 런치 인자 person_model:=yolo11n.pt)
     yolo:
       model: models/leg_640.pt  # 상대 경로는 limbo_perception share 폴더 기준으로 찾음
-      confidence: 0.3
+      confidence: 0.3       # source: oak에서도 이 값과 classes로 카메라 결과를 한 번 더 거른다
       classes: [0, 1]       # 사람으로 볼 클래스 번호 (하반신 모델 0=person, 1=leg. yolo11n은 [0])
       imgsz: 640            # 추론 입력 크기 px (학습 크기와 맞춤: leg_640 640, leg_512 512, yolo11n 640)
 

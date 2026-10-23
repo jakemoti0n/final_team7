@@ -1,6 +1,6 @@
 ---
 name: split-sim
-description: LIMBO 시뮬레이션을 두 대로 나눠 돌리는 설정·확인·측정 안내. PC는 Gazebo(role:=sim), Jetson Orin Nano는 실물에서 돌릴 로봇 스택(role:=robot). Jetson에서 시뮬이 느리다, 메모리 부족, load average가 높다, AMCL이 TF 시각이 안 맞는다고 한다, /scan이 느리다, 젯슨에 올려 보자, 두 대로 나눠 돌리자, 보드 부하를 재자, role:=robot 같은 말이 나오면 반드시 이 스킬을 따른다. 사람이 읽어도 그대로 따라 할 수 있게 썼다.
+description: LIMBO 시뮬레이션을 두 대로 나눠 돌리는 설정·확인·측정 안내. PC는 Gazebo(role:=sim), Jetson Orin Nano는 실물에서 돌릴 로봇 스택(role:=robot). Jetson에서 시뮬이 느리다, 메모리 부족, load average가 높다, AMCL이 TF 시각이 안 맞는다고 한다, /scan이 느리다, 젯슨에 올려 보자, 두 대로 나눠 돌리자, 보드 부하를 재자, role:=robot, OAK 카메라를 젯슨에 꽂고 재자, camera:=oak 같은 말이 나오면 반드시 이 스킬을 따른다. 사람이 읽어도 그대로 따라 할 수 있게 썼다.
 ---
 
 # 시뮬레이션 두 대로 나눠 돌리기 (PC = Gazebo, Jetson = 로봇 스택)
@@ -15,7 +15,7 @@ Jetson은 실물에서 **로봇 스택만** 돌리는 컴퓨터다. 그래서 Ga
 | role | 띄우는 것 | 어디서 |
 |---|---|---|
 | `sim` | Gazebo, robot_state_publisher, 브리지, self_filter, pointcloud_to_laserscan, rviz | PC |
-| `robot` | EKF, wheel_slip_monitor, AMCL(map_server), Nav2, person_detector(YOLO), tof_node, person_wait | Jetson |
+| `robot` | EKF, wheel_slip_monitor, AMCL(map_server), Nav2, person_detector(YOLO, camera:=oak면 YOLO 없이 추적만), oak_camera(camera:=oak만), tof_node, person_wait | Jetson |
 | `all` (기본) | 전부 | 한 대 (지금까지와 같음) |
 
 네트워크로 오가는 것: PC→Jetson /clock, /scan, /odom, /imu, /joint_states, TF, 카메라 컬러·깊이(약 65 Mbit/s), /tof/points,
@@ -123,12 +123,38 @@ limbo && ros2 run limbo_patrol patrol_node --ros-args -p use_sim_time:=true -p w
 비교 기준(Jetson 한 대에 전부 올렸을 때, 2026-10-22): load average 20, real-time factor 0.56, /scan 1~2 Hz, 메모리 부족, AMCL TF 시각 불일치 경고.
 Jetson의 load1이 코어 수(6) 아래이고 /scan이 PC와 같은 주기로 들어오며 AMCL 경고가 0이면 분리가 성공한 것이다.
 
+## 4-2. 실물 OAK 카메라까지 붙여 재기 (camera:=oak)
+
+실물에서 Jetson이 하는 일에는 OAK-D Lite에서 영상·깊이를 받고 카메라 안 모델 결과로 사람을 추적하는 것도 있다(Jetson은 YOLO를 돌리지 않는다).
+`camera:=oak`를 **두 대 모두에** 주면 PC는 Gazebo 카메라 영상 브리지를 끄고, Jetson은 `oak_camera` 노드가 USB로 꽂힌 OAK를 열어 같은 토픽(/rgbd_camera/image·depth_image·camera_info)과
+/oak/detections를 낸다. person_detector는 YOLO를 올리지 않고 그 결과에 BoT-SORT만 돌린다. PC→Jetson 카메라 영상(약 65 Mbit/s)이 없어진다.
+Nav2가 받는 /rgbd_camera/points는 시뮬 월드와 맞도록 Gazebo 것을 그대로 쓴다.
+
+먼저 Jetson에서 카메라 단독 점검(변경 기록 45의 할 일: udev 규칙, `tools/oak/check_camera.py`, `run_leg_model.py`)이 통과해야 한다.
+venv에 depthai가 없으면 `pip install -r requirements.txt`를 다시 한다(`depthai<3` 포함). USB 3 케이블이면 `limbo_perception/config/oak_camera.yaml`의 `usb_speed`를 `super`로(2.0 케이블은 `high` 그대로).
+
+```bash
+# PC
+ros2 launch limbo_bringup start_simulation.launch.py role:=sim camera:=oak world:=aischool_2f map:=aischool_2f_map
+# Jetson (PC가 뜬 뒤)
+ros2 launch limbo_bringup start_simulation.launch.py role:=robot camera:=oak world:=aischool_2f map:=aischool_2f_map gui:=false
+```
+
+→ Jetson 로그에 `oak_camera: OAK-D-LITE 연결 | USB HIGH`(또는 SUPER), person_detector `started (source oak)`, 그 뒤 10초마다 `발행 14~15 Hz … 지연 중앙값 ~230 ms`.
+`ros2 topic info /rgbd_camera/image`의 Publisher count가 1(oak_camera)이어야 한다. 2면 한쪽에 camera:=oak를 빠뜨린 것이다.
+
+- 카메라는 시뮬 로봇과 같이 움직이지 않는다. **로봇을 세워 두고** 카메라 앞에 사람이 서거나 걸으며 잰다. 순찰을 돌리면 사람 위치·속도가 틀어진다(odom 좌표가 로봇과 같이 돌기 때문). 주행 평가에는 쓰지 않는다.
+- oak_camera는 stamp를 시뮬 TF에 맞추려고 /clock을 받는다. 실물에는 없는 부하이므로 보고에 "oak_camera CPU에 /clock 포함"이라고 적는다.
+- `OAK 장치 오류: … → N초 뒤 다시 연결`이 계속 찍히면 oak_camera가 장치를 못 여는 것이다(노드는 살아서 1→2→4…10초 간격으로 다시 시도한다).
+  `Cannot find any device`면 `lsusb | grep 03e7`부터, `X_LINK_DEVICE_ALREADY_IN_USE`면 `tools/oak` 점검 도구나 다른 oak_camera가 떠 있는지 본다.
+  연결됐다 끊기기를 반복하고 `journalctl -k | grep "usb 1-"`에 `error -71`·`-110`이 있으면 케이블·포트·전원 문제다(변경 기록 46). 케이블부터 바꾼다.
+
 ## 5. 끝내기
 
 양쪽 런치 터미널에서 Ctrl+C. 그 뒤 남은 것이 없는지:
 
 ```bash
-ps -eo pid,args | grep -E 'ekf_node|parameter_bridge|gz sim|nav2|person_detector' | grep -v grep
+ps -eo pid,args | grep -E 'ekf_node|parameter_bridge|gz sim|nav2|person_detector|oak_camera' | grep -v grep
 ```
 
 → 아무것도 안 나와야 한다. 남아 있으면 그 PID만 `kill <PID>`. ROS 프로세스가 하나도 없을 때 `rm -f /dev/shm/fastrtps_*`로 DDS 공유 메모리를 지운다
@@ -152,10 +178,11 @@ ps -eo pid,args | grep -E 'ekf_node|parameter_bridge|gz sim|nav2|person_detector
 ## 보고 형식
 
 ```
-구성: PC <호스트명>(role:=sim) + Jetson(role:=robot), 연결 유선/무선, 월드 aischool_2f
+구성: PC <호스트명>(role:=sim) + Jetson(role:=robot), camera sim/oak, 연결 유선/무선, 월드 aischool_2f
 확인: 노드 N개, /scan Jetson X Hz / PC Y Hz, bt_navigator active, TF map→base_footprint 있음
 Jetson 2분: load1 평균 a / 최대 b, 가용 메모리 최소 c MB, CPU 상위 (프로세스 %), AMCL 경고 n건
 PC 2분:     load1 평균 / 최대, /scan Hz
 주행: 순찰 waypoint k/k, 멈춤·이상 (있으면 시각과 로그 줄)
+OAK(camera:=oak만): oak_camera 발행 Hz·지연 중앙값·칩 온도, oak_camera·person_detector CPU %
 문제: (없음 / 증상 그대로)
 ```

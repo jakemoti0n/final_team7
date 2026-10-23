@@ -1,0 +1,7 @@
+# camera:=oak일 때 person_detector.yaml 위에 덧씌우는 값. 여기 없는 값은 person_detector.yaml 그대로 쓴다.
+person_detector:
+  ros__parameters:
+    detector:
+      source: oak           # YOLO를 올리지 않고 /oak/detections(oak_camera)를 받아 BoT-SORT만 돌린다
+    # OAK 영상은 640x352라 시뮬(320x240)의 40 px를 같은 비율(12 %)로 키움
+    edge_min_width_px: 80

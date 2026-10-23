@@ -27,7 +27,7 @@ Ubuntu 24.04 + ROS 2 Jazzy Desktop이 깔려 있다고 가정한다 ([ROS 설치
 sudo apt install ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-ros-gz \
   ros-jazzy-cv-bridge ros-jazzy-pcl-ros ros-jazzy-pointcloud-to-laserscan \
   ros-jazzy-spatio-temporal-voxel-layer ros-jazzy-slam-toolbox \
-  ros-jazzy-robot-localization ros-dev-tools python3-venv              # ROS 패키지
+  ros-jazzy-robot-localization ros-jazzy-vision-msgs ros-dev-tools python3-venv              # ROS 패키지
 git clone --recurse-submodules https://github.com/jakemoti0n/final_team7.git ~/limbo   # 저장소 (서브모듈 포함)
 python3 -m venv --system-site-packages ~/limbo/venvs/limbo_yolo && \
   ~/limbo/venvs/limbo_yolo/bin/pip install -r ~/limbo/requirements.txt   # YOLO용 Python 환경 (CPU torch)
@@ -127,6 +127,10 @@ ros2 launch limbo_bringup start_simulation.launch.py robot:=legacy
 
 # 사람 인식 모델 바꿔 시험 (기본은 하반신 모델. 기존 COCO 모델로 돌리려면 person_detector.yaml의 classes·imgsz도 주석대로)
 ros2 launch limbo_bringup start_simulation.launch.py person_model:=yolo11n.pt
+
+# 사람 인식을 실물 OAK-D Lite로: 카메라 영상·깊이 + 카메라 안 모델 결과를 쓴다 (YOLO 안 돌림).
+# 카메라는 시뮬 로봇과 같이 안 움직이므로 로봇을 세워 두고 인식·부하를 잴 때만. 두 대로 나눌 때는 split-sim 스킬 4-2
+ros2 launch limbo_bringup start_simulation.launch.py camera:=oak
 
 # 주행 평가 기록: Goal이 끝날 때마다 ~/limbo_results/nav_<월드>_<시각>.csv에 한 줄
 ros2 launch limbo_bringup start_simulation.launch.py record:=true

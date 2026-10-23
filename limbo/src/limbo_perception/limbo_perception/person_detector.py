@@ -3,6 +3,11 @@ RGB-D 카메라로 사람을 검출·추적하고 미래 경로를 예측하는 
 
 ROS 입출력(구독, 발행, TF, 파라미터)과 YOLO 호출만 여기서 하고,
 계산은 ROS 없이 테스트할 수 있는 모듈에 맡긴다.
+
+검출은 두 가지 중 하나를 쓴다 (detector.source).
+- yolo: 받은 영상에 이 노드가 YOLO + BoT-SORT를 돌린다 (시뮬레이션 기본).
+- oak: OAK-D Lite 안에서 돈 모델 결과(/oak/detections, oak_camera 노드)를 받아 BoT-SORT만 돌린다.
+  YOLO 모델을 올리지 않는다. 깊이 계산부터는 두 방식이 같다.
 """
 
 from dataclasses import dataclass
@@ -27,7 +32,7 @@ from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import Bool, String
 import tf2_geometry_msgs  # noqa: F401  PointStamped용 tf2 변환 등록
 from tf2_ros import Buffer, TransformException, TransformListener
-from ultralytics import YOLO
+from vision_msgs.msg import Detection2DArray
 from visualization_msgs.msg import MarkerArray
 
 # 다른 노드와의 계약이라 이름을 바꾸면 구독하는 쪽도 같이 바꿔야 한다
@@ -41,6 +46,7 @@ NEAREST_ODOM_TOPIC = '/person_detector/person_position_odom'
 # 시험 기록용(JSON 문자열): frame마다 카메라 시각 t, YOLO 박스 [클래스, x1, y1, x2, y2, 신뢰도],
 # 합친 뒤 남은 박스 [x1, y1, x2, y2, leg 여부]
 BOXES_TOPIC = '/person_detector/boxes'
+OAK_DETECTIONS_TOPIC = '/oak/detections'  # ← oak_camera (detector.source: oak일 때만)
 
 PUBLISH_QUEUE = 10
 EXECUTOR_THREADS = 2
@@ -77,11 +83,18 @@ class PersonDetector(Node):
         self.bridge = CvBridge()
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
-        self.model = YOLO(self.model_path)
-        used = {c: self.model.names.get(c) for c in self.yolo_classes}
-        self.get_logger().info(
-            f'모델 {self.model_path} 클래스 {used} '
-            f'(전체 {len(self.model.names)}개), 입력 크기 {self.yolo_imgsz}')
+        if self.detector_source == 'oak':
+            self.tracker = self._make_tracker()
+            self.get_logger().info(
+                f'검출은 OAK 카메라 안 모델 결과({OAK_DETECTIONS_TOPIC}), '
+                f'추적 {self.yolo_tracker}, 클래스 {self.yolo_classes}')
+        else:
+            from ultralytics import YOLO
+            self.model = YOLO(self.model_path)
+            used = {c: self.model.names.get(c) for c in self.yolo_classes}
+            self.get_logger().info(
+                f'모델 {self.model_path} 클래스 {used} '
+                f'(전체 {len(self.model.names)}개), 입력 크기 {self.yolo_imgsz}')
         self.depth_jump_filter = geometry.DepthJumpFilter(
             jump_m=self.jump_reject_m)
         self.track_manager = tracking.TrackManager(
@@ -111,21 +124,31 @@ class PersonDetector(Node):
         self.depth_sub = message_filters.Subscriber(
             self, Image, self.depth_topic,
             qos_profile=qos_profile_sensor_data)
+        synced = [self.rgb_sub, self.depth_sub]
+        if self.detector_source == 'oak':
+            # oak_camera는 영상·깊이·검출에 같은 stamp를 단다
+            synced.append(message_filters.Subscriber(
+                self, Detection2DArray, OAK_DETECTIONS_TOPIC,
+                qos_profile=qos_profile_sensor_data))
         self.rgb_depth_sync = message_filters.ApproximateTimeSynchronizer(
-            [self.rgb_sub, self.depth_sub],
-            queue_size=self.sync_queue_size, slop=self.sync_slop)
+            synced, queue_size=self.sync_queue_size, slop=self.sync_slop)
         self.rgb_depth_sync.registerCallback(self.image_callback)
 
         self.create_subscription(
             CameraInfo, self.camera_info_topic, self.camera_info_callback,
             qos_profile_sensor_data)
 
-        self.get_logger().info('Person detector with RGB-D depth started')
+        self.get_logger().info(
+            f'Person detector with RGB-D depth started (source {self.detector_source})')
 
     def _declare_parameters(self):
         # 코드 기본값은 yaml 없이도 노드가 뜨게 하는 보험이다. 튜닝은 yaml에서 한다.
         p = self.declare_parameter
 
+        self.detector_source = p('detector.source', 'yolo').value
+        if self.detector_source not in ('yolo', 'oak'):
+            raise ValueError(
+                f'detector.source는 yolo 또는 oak: {self.detector_source}')
         self.rgb_topic = p('rgb_topic', '/rgbd_camera/image').value
         self.depth_topic = p('depth_topic', '/rgbd_camera/depth_image').value
         self.camera_info_topic = p(
@@ -240,15 +263,24 @@ class PersonDetector(Node):
             get_package_share_directory('limbo_perception'), path)
         return share_path if os.path.exists(share_path) else path
 
+    def _make_tracker(self):
+        """detector.source: oak용. model.track()이 안에서 쓰는 것과 같은 추적기를 따로 만든다."""
+        from ultralytics.trackers.track import TRACKER_MAP
+        from ultralytics.utils import IterableSimpleNamespace, YAML
+        from ultralytics.utils.checks import check_yaml
+        cfg = IterableSimpleNamespace(**YAML.load(check_yaml(self.yolo_tracker)))
+        return TRACKER_MAP[cfg.tracker_type](args=cfg)
+
     def camera_info_callback(self, msg):
         self.intrinsics = geometry.CameraIntrinsics.from_k(msg.k)
 
-    def image_callback(self, msg, depth_msg):
+    def image_callback(self, msg, depth_msg, detections_msg=None):
         if self.intrinsics is None:
             return
 
-        depth_image = self.bridge.imgmsg_to_cv2(
-            depth_msg, desired_encoding='passthrough')
+        depth_image = geometry.depth_in_meters(
+            self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding='passthrough'),
+            depth_msg.encoding)
         robot_xy = self._robot_position(msg.header.stamp)
         # 사람이 검출되지 않는 frame에서도 cleanup이 동작해야 해서 먼저 계산한다
         current_time = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
@@ -258,7 +290,7 @@ class PersonDetector(Node):
 
         matched_person_ids = set()
         results = []
-        for detection in self._detect(frame, msg.header.stamp):
+        for detection in self._detect(frame, msg.header.stamp, detections_msg):
             result = self._process_detection(
                 detection, depth_image, msg.header.stamp, current_time,
                 robot_xy, matched_person_ids)
@@ -286,8 +318,32 @@ class PersonDetector(Node):
         output_msg.header = msg.header
         self.image_pub.publish(output_msg)
 
-    def _detect(self, frame, stamp):
-        """YOLO + BoT-SORT 결과 중 track ID가 붙은 사람 box만, 한 사람에 하나씩 반환한다."""
+    def _detect(self, frame, stamp, detections_msg=None):
+        """검출 + BoT-SORT 결과 중 track ID가 붙은 사람 box만, 한 사람에 하나씩 반환한다."""
+        if self.detector_source == 'oak':
+            tracks = self._track_oak(frame, detections_msg)
+        else:
+            tracks = self._track_yolo(frame)
+        if tracks is None:
+            return []
+
+        raw_track_ids, classes, xyxy, confs = tracks
+        kept = geometry.merge_leg_boxes(
+            xyxy, classes, self.leg_class, self.leg_inside_ratio, self.leg_iou,
+            self.leg_pair_gap_ratio, self.leg_pair_vertical_overlap)
+        self.boxes_pub.publish(String(data=json.dumps({
+            't': stamp.sec + stamp.nanosec * 1e-9,
+            'boxes': [[c, *b, round(f, 3)]
+                      for c, b, f in zip(classes, xyxy, confs)],
+            'kept': [[*box, int(classes[i] == self.leg_class)]
+                     for i, box in kept],
+        })))
+        return [Detection(box, raw_track_ids[i],
+                          leg=classes[i] == self.leg_class)
+                for i, box in kept]
+
+    def _track_yolo(self, frame):
+        """YOLO + BoT-SORT → (track ID, 클래스, xyxy, 신뢰도) 목록들. track이 없으면 None."""
         result = self.model.track(
             source=frame,
             classes=self.yolo_classes,
@@ -300,25 +356,26 @@ class PersonDetector(Node):
 
         boxes = result.boxes
         if boxes is None or not boxes.is_track or boxes.id is None:
-            return []
+            return None
+        return (boxes.id.int().cpu().tolist(),
+                boxes.cls.int().cpu().tolist(),
+                [tuple(int(v) for v in b) for b in boxes.xyxy.cpu().numpy()],
+                boxes.conf.cpu().tolist())
 
-        raw_track_ids = boxes.id.int().cpu().tolist()
-        classes = boxes.cls.int().cpu().tolist()
-        xyxy = [tuple(int(v) for v in b) for b in boxes.xyxy.cpu().numpy()]
-        kept = geometry.merge_leg_boxes(
-            xyxy, classes, self.leg_class, self.leg_inside_ratio, self.leg_iou,
-            self.leg_pair_gap_ratio, self.leg_pair_vertical_overlap)
-        confs = boxes.conf.cpu().tolist()
-        self.boxes_pub.publish(String(data=json.dumps({
-            't': stamp.sec + stamp.nanosec * 1e-9,
-            'boxes': [[c, *b, round(f, 3)]
-                      for c, b, f in zip(classes, xyxy, confs)],
-            'kept': [[*box, int(classes[i] == self.leg_class)]
-                     for i, box in kept],
-        })))
-        return [Detection(box, raw_track_ids[i],
-                          leg=classes[i] == self.leg_class)
-                for i, box in kept]
+    def _track_oak(self, frame, detections_msg):
+        """OAK 검출 → BoT-SORT → _track_yolo와 같은 형식. model.track()처럼 클래스·신뢰도로 먼저 거른다."""
+        from ultralytics.engine.results import Boxes
+        dets = geometry.detections_array(
+            detection_rows(detections_msg), self.yolo_classes, self.yolo_confidence)
+        # 사람이 없는 frame도 넣어야 추적기가 사라진 트랙을 정리한다
+        tracks = self.tracker.update(Boxes(dets, frame.shape[:2]), frame)
+        if len(tracks) == 0:
+            return None
+        # 추적기 출력 한 줄 = [x1, y1, x2, y2, track ID, 신뢰도, 클래스, 입력 번호]
+        return (tracks[:, 4].astype(int).tolist(),
+                tracks[:, 6].astype(int).tolist(),
+                [tuple(int(v) for v in b) for b in tracks[:, :4]],
+                tracks[:, 5].tolist())
 
     def _process_detection(self, detection, depth_image, stamp, current_time,
                            robot_xy, matched_person_ids):
@@ -454,6 +511,19 @@ class PersonDetector(Node):
                 f'{target_frame}: {ex}',
                 throttle_duration_sec=TF_WARN_PERIOD_SEC)
             return None
+
+
+def detection_rows(msg):
+    """Detection2DArray → [x1, y1, x2, y2, 신뢰도, 클래스] 목록 (oak_camera가 낸 형식)."""
+    rows = []
+    for d in msg.detections:
+        if not d.results:
+            continue
+        cx, cy = d.bbox.center.position.x, d.bbox.center.position.y
+        hw, hh = d.bbox.size_x / 2.0, d.bbox.size_y / 2.0
+        h = d.results[0].hypothesis
+        rows.append([cx - hw, cy - hh, cx + hw, cy + hh, h.score, int(h.class_id)])
+    return rows
 
 
 def main(args=None):

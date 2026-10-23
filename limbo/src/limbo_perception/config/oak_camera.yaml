@@ -1,0 +1,19 @@
+# oak_camera 노드 값. 카메라 구성(해상도·16:9·shave)은 limbo_perception/oak.py에 고정돼 있고 여기서 바꾸지 않는다.
+oak_camera:
+  ros__parameters:
+    blob: models/leg_640_352_3shave.blob  # 상대 경로는 limbo_perception share 폴더 기준
+    # USB 링크 속도: 2.0 케이블이면 high, 3.0 케이블이면 super.
+    # 2.0 케이블에 super를 주면 장치가 8초 뒤 워치독 크래시로 꺼진다 (변경 기록 45)
+    usb_speed: high
+    frame_id: rgbd_camera_optical_link
+    nn:
+      threads: 2            # 3 shave blob은 2가 가장 빠름 (14.8 Hz)
+      confidence: 0.3       # 카메라 결과를 푸는 문턱. person_detector.yaml yolo.confidence보다 크면 안 됨
+      iou: 0.5              # NMS 겹침 문턱 (tools/oak 점검 도구와 같은 값)
+    # 장치를 못 찾거나 링크가 끊기면 다시 연결한다. 기다리는 시간은 실패할수록 두 배(최대 max_delay),
+    # 영상을 받으면 처음으로. false면 exit code 1로 끝난다
+    reconnect:
+      enabled: true
+      min_delay: 1.0        # sec
+      max_delay: 10.0       # sec
+    stall_timeout: 3.0      # sec, 연결돼 있는데 NN 결과가 이만큼 안 오면 멈춘 것으로 보고 다시 연결

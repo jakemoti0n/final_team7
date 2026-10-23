@@ -58,6 +58,12 @@ def generate_launch_description():
     on_sim = IfCondition(PythonExpression(["'", role, "' in ('all', 'sim')"]))
     on_robot = IfCondition(PythonExpression(["'", role, "' in ('all', 'robot')"]))
 
+    # camera:=sim(기본) / oak. 사람 인식 영상의 출처라 role(어느 컴퓨터에서 도는가)과 따로 고른다.
+    # oak면 Gazebo 카메라 영상 브리지를 끄고, 실물 OAK-D Lite를 oak_camera 노드가 열어 같은 토픽과 카메라 안 모델 결과를 낸다.
+    # 카메라는 실물에서 Jetson에 꽂히므로 oak_camera는 robot 쪽이다. 두 대로 나눌 때는 두 대 모두 같은 camera 값을 준다
+    camera = LaunchConfiguration('camera')
+    use_oak = ["'", camera, "' == 'oak'"]
+
     urdf_file = PathJoinSubstitution([
         limbo_description_dir,
         'urdf',
@@ -95,6 +101,7 @@ def generate_launch_description():
             'robot': LaunchConfiguration('robot'),
             'camera_z': LaunchConfiguration('camera_z'),
             'camera_pitch_deg': LaunchConfiguration('camera_pitch_deg'),
+            'camera': camera,
         }.items(),
         condition=on_sim,
     )
@@ -371,6 +378,10 @@ def generate_launch_description():
         model = LaunchConfiguration('person_model').perform(context)
         if model:
             parameters.append({'yolo.model': model})
+        # camera:=oak이면 YOLO 대신 카메라 안 모델 결과(/oak/detections)를 쓴다
+        if LaunchConfiguration('camera').perform(context) == 'oak':
+            parameters.insert(1, os.path.join(
+                limbo_perception_dir, 'config', 'person_detector_oak.yaml'))
         return [Node(
             package='limbo_perception',
             executable='person_detector',
@@ -380,6 +391,19 @@ def generate_launch_description():
         )]
 
     detector = OpaqueFunction(function=make_detector, condition=on_robot)
+
+    # 실물 OAK-D Lite → /rgbd_camera/image·depth_image·camera_info, /oak/detections (camera:=oak일 때만)
+    # stamp를 시뮬 TF와 맞추려고 sim time을 쓴다(/clock 구독). 실물 로봇에서는 이 /clock 부하가 없다
+    oak_camera = Node(
+        condition=IfCondition(PythonExpression(
+            ["'", role, "' in ('all', 'robot') and "] + use_oak)),
+        package='limbo_perception',
+        executable='oak_camera',
+        name='oak_camera',
+        output='screen',
+        parameters=[os.path.join(limbo_perception_dir, 'config', 'oak_camera.yaml'),
+                    {'use_sim_time': True}]
+    )
 
     # ToF 근접 센서 → /tof/obstacle_ahead·/tof/nearest (관제·로그용). 코앞 안전 정지는 collision_monitor가 /tof/points로 한다
     tof = Node(
@@ -448,6 +472,9 @@ def generate_launch_description():
         # 두 대로 나눠 돌릴 때: PC에서 role:=sim (Gazebo·센서 가공·rviz), Jetson에서 role:=robot (EKF·AMCL·Nav2·인식).
         # 같은 ROS_DOMAIN_ID, ROS_LOCALHOST_ONLY=0. robot 쪽은 PC의 /clock을 따른다. 기본 all은 지금처럼 한 대에서 전부
         DeclareLaunchArgument('role', default_value='all'),
+        # 사람 인식 영상: sim(Gazebo 카메라, 기본) / oak(실물 OAK-D Lite 영상 + 카메라 안 모델 결과).
+        # oak는 카메라가 시뮬 로봇과 같이 움직이지 않으므로 로봇을 세워 두고 인식·부하를 잴 때만 쓴다
+        DeclareLaunchArgument('camera', default_value='sim'),
 
         # 바로 Gazebo 실행
         gazebo,
@@ -484,6 +511,7 @@ def generate_launch_description():
         ),
 
         detector,
+        oak_camera,
         tof,
         person_wait,
         nav_recorder,

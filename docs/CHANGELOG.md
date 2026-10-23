@@ -8,6 +8,36 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-23 (46) person_detector가 실물 OAK-D Lite 영상과 카메라 안 모델 결과를 쓰는 `camera:=oak` — 실기·Jetson 검증 전
+
+**할 일**
+- `sudo apt install ros-jazzy-vision-msgs` (검출 결과 메시지). 대부분 이미 깔려 있다
+- YOLO venv에 depthai: `pip install -r requirements.txt` (`depthai<3`이 추가됨). 그 뒤 `build_limbo`
+- OAK를 맡은 사람: 카메라를 꽂고 `ros2 launch limbo_bringup start_simulation.launch.py camera:=oak`. 로그에 `oak_camera: OAK-D-LITE 연결`, 10초마다 `발행 … Hz`가 찍히고 RViz `/person_detector/annotated_image`에 카메라 앞 사람 박스·거리가 보이면 정상. 거리를 줄자와 대 보고 결과를 알려 주면 다음 기록에 적는다
+- Jetson에 꽂아 두 대로 잴 때는 split-sim 스킬 4-2 (두 대 모두 `camera:=oak`)
+
+**변경**
+- 런치 인자 `camera:=sim|oak`(기본 sim). `role`(어느 컴퓨터)과 따로 고른다. oak면 Gazebo 카메라 영상 브리지를 끄고 robot 쪽에 `oak_camera`를 띄우며, person_detector에 `person_detector_oak.yaml`을 덧씌운다
+- `limbo_perception/oak_camera.py`(새 노드): 장치를 열어 `/rgbd_camera/image`(bgr8 640x352)·`depth_image`(16UC1 mm, 컬러에 정렬, preview와 같은 영역으로 자름)·`camera_info`(장치 보정값)와 `/oak/detections`(vision_msgs/Detection2DArray)를 같은 stamp로 낸다. stamp = 노드 시계 − 장치 지연. 장치를 못 찾거나 링크가 끊기면(X_LINK_ERROR, 케이블 빠짐, 다른 프로세스가 사용 중) 노드는 살아 있고 장치만 다시 연다. 기다림 1→2→4…최대 10초, 영상을 받으면 1초로. 연결돼 있는데 NN 결과가 3초 넘게 안 오면 멈춘 것으로 보고 다시 연다(`reconnect.*`, `stall_timeout`. `reconnect.enabled: false`면 exit code 1)
+- `limbo_perception/oak.py`: 파이프라인·decode·프레임 짝짓기(NN 결과↔입력 프레임은 sequence 번호, 깊이는 가장 가까운 장치 시각). `tools/oak/oak_common.py`는 이것을 가져다 쓴다(카메라 구성은 한 곳에만)
+- person_detector `detector.source: yolo|oak`. oak면 YOLO를 올리지 않고, 받은 박스를 `yolo.classes`·`yolo.confidence`로 거른 뒤 `model.track()`과 같은 BoT-SORT(`yolo.tracker`)에 넣는다. 깊이 encoding이 16UC1이면 m로 바꾼다. 그 뒤(leg 합치기·깊이·칼만·의도·예측)는 그대로
+- `person_detector_oak.yaml`: source oak, `edge_min_width_px` 40→80(640 폭이라 같은 12 %). `oak_camera.yaml`: blob, `usb_speed: high`, NN 문턱
+- blob을 `tools/oak/models/`에서 `limbo_perception/models/`로 옮겨 설치본에 넣음
+- Gazebo 브리지 설정을 `bridge.yaml`(나머지)과 `bridge_camera.yaml`(컬러·깊이·CameraInfo)로 나눔. /rgbd_camera/points는 Nav2가 시뮬 월드를 보도록 camera:=oak여도 Gazebo 것을 씀
+
+**배경**
+- 실물에서 추론은 카메라 칩에서 하고 Jetson은 YOLO를 돌리지 않는다(변경 기록 45). 부하 시험도 그 구성으로 재야 해서 카메라 출처를 role과 따로 바꿀 수 있게 했다
+- 카메라는 시뮬 로봇과 같이 안 움직인다. camera:=oak는 로봇을 세워 두고 인식·부하를 잴 때만 쓴다. 시뮬에서는 stamp를 TF에 맞추려고 oak_camera가 /clock을 받는다(실물에는 없는 부하)
+
+**확인**(이 노트북, 카메라 없음)
+- 단위 테스트 69개 통과(새 `test_oak.py`: decode·NMS·깊이 자르기·짝짓기·mm→m·클래스/문턱 거르기), flake8 통과
+- 가짜 oak_camera 토픽(2 m 앞 사람 박스, 16UC1)으로 person_detector source oak: BoT-SORT ID 1 → base_link x 2.1 m → 예측 발행
+- `camera:=oak gui:=false` 런치: 카메라 브리지 없음, /rgbd_camera/image 발행자 0, /rgbd_camera/points 1, person_detector `source oak`. 기본 런치는 `parameter_bridge_camera`가 뜨고 YOLO로 추적(이전과 같음)
+- 다시 연결: 가짜 depthai로 못 찾음 2번 → 연결 → X_LINK_ERROR → 다시 연결 → 결과 멈춤 3초 → 다시 연결 → 정상 15 Hz 순서를 확인. 실물로는 다른 프로세스가 장치를 잡고 있는 동안 `X_LINK_DEVICE_ALREADY_IN_USE`로 1·2·4초 기다리다 풀리자 연결됨
+- 실물 oak_camera 단독(노트북 USB 2.0, 시뮬 없이): 14.8~15.3 Hz, 지연 중앙값 232~233 ms, 깊이 짝 없음 0. 칩 온도 62~63°C(변경 기록 45의 37~46°C보다 높음, 계속 보기)
+- 시뮬과 같이 돌린 첫 시험(19:37)에서는 40초쯤 13.4 → 2.7 Hz로 떨어진 뒤 X_LINK_ERROR로 끊겼고, 커널 로그에 USB error -71·-110이 나왔다. 케이블·포트·전원 쪽으로 보고 작업자가 원인을 잡음(무엇을 바꿨는지 여기 적을 것)
+- 아직 실기에서 안 본 것: 깊이 4 px 자르기·CameraInfo cy 보정이 맞는지(줄자 대조), 케이블을 실제로 뽑았다 꽂을 때의 다시 연결
+
 ## 2026-10-23 (45) OAK-D Lite 점검 도구 + 하반신 모델(leg_640)을 카메라 안에서 돌리는 blob — `tools/oak/`, Jetson 검증 전
 
 (번호 43·44는 ktj에 있음: split-sim 대역폭·컴포지션, 벽 오인식 수정. 이 항목은 그 뒤 번호)

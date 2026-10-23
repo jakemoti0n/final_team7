@@ -38,6 +38,24 @@ class DepthConfig:
     person_box_radius: float = 0.12
 
 
+def depth_in_meters(depth_image, encoding):
+    """
+    깊이 이미지를 m 단위 float로. Gazebo는 32FC1(m), OAK는 16UC1(mm, REP 118)을 낸다.
+
+    16UC1의 0(측정 못 함)은 0 m가 되어 min_depth에서 걸러진다.
+    """
+    if encoding == '16UC1':
+        return depth_image.astype(np.float32) * 0.001
+    return depth_image
+
+
+def detections_array(rows, classes, confidence):
+    """[x1, y1, x2, y2, 신뢰도, 클래스] 목록 중 쓸 클래스·신뢰도 이상만 (N, 6) float32 배열로."""
+    dets = np.array(rows, dtype=np.float32).reshape(-1, 6)
+    keep = np.isin(dets[:, 5].astype(int), classes) & (dets[:, 4] >= confidence)
+    return dets[keep]
+
+
 def person_depth(depth_image, x1, y1, x2, y2, config, leg=False):
     """
     박스 중앙 영역의 유효 depth 중 가까운 쪽 값(m, percentile), 없으면 None.

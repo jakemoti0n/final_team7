@@ -7,6 +7,7 @@ from launch.actions import (
     ExecuteProcess,
     OpaqueFunction,
 )
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -54,6 +55,12 @@ def generate_launch_description():
         "config",
         "bridge.yaml"
     )
+    # 카메라 컬러·깊이·CameraInfo만 따로 둔다. camera:=oak이면 실물 OAK(oak_camera 노드)가 같은 토픽을 낸다
+    bridge_camera_config = os.path.join(
+        simulation_pkg,
+        "config",
+        "bridge_camera.yaml"
+    )
 
     # Gazebo가 package://limbo_description/... mesh를
     # 찾을 수 있도록 ROS install share 경로 등록
@@ -96,6 +103,11 @@ def generate_launch_description():
         "robot",
         default_value="v14",
         description="v14(기본, 쓰레기통 로봇) 또는 legacy(이전 모델)",
+    )
+    camera_arg = DeclareLaunchArgument(
+        "camera",
+        default_value="sim",
+        description="sim(Gazebo 카메라 영상을 브리지) 또는 oak(실물 OAK가 영상을 내므로 브리지 안 함)",
     )
     gui_arg = DeclareLaunchArgument(
         "gui",
@@ -145,6 +157,20 @@ def generate_launch_description():
         output="screen",
     )
 
+    bridge_camera = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        name="parameter_bridge_camera",
+        parameters=[
+            {
+                "config_file": bridge_camera_config,
+                "use_sim_time": True,
+            }
+        ],
+        output="screen",
+        condition=IfCondition(PythonExpression(["'", LaunchConfiguration("camera"), "' == 'sim'"])),
+    )
+
     spawn_robot = TimerAction(
         period=2.0,
         actions=[
@@ -177,6 +203,7 @@ def generate_launch_description():
         world_arg,
         robot_arg,
         gui_arg,
+        camera_arg,
         camera_z_arg,
         camera_pitch_arg,
         set_gz_resource_path,
@@ -185,6 +212,7 @@ def generate_launch_description():
         gz_sim,
         robot_state_publisher,
         bridge,
+        bridge_camera,
         spawn_robot,
         OpaqueFunction(function=start_movers),
     ])  
