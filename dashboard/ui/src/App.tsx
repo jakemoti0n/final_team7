@@ -1,10 +1,10 @@
 import { useEffect, useReducer, useState, type ReactNode } from 'react'
 import { LiveProvider } from './live'
 import { MockProvider, demoMap, scenarios, type Patrol, type Scenario } from './demo'
-import { commandNames, resultLabels, type Command, type Outcome, type RequestResult } from './commands'
-import { LiveControl, lockReason, pauseReason, resumeReason } from './control'
+import { commandNames, followCommands, patrolCommands, resultLabels, type Command, type Outcome, type RequestResult } from './commands'
+import { LiveControl, lockReason, pauseReason, reasonFor, resumeReason } from './control'
 import { headingDeg, isMapInfo, toPixel, uncertaintyPx, type MapInfo } from './map'
-import { names, topicKeys, type Provider, type Snapshot, type View } from './types'
+import { names, topicKeys, type FollowInfo, type Provider, type Snapshot, type View } from './types'
 
 export function ageText(age: number | null, delta = 0) {
   if (age === null) return '—'
@@ -28,7 +28,8 @@ function Card({ title, children, className = '' }: { title: string; children: Re
   return <section className={`card ${className}`} aria-label={title}><h2 className="card-heading">{title}</h2>{children}</section>
 }
 function CommandButton({ command, disabled, busy, onClick, describedBy }: { command: Command; disabled: boolean; busy: boolean; onClick?: () => void; describedBy: string }) {
-  return <button className={`command ${command}`} disabled={disabled} aria-busy={busy} aria-describedby={describedBy} onClick={onClick}><span aria-hidden="true">{command === 'pause' ? '■' : '▷'}</span>{busy ? resultLabels[command].pending : commandNames[command]}</button>
+  const icons: Record<Command, string> = { pause: '■', resume: '▷', follow_start: '▷', follow_stop: '■', follow_enroll: '＋' }
+  return <button className={`command ${command}`} disabled={disabled} aria-busy={busy} aria-describedby={describedBy} onClick={onClick}><span aria-hidden="true">{icons[command]}</span>{busy ? resultLabels[command].pending : commandNames[command]}</button>
 }
 /** 요청 후 경과 초. 서버 명령은 서버가 잰 값 + 받은 뒤 지난 시간, 화면 자체 결과는 브라우저 시계 */
 function requestAge(result: RequestResult, delta: number) {
@@ -62,8 +63,22 @@ function Controls({ demo, live, view, delta }: { demo: MockProvider | null; live
       <CommandButton command="resume" disabled={!!resume} busy={pending && request?.command === 'resume'} describedBy="resume-reason" onClick={() => send('resume')} />
       <p id="resume-reason" className="muted">{resume || (demo ? '일시 중단된 가상 순찰 작업을 재개합니다.' : '멈춘 지점부터 순찰을 이어서 합니다.')}</p>
       {request?.command === 'resume' && <ResultBox key={request.id} result={request} delta={delta} />}
+      {!demo && <FollowControls view={view} request={request} pending={pending} lock={lock} send={send} delta={delta} />}
     </div>
   </Card>
+}
+/** 따라가기 제어 (PROJECT.md 2-9 3단계). 순찰과 배타적이라 같은 카드 아래쪽에 두고, 잠금 사유는 순찰 버튼과 같은 방식으로 문장으로 보인다 */
+function FollowControls({ view, request, pending, lock, send, delta }: { view: View; request: RequestResult | null; pending: boolean; lock: string; send: (c: Command) => void; delta: number }) {
+  const reasons = Object.fromEntries(followCommands.map(c => [c, reasonFor(c, view, lock)])) as Record<typeof followCommands[number], string>
+  const hints: Record<typeof followCommands[number], string> = { follow_enroll: '형광 밴드를 찬 운용자가 로봇 앞 0.5~2.5 m에 혼자 선 상태에서 누릅니다.', follow_start: '등록한 운용자가 카메라에 보이면 1.5 m 거리를 두고 따라갑니다. 순찰은 멈춥니다.', follow_stop: '그 자리에 섭니다. 순찰은 멈춘 채로 있으니 필요하면 순찰 재개를 누르세요.' }
+  return <>
+    <p className="eyebrow" id="follow-heading">따라가기 · 등록한 운용자 한 명을 따라감</p>
+    {followCommands.map(command => <div key={command} className="follow-command">
+      <CommandButton command={command} disabled={!!reasons[command]} busy={pending && request?.command === command} describedBy={`${command}-reason`} onClick={() => send(command)} />
+      <p id={`${command}-reason`} className="muted">{reasons[command] || hints[command]}</p>
+      {request?.command === command && <ResultBox key={request.id} result={request} delta={delta} />}
+    </div>)}
+  </>
 }
 const patrolLabels: Record<string, string> = { waiting_localization: '위치 확인 중', patrolling: '순찰 중', pausing: '멈추는 중', paused: '일시정지', completed: '순찰 완료', failed: '순찰 실패' }
 const patrolTones: Record<string, Tone> = { patrolling: 'good', pausing: 'warn', paused: 'warn', failed: 'bad' }
@@ -84,6 +99,27 @@ function PatrolCard({ view }: { view: View }) {
   const shown = state ? patrolLabel(state, patrol!.reason) : null
   return <Card title="순찰"><div className="movement patrol-state" role="status">{shown ? <Badge status={state!} tone={old ? 'neutral' : shown.tone}>{shown.label}{old && ' (마지막 상태)'}</Badge> : lost ? <Badge status="lost" tone="warn">순찰 상태 확인 불가</Badge> : <Badge status="unknown">{view.serverProblem ? '현재 확인 불가' : '확인 전'}</Badge>}<span className="patrol-target">{target}</span></div>
     <p className="muted">{!patrol ? '순찰 상태 수신 대기' : old ? '로봇과 연결이 원활하지 않아 지금 상태는 알 수 없습니다' : lost ? '순찰 프로그램이 꺼져 있거나 상태를 알 수 없습니다' : state === 'failed' && patrol.reason ? `사유: ${patrol.reason}` : shown?.note ? shown.note : `마지막 상태 변경 ${timeText(patrol.last_received_at)}`}</p></Card>
+}
+const followReasons: Record<string, string> = { stop_requested: '정지 명령', lost_timeout: '운용자 놓침', started: '', moving: '', near_hold: '', target_lost: '' }
+/** 따라가기 상태 한 줄 (PROJECT.md 2-9). 서 있는 것도 '따라가는 중'이고, 놓치면 찾는 중, 끝났으면 왜 끝났는지 */
+export function followLabel(follow: FollowInfo): { label: string; tone: Tone; note: string } {
+  const reason = follow.reason ?? ''
+  if (follow.state === 'following') return follow.reason === 'near_hold' ? { label: '따라가는 중 · 운용자 앞에 정지', tone: 'good', note: '운용자가 가까워 그 자리에 서 있습니다. 멀어지면 다시 갑니다.' } : { label: '따라가는 중', tone: 'good', note: '' }
+  if (follow.state === 'holding') return { label: `운용자 찾는 중 · ${Math.floor(follow.lost_s ?? 0)}초`, tone: 'warn', note: '마지막으로 본 자리로 가서 기다립니다. 제한 시간을 넘기면 따라가기를 끝냅니다.' }
+  if (follow.state === 'stopped') {
+    const why = reason.startsWith('nav_') ? `주행 실패 (${reason.slice(4) || '사유 없음'})` : followReasons[reason] ?? reason
+    return { label: `끝남 · ${why || '사유 없음'}`, tone: reason === 'stop_requested' ? 'neutral' : 'warn', note: reason === 'stop_requested' ? '정지 명령으로 끝났습니다.' : '운용자가 로봇 앞에 서면 다시 시작할 수 있습니다.' }
+  }
+  return { label: '대기 중', tone: 'neutral', note: '' }
+}
+function FollowCard({ view }: { view: View }) {
+  const follow = view.serverProblem ? null : view.snapshot?.follow
+  const old = view.snapshot?.bridge.status !== 'connected'
+  const lost = !!follow && !follow.state && follow.update_count > 0
+  const shown = follow?.state ? followLabel(follow) : null
+  const facts = follow?.state ? [follow.enrolled ? '운용자 등록됨' : '운용자 미등록', follow.active && follow.distance_m != null ? `거리 ${follow.distance_m.toFixed(1)} m` : '', follow.enrolled ? (follow.visible ? '카메라에 보임' : '카메라에 안 보임') : ''].filter(Boolean).join(' · ') : ''
+  return <Card title="따라가기"><div className="movement patrol-state" role="status">{shown ? <Badge status={follow!.state!} tone={old ? 'neutral' : shown.tone}>{shown.label}{old && ' (마지막 상태)'}</Badge> : lost ? <Badge status="lost" tone="warn">따라가기 상태 확인 불가</Badge> : <Badge status="unknown">{view.serverProblem ? '현재 확인 불가' : '확인 전'}</Badge>}<span className="patrol-target">{facts}</span></div>
+    <p className="muted">{!follow ? '따라가기 상태 수신 대기' : old ? '로봇과 연결이 원활하지 않아 지금 상태는 알 수 없습니다' : lost ? '따라가기 프로그램이 꺼져 있거나 상태를 알 수 없습니다' : shown?.note ? shown.note : follow.enrolled ? `마지막 상태 변경 ${timeText(follow.last_received_at)}` : '등록: 형광 밴드를 차고 로봇 앞 0.5~2.5 m에 혼자 선 뒤 운용자 등록을 누르세요'}</p></Card>
 }
 const FOLLOW_SPAN_M = 10   // 로봇 따라가기: 로봇 중심 가로세로 10 m
 function MapCard({ map, view, delta }: { map: MapInfo | null; view: View; delta: number }) {
@@ -122,7 +158,7 @@ function DemoTools({ demo }: { demo: MockProvider }) {
     <div><strong>데모 시나리오 도구</strong><small>시나리오 변경·초기화 시 진행 요청과 결과가 지워집니다.</small></div>
     <label>화면 상태<select aria-label="화면 상태" value={demo.scenario} onChange={e => demo.reset(e.target.value as Scenario)}>{Object.entries(scenarios).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
     <label>가상 순찰 상태<select aria-label="가상 순찰 상태" value={demo.patrol} onChange={e => demo.setPatrol(e.target.value as Patrol)}><option value="paused">일시 중단 · 재개할 작업 있음</option><option value="patrolling">이미 순찰 중</option><option value="empty">재개할 작업 없음</option><option value="unknown">상태 미확인</option></select></label>
-    {(Object.keys(commandNames) as Command[]).map(command => <label key={command}>{commandNames[command]} 결과<select aria-label={`${commandNames[command]} 결과`} value={demo.outcomes[command]} onChange={e => { demo.outcomes[command] = e.target.value as Outcome; redraw(n => n + 1) }}>{Object.entries(outcomes).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>)}
+    {patrolCommands.map(command => <label key={command}>{commandNames[command]} 결과<select aria-label={`${commandNames[command]} 결과`} value={demo.outcomes[command]} onChange={e => { demo.outcomes[command] = e.target.value as Outcome; redraw(n => n + 1) }}>{Object.entries(outcomes).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>)}
     <label>응답 제한 시간(초)<input aria-label="응답 제한 시간(초)" type="number" min="0.1" max="60" step="0.1" defaultValue="5" onChange={e => { const n = Number(e.target.value); if (Number.isFinite(n) && n >= .1 && n <= 60) demo.machine.responseTimeout = n * 1000 }} /></label>
     <label>상태 확인 제한 시간(초)<input aria-label="상태 확인 제한 시간(초)" type="number" min="0.1" max="60" step="0.1" defaultValue="5" onChange={e => { const n = Number(e.target.value); if (Number.isFinite(n) && n >= .1 && n <= 60) demo.machine.confirmationTimeout = n * 1000 }} /></label>
     <button onClick={() => demo.reset()}>시나리오 초기화</button><button onClick={() => demo.disconnect()}>진행 중 연결 끊기</button>
@@ -190,7 +226,7 @@ export default function App() {
     {banner && <div className={`banner ${connection}`} role={connection === 'checking' ? 'status' : 'alert'}><div className="container">{banner}</div></div>}
     {demo && <DemoTools demo={demo} />}
     <main className="container"><div className="page-meta"><span>{demo ? '가상 로봇 상태 및 제어 흐름 검증' : '로봇 상태 모니터링 · 순찰 제어'}</span><a href={demo ? '/' : '/demo'}>{demo ? '실제 수신 화면으로 →' : '가상 제어 데모 보기 →'}</a></div>
-      <div className="summary"><PatrolCard view={view} />
+      <div className="summary"><PatrolCard view={view} />{!demo && <FollowCard view={view} />}
         <Card title="이동"><div className="movement" role="status"><Badge status={motionStatus} />{!view.serverProblem && state?.motion.rotating && <span>회전 중</span>}
           <div className={`speed ${retained ? 'muted' : ''}`}><strong>{value ? value.linear_speed_mps.toFixed(2) : '—'}</strong><span>m/s</span>{retained && <Badge status="unknown">마지막 수신 값</Badge>}</div></div>
           <p className="muted">{value ? `주행 정보 ${timeText(value.last_received_at)} 기준 추정값` : '유효한 주행 정보 수신 대기'} · 멈춰 있다고 일시정지가 확인된 것은 아닙니다</p></Card></div>

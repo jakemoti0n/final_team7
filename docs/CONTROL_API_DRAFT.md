@@ -16,8 +16,10 @@
 
 ```
 [화면] ──POST /api/v1/commands──► [서버] ◄──GET /api/v1/commands/next (long poll)── [Bridge] ──/patrol/pause, /patrol/resume──► [순찰 노드]
+                                                                                        ──/follow/start, /follow/stop──► [follow_node]   (따라가기 3단계, 2026-10-23)
+                                                                                        ──/follow/enroll──► [person_detector]
                                     ▲     ◄──POST /api/v1/commands/{id}/result────
-[화면] ◄──WS /api/v1/stream──────── │     ◄──POST /api/v1/telemetry (v2: 순찰 상태·위치 추가)── [Bridge] ◄── /patrol/state, TF map→base_footprint, /amcl_pose
+[화면] ◄──WS /api/v1/stream──────── │     ◄──POST /api/v1/telemetry (v2: 순찰 상태·위치 추가)── [Bridge] ◄── /patrol/state, TF map→base_footprint, /amcl_pose, /follow/state
 [화면] ◄──GET /api/v1/map(.png)──── [서버] (지도 파일은 서버 설정에서 읽음)
 ```
 
@@ -65,6 +67,22 @@ v1 필드는 전부 그대로, `schema_version: 2`와 아래 두 객체만 추�
 
 추가 크기는 약 400바이트로 8 KiB 안에 들어간다.
 
+### `follow` (원본 `/follow/state`, **v2 선택 필드** — 따라가기 3단계, 2026-10-23)
+
+Bridge가 `follow`를 넣지 않으면 서버는 "따라가기 상태 없음"(`null`)으로 본다. 넣으면 규칙은 `patrol`과 같다 (미수신이면 `update_count: 0`에 나머지 `null`, 발행자가 없으면 내용 `null`, 수신 횟수로 명령 이후 판정).
+
+| 필드 | 형식 | 의미 (PROJECT.md 2-9) |
+|---|---|---|
+| `state` | 문자열 또는 `null` | `idle` · `following`(서 있는 것 포함) · `holding`(놓쳐서 마지막 자리에서 찾는 중) · `stopped`(끝남) |
+| `active` | 불 또는 `null` | following·holding이면 참 (Nav2 목표가 살아 있음) |
+| `enrolled` | 불 또는 `null` | 운용자가 등록돼 있는지. **따라가기 시작 버튼 잠금 기준** |
+| `visible` | 불 또는 `null` | 운용자를 최근 1 s 안에 봤는지. 안내만 하고 잠그지 않는다 (1 s 텔레메트리로는 깜빡이고, 안 보이면 노드가 `operator_not_visible`로 거절) |
+| `target_id` | 정수 또는 `null` | 운용자 트랙 번호, 없으면 −1 |
+| `distance_m` | 0 이상 숫자 또는 `null` | 로봇↔운용자 거리 |
+| `reason` | 문자열 또는 `null` | 이번 틱의 사유: `started` `moving` `near_hold` `target_lost` `lost_timeout` `stop_requested` `nav_*` (최대 200자) |
+| `elapsed_s` / `lost_s` | 0 이상 숫자 또는 `null` | 지금 상태가 된 뒤 / 놓친 뒤 지난 시간 |
+| `update_count`, `last_received_at`, `age_ms` | `patrol`과 같음 | `/follow/state`는 5 Hz로 늘 오므로 `age_ms`가 크면 follow_node가 멈춘 것 |
+
 ---
 
 ## 2. 명령 API
@@ -80,9 +98,10 @@ v1 필드는 전부 그대로, `schema_version: 2`와 아래 두 객체만 추�
 | 202 `{"request_id": "...", "command": "pause", "issued_at": "...Z", "stage": "queued"}` | 접수 |
 | 409 `command_in_progress` | 끝나지 않은 명령이 있음 (화면도 그동안 버튼을 잠금) |
 | 409 `bridge_not_connected` | Bridge 상태가 `connected`가 아님 |
-| 422 `invalid_command` | `pause`, `resume` 외 |
+| 422 `invalid_command` | `pause`, `resume`, `follow_start`, `follow_stop`, `follow_enroll` 외 |
 
 - `request_id`는 서버가 만든 UUID. 화면은 이 ID로 진행 상황을 본다
+- 따라가기 명령(2026-10-23): `follow_enroll` → `/follow/enroll`(person_detector), `follow_start` → `/follow/start`, `follow_stop` → `/follow/stop`(follow_node). 모두 `std_srvs/Trigger`. 거절 사유는 서비스 `message` 그대로 (`operator_not_enrolled`, `operator_not_visible`, `already_following`, `no_camera_frame` 등)
 - 한 번에 명령 하나만 (진행 중이면 거절). 명령 대기열은 길이 1
 
 ### 2.2 Bridge → 서버: 명령 가져오기 `GET /api/v1/commands/next`
@@ -109,7 +128,8 @@ v1 필드는 전부 그대로, `schema_version: 2`와 아래 두 객체만 추�
   "outcome": "accepted",
   "message": "pause accepted",
   "service_latency_ms": 12.4,
-  "patrol_update_count_at_call": 41
+  "patrol_update_count_at_call": 41,
+  "follow_update_count_at_call": 120
 }
 ```
 
@@ -122,6 +142,7 @@ v1 필드는 전부 그대로, `schema_version: 2`와 아래 두 객체만 추�
 | `expired` | `ttl_ms`가 지나 부르지 않음 |
 
 - `patrol_update_count_at_call`: 서비스를 부르기 직전까지 받은 `/patrol/state` 수 (텔레메트리 `patrol.update_count`와 같은 카운터)
+- `follow_update_count_at_call`: 같은 방식의 `/follow/state` 수. 따라가기 명령은 이 값으로 판정한다 (2026-10-23)
 - 서버 응답: 200 `{"accepted": true}`. 이미 끝난 명령에 대한 늦은 보고는 200 `{"accepted": false, "reason": "command_closed"}` (결과를 바꾸지 않음, PRD §5.3)
 
 ### 2.4 Bridge → 서버: 실행 직전 확인 `POST /api/v1/commands/{request_id}/claim` (2026-10-13 추가)
@@ -168,6 +189,9 @@ queued → delivered → accepted → confirmed        (성공)
 |---|---|
 | pause | `accepted` 이후 텔레메트리에서 `patrol.update_count > patrol_update_count_at_call` **이고** `patrol.state == "paused"` **이고** 그 뒤 `motion`이 최신 값이면서 정지 기준(0.05 m/s, 0.05 rad/s) 미만 |
 | resume | `accepted` 이후 `patrol.update_count > patrol_update_count_at_call` **이고** `patrol.state == "patrolling"`. 속도로 판단하지 않음 |
+| follow_start | `accepted` 이후 `follow.update_count > follow_update_count_at_call` **이고** `follow.state`가 `following` 또는 `holding` |
+| follow_stop | 위 횟수 조건 **이고** `follow.state`가 `idle` 또는 `stopped` **이고** pause와 같은 정지 기준 |
+| follow_enroll | 위 횟수 조건 **이고** `follow.enrolled == true` |
 
 ### 3.3 왜 `update_count`로 비교하나
 
@@ -181,10 +205,12 @@ queued → delivered → accepted → confirmed        (성공)
   "message": "pause accepted", "issued_at": "...Z", "updated_at": "...Z"
 },
 "patrol": { ...텔레메트리 patrol 그대로 + 서버 경과 시간... },
-"pose": { ...텔레메트리 pose 그대로 + 서버 경과 시간... }
+"pose": { ...텔레메트리 pose 그대로 + 서버 경과 시간... },
+"follow": { ...텔레메트리 follow 그대로 + 서버 경과 시간, Bridge가 안 보내면 null... }
 ```
 
 - `command`는 마지막 명령 하나만 (다음 명령 전까지 유지, PRD 그대로). 알림 목록에도 결과를 한 번 남김
+- 따라가기 알림(서버 판단, 명령과 별개): `follow.state == stopped`이고 사유가 `lost_timeout`(운용자 놓침) 또는 `nav_*`(주행 실패)면 `follow:stopped` 경고(지속), `following`·`holding`으로 돌아오면 닫음. 정지 명령으로 끝난 것은 명령 결과가 이미 알리므로 알림 없음
 
 ---
 
@@ -203,7 +229,7 @@ queued → delivered → accepted → confirmed        (성공)
 |---|---|
 | 텔레메트리 (기존) | v2로 `patrol`, `pose` 추가. 1초 주기·재시도 규칙 그대로 |
 | 명령 (새로) | 별도 비동기 작업: `commands/next` long poll → 받으면 서비스 비동기 호출(제한 3초) → 결과 보고. 실패 시 1·2·4·8·10초 재시도는 **가져오기에만** 적용, 결과 보고는 한 번 (유실되면 서버가 `no_response`로 처리) |
-| 구독 추가 | `/patrol/state` (reliable + transient_local, 순찰 노드와 맞춤), `/amcl_pose` (reliable + transient_local, AMCL과 맞춤), TF |
+| 구독 추가 | `/patrol/state` (reliable + transient_local, 순찰 노드와 맞춤), `/amcl_pose` (reliable + transient_local, AMCL과 맞춤), TF, `/follow/state` (reliable + volatile, 5 Hz) |
 | 서비스 대기 | 호출 전에 서비스가 없으면 기다리지 않고 바로 `service_unavailable` |
 
 ---

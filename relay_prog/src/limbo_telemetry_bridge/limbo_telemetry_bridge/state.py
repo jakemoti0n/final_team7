@@ -9,6 +9,8 @@ import uuid
 TOPICS = ('odom', 'lidar_raw', 'lidar_filtered', 'camera_raw')
 SCHEMA_VERSION = 2
 PATROL_STATES = ('waiting_localization', 'patrolling', 'pausing', 'paused', 'completed', 'failed')
+FOLLOW_STATES = ('idle', 'following', 'holding', 'stopped')
+FOLLOW_FIELDS = ('state', 'active', 'enrolled', 'visible', 'target_id', 'distance_m', 'reason', 'elapsed_s', 'lost_s')
 REASON_LIMIT = 200
 
 
@@ -31,6 +33,8 @@ class State:
         # v2: 순찰 상태(/patrol/state)와 위치(/amcl_pose). 숫자·짧은 문자열만 보관한다
         self.patrol = dict(count=0, fields=None, at=None, mono=None, alive=True)
         self.pose = None
+        # 따라가기 상태(/follow/state). patrol과 같은 규칙: 수신 횟수로 명령 이후인지 판정, 발행자가 없으면 내용은 null
+        self.follow = dict(count=0, fields=None, at=None, mono=None, alive=True)
 
     def patrol_publisher(self, alive):
         """/patrol/state 발행자(순찰 노드)가 있는지. 없으면 마지막 상태 대신 "알 수 없음"으로 보낸다
@@ -56,6 +60,27 @@ class State:
     def patrol_update_count(self):
         with self.lock:
             return self.patrol['count']
+
+    def follow_publisher(self, alive):
+        """/follow/state 발행자(follow_node)가 있는지. 없으면 "알 수 없음"으로 보낸다 (patrol_publisher와 같음)."""
+        with self.lock:
+            self.follow['alive'] = bool(alive)
+
+    def receive_follow(self, state, active, enrolled, visible, target_id, distance_m, reason, elapsed_s, lost_s):
+        with self.lock:
+            fields = None
+            numbers = (distance_m, elapsed_s, lost_s)
+            if (state in FOLLOW_STATES and all(type(v) is bool for v in (active, enrolled, visible))
+                    and type(target_id) is int and isinstance(reason, str)
+                    and all(isinstance(v, (int, float)) and math.isfinite(v) and v >= 0 for v in numbers)):
+                fields = dict(state=state, active=active, enrolled=enrolled, visible=visible, target_id=target_id,
+                              distance_m=float(distance_m), reason=reason[:REASON_LIMIT],
+                              elapsed_s=float(elapsed_s), lost_s=float(lost_s))
+            self.follow.update(count=self.follow['count'] + 1, fields=fields, at=self.utc(), mono=self.monotonic())
+
+    def follow_update_count(self):
+        with self.lock:
+            return self.follow['count']
 
     def receive_pose(self, frame_id, x, y, yaw, position_std_m):
         with self.lock:
@@ -96,7 +121,7 @@ class State:
             # Copy only bounded numeric state; JSON and networking happen after unlock.
             topics = {k: {**v, 'buckets': tuple(v['buckets'])} for k, v in self.topics.items()}
             motion = self.motion
-            patrol, pose = dict(self.patrol), self.pose
+            patrol, pose, follow = dict(self.patrol), self.pose, dict(self.follow)
         result = {}
         bucket = math.floor(now * 10)
         for key, topic in topics.items():
@@ -111,6 +136,7 @@ class State:
             )
         patrol_fields = (patrol['alive'] and patrol['fields']) or dict.fromkeys(
             ('state', 'waypoint_index', 'waypoint_count', 'waypoint_name', 'has_resumable_task', 'reason'))
+        follow_fields = (follow['alive'] and follow['fields']) or dict.fromkeys(FOLLOW_FIELDS)
         return dict(
             schema_version=SCHEMA_VERSION, robot_id=self.robot_id, bridge_session_id=self.session_id,
             sequence=sequence, sent_at=sent_at, source_clock=self.source_clock, topics=result,
@@ -128,4 +154,7 @@ class State:
                       position_std_m=None if pose is None else pose[4],
                       last_received_at=None if pose is None else pose[5],
                       age_ms=None if pose is None else max(0.0, (now-pose[6])*1000)),
+            follow=dict(**follow_fields, update_count=follow['count'],
+                        last_received_at=follow['at'],
+                        age_ms=None if follow['mono'] is None else max(0.0, (now-follow['mono'])*1000)),
         )

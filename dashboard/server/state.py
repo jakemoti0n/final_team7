@@ -14,11 +14,16 @@ NAMES = {"odom": "주행 정보", "lidar_raw": "LiDAR 원본",
 # 관제 명령 단계 (docs/CONTROL_API_DRAFT.md §3). FINAL에 들어가면 결과가 바뀌지 않는다
 FINAL = {"confirmed", "rejected", "service_unavailable", "no_response", "expired", "unconfirmed",
          "connection_lost"}
-COMMAND_TEXT = {"pause": "정지", "resume": "재개"}
+COMMAND_TEXT = {"pause": "정지", "resume": "재개", "follow_start": "따라가기 시작", "follow_stop": "따라가기 정지",
+                "follow_enroll": "운용자 등록"}
+# 명령을 받는 노드 (service_unavailable 문구). 따라가기 시작·정지는 follow_node, 등록은 카메라(person_detector)
+NODE_TEXT = {"pause": "순찰 노드", "resume": "순찰 노드", "follow_start": "따라가기 노드", "follow_stop": "따라가기 노드",
+             "follow_enroll": "카메라 노드"}
+FOLLOW_COMMANDS = ("follow_start", "follow_stop", "follow_enroll")
 RESULT_TEXT = {  # (알림 중요도, 문구)
     "confirmed": ("info", "{c} 상태 확인됨"),
     "rejected": ("error", "{c} 요청 실패: {m}"),
-    "service_unavailable": ("error", "{c} 요청 실패: 순찰 노드가 응답할 수 없음"),
+    "service_unavailable": ("error", "{c} 요청 실패: {n}가 응답할 수 없음"),
     "no_response": ("warning", "{c} 여부 확인 불가: 로봇 응답 없음"),
     "expired": ("warning", "{c} 요청 실패: 로봇에 제때 전달되지 않아 실행 안 함"),
     "unconfirmed": ("warning", "{c} 여부 확인 불가: 응답 후 상태 확인 없음"),
@@ -47,6 +52,7 @@ class Store:
         self.revision = 0
         self.was_connected = False
         self.patrol_seen = None      # 마지막으로 알림을 판단한 (상태, 사유)
+        self.follow_seen = None      # 따라가기도 같은 방식 (상태, 사유)
         self.command = None          # 마지막 명령 하나 (다음 명령 전까지 유지)
         self.map_available = False   # 앱이 지도 파일을 읽으면 True
 
@@ -76,7 +82,7 @@ class Store:
         self.command = dict(request_id=str(uuid.uuid4()), command=command, stage="queued", message="",
                             issued_at=self.utc(), updated_at=self.utc(), issued_mono=now,
                             delivered_mono=None, claimed_mono=None, accepted_mono=None, session=self.session,
-                            count_at_call=None)
+                            count_at_call=None, follow_count_at_call=None)
         return 202, self.command_view()
 
     def take_command(self, session):
@@ -114,7 +120,8 @@ class Store:
         c["message"] = result.message
         if result.outcome == "accepted":
             c.update(stage="accepted", accepted_mono=self.monotonic(), updated_at=self.utc(),
-                     count_at_call=result.patrol_update_count_at_call)
+                     count_at_call=result.patrol_update_count_at_call,
+                     follow_count_at_call=result.follow_update_count_at_call)
             self.check_confirmation()
         else:
             self.finish(result.outcome)
@@ -125,12 +132,31 @@ class Store:
         c, p = self.command, self.payload
         if not c or c["stage"] != "accepted" or not p or p["bridge_session_id"] != c["session"]:
             return
+        if c["command"] in FOLLOW_COMMANDS:
+            return self.check_follow_confirmation(c, p)
         patrol = p.get("patrol")
         if not patrol or patrol["update_count"] <= c["count_at_call"]:
             return
         if c["command"] == "resume" and patrol["state"] == "patrolling":
             self.finish("confirmed")
         elif c["command"] == "pause" and patrol["state"] == "paused":
+            motion, cfg = p["motion"], self.settings
+            if (motion["age_ms"] is not None and motion["age_ms"] / 1000 < cfg.topic_delay_s.odom
+                    and motion["linear_speed_mps"] < cfg.linear_threshold_mps
+                    and abs(motion["angular_velocity_radps"]) < cfg.angular_threshold_radps):
+                self.finish("confirmed")
+
+    def check_follow_confirmation(self, c, p):
+        """따라가기 명령은 /follow/state 수신 횟수로 명령 이후인지 본다. 시작은 following·holding, 정지는 끝난 상태 + 로봇 정지,
+        등록은 enrolled가 참이면 확인."""
+        follow = p.get("follow")
+        if not follow or follow["update_count"] <= c["follow_count_at_call"] or follow["state"] is None:
+            return
+        if c["command"] == "follow_start" and follow["state"] in ("following", "holding"):
+            self.finish("confirmed")
+        elif c["command"] == "follow_enroll" and follow["enrolled"]:
+            self.finish("confirmed")
+        elif c["command"] == "follow_stop" and follow["state"] in ("idle", "stopped"):
             motion, cfg = p["motion"], self.settings
             if (motion["age_ms"] is not None and motion["age_ms"] / 1000 < cfg.topic_delay_s.odom
                     and motion["linear_speed_mps"] < cfg.linear_threshold_mps
@@ -159,7 +185,8 @@ class Store:
         c.update(stage=stage, updated_at=self.utc())
         severity, text = RESULT_TEXT[stage]
         self.add(f"command:{c['request_id']}", severity,
-                 text.format(c=COMMAND_TEXT[c["command"]], m=c["message"] or "사유 없음"), "control")
+                 text.format(c=COMMAND_TEXT[c["command"]], n=NODE_TEXT[c["command"]], m=c["message"] or "사유 없음"),
+                 "control")
 
     def command_view(self):
         c = self.command
@@ -192,6 +219,7 @@ class Store:
             self.last_motion_mono = self.received_mono
         self.check_confirmation()
         self.check_patrol()
+        self.check_follow()
         return {**reply, "accepted": True, "server_received_at": self.received_at}
 
     def check_patrol(self):
@@ -216,6 +244,20 @@ class Store:
         elif state == "patrolling":
             self.close("patrol:stopped", "이동 실패로 멈췄던 순찰을 다시 진행합니다")
             self.close("patrol:failed", "순찰을 다시 시작했습니다")
+
+    def check_follow(self):
+        """따라가기가 저절로 끝난 것(운용자 놓침·주행 실패)은 알림으로. 정지 명령으로 끝난 것은 명령 결과가 이미 알린다."""
+        follow = (self.payload or {}).get("follow") or {}
+        state, reason = follow.get("state"), follow.get("reason") or ""
+        if (state, reason) == self.follow_seen:
+            return
+        self.follow_seen = (state, reason)
+        if state == "stopped" and reason == "lost_timeout":
+            self.problem("follow:stopped", "warning", "따라가기가 끝났습니다: 운용자를 제한 시간 넘게 찾지 못함. 운용자가 로봇 앞에 서면 다시 시작해 주세요")
+        elif state == "stopped" and reason.startswith("nav_"):
+            self.problem("follow:stopped", "warning", f"따라가기가 끝났습니다: 주행 실패 ({reason[4:] or '사유 없음'}). 주변을 확인한 뒤 다시 시작해 주세요")
+        elif state in ("following", "holding"):
+            self.close("follow:stopped", "따라가기를 다시 시작했습니다")
 
     def add(self, key, severity, message, kind, active=False):
         alert = dict(id=str(uuid.uuid4()), key=key, at=self.utc(), severity=severity,
@@ -290,6 +332,7 @@ class Store:
             age = value["age_ms"] / 1000 + elapsed if value["age_ms"] is not None else None
             return {**value, "age_s": age}
         pose = aged("pose")
+        follow = aged("follow")
         if pose is not None:
             pose["stale"] = uncertain or pose["age_s"] is None or pose["age_s"] >= cfg.topic_delay_s.odom
         self.revision += 1
@@ -300,5 +343,5 @@ class Store:
                     motion=dict(status=movement, rotating=rotating, current=motion if fresh else None,
                                 age_s=motion_age, last_valid=retained),
                     alerts=deepcopy(list(self.alerts)), settings=cfg.model_dump(),
-                    patrol=aged("patrol"), pose=pose, command=self.command_view(),
+                    patrol=aged("patrol"), pose=pose, follow=follow, command=self.command_view(),
                     map_available=self.map_available)

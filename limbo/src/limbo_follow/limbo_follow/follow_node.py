@@ -318,6 +318,8 @@ class FollowNode(Node):
         msg.reason = self.reason
         msg.elapsed_sec = float(time.monotonic() - self.state_since)
         msg.lost_sec = float(time.monotonic() - self.lost_since) if self.lost_since is not None else 0.0
+        msg.enrolled = bool(self.target is not None and self.target.enrolled)
+        msg.visible = self._target_visible()
         self.state_pub.publish(msg)
 
 

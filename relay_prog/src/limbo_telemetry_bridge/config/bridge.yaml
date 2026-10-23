@@ -33,5 +33,10 @@ control:
   base_frame: base_footprint
   pause_service: /patrol/pause        # std_srvs/srv/Trigger
   resume_service: /patrol/resume
+  # 따라가기 (PROJECT.md 2-9 3단계). 상태는 follow_node가 5 Hz로 냄(reliable·volatile), 서비스는 모두 std_srvs/srv/Trigger
+  follow_state_topic: /follow/state     # limbo_interfaces/msg/FollowState
+  follow_start_service: /follow/start   # follow_node
+  follow_stop_service: /follow/stop     # follow_node
+  follow_enroll_service: /follow/enroll # person_detector: 로봇 앞에 선 밴드 찬 사람을 운용자로 등록
   command_wait_s: 10                  # commands/next long poll 최대 대기
   service_timeout_s: 3                # 서비스 응답 제한. 넘으면 no_response

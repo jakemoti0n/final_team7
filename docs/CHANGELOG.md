@@ -10,6 +10,29 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-23 (131) 따라가기 3단계(관제): 운용자 등록·시작·정지 버튼 + 따라가기 카드 + 텔레메트리 `follow` — 관제 경로 시뮬 2회 정상, 주행은 2단계 규칙 구멍 2개 발견
+
+**할 일**
+- `build_limbo`(`FollowState.msg`에 `enrolled`·`visible` 추가 → limbo_interfaces·limbo_follow·limbo_perception 다시 빌드)
+- Bridge: `cd ~/limbo/relay_prog && venvs/bridge/bin/python -m colcon build --symlink-install --base-paths src`. `config/bridge.yaml`의 `control`에 `follow_*` 네 항목이 필수가 됨(없으면 설정 오류로 안 뜸)
+- 화면: `cd ~/limbo/dashboard/ui && pnpm install --frozen-lockfile && pnpm build`. 서버는 그대로
+
+**변경**
+- `limbo_interfaces/FollowState.msg`: `enrolled`(시작 버튼 잠금 기준), `visible`(안내용). `follow_node`가 채움
+- `person_wait_node`: 운용자 제외를 `/follow/state`의 target_id(5 Hz) 대신 `/follow/target`(프레임마다)으로. 인식이 끊겼다 새 번호로 잡히는 순간의 헛 기다리기 제거(2단계 남은 손질)
+- Bridge(`relay_prog`): `/follow/state` 구독(reliable·volatile)과 발행자 생존 확인, 텔레메트리 v2 **선택 필드** `follow`(state·active·enrolled·visible·target_id·distance_m·reason·elapsed_s·lost_s·update_count·last_received_at·age_ms), 명령 `follow_start`·`follow_stop`·`follow_enroll` → `/follow/start`·`/follow/stop`·`/follow/enroll`, 결과에 `follow_update_count_at_call`. 시험 receiver 검증기 갱신, 시험 3개 추가(70 통과)
+- 서버(`dashboard/server`): `Follow` 모델(v2 선택, v1 거부), 명령 3종 접수, 판정(시작=following·holding, 정지=idle·stopped+로봇 정지, 등록=enrolled), 따라가기 알림(운용자 놓침·주행 실패로 끝나면 경고 지속, 다시 시작하면 닫음), service_unavailable 문구에 노드 이름(순찰·따라가기·카메라). 시험 6개 추가(64 통과)
+- 화면(`dashboard/ui`): 제어 카드 아래 따라가기 버튼 3개(잠금 사유: 미등록·이미 따라가는 중·따라가는 중 아님), **순찰 재개는 따라가는 동안 잠금**, 요약 줄에 따라가기 카드(상태·거리·등록·보임·등록 안내). 가상(/demo)은 순찰 명령만. 시험 4개 추가(29 통과), tsc·빌드 통과
+- 문서: `docs/CONTROL_API_DRAFT.md`(follow 블록·명령·판정·알림), `docs/CONTROL_SCREEN.md` E절, PROJECT.md 2-9(용도: 한 사람을 거리 두고 따라가고 서면 선다, 순찰 미션 계획과 별개; 3단계·발견한 구멍), dashboard README 첫 줄 현행화
+- 실험(`experiments/2026-10-22_follow_operator/`): `run3.sh`(2단계 장면 + 서버 + Bridge, 명령은 API로), `api3.py`
+
+**PM 결정(2026-10-23)**: 등록 버튼 넣음. 따라가기 정지 뒤 순찰 자동 재개 안 함(관제가 순찰 재개를 누름).
+
+**확인**(시뮬 zz_follow2, fw9·fw10)
+- 관제 경로: 등록(카메라 준비 전 `no_camera_frame` 거절 2회 뒤 confirmed 0.4~0.6 s), 시작 confirmed 1.0 s, 정지 confirmed, 놓침 경고 알림. 두 회차 모두 설계대로
+- 주행은 두 회차 다 완주 전에 끝남 — 관제와 무관한 2단계 규칙 구멍: (a) 운용자가 멈춘 뒤 잠깐 끊기면 "가던 방향 1.5 m 더" 규칙이 운용자를 지나쳐 등진 채 섬(fw9), (b) 가로지르는 사람을 피해 경로가 꺾이면 ±34° 시야 밖으로 나감(fw10). 실험 기록 3단계 절에 분석. 수정은 PM 결정 뒤
+- 이 노트북에 시험 환경 새로 만듦(저장소 밖): `dashboard/.venv`, `relay_prog/venvs/bridge`, Node 22·pnpm은 `~/.local/opt`
+
 ## 2026-10-22 (130) 따라가기 2단계(주행): `limbo_follow` 노드 + `limbo_follow.xml` + 따라가기용 MPPI — 시뮬 홀·복도 모퉁이 2개 19 m 완주, 평균 거리 2.08 m, 충돌 0
 
 **할 일**

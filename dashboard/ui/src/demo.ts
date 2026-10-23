@@ -15,7 +15,7 @@ export class MockProvider implements Provider {
   current: View = { snapshot: null, serverProblem: false, receivedMono: performance.now() }
   scenario: Scenario = 'normal'
   patrol: Patrol = 'patrolling'
-  outcomes: Record<Command, Outcome> = { pause: 'success', resume: 'success' }
+  outcomes: Record<Command, Outcome> = { pause: 'success', resume: 'success', follow_start: 'success', follow_stop: 'success', follow_enroll: 'success' }
   private target = 2
   private x = -.2
   private y = 3.6
@@ -59,7 +59,8 @@ export class MockProvider implements Provider {
   }
   get pauseReason() { return this.lockReason || (this.patrol === 'paused' ? '이미 일시정지 상태입니다' : '') }
   get resumeReason() { return this.lockReason || ({ paused: '', patrolling: '이미 순찰 중입니다', empty: '재개할 작업이 없습니다', unknown: '순찰 상태를 확인할 수 없습니다' }[this.patrol]) }
-  request(command: Command) { if (command === 'pause' ? this.pauseReason : this.resumeReason) return; this.machine.start(command, this.outcomes[command]) }
+  // 가상 로봇은 순찰 명령만 흉내 낸다. 따라가기 버튼은 실제 화면에만 있다
+  request(command: Command) { if (command !== 'pause' && command !== 'resume') return; if (command === 'pause' ? this.pauseReason : this.resumeReason) return; this.machine.start(command, this.outcomes[command]) }
   // 순찰 중이면 1초에 0.5 m씩 다음 지점으로 (끝까지 가면 처음부터)
   private move() {
     if (this.patrol !== 'patrolling') return
@@ -94,7 +95,7 @@ export class MockProvider implements Provider {
         return [key, { status: initial ? 'never_received' : uncertain ? 'unknown' : delayed ? 'delayed' : 'receiving', last_received_at: initial ? null : delayed ? this.scenarioAt : at, age_s: initial ? null : delayed ? 6 : age, received_count: initial ? 0 : 40, receive_hz: initial || uncertain || delayed ? null : 10, last_receive_hz: initial ? null : 10 }]
       })) as Snapshot['topics'],
       motion: { status: initial ? 'unconfirmed' : uncertain ? 'unknown' : 'moving', rotating: false, current: initial || uncertain ? null : motion, age_s: initial ? null : age, last_valid: initial ? null : motion }, alerts: [...this.alerts],
-      patrol: initial ? null : this.patrolInfo(at, age), pose: this.poseInfo(initial ? null : at, initial ? null : age, uncertain), command: null, map_available: true,
+      patrol: initial ? null : this.patrolInfo(at, age), pose: this.poseInfo(initial ? null : at, initial ? null : age, uncertain), command: null, map_available: true, follow: null,
     }
     this.current = { snapshot, serverProblem: this.scenario === 'server', receivedMono: performance.now() }
     this.listeners.forEach(fn => fn(this.current))

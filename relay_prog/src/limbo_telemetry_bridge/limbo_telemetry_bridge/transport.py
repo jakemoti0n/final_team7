@@ -15,7 +15,7 @@ import aiohttp
 
 LOG = logging.getLogger(__name__)
 MAX_BYTES = 8192
-COMMANDS = ('pause', 'resume')
+COMMANDS = ('pause', 'resume', 'follow_start', 'follow_stop', 'follow_enroll')
 MESSAGE_LIMIT = 200
 # 서비스를 부르기 직전 서버에 "아직 유효한가"를 묻는 왕복 시간 한도. 넘으면 부르지 않는다.
 # ttl_ms만으로는 서버가 넘긴 뒤 Bridge가 읽기까지 걸린 시간을 알 수 없다 (2026-10-13 실패 시험 문제 1)
@@ -226,7 +226,8 @@ class Sender:
         result = dict(robot_id=self.state.robot_id, bridge_session_id=self.state.session_id,
                       request_id=command['request_id'], outcome=None, message='',
                       service_latency_ms=None,
-                      patrol_update_count_at_call=self.state.patrol_update_count())
+                      patrol_update_count_at_call=self.state.patrol_update_count(),
+                      follow_update_count_at_call=self.state.follow_update_count())
         if self.monotonic() - received >= command['ttl_ms'] / 1000:
             return {**result, 'outcome': 'expired', 'message': 'command expired before service call'}
         claimed, rtt = await self.claim(client, command)
@@ -237,7 +238,8 @@ class Sender:
         started = self.monotonic()
         future = self.controller.call(command['command'])
         if future is None:
-            return {**result, 'outcome': 'service_unavailable', 'message': 'patrol service not available'}
+            kind = 'patrol' if command['command'] in ('pause', 'resume') else 'follow'
+            return {**result, 'outcome': 'service_unavailable', 'message': f'{kind} service not available'}
         deadline = started + self.config['control']['service_timeout_s']
         while not future.done() and self.monotonic() < deadline and not self.stop_event.is_set():
             await self.sleep(0.01)

@@ -62,14 +62,42 @@ def test_v2_patrol_and_pose_snapshot():
     assert state.patrol_update_count() == 2
 
 
+def test_v2_follow_snapshot_and_publisher_gone():
+    """따라가기 상태(3단계)는 patrol과 같은 규칙: 미수신 null, 수신 횟수로 명령 이후 판정, 발행자 없으면 내용 null"""
+    clock = Clock()
+    state = State(monotonic=clock.mono, utc=clock.utc)
+    first = state.snapshot()
+    validate(first)
+    assert first['follow']['update_count'] == 0 and first['follow']['state'] is None
+    state.receive_follow('following', True, True, True, 7, 1.83, 'moving', 12.5, 0.0)
+    clock.now = 1
+    follow = state.snapshot()['follow']
+    validate(state.snapshot())
+    assert follow['state'] == 'following' and follow['active'] is True and follow['target_id'] == 7
+    assert follow['distance_m'] == 1.83 and follow['update_count'] == 1 and follow['age_ms'] == 1000
+    assert state.follow_update_count() == 1
+    state.receive_follow('dancing', True, True, True, 7, 1.0, '', 0.0, 0.0)      # 모르는 상태도 횟수는 센다
+    follow = state.snapshot()['follow']
+    assert follow['update_count'] == 2 and follow['state'] is None
+    state.receive_follow('stopped', False, True, False, -1, 2.0, 'lost_timeout', 0.2, 15.1)
+    state.follow_publisher(False)
+    follow = state.snapshot()['follow']
+    assert follow['state'] is None and follow['update_count'] == 3 and follow['last_received_at'] is not None
+    validate(state.snapshot())
+    state.follow_publisher(True)
+    assert state.snapshot()['follow']['reason'] == 'lost_timeout'
+    assert len(json.dumps(state.snapshot()).encode()) < 8192
+
+
 def test_v1_payload_still_valid_and_v2_rules_enforced():
     v2 = State().snapshot()
-    v1 = {k: v for k, v in v2.items() if k not in ('patrol', 'pose')}
+    v1 = {k: v for k, v in v2.items() if k not in ('patrol', 'pose', 'follow')}
     v1['schema_version'] = 1
     validate(v1)
     for mutate in (lambda p: p.pop('patrol'),
                    lambda p: p['patrol'].update(state='paused'),          # 미수신인데 값
                    lambda p: p['pose'].update(x=1.0),                     # 일부만 채움
+                   lambda p: p['follow'].update(state='following'),       # 미수신인데 값
                    lambda p: p.update(schema_version=3)):
         payload = json.loads(json.dumps(v2))
         mutate(payload)
@@ -80,7 +108,7 @@ def test_v1_payload_still_valid_and_v2_rules_enforced():
 
 
 @pytest.mark.parametrize('key,value', [
-    ('pause_service', 'patrol/pause'), ('command_wait_s', 0), ('command_wait_s', 31),
+    ('pause_service', 'patrol/pause'), ('follow_start_service', 'follow/start'), ('command_wait_s', 0), ('command_wait_s', 31),
     ('service_timeout_s', math.nan), ('service_timeout_s', 11), ('extra', 1),
     ('map_frame', '/map'), ('base_frame', ''), ('base_frame', 3)])
 def test_invalid_control_configuration(tmp_path, key, value):
@@ -95,6 +123,7 @@ def test_invalid_control_configuration(tmp_path, key, value):
 def test_command_response_validation():
     good = dict(request_id='4c829302-34cd-48e6-91d1-267230398eb7', command='pause', ttl_ms=4800)
     assert command_from(json.dumps(good))['command'] == 'pause'
+    assert command_from(json.dumps(good | {'command': 'follow_enroll'}))['command'] == 'follow_enroll'
     for bad in ({**good, 'command': 'restart'}, {**good, 'ttl_ms': -1}, {**good, 'request_id': 'x'},
                 {**good, 'extra': 1}, {**good, 'ttl_ms': True}):
         with pytest.raises((ValueError, TypeError)):
@@ -148,6 +177,8 @@ def config(server, wait=0.3):
                 send_interval_s=0.1,
                 control=dict(patrol_state_topic='/patrol/state', pose_topic='/amcl_pose',
                              pause_service='/patrol/pause', resume_service='/patrol/resume',
+                             follow_state_topic='/follow/state', follow_start_service='/follow/start',
+                             follow_stop_service='/follow/stop', follow_enroll_service='/follow/enroll',
                              command_wait_s=wait, service_timeout_s=0.2))
 
 
@@ -192,6 +223,23 @@ def test_command_outcomes_reported_once(server, mode, outcome, message):
     assert (result['service_latency_ms'] is not None) == (mode in ('accept', 'reject'))
     assert controller.calls == ['pause']          # 서비스는 한 번만
     assert len(server.delivered) == 1             # 서버도 한 번만 내줌
+
+
+@pytest.mark.parametrize('mode,outcome,message', [
+    ('accept', 'accepted', 'follow_start accepted'),
+    ('missing', 'service_unavailable', 'follow service not available'),
+])
+def test_follow_command_reports_follow_count(server, mode, outcome, message):
+    """따라가기 명령은 follow_update_count_at_call로 판정한다 (patrol 횟수와 별개)"""
+    state = State()
+    state.receive_patrol('paused', 0, 10, 'A', True, 'paused by request')
+    for _ in range(2):
+        state.receive_follow('idle', False, True, True, -1, 0.0, 'idle', 3.0, 0.0)
+    controller = Controller(mode)
+    result, _ = run_command(server, controller, command='follow_start', state=state)
+    assert result['outcome'] == outcome and result['message'] == message
+    assert result['follow_update_count_at_call'] == 2 and result['patrol_update_count_at_call'] == 1
+    assert controller.calls == ['follow_start']
 
 
 def test_expired_command_is_not_called(server):

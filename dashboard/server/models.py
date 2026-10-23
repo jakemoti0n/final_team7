@@ -123,6 +123,38 @@ class Pose(StrictModel):
         return self
 
 
+FollowStateName = Literal["idle", "following", "holding", "stopped"]
+
+
+class Follow(StrictModel):
+    """v2 선택 필드: 따라가기 상태(/follow/state, PROJECT.md 2-9 3단계). 규칙은 Patrol과 같다"""
+    state: FollowStateName | None
+    active: bool | None
+    enrolled: bool | None
+    visible: bool | None
+    target_id: int | None
+    distance_m: Nonnegative | None
+    reason: ShortText | None
+    elapsed_s: Nonnegative | None
+    lost_s: Nonnegative | None
+    update_count: Count
+    last_received_at: UTC | None
+    age_ms: Nonnegative | None
+
+    @model_validator(mode="after")
+    def coherent(self):
+        content = (self.state, self.active, self.enrolled, self.visible, self.target_id, self.distance_m,
+                   self.reason, self.elapsed_s, self.lost_s)
+        if self.update_count == 0:
+            if any(x is not None for x in (*content, self.last_received_at, self.age_ms)):
+                raise ValueError("unreceived follow must be null")
+        elif self.last_received_at is None or self.age_ms is None:
+            raise ValueError("received follow needs timestamps")
+        elif any(x is None for x in content) and not all(x is None for x in content):
+            raise ValueError("follow content must be entirely populated or entirely null")
+        return self
+
+
 class Telemetry(StrictModel):
     schema_version: Annotated[int, Field(ge=1, le=2)]
     robot_id: Annotated[str, Field(min_length=1)]
@@ -134,14 +166,15 @@ class Telemetry(StrictModel):
     motion: Motion
     patrol: Patrol | None = None   # v2에만 있음
     pose: Pose | None = None       # v2에만 있음
+    follow: Follow | None = None   # v2 선택 필드 (따라가기 3단계). 없으면 "따라가기 상태 없음"
 
     @model_validator(mode="after")
     def coherent(self):
         v2 = {"patrol", "pose"} & self.model_fields_set
         if self.schema_version == 2 and (len(v2) != 2 or self.patrol is None or self.pose is None):
             raise ValueError("v2 requires patrol and pose")
-        if self.schema_version == 1 and v2:
-            raise ValueError("v1 must not include patrol or pose")
+        if self.schema_version == 1 and (v2 or "follow" in self.model_fields_set):
+            raise ValueError("v1 must not include patrol, pose or follow")
         if self.motion.age_ms is not None:
             odom = self.topics.odom
             if odom.received_count == 0:
@@ -152,7 +185,7 @@ class Telemetry(StrictModel):
         return self
 
 
-CommandName = Literal["pause", "resume"]
+CommandName = Literal["pause", "resume", "follow_start", "follow_stop", "follow_enroll"]
 
 
 class CommandRequest(StrictModel):
@@ -175,6 +208,7 @@ class CommandResult(StrictModel):
     message: ShortText
     service_latency_ms: Nonnegative | None
     patrol_update_count_at_call: Count
+    follow_update_count_at_call: Count
 
     @model_validator(mode="after")
     def coherent(self):

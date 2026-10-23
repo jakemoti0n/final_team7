@@ -40,7 +40,8 @@ def load_config(path):
         if type(topic['depth']) is not int or not 1 <= topic['depth'] <= 100:
             raise ValueError('depth must be an integer in 1..100')
     control = config['control']
-    names = ('patrol_state_topic', 'pose_topic', 'pause_service', 'resume_service')
+    names = ('patrol_state_topic', 'pose_topic', 'pause_service', 'resume_service',
+             'follow_state_topic', 'follow_start_service', 'follow_stop_service', 'follow_enroll_service')
     frames = ('map_frame', 'base_frame')
     if not isinstance(control, dict) or set(control) != {*names, *frames, 'command_wait_s', 'service_timeout_s'}:
         raise ValueError('invalid control configuration fields')

@@ -106,7 +106,7 @@ def create_app(settings=None, store=None):
         try:
             command = CommandRequest.model_validate(raw)
         except (ValidationError, ValueError):
-            return error(422, "invalid_command", "command must be pause or resume")
+            return error(422, "invalid_command", "command must be pause, resume, follow_start, follow_stop or follow_enroll")
         status, body = store.issue(command.command)
         if status != 202:
             return error(status, *body)

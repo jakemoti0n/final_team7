@@ -13,6 +13,7 @@ import uuid
 
 KEYS = {'odom', 'lidar_raw', 'lidar_filtered', 'camera_raw'}
 PATROL_STATES = {'waiting_localization', 'patrolling', 'pausing', 'paused', 'completed', 'failed'}
+FOLLOW_STATES = {'idle', 'following', 'holding', 'stopped'}
 OUTCOMES = {'accepted', 'rejected', 'no_response', 'service_unavailable', 'expired'}
 
 
@@ -47,7 +48,10 @@ def validate(payload):
     if version not in (1, 2):
         raise ValueError('unsupported schema_version')
     base = 'schema_version robot_id bridge_session_id sequence sent_at source_clock topics motion'
-    fields(payload, base + (' patrol pose' if version == 2 else ''))
+    if version == 2 and 'follow' in payload:          # v2 선택 필드 (따라가기 3단계)
+        fields(payload, base + ' patrol pose follow')
+    else:
+        fields(payload, base + (' patrol pose' if version == 2 else ''))
     if not isinstance(payload['robot_id'], str) or not payload['robot_id']:
         raise ValueError('invalid robot_id')
     if not isinstance(payload['bridge_session_id'], str):
@@ -78,6 +82,8 @@ def validate(payload):
     if version == 2:
         validate_patrol(payload['patrol'])
         validate_pose(payload['pose'])
+        if 'follow' in payload:
+            validate_follow(payload['follow'])
     motion = payload['motion']
     fields(motion, 'linear_speed_mps angular_velocity_radps last_received_at age_ms')
     if all(v is None for v in motion.values()):
@@ -116,6 +122,31 @@ def validate_patrol(patrol):
             raise ValueError('invalid ' + key)
 
 
+def validate_follow(follow):
+    fields(follow, 'state active enrolled visible target_id distance_m reason elapsed_s lost_s '
+                   'update_count last_received_at age_ms')
+    number(follow['update_count'], 0, True)
+    content = ('state', 'active', 'enrolled', 'visible', 'target_id', 'distance_m', 'reason', 'elapsed_s', 'lost_s')
+    if follow['update_count'] == 0:
+        if any(follow[k] is not None for k in (*content, 'last_received_at', 'age_ms')):
+            raise ValueError('unreceived follow must be null')
+        return
+    timestamp(follow['last_received_at'])
+    number(follow['age_ms'], 0)
+    if all(follow[k] is None for k in content):
+        return  # 받았지만 알 수 없는 상태
+    if follow['state'] not in FOLLOW_STATES:
+        raise ValueError('invalid follow state')
+    for key in ('active', 'enrolled', 'visible'):
+        if type(follow[key]) is not bool:
+            raise ValueError('invalid ' + key)
+    number(follow['target_id'], None, True)
+    for key in ('distance_m', 'elapsed_s', 'lost_s'):
+        number(follow[key], 0)
+    if not isinstance(follow['reason'], str) or len(follow['reason']) > 200:
+        raise ValueError('invalid reason')
+
+
 def validate_pose(pose):
     fields(pose, 'frame_id x y yaw position_std_m last_received_at age_ms')
     if all(v is None for v in pose.values()):
@@ -133,12 +164,13 @@ def validate_pose(pose):
 
 def validate_result(result, request_id):
     fields(result, 'robot_id bridge_session_id request_id outcome message service_latency_ms '
-                   'patrol_update_count_at_call')
+                   'patrol_update_count_at_call follow_update_count_at_call')
     if result['request_id'] != request_id or result['outcome'] not in OUTCOMES:
         raise ValueError('invalid result')
     if not isinstance(result['message'], str) or len(result['message']) > 200:
         raise ValueError('invalid message')
     number(result['patrol_update_count_at_call'], 0, True)
+    number(result['follow_update_count_at_call'], 0, True)
     if result['outcome'] in ('accepted', 'rejected'):
         number(result['service_latency_ms'], 0)
     elif result['service_latency_ms'] is not None:

@@ -28,6 +28,13 @@ class Robot:
                            has_resumable_task=True, reason='navigating', update_count=3,
                            last_received_at='2026-10-13T00:00:00.000Z', age_ms=100.)
         self.speed = 0.3
+        self.follow = None   # 따라가기 블록(v2 선택). send_follow()로 채운다
+
+    def send_follow(self, **follow):
+        base = dict(state='idle', active=False, enrolled=False, visible=False, target_id=-1, distance_m=0.0, reason='idle',
+                    elapsed_s=1.0, lost_s=0.0, update_count=1, last_received_at='2026-10-13T00:00:00.000Z', age_ms=100.)
+        self.follow = (self.follow or base) | follow
+        return self.send()
 
     def send(self, **patrol):
         self.sequence += 1
@@ -36,6 +43,8 @@ class Robot:
         payload.update(schema_version=2, patrol=dict(self.patrol),
                        pose=dict(frame_id='map', x=1.0, y=2.0, yaw=0.5, position_std_m=0.05,
                                  last_received_at='2026-10-13T00:00:00.000Z', age_ms=50.))
+        if self.follow is not None:
+            payload['follow'] = dict(self.follow)
         return self.client.post('/api/v1/telemetry', json=payload)
 
 
@@ -47,11 +56,11 @@ def rig():
         yield clock, store, client, Robot(client)
 
 
-def result(request_id, outcome='accepted', message='pause accepted', count=3, session=SESSION):
+def result(request_id, outcome='accepted', message='pause accepted', count=3, session=SESSION, follow_count=0):
     answered = outcome in ('accepted', 'rejected')
     return dict(robot_id='LIMBO-01', bridge_session_id=session, request_id=request_id, outcome=outcome,
                 message=message, service_latency_ms=12.0 if answered else None,
-                patrol_update_count_at_call=count)
+                patrol_update_count_at_call=count, follow_update_count_at_call=follow_count)
 
 
 def deliver(client, command='pause'):
@@ -102,6 +111,8 @@ def test_issue_requires_connection_and_one_at_a_time(rig):
     assert client.post('/api/v1/commands', json={'command': 'pause'}).json()['error']['code'] == 'bridge_not_connected'
     robot.send()
     assert client.post('/api/v1/commands', json={'command': 'restart'}).status_code == 422
+    assert client.post('/api/v1/commands', json={'command': 'follow_start'}).status_code == 202
+    store.command = None
     assert client.post('/api/v1/commands', json={'command': 'pause', 'x': 1}).status_code == 422
     first = client.post('/api/v1/commands', json={'command': 'pause'})
     assert first.status_code == 202 and first.json()['stage'] == 'queued'
@@ -273,6 +284,98 @@ def test_result_validation(rig):
     assert client.post(url, json=good | {'robot_id': 'X'}).status_code == 409
     assert client.post(url, json=good | {'bridge_session_id': str(uuid.uuid4())}).json()['reason'] == 'command_closed'
     assert client.post(url, content=b'{}', headers={'content-type': 'text/plain'}).status_code == 415
+
+
+# ---- 따라가기 명령·상태 (PROJECT.md 2-9 3단계) ----
+
+def test_follow_block_is_optional_in_v2_and_rejected_in_v1(rig):
+    clock, store, client, robot = rig
+    robot.send()
+    assert store.snapshot()['follow'] is None                         # follow 없는 v2 Bridge도 받는다
+    assert robot.send_follow(state='following', active=True, enrolled=True, visible=True, target_id=7, distance_m=1.8,
+                             reason='moving').status_code == 200
+    clock.now = 1
+    follow = store.snapshot()['follow']
+    assert follow['state'] == 'following' and follow['target_id'] == 7 and follow['age_s'] == pytest.approx(1.1)
+    v1 = sample(SESSION, 99) | {'follow': robot.follow}
+    assert client.post('/api/v1/telemetry', json=v1).status_code == 422
+    bad = robot.follow | {'state': None}                               # 내용 일부만 null
+    robot.follow = bad
+    assert robot.send().status_code == 422
+    robot.follow = dict.fromkeys(robot.follow) | {'update_count': 0}  # 미수신: 전부 null
+    assert robot.send().status_code == 200
+
+
+def test_follow_start_confirmed_by_follow_count_and_state(rig):
+    clock, store, client, robot = rig
+    robot.send_follow(enrolled=True, visible=True, update_count=5)
+    command = deliver(client, 'follow_start')
+    client.post(f"/api/v1/commands/{command['request_id']}/result",
+                json=result(command['request_id'], message='following person 7 at 1.80 m', follow_count=5))
+    assert stage(store) == 'accepted'
+    robot.send_follow(state='following', active=True, target_id=7, reason='started', update_count=5)   # 명령 이전 횟수
+    assert stage(store) == 'accepted'
+    robot.send(update_count=9)                                         # 순찰 횟수가 늘어도 상관없음
+    assert stage(store) == 'accepted'
+    robot.send_follow(update_count=6)                                  # 새 상태 following → 속도와 무관하게 확인
+    state = store.snapshot()
+    assert state['command']['stage'] == 'confirmed'
+    assert state['alerts'][0]['message'] == '따라가기 시작 상태 확인됨'
+
+
+def test_follow_stop_needs_end_state_and_standstill(rig):
+    clock, store, client, robot = rig
+    robot.send_follow(state='following', active=True, enrolled=True, visible=True, target_id=7, reason='moving', update_count=5)
+    command = deliver(client, 'follow_stop')
+    client.post(f"/api/v1/commands/{command['request_id']}/result", json=result(command['request_id'], message='stopped', follow_count=5))
+    robot.send_follow(state='stopped', active=False, reason='stop_requested', update_count=6)   # 아직 움직임
+    assert stage(store) == 'accepted'
+    robot.speed = 0.0
+    robot.send_follow(update_count=6)
+    assert stage(store) == 'confirmed'
+    assert not [a for a in alerts(store) if a['key'] == 'follow:stopped']   # 명령으로 끝난 건 따라가기 알림 아님
+
+
+def test_follow_enroll_confirmed_when_enrolled(rig):
+    clock, store, client, robot = rig
+    robot.send_follow(update_count=5)
+    command = deliver(client, 'follow_enroll')
+    client.post(f"/api/v1/commands/{command['request_id']}/result", json=result(command['request_id'], message='enrolled', follow_count=5))
+    robot.send_follow(enrolled=True, update_count=5)
+    assert stage(store) == 'accepted'
+    robot.send_follow(update_count=6)
+    assert stage(store) == 'confirmed' and alerts(store)[0]['message'] == '운용자 등록 상태 확인됨'
+
+
+def test_follow_rejection_and_missing_node_texts(rig):
+    clock, store, client, robot = rig
+    robot.send_follow()
+    command = deliver(client, 'follow_start')
+    client.post(f"/api/v1/commands/{command['request_id']}/result", json=result(command['request_id'], 'rejected', 'operator_not_enrolled'))
+    assert alerts(store)[0]['message'] == '따라가기 시작 요청 실패: operator_not_enrolled'
+    command = deliver(client, 'follow_enroll')
+    client.post(f"/api/v1/commands/{command['request_id']}/result", json=result(command['request_id'], 'service_unavailable', ''))
+    assert alerts(store)[0]['message'] == '운용자 등록 요청 실패: 카메라 노드가 응답할 수 없음'
+    command = deliver(client, 'pause')
+    client.post(f"/api/v1/commands/{command['request_id']}/result", json=result(command['request_id'], 'service_unavailable', ''))
+    assert alerts(store)[0]['message'] == '정지 요청 실패: 순찰 노드가 응답할 수 없음'
+
+
+def test_follow_ending_by_itself_raises_alert_and_restart_clears(rig):
+    clock, store, client, robot = rig
+    robot.send_follow(state='following', active=True, enrolled=True, visible=True, target_id=7, reason='moving')
+    robot.send_follow(state='holding', reason='target_lost', lost_s=3.0, update_count=2)
+    assert not [a for a in alerts(store) if a['key'] == 'follow:stopped']
+    robot.send_follow(state='stopped', active=False, reason='lost_timeout', lost_s=15.2, update_count=3)
+    robot.send_follow(update_count=4)                                   # 같은 상태 반복은 한 번만
+    stopped = [a for a in alerts(store) if a['key'] == 'follow:stopped']
+    assert len(stopped) == 1 and stopped[0]['severity'] == 'warning' and stopped[0]['active'] and '찾지 못함' in stopped[0]['message']
+    robot.send_follow(state='stopped', reason='nav_aborted', update_count=5)
+    assert '주행 실패 (aborted)' in alerts(store)[0]['message'] if alerts(store)[0]['key'] == 'follow:stopped' else True
+    robot.send_follow(state='following', active=True, reason='started', update_count=6)
+    first = alerts(store)[0]
+    assert first['key'] == 'follow:stopped' and first['kind'] == 'recovery'
+    assert not any(a['active'] for a in alerts(store) if a['key'] == 'follow:stopped')
 
 
 # ---- 지도 ----

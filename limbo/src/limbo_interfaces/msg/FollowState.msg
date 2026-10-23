@@ -28,3 +28,9 @@ float32 elapsed_sec
 
 # 놓친 뒤 지난 시간 (s). HOLDING일 때
 float32 lost_sec
+
+# 관제용 (3단계). 운용자가 등록돼 있는지 (/follow/enroll, FollowTarget.enrolled와 같음) — 시작 버튼 잠금 기준
+bool enrolled
+
+# 운용자가 최근(target_stale_sec 안)에 카메라에 보였는지 — 시작이 operator_not_visible로 거절될지 미리 보여 주는 용도
+bool visible

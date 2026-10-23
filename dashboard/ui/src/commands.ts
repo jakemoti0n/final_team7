@@ -1,12 +1,18 @@
-export type Command = 'pause' | 'resume'
+export type Command = 'pause' | 'resume' | 'follow_start' | 'follow_stop' | 'follow_enroll'
+/** 순찰 명령(가상 데모가 흉내 내는 것). 따라가기 명령은 실제 화면에만 있다 (PROJECT.md 2-9 3단계) */
+export const patrolCommands = ['pause', 'resume'] as const
+export const followCommands = ['follow_enroll', 'follow_start', 'follow_stop'] as const
 export type Outcome = 'success' | 'reject' | 'no_response' | 'no_confirmation' | 'late'
 export type Stage = 'waiting' | 'running' | 'done' | 'failed' | 'unknown'
 export type Result = 'pending' | 'success' | 'failed' | 'unknown'
 export interface RequestResult { id: string; command: Command; at: string; age_s?: number | null; stages: [Stage, Stage, Stage]; result: Result; detail: string }
-export const commandNames: Record<Command, string> = { pause: '일시정지', resume: '순찰 재개' }
+export const commandNames: Record<Command, string> = { pause: '일시정지', resume: '순찰 재개', follow_start: '따라가기 시작', follow_stop: '따라가기 정지', follow_enroll: '운용자 등록' }
 export const resultLabels: Record<Command, Record<Result, string>> = {
   pause: { pending: '정지 요청 중', success: '정지 상태 확인됨', failed: '정지 요청 실패', unknown: '정지 여부 확인 불가' },
   resume: { pending: '재개 요청 중', success: '재개 확인됨', failed: '재개 실패', unknown: '재개 여부 확인 불가' },
+  follow_start: { pending: '따라가기 시작 요청 중', success: '따라가기 시작 확인됨', failed: '따라가기 시작 실패', unknown: '따라가기 시작 여부 확인 불가' },
+  follow_stop: { pending: '따라가기 정지 요청 중', success: '따라가기 정지 확인됨', failed: '따라가기 정지 실패', unknown: '따라가기 정지 여부 확인 불가' },
+  follow_enroll: { pending: '운용자 등록 요청 중', success: '운용자 등록 확인됨', failed: '운용자 등록 실패', unknown: '운용자 등록 여부 확인 불가' },
 }
 
 /** Only correlated explicit mock events can finish a request. Telemetry never enters this machine. */

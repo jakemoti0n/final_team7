@@ -9,7 +9,7 @@ from rclpy.parameter import Parameter
 from rclpy.time import Time
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 from geometry_msgs.msg import PoseWithCovarianceStamped
-from limbo_interfaces.msg import PatrolState
+from limbo_interfaces.msg import FollowState, PatrolState
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, PointCloud2
 from std_srvs.srv import Trigger
@@ -67,19 +67,37 @@ class BridgeNode(Node):
         self.pose_timer = self.create_timer(POSE_PERIOD_S, self._read_pose)
         self.patrol_topic = control['patrol_state_topic']
         self.patrol_timer = self.create_timer(POSE_PERIOD_S, self._check_patrol_publisher)
-        self.patrol_clients = {'pause': self.create_client(Trigger, control['pause_service']),
-                         'resume': self.create_client(Trigger, control['resume_service'])}
+        # 따라가기 상태(5 Hz, reliable·volatile)와 서비스 (PROJECT.md 2-9 3단계)
+        self.follow_topic = control['follow_state_topic']
+        self.topic_subscriptions.append(self.create_subscription(
+            FollowState, self.follow_topic, self._follow_callback,
+            QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                       durability=DurabilityPolicy.VOLATILE)))
+        self.follow_timer = self.create_timer(POSE_PERIOD_S, self._check_follow_publisher)
+        self.service_clients = {'pause': self.create_client(Trigger, control['pause_service']),
+                                'resume': self.create_client(Trigger, control['resume_service']),
+                                'follow_start': self.create_client(Trigger, control['follow_start_service']),
+                                'follow_stop': self.create_client(Trigger, control['follow_stop_service']),
+                                'follow_enroll': self.create_client(Trigger, control['follow_enroll_service'])}
         self.sender.start()
 
     def call(self, command):
         """명령 작업(HTTP 스레드)에서 부른다. 서비스가 없으면 기다리지 않고 None."""
-        client = self.patrol_clients[command]
+        client = self.service_clients[command]
         if not client.service_is_ready():
             return None
         return client.call_async(Trigger.Request())
 
     def _check_patrol_publisher(self):
         self.state.patrol_publisher(self.count_publishers(self.patrol_topic) > 0)
+
+    def _check_follow_publisher(self):
+        self.state.follow_publisher(self.count_publishers(self.follow_topic) > 0)
+
+    def _follow_callback(self, message):
+        self.state.receive_follow(message.state, message.active, message.enrolled, message.visible,
+                                  message.target_id, message.distance, message.reason,
+                                  message.elapsed_sec, message.lost_sec)
 
     def _patrol_callback(self, message):
         self.state.receive_patrol(message.state, message.waypoint_index, message.waypoint_count,

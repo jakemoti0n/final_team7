@@ -7,10 +7,10 @@ type Shape = { stages: [Stage, Stage, Stage]; result: Result; detail: (message: 
 export const stageShapes: Record<ServerStage, Shape> = {
   queued: { stages: ['running', 'waiting', 'waiting'], result: 'pending', detail: () => '서버가 요청을 받았습니다. 로봇이 가져가기를 기다립니다.' },
   delivered: { stages: ['done', 'running', 'waiting'], result: 'pending', detail: () => '로봇에 전달했습니다. 로봇 응답을 기다립니다.' },
-  accepted: { stages: ['done', 'done', 'running'], result: 'pending', detail: () => '로봇이 요청을 받아들였습니다. 이후 순찰 상태 보고를 기다립니다.' },
-  confirmed: { stages: ['done', 'done', 'done'], result: 'success', detail: () => '요청 이후 로봇이 보낸 순찰 상태로 확인했습니다.' },
+  accepted: { stages: ['done', 'done', 'running'], result: 'pending', detail: () => '로봇이 요청을 받아들였습니다. 이후 상태 보고를 기다립니다.' },
+  confirmed: { stages: ['done', 'done', 'done'], result: 'success', detail: () => '요청 이후 로봇이 보낸 상태로 확인했습니다.' },
   rejected: { stages: ['done', 'failed', 'unknown'], result: 'failed', detail: m => `로봇이 요청을 거절했습니다. 사유: ${m || '없음'}` },
-  service_unavailable: { stages: ['done', 'failed', 'unknown'], result: 'failed', detail: () => '순찰 프로그램이 꺼져 있어 요청을 실행하지 않았습니다.' },
+  service_unavailable: { stages: ['done', 'failed', 'unknown'], result: 'failed', detail: () => '로봇 쪽 프로그램이 꺼져 있어 요청을 실행하지 않았습니다.' },
   no_response: { stages: ['done', 'unknown', 'unknown'], result: 'unknown', detail: () => '제한 시간 안에 로봇 응답이 없습니다. 자동 재전송하지 않습니다.' },
   // Bridge가 실행 직전 서버에 확인(claim)하므로 expired는 "실행 안 함"이 확실하다 (CHANGELOG (28))
   expired: { stages: ['failed', 'unknown', 'unknown'], result: 'failed', detail: () => '로봇에 제때 전달되지 않아 실행하지 않았습니다. 필요하면 다시 눌러 주세요.' },
@@ -41,13 +41,52 @@ export function pauseReason(view: View, lock: string) {
   const state = view.snapshot?.patrol?.state
   return state === 'paused' || state === 'pausing' ? '이미 일시정지 상태입니다' : ''
 }
-/** 재개 허용은 순찰 노드의 has_resumable_task로만 판단한다 (속도로 추정하지 않음) */
+/** 재개 허용은 순찰 노드의 has_resumable_task로만 판단한다 (속도로 추정하지 않음). 따라가는 동안은 잠근다 (둘은 배타적) */
 export function resumeReason(view: View, lock: string) {
   if (lock) return lock
+  if (view.snapshot?.follow?.active) return '따라가기 중입니다. 먼저 따라가기를 정지하세요'
   const patrol = view.snapshot?.patrol
   if (!patrol?.state) return patrol?.update_count ? '순찰 프로그램 상태를 확인할 수 없습니다' : '순찰 상태를 확인할 수 없습니다'
   if (patrol.state === 'patrolling') return '이미 순찰 중입니다'
   return patrol.has_resumable_task ? '' : '재개할 작업이 없습니다'
+}
+
+// ---- 따라가기 (PROJECT.md 2-9 3단계). 잠금은 로봇이 알려 준 사실로만: 등록 여부·따라가는 중. 보이는지는 안내만 하고 잠그지 않는다
+// (1초 텔레메트리로는 깜빡이고, 안 보이면 따라가기 노드가 operator_not_visible로 거절해 화면에 사유가 뜬다)
+function followUnknown(view: View) {
+  const follow = view.snapshot?.follow
+  if (!follow) return '따라가기 상태를 확인할 수 없습니다'
+  if (!follow.state) return follow.update_count ? '따라가기 프로그램 상태를 확인할 수 없습니다' : '따라가기 상태를 확인할 수 없습니다'
+  return ''
+}
+export function followStartReason(view: View, lock: string) {
+  if (lock) return lock
+  const unknown = followUnknown(view)
+  if (unknown) return unknown
+  const follow = view.snapshot!.follow!
+  if (follow.active) return '이미 따라가는 중입니다'
+  return follow.enrolled ? '' : '운용자를 먼저 등록하세요'
+}
+export function followStopReason(view: View, lock: string) {
+  if (lock) return lock
+  const unknown = followUnknown(view)
+  if (unknown) return unknown
+  return view.snapshot!.follow!.active ? '' : '따라가는 중이 아닙니다'
+}
+export function enrollReason(view: View, lock: string) {
+  if (lock) return lock
+  const unknown = followUnknown(view)
+  if (unknown) return unknown
+  return view.snapshot!.follow!.active ? '따라가는 중에는 등록할 수 없습니다' : ''
+}
+export function reasonFor(command: Command, view: View, lock: string) {
+  switch (command) {
+    case 'pause': return pauseReason(view, lock)
+    case 'resume': return resumeReason(view, lock)
+    case 'follow_start': return followStartReason(view, lock)
+    case 'follow_stop': return followStopReason(view, lock)
+    case 'follow_enroll': return enrollReason(view, lock)
+  }
 }
 
 /** 보낸 직후 서버 스냅샷이 아직 안 바뀐 동안만 화면 자체 결과(전송 중·전송 실패)를 보여 준다 */
@@ -62,7 +101,7 @@ export class LiveControl {
   }
   async send(view: View, command: Command) {
     const lock = lockReason(view, this.current(view))
-    if (command === 'pause' ? pauseReason(view, lock) : resumeReason(view, lock)) return
+    if (reasonFor(command, view, lock)) return
     const base = view.snapshot?.command?.request_id ?? null
     this.local = { base, result: { id: '—', command, at: new Date().toISOString(), stages: ['running', 'waiting', 'waiting'], result: 'pending', detail: '서버에 요청을 보내고 있습니다.' } }
     this.changed()

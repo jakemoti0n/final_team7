@@ -1,9 +1,9 @@
 import { expect, it, vi } from 'vitest'
-import { LiveControl, fromServer, lockReason, pauseReason, resumeReason, stageShapes } from './control'
+import { LiveControl, enrollReason, followStartReason, followStopReason, fromServer, lockReason, pauseReason, reasonFor, resumeReason, stageShapes } from './control'
 import { headingDeg, isMapInfo, toPixel, uncertaintyPx } from './map'
 import { MockProvider } from './demo'
-import { overall, patrolLabel } from './App'
-import type { ServerCommand, ServerStage, Snapshot, View } from './types'
+import { followLabel, overall, patrolLabel } from './App'
+import type { FollowInfo, ServerCommand, ServerStage, Snapshot, View } from './types'
 
 function view(change: (s: Snapshot) => void = () => {}, serverProblem = false): View {
   const mock = new MockProvider(); mock.start(); const snapshot = structuredClone(mock.current.snapshot!); mock.dispose()
@@ -90,4 +90,46 @@ it('patrol card: retrying and stopped after navigation failure are shown apart f
   expect(patrolLabel('paused', 'navigation failed')).toMatchObject({ label: '이동 실패 · 확인 후 재개', tone: 'warn' })
   expect(patrolLabel('paused', 'paused by request')).toMatchObject({ label: '일시정지', note: '' })
   expect(patrolLabel('patrolling', 'lap 2 started')).toMatchObject({ label: '순찰 중', tone: 'good' })
+})
+
+// ---- 따라가기 (PROJECT.md 2-9 3단계) ----
+const followInfo = (change: Partial<FollowInfo> = {}): FollowInfo => ({ state: 'idle', active: false, enrolled: true, visible: true, target_id: -1, distance_m: 0, reason: 'idle', elapsed_s: 2, lost_s: 0, update_count: 4, last_received_at: '2026-10-22T00:00:00.000Z', age_s: 0, ...change })
+it('follow start needs enrollment and not already following; stop needs following; enroll is blocked while following', () => {
+  expect(followStartReason(view(s => { s.follow = followInfo() }), '')).toBe('')
+  expect(followStartReason(view(s => { s.follow = followInfo({ enrolled: false }) }), '')).toBe('운용자를 먼저 등록하세요')
+  expect(followStartReason(view(s => { s.follow = followInfo({ visible: false }) }), '')).toBe('')           // 보이는지는 잠그지 않음 (노드가 거절)
+  expect(followStartReason(view(s => { s.follow = followInfo({ state: 'following', active: true }) }), '')).toBe('이미 따라가는 중입니다')
+  expect(followStartReason(view(s => { s.follow = null }), '')).toBe('따라가기 상태를 확인할 수 없습니다')
+  expect(followStartReason(view(s => { s.follow = { ...followInfo(), state: null, active: null, enrolled: null, update_count: 3 } }), '')).toBe('따라가기 프로그램 상태를 확인할 수 없습니다')
+  expect(followStartReason(view(s => { s.follow = followInfo() }), '잠김')).toBe('잠김')
+  expect(followStopReason(view(s => { s.follow = followInfo({ state: 'holding', active: true }) }), '')).toBe('')
+  expect(followStopReason(view(s => { s.follow = followInfo() }), '')).toBe('따라가는 중이 아닙니다')
+  expect(enrollReason(view(s => { s.follow = followInfo({ enrolled: false }) }), '')).toBe('')
+  expect(enrollReason(view(s => { s.follow = followInfo({ state: 'following', active: true }) }), '')).toBe('따라가는 중에는 등록할 수 없습니다')
+  expect(reasonFor('follow_stop', view(s => { s.follow = followInfo({ state: 'following', active: true }) }), '')).toBe('')
+})
+it('patrol resume is locked while following; pause is not', () => {
+  const following = view(s => { s.follow = followInfo({ state: 'following', active: true }); s.patrol!.state = 'paused' })
+  expect(resumeReason(following, '')).toBe('따라가기 중입니다. 먼저 따라가기를 정지하세요')
+  expect(resumeReason(view(s => { s.follow = followInfo() }), '')).toBe('')
+  expect(pauseReason(view(s => { s.follow = followInfo({ state: 'following', active: true }); s.patrol!.state = 'patrolling' }), '')).toBe('')
+})
+it('follow labels: standing near the operator is still following; lost shows seconds; ended shows why', () => {
+  expect(followLabel(followInfo({ state: 'following', active: true, reason: 'moving' }))).toMatchObject({ label: '따라가는 중', tone: 'good' })
+  expect(followLabel(followInfo({ state: 'following', active: true, reason: 'near_hold' })).label).toContain('정지')
+  expect(followLabel(followInfo({ state: 'holding', active: true, reason: 'target_lost', lost_s: 6.8 }))).toMatchObject({ label: '운용자 찾는 중 · 6초', tone: 'warn' })
+  expect(followLabel(followInfo({ state: 'stopped', reason: 'lost_timeout' }))).toMatchObject({ label: '끝남 · 운용자 놓침', tone: 'warn' })
+  expect(followLabel(followInfo({ state: 'stopped', reason: 'stop_requested' }))).toMatchObject({ label: '끝남 · 정지 명령', tone: 'neutral' })
+  expect(followLabel(followInfo({ state: 'stopped', reason: 'nav_aborted' })).label).toBe('끝남 · 주행 실패 (aborted)')
+  expect(followLabel(followInfo()).label).toBe('대기 중')
+})
+it('live control sends follow commands through the same endpoint and rejects locked ones locally', async () => {
+  const calls: string[] = []
+  const post = vi.fn(async (_url: string, init?: RequestInit) => { calls.push(JSON.parse(init!.body as string).command); return new Response(JSON.stringify({ request_id: 'r9', command: 'follow_start', issued_at: '2026-10-22T00:00:00.000Z', stage: 'queued' }), { status: 202 }) })
+  const live = new LiveControl(() => {}, post as unknown as typeof fetch)
+  await live.send(view(s => { s.follow = followInfo({ enrolled: false }) }), 'follow_start')
+  expect(calls).toEqual([])                                                   // 미등록: 보내지 않음
+  await live.send(view(s => { s.follow = followInfo() }), 'follow_start')
+  expect(calls).toEqual(['follow_start'])
+  expect(live.current(view(s => { s.follow = followInfo() }))?.command).toBe('follow_start')
 })

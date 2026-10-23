@@ -2,7 +2,7 @@
 
 FastAPI 수신 서버와 React/TypeScript 운영 UI. 구현 기준은 [Dashboard PRD](docs/PRD.md), 수신 계약의 단일 기준은 [Bridge PRD §3](../relay_prog/docs/PRD.md)다. 기존 `limbo/`, `relay_prog/` 프로그램을 수정하지 않는다.
 
-- `/`: 실제 수신 화면. 세 제어 버튼은 항상 비활성화되며 실제 제어 API는 없다.
+- `/`: 실제 수신 화면. 순찰 일시정지·재개와 따라가기 운용자 등록·시작·정지 버튼이 서버 `/api/v1/commands`로 실제 명령을 보낸다 (계약 `docs/CONTROL_API_DRAFT.md`, 화면 설계 `docs/CONTROL_SCREEN.md`). 프로그램 재시작 버튼은 없다.
 - `/demo`: 독립 Mock 공급자. 실제 서버 API/WebSocket에 접속하지 않는다. 가상 데이터·알림·명령 결과는 이 페이지의 메모리에만 존재한다.
 - 서버는 ROS2 설치 없이 실행된다. 한 로봇, 단일 프로세스, 메모리 최신 상태 및 최근 알림 100건을 지원한다. 서버 재시작 시 초기화되며 브라우저 새로고침은 서버 이력을 지우지 않는다.
 
