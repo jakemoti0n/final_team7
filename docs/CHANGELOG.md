@@ -8,6 +8,36 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-23 (45) OAK-D Lite 점검 도구 + 하반신 모델(leg_640)을 카메라 안에서 돌리는 blob — `tools/oak/`, Jetson 검증 전
+
+(번호 43·44는 ktj에 있음: split-sim 대역폭·컴포지션, 벽 오인식 수정. 이 항목은 그 뒤 번호)
+
+**할 일**(OAK-D Lite를 맡은 사람)
+- venv 만들기: `python3 -m venv ~/limbo/venvs/limbo_oak && ~/limbo/venvs/limbo_oak/bin/pip install -r tools/oak/requirements.txt`
+- 처음 한 번 udev 규칙(sudo, `tools/oak/check_camera.py` 맨 위 설명). 넣은 뒤 카메라를 뽑았다 다시 꽂는다
+- `~/limbo/venvs/limbo_oak/bin/python tools/oak/check_camera.py` → 이름 OAK-D-LITE, rgb·depth 19.5 Hz 안팎이면 정상
+- `~/limbo/venvs/limbo_oak/bin/python tools/oak/run_leg_model.py` → 사람이 1.5~3 m 앞에 서면 person·leg 검출이 찍힘. 끝나면 `oak_last.png`에 박스 그림
+- **USB 케이블이 2.0이면 기본값(`--usb high`) 그대로. 3.0 케이블이면 `--usb super`.** 2.0 케이블에 super를 주면 장치가 8초 뒤 워치독 크래시로 꺼진다(아래 배경)
+- Jetson에서 돌린 결과(세 줄의 Hz·지연·온도)를 보고하면 다음 기록에 적는다. 문서에 적힌 구성(16:9·3 shave·USB 속도)은 바꾸지 않는다
+
+**변경**
+- `tools/oak/oak_common.py`: 실물 배치와 같은 파이프라인(컬러 640x352 16:9, 깊이 640x360 컬러 정렬, NN), 모델 출력 풀기(decode, NMS), 공통 인자
+- `tools/oak/check_camera.py`: 연결·USB 속도·센서·프레임률·깊이 확인. `tools/oak/run_leg_model.py`: blob을 카메라에 올려 검출·프레임률·지연 측정
+- `tools/oak/export_blob.py`: .pt → ONNX(640x352) → blob 변환 절차. 모델을 다시 학습했을 때만
+- `tools/oak/models/leg_640_352_3shave.blob`: leg_640.pt를 변환한 것(FP16, 3 shave, BGR→RGB·/255 정규화 내장). `tools/oak/requirements.txt`: depthai<3 등
+- 저장소의 ROS 노드는 아직 안 건드림. person_detector에 OAK 입력 모드를 넣는 설계는 ktj에서 승인 뒤 진행
+
+**배경**
+- 실물 카메라는 OAK-D Lite(IMX214 컬러 + OV7251 모노 640x480 ×2, 플래시 없음). IMU는 Mid-360 내장을 쓴다. 플래시가 없어 모델은 호스트(Jetson)가 켤 때마다 올리고, 추론은 카메라 칩(MyriadX)에서 한다. Jetson은 YOLO를 돌리지 않는다
+- 16:9(640x352)로 정한 이유: 카메라 높이 0.6 m 수평에서 1.5 m 앞 사람은 바닥~1.17 m까지 보여 하반신(발~골반)이 다 들어온다. 4:3(13 MP 모드)이 더 보는 건 배·가슴과 1.2 m 안 바닥뿐인데, 깊이 유효 비율은 4:3이 띠별 43~73 %로 16:9(52~80 %)보다 비고 지연도 20 ms 길다. 시뮬 카메라(320x240 4:3)는 아직 그대로라 뒤에 맞춘다
+- USB 2.0 링크에서 depthai 기본값(super)으로 열면 펌웨어는 부팅되지만 호스트 RPC 스트림이 안 열려 8초 뒤 워치독이 재부팅한다(`Device already closed or disconnected`). `dai.Device(pipeline, dai.UsbSpeed.HIGH)`로 링크를 2.0에 고정하면 붙는다. 노트북 USB 3 포트에 꽂아도 2.0으로 잡힌 것은 케이블이 2.0용이기 때문
+- shave: 스테레오를 같이 돌리면 NN에 shave 7개만 남아 6 shave 블롭은 9.8 Hz·지연 600 ms로 막혔다. 3 shave × 2 thread가 14.8 Hz·231 ms, 7 shave × 1 thread 10.4 Hz
+
+**확인**(이 노트북, USB 2.0)
+- blob과 PC ONNX 대조: 시뮬 녹화 56장에서 박스 92개 중 90개 일치(IoU 0.5, 같은 클래스), 점수 차 평균 −0.013·최대 0.065
+- check_camera: rgb·depth 19.5 Hz, 깊이 지연 79 ms, 유효 0.99, 온도 37°C. run_leg_model: NN 14.5 Hz·233 ms(깊이 포함), 17.2 Hz·200 ms(--no-depth)
+- Jetson(arm64)에서는 아직 안 돌려 봄. depthai는 aarch64 휠이 있어 같은 requirements로 깔린다
+
 ## 2026-10-22 (42) 시뮬을 두 대로 나눠 돌리는 `role` 런치 인자 + 안내 스킬 `split-sim` — Jetson 부하 시험용, Jetson 검증 전
 
 **할 일**

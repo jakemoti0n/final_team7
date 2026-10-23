@@ -1,0 +1,6 @@
+# OAK-D Lite 점검·모델 실행용 Python 환경. 설치: python3 -m venv ~/limbo/venvs/limbo_oak && ~/limbo/venvs/limbo_oak/bin/pip install -r tools/oak/requirements.txt
+# depthai 3.x는 API가 달라 2.x로 고정한다. blobconverter는 export_blob.py의 blob 단계에만 필요.
+depthai<3
+opencv-python
+numpy
+blobconverter
