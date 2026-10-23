@@ -18,7 +18,10 @@ Jetson은 실물에서 **로봇 스택만** 돌리는 컴퓨터다. 그래서 Ga
 | `robot` | EKF, wheel_slip_monitor, AMCL(map_server), Nav2, person_detector(YOLO), tof_node, person_wait | Jetson |
 | `all` (기본) | 전부 | 한 대 (지금까지와 같음) |
 
-네트워크로 오가는 것: PC→Jetson /clock, /scan, /odom, /imu, /joint_states, TF, 카메라 컬러·깊이(약 50 Mbit/s), /tof/points. Jetson→PC /cmd_vel.
+네트워크로 오가는 것: PC→Jetson /clock, /scan, /odom, /imu, /joint_states, TF, 카메라 컬러·깊이(약 65 Mbit/s), /tof/points,
+그리고 Nav2 코스트맵·collision_monitor가 받는 /rgbd_camera/points(약 213 Mbit/s)·/mid360/points_filtered(약 50 Mbit/s). Jetson→PC /cmd_vel.
+role:=robot에서는 Nav2를 한 프로세스(nav2_container)로 모아 포인트클라우드를 한 벌만 받는다. 합계 약 350 Mbit/s, 모으지 않으면 약 910 Mbit/s
+(2026-10-22, PC 한 대에서 robot 쪽을 UDP로만 붙여 루프백으로 잼). **유선(1 GbE)이 사실상 필수**이고 Wi-Fi로는 못 따라온다.
 
 ## 이 스킬을 따르는 에이전트에게
 

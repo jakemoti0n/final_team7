@@ -311,7 +311,21 @@ def generate_launch_description():
         params_file = nav2_params_file
         if LaunchConfiguration('robot').perform(context) == 'legacy':
             params_file = write_legacy_nav2_params()
-        return [IncludeLaunchDescription(
+        # role:=robot(두 대로 나눌 때)만 Nav2를 한 프로세스(컨테이너)에 모은다. 코스트맵 두 개와 collision_monitor가
+        # 포인트클라우드를 프로세스마다 따로 받으면 PC→Jetson이 약 910 Mbit/s, 한 프로세스면 한 벌만 와서 약 350 Mbit/s (2026-10-22 실측)
+        composed = LaunchConfiguration('role').perform(context) == 'robot'
+        container = []
+        if composed:
+            container = [Node(
+                package='rclcpp_components',
+                executable='component_container_isolated',
+                name='nav2_container',
+                output='screen',
+                # params 파일을 컨테이너에도 준다. 안 주면 local_costmap 같은 하위 노드가 설정을 못 받아 기본 레이어로 뜨고 죽는다
+                parameters=[params_file, {'use_sim_time': True}],
+                remappings=[('/tf', 'tf'), ('/tf_static', 'tf_static')],
+            )]
+        return container + [IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(
                     nav2_bringup_dir,
@@ -323,6 +337,8 @@ def generate_launch_description():
                 'use_sim_time': 'true',
                 'autostart': 'true',
                 'params_file': params_file,
+                'use_composition': 'True' if composed else 'False',
+                'container_name': 'nav2_container',
             }.items()
         )]
 
