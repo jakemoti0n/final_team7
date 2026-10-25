@@ -174,10 +174,6 @@ ps -eo pid,args | grep -E 'ekf_node|parameter_bridge|gz sim|nav2|person_detector
 3. **person_detector의 "extrapolation into the future … 10~20 ms" 경고가 10초에 한두 건**: 한 대에서 돌릴 때도 나는 정상 범위다. 매 프레임 나면 2번.
 4. **Jetson에서 `package 'limbo_simulation' not found`**: 런치 파일이 시뮬 패키지 경로를 읽는다. 빌드에 포함돼야 한다(`build_limbo`가 전체를 빌드하면 들어 있다).
 5. **Nav2가 configure에서 멈춘다(lifecycle timeout)**: 시작 부하 문제로 한 대에서도 가끔 난다. Ctrl+C 뒤 5절대로 정리하고 한 번 다시 띄운다. 두 번째도 실패하면 [PM 확인 필요].
-   - Jetson에서 `Activating collision_monitor` 뒤 `unable to be reached after 4.00s by bond` → `Aborting bringup`이 두 번 연달아 났다(2026-10-24).
-     그래서 role:=robot에서만 Nav2 lifecycle manager의 bond_timeout을 10초로 늘려 두었다(PM 부재 중 작업자 판단, PM 확인 필요).
-     확인: `ros2 param get /lifecycle_manager_navigation bond_timeout` → 10.0. 그래도 bond로 멈추면 [PM 확인 필요]
-   - 로그의 `Managed nodes are active`는 두 번 나와야 한다(위치 추정 `lifecycle_manager_localization`, Nav2 `lifecycle_manager_navigation`). Jetson에서는 Nav2가 50~80초 늦게 올라온다
 
 ## 보고 형식
 

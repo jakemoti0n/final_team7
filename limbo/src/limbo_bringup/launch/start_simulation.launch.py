@@ -4,12 +4,12 @@ import tempfile
 import yaml
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, OpaqueFunction, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution, PythonExpression
 
-from launch_ros.actions import Node, SetParameter
+from launch_ros.actions import Node
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -332,7 +332,7 @@ def generate_launch_description():
                 parameters=[params_file, {'use_sim_time': True}],
                 remappings=[('/tf', 'tf'), ('/tf_static', 'tf_static')],
             )]
-        nav2 = IncludeLaunchDescription(
+        return container + [IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(
                     nav2_bringup_dir,
@@ -347,12 +347,7 @@ def generate_launch_description():
                 'use_composition': 'True' if composed else 'False',
                 'container_name': 'nav2_container',
             }.items()
-        )
-        if not composed:
-            return [nav2]
-        # Jetson에서 collision_monitor가 활성화 직후 bond 4초(기본)를 놓쳐 Nav2 시작이 두 번 연달아 중단됨 (2026-10-24).
-        # 감시 시간만 10초로 늘린다. 컨테이너에 올라가는 노드는 컨테이너의 params 파일을 읽지 않으므로 SetParameter로 얹는다
-        return container + [GroupAction([SetParameter('bond_timeout', 10.0), nav2])]
+        )]
 
     navigation = OpaqueFunction(function=make_navigation, condition=on_robot)
 
