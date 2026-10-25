@@ -58,6 +58,12 @@ def generate_launch_description():
     on_sim = IfCondition(PythonExpression(["'", role, "' in ('all', 'sim')"]))
     on_robot = IfCondition(PythonExpression(["'", role, "' in ('all', 'robot')"]))
 
+    # camera:=sim(기본) / oak. 사람 인식 영상의 출처라 role(어느 컴퓨터에서 도는가)과 따로 고른다.
+    # oak면 Gazebo 카메라 영상 브리지를 끄고, 실물 OAK-D Lite를 oak_camera 노드가 열어 같은 토픽과 카메라 안 모델 결과를 낸다.
+    # 카메라는 실물에서 Jetson에 꽂히므로 oak_camera는 robot 쪽이다. 두 대로 나눌 때는 두 대 모두 같은 camera 값을 준다
+    camera = LaunchConfiguration('camera')
+    use_oak = ["'", camera, "' == 'oak'"]
+
     urdf_file = PathJoinSubstitution([
         limbo_description_dir,
         'urdf',
@@ -95,6 +101,7 @@ def generate_launch_description():
             'robot': LaunchConfiguration('robot'),
             'camera_z': LaunchConfiguration('camera_z'),
             'camera_pitch_deg': LaunchConfiguration('camera_pitch_deg'),
+            'camera': camera,
         }.items(),
         condition=on_sim,
     )
@@ -311,7 +318,23 @@ def generate_launch_description():
         params_file = nav2_params_file
         if LaunchConfiguration('robot').perform(context) == 'legacy':
             params_file = write_legacy_nav2_params()
-        return [IncludeLaunchDescription(
+        # True면 Nav2 노드들을 한 프로세스(컨테이너)로 띄운다. 두 대로 나눠 돌릴 때(role:=robot) 포인트클라우드를
+        # 프로세스마다 한 벌씩(3벌, 약 850 Mbit/s) 받지 않고 한 벌(약 330 Mbit/s)만 받게 하려고 쓴다
+        composed = LaunchConfiguration('nav2_composition').perform(context).lower() == 'true'
+        container = []
+        if composed:
+            # navigation_launch.py는 컨테이너에 노드를 싣기만 하고 컨테이너는 띄우지 않는다(nav2 bringup_launch.py가 띄움).
+            # 여기서 안 띄우면 /nav2_container/_container/load_node를 끝없이 기다려 Nav2가 하나도 안 뜬다 (2026-10-25)
+            container = [Node(
+                package='rclcpp_components',
+                executable='component_container_isolated',
+                name='nav2_container',
+                output='screen',
+                # params 파일을 컨테이너에도 준다. 안 주면 local_costmap 같은 하위 노드가 설정을 못 받아 기본 레이어로 뜨고 죽는다
+                parameters=[params_file, {'use_sim_time': True}],
+                remappings=[('/tf', 'tf'), ('/tf_static', 'tf_static')],
+            )]
+        return container + [IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(
                     nav2_bringup_dir,
@@ -323,9 +346,9 @@ def generate_launch_description():
                 'use_sim_time': 'true',
                 'autostart': 'true',
                 'params_file': params_file,
-                # True면 Nav2 노드들을 한 프로세스(컨테이너)로 띄운다. 두 대로 나눠 돌릴 때(role:=robot) 포인트클라우드를
-                # 프로세스마다 한 벌씩(3벌, 약 850 Mbit/s) 받지 않고 한 벌(약 330 Mbit/s)만 받게 하려고 쓴다
-                'use_composition': LaunchConfiguration('nav2_composition'),
+                # navigation_launch.py는 이 값을 파이썬 식으로 읽으므로 True/False로 맞춰 넘긴다
+                'use_composition': 'True' if composed else 'False',
+                'container_name': 'nav2_container',
             }.items()
         )]
 
@@ -358,6 +381,10 @@ def generate_launch_description():
         model = LaunchConfiguration('person_model').perform(context)
         if model:
             parameters.append({'yolo.model': model})
+        # camera:=oak이면 YOLO 대신 카메라 안 모델 결과(/oak/detections)를 쓴다
+        if LaunchConfiguration('camera').perform(context) == 'oak':
+            parameters.insert(1, os.path.join(
+                limbo_perception_dir, 'config', 'person_detector_oak.yaml'))
         return [Node(
             package='limbo_perception',
             executable='person_detector',
@@ -367,6 +394,19 @@ def generate_launch_description():
         )]
 
     detector = OpaqueFunction(function=make_detector, condition=on_robot)
+
+    # 실물 OAK-D Lite → /rgbd_camera/image·depth_image·camera_info, /oak/detections (camera:=oak일 때만)
+    # stamp를 시뮬 TF와 맞추려고 sim time을 쓴다(/clock 구독). 실물 로봇에서는 이 /clock 부하가 없다
+    oak_camera = Node(
+        condition=IfCondition(PythonExpression(
+            ["'", role, "' in ('all', 'robot') and "] + use_oak)),
+        package='limbo_perception',
+        executable='oak_camera',
+        name='oak_camera',
+        output='screen',
+        parameters=[os.path.join(limbo_perception_dir, 'config', 'oak_camera.yaml'),
+                    {'use_sim_time': True}]
+    )
 
     # ToF 근접 센서 → /tof/obstacle_ahead·/tof/nearest (관제·로그용). 코앞 안전 정지는 collision_monitor가 /tof/points로 한다
     tof = Node(
@@ -437,6 +477,9 @@ def generate_launch_description():
         DeclareLaunchArgument('role', default_value='all'),
         # Nav2를 한 프로세스로(컴포지션). 기본 False는 지금과 같음. role:=robot(Jetson)에서는 True 권장 (split-sim 스킬 2절)
         DeclareLaunchArgument('nav2_composition', default_value='False'),
+        # 사람 인식 영상: sim(Gazebo 카메라, 기본) / oak(실물 OAK-D Lite 영상 + 카메라 안 모델 결과).
+        # oak는 카메라가 시뮬 로봇과 같이 움직이지 않으므로 로봇을 세워 두고 인식·부하를 잴 때만 쓴다
+        DeclareLaunchArgument('camera', default_value='sim'),
 
         # 바로 Gazebo 실행
         gazebo,
@@ -473,6 +516,7 @@ def generate_launch_description():
         ),
 
         detector,
+        oak_camera,
         tof,
         person_wait,
         nav_recorder,
