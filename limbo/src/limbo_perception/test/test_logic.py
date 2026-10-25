@@ -374,3 +374,96 @@ def test_tracks_ahead_of_bumper_rotates_position_and_velocity_only():
     # 서 있는 사람은 로봇이 다가가도 속도 0 그대로 (로봇 속도를 빼지 않음)
     (_, _, vx, vy), = geometry.tracks_ahead_of_bumper([(3.0, 0.0, 0.0, 0.0)], 0.0, 0.0, 0.0, 0.25)
     assert vx == 0.0 and vy == 0.0
+
+
+# ---- 면(벽·문) 걸러내기: geometry.surface_check ----
+
+def _plane_depth(size=(240, 320), fx=230.0, cx=160.0, distance=1.5, yaw_deg=0.0):
+    """카메라 앞 distance에 있는 수직 평면(yaw_deg만큼 비스듬)의 깊이 영상 (z = d / (cos + tan(u) sin))."""
+    h, w = size
+    u = (np.arange(w) - cx) / fx
+    yaw = np.radians(yaw_deg)
+    row = distance / (np.cos(yaw) + u * np.sin(yaw))
+    return np.tile(row.astype(np.float32), (h, 1))
+
+
+def _textured(size=(240, 320), seed=0):
+    return np.random.default_rng(seed).integers(60, 120, size=size, dtype=np.uint8)
+
+
+def _check(depth, gray, box):
+    return geometry.surface_check(
+        depth, gray, box, geometry.SurfaceConfig(), geometry.DepthConfig())
+
+
+def test_surface_flat_black_wall_is_rejected():
+    # dev 벽 오인식 장면: 화면 왼쪽 70 %를 덮는 검은 면, 깊이 1.47 m 평평
+    depth = _plane_depth(distance=1.47)
+    gray = np.zeros((240, 320), dtype=np.uint8)
+    is_surface, planar, texture = _check(depth, gray, (0, 0, 160, 235))
+    assert is_surface and planar == 1.0 and texture == 0.0
+
+
+def test_surface_oblique_wall_is_rejected():
+    depth = _plane_depth(distance=1.2, yaw_deg=50)   # 비스듬한 벽: 1 m대에서 3 m 너머로 매끄럽게 멀어짐
+    gray = np.full((240, 320), 40, dtype=np.uint8)
+    is_surface, planar, _ = _check(depth, gray, (0, 0, 220, 240))
+    assert is_surface and planar > 0.98
+
+
+def test_surface_free_standing_panel_with_edge_inside_box_is_rejected():
+    # 세워 둔 검은 판(1.24 m) 뒤로 벽(3.5 m)이 보이는 큰 박스: 가장자리에 단차가 있어도 가운데는 평면
+    depth = _plane_depth(distance=3.5)
+    depth[:, :185] = 1.24
+    gray = np.full((240, 320), 200, dtype=np.uint8)
+    gray[:, :185] = 0
+    assert _check(depth, gray, (6, 7, 238, 235))[0]
+
+
+def test_surface_legs_in_front_of_wall_are_kept():
+    depth = _plane_depth(distance=3.0)
+    depth[60:240, 120:150] = 1.5              # 다리 둘 (1.5 m), 사이로 벽이 보임 → 가운데가 평면이 아님
+    depth[60:240, 170:200] = 1.5
+    gray = np.zeros((240, 320), dtype=np.uint8)   # 검은 옷이라 무늬가 없어도
+    is_surface, planar, _ = _check(depth, gray, (110, 50, 210, 240))
+    assert not is_surface and planar < 0.9
+
+
+def test_surface_round_torso_with_clothing_texture_is_kept():
+    # 코앞 손님: 몸통이 화면을 채움. 둥근 몸통(반지름 0.18 m)은 가운데도 완전한 평면이 아니고, 옷에는 무늬가 있다
+    u = (np.arange(320) - 160) / 230.0
+    x = u * 0.6
+    body = 0.6 + 0.18 - np.sqrt(np.clip(0.18 ** 2 - x ** 2, 0, None))
+    depth = np.tile(body.astype(np.float32), (240, 1))
+    gray = _textured()
+    is_surface, planar, texture = _check(depth, gray, (0, 0, 320, 240))
+    assert not is_surface and texture > 6.0
+
+
+def test_surface_person_leaning_on_textureless_wall_is_kept_by_texture():
+    # 벽(1.5 m)에 등을 댄 사람: 몸 앞면(1.38 m)이 평면에 가까워도 옷 무늬로 살아남는다 (둘 다 맞아야 면)
+    depth = _plane_depth(distance=1.5)
+    depth[40:240, 130:190] = 1.38
+    gray = _textured()
+    assert not _check(depth, gray, (120, 30, 200, 240))[0]
+
+
+def test_surface_small_box_or_no_depth_is_not_judged():
+    depth = _plane_depth(distance=1.5)
+    gray = np.zeros((240, 320), dtype=np.uint8)
+    assert _check(depth, gray, (100, 100, 140, 160)) == (False, None, None)
+    depth[:, :] = np.nan
+    assert _check(depth, gray, (0, 0, 200, 240)) == (False, None, None)
+
+
+def test_narrow_strip_is_not_a_person_but_leg_box_is_exempt():
+    fx = 230.0
+    strip = (218, 69, 235, 154)   # 검은 판 가장자리 띠: 17 px, 1.5 m → 0.11 m
+    assert geometry.too_narrow_for_person(strip, 1.5, fx, 0.15, leg=False)
+    assert not geometry.too_narrow_for_person(strip, 1.5, fx, 0.15, leg=True)
+    assert not geometry.too_narrow_for_person(strip, None, fx, 0.15, leg=False)
+    person = (120, 40, 180, 230)  # 60 px, 1.5 m → 0.40 m
+    assert not geometry.too_narrow_for_person(person, 1.5, fx, 0.15, leg=False)
+    assert abs(geometry.physical_width_m(person, 1.5, fx) - 0.404) < 0.01
+    far = (206, 128, 213, 148)    # 멀리 4.7 m의 7 px 사람: ±2 px 여유로 0.18 m → 살림
+    assert not geometry.too_narrow_for_person(far, 4.7, fx, 0.15, leg=False)

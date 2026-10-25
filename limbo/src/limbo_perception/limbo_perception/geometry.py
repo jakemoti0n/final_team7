@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+import cv2
 import numpy as np
 
 
@@ -99,6 +100,65 @@ def person_depth(depth_image, x1, y1, x2, y2, config, leg=False):
         return None
 
     return float(np.percentile(valid_depth, percentile))
+
+
+@dataclass
+class SurfaceConfig:
+    """
+    벽·문·가구 면을 사람으로 본 박스를 걸러내는 기준.
+
+    2026-10-22 dev 벽 오인식(검은 면 1.47 m를 leg_640이 person 0.34로 봄) 대응.
+    원리: 벽·판·문·가구의 면은 박스 가운데의 깊이가 **하나의 평면**이고 무늬가 없다. 사람은 몸통이 둥글고 다리 사이에 틈이
+    있어 가운데 깊이가 평면이 아니며, 옷에는 무늬·주름이 있다. 박스 가장자리는 보지 않는다 — 세워 둔 판·가구처럼 가장자리에
+    깊이 단차가 있는 면도 많아서, 단차 유무로는 사람과 못 가른다(2026-10-22 검은 판 재현에서 확인).
+    밝기·모델 신뢰도와 무관한 기하학적 성질이라 실물 카메라에서도 그대로 통한다.
+    시뮬 측정(사람 장면 큰 person 박스 151개): 평면 비율 중앙값 0.09·최대 0.84, 무늬 최소 3.0·중앙값 39. 검은 판: 1.0·0.0.
+    """
+
+    min_box_area_ratio: float = 0.15  # 화면 면적의 이 비율 이상인 박스만 판정 (작은 박스는 픽셀이 적고, 추적 조건 5프레임이 거른다)
+    inner_margin: float = 0.30        # 박스 각 변에서 이 비율을 잘라낸 가운데만 본다 (가장자리는 배경·이웃 면이 섞인다)
+    plane_tol_m: float = 0.03         # m, 맞춘 평면에서 이 안에 있으면 "평면 위". 실물 스테레오 잡음(1.5 m에서 1~2 cm)보다 크게
+    min_planar_ratio: float = 0.95    # 가운데 유효 픽셀 중 평면 위 비율이 이 이상이면 "평면" (사람 최대 0.84)
+    # 가운데 명암의 라플라시안 표준편차가 이 미만이면 "무늬 없음" (사람 최소 3.0·중앙값 39, 매끈한 음영은 0~2)
+    max_texture: float = 6.0
+    min_valid_pixels: int = 50        # 가운데 유효 깊이 픽셀이 이보다 적으면 판정하지 않는다
+
+
+def surface_check(depth_image, gray_image, box, config, depth_config):
+    """
+    박스가 벽·문·가구 같은 '면'인지 본다.
+
+    (면인가, 평면 비율, 무늬 값)을 돌려주고, 판정 대상이 아니면(작은 박스, 유효 깊이 부족) (False, None, None).
+    면으로 보려면 두 조건이 **모두** 맞아야 한다: 가운데 깊이가 평면이고, 영상에 무늬가 없음.
+    둘을 같이 보는 이유: 코앞까지 와서 몸통만 화면을 채운 손님은 가운데가 거의 평면으로 보일 수 있지만 옷은 무늬가 있다.
+    평면은 역깊이(1/z)가 픽셀 좌표의 1차식이라는 성질로 맞춘다 (비스듬한 벽도 평면이다).
+    """
+    x1, y1, x2, y2 = box
+    height, width = depth_image.shape[:2]
+    if (x2 - x1) * (y2 - y1) < config.min_box_area_ratio * width * height:
+        return False, None, None
+
+    m = config.inner_margin
+    gx1, gx2 = max(0, int(x1 + (x2 - x1) * m)), min(width, int(x2 - (x2 - x1) * m))
+    gy1, gy2 = max(0, int(y1 + (y2 - y1) * m)), min(height, int(y2 - (y2 - y1) * m))
+    if gx2 - gx1 < 2 or gy2 - gy1 < 2:
+        return False, None, None
+
+    z = depth_image[gy1:gy2, gx1:gx2].astype(np.float64)
+    valid = np.isfinite(z) & (z > depth_config.min_depth) & (z < depth_config.max_depth)
+    if valid.sum() < config.min_valid_pixels:
+        return False, None, None
+    vv, uu = np.mgrid[gy1:gy2, gx1:gx2]
+    design = np.column_stack([uu[valid], vv[valid], np.ones(int(valid.sum()))])
+    coef, *_ = np.linalg.lstsq(design, 1.0 / z[valid], rcond=None)
+    predicted = 1.0 / np.maximum(design @ coef, 1e-6)
+    planar_ratio = float(np.mean(np.abs(z[valid] - predicted) < config.plane_tol_m))
+
+    gray = gray_image[gy1:gy2, gx1:gx2].astype(np.float32)
+    texture = float(cv2.Laplacian(gray, cv2.CV_32F).std())
+
+    is_surface = planar_ratio >= config.min_planar_ratio and texture < config.max_texture
+    return is_surface, planar_ratio, texture
 
 
 def _area(box):
@@ -216,6 +276,27 @@ def pixel_to_optical_point(u, v, depth, intrinsics):
     x = (u - intrinsics.cx) * z / intrinsics.fx
     y = (v - intrinsics.cy) * z / intrinsics.fy
     return x, y, z
+
+
+BOX_EDGE_TOLERANCE_PX = 2  # 박스 좌우 끝은 각각 ±1 px 어림이라, 폭을 잴 때 이만큼 후하게 본다 (멀수록 1 px가 큰 거리)
+
+
+def physical_width_m(box, depth, fx, tolerance_px=BOX_EDGE_TOLERANCE_PX):
+    """박스의 실제 가로 폭(m) = (픽셀 폭 + 어림 여유) × 거리 ÷ 초점 거리. 사람은 옆으로 서도 0.25 m는 된다."""
+    return (box[2] - box[0] + tolerance_px) * depth / fx
+
+
+def too_narrow_for_person(box, depth, fx, min_width_m, leg):
+    """
+    사람 박스(person 클래스)가 사람일 수 없을 만큼 좁은가 (문틀·기둥·판 가장자리의 세로 띠 오탐).
+
+    2026-10-22 검은 판 재현: 판 가장자리 띠(17 px, 1.5 m → 0.11 m)를 person 0.69로 보고 추적까지 됐다.
+    화면 끝이 아니면 clipped_at_edge에 안 걸리고, 작아서 면 판정 대상도 아니다. leg 박스는 다리 하나가 0.1 m라 보지 않는다.
+    시뮬 사람 장면 person 박스 442개: 실제 폭 중앙값 0.56 m. 4.6~4.9 m의 7 px짜리 먼 사람(0.14 m)은 ±2 px 여유로 살린다.
+    """
+    if leg or depth is None:
+        return False
+    return physical_width_m(box, depth, fx) < min_width_m
 
 
 def clipped_at_edge(box, image_width, margin_px, min_width_px):

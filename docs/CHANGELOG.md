@@ -8,65 +8,40 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
-## 2026-10-23 (46) person_detector가 실물 OAK-D Lite 영상과 카메라 안 모델 결과를 쓰는 `camera:=oak` — 실기·Jetson 검증 전
+## 2026-10-22 (44) 벽·검은 면을 사람으로 보는 오인식 수정: 큰 박스 평면·무늬 판정 + person 박스 실제 폭 하한 — 회귀 통과
 
 **할 일**
-- `sudo apt install ros-jazzy-vision-msgs` (검출 결과 메시지). 대부분 이미 깔려 있다
-- YOLO venv에 depthai: `pip install -r requirements.txt` (`depthai<3`이 추가됨). 그 뒤 `build_limbo`
-- OAK를 맡은 사람: 카메라를 꽂고 `ros2 launch limbo_bringup start_simulation.launch.py camera:=oak`. 로그에 `oak_camera: OAK-D-LITE 연결`, 10초마다 `발행 … Hz`가 찍히고 RViz `/person_detector/annotated_image`에 카메라 앞 사람 박스·거리가 보이면 정상. 거리를 줄자와 대 보고 결과를 알려 주면 다음 기록에 적는다
-- Jetson에 꽂아 두 대로 잴 때는 split-sim 스킬 4-2 (두 대 모두 `camera:=oak`)
+- pull 뒤 `build_limbo`(limbo_perception 코드·yaml). 모델·문턱은 그대로(leg_640, 0.3)
+- 벽 오인식이 또 보이면 `/person_detector/boxes`의 `surface` 항목과 주석 영상의 회색 박스를 확인 (TROUBLESHOOTING 2026-10-22)
 
 **변경**
-- 런치 인자 `camera:=sim|oak`(기본 sim). `role`(어느 컴퓨터)과 따로 고른다. oak면 Gazebo 카메라 영상 브리지를 끄고 robot 쪽에 `oak_camera`를 띄우며, person_detector에 `person_detector_oak.yaml`을 덧씌운다
-- `limbo_perception/oak_camera.py`(새 노드): 장치를 열어 `/rgbd_camera/image`(bgr8 640x352)·`depth_image`(16UC1 mm, 컬러에 정렬, preview와 같은 영역으로 자름)·`camera_info`(장치 보정값)와 `/oak/detections`(vision_msgs/Detection2DArray)를 같은 stamp로 낸다. stamp = 노드 시계 − 장치 지연. 장치를 못 찾거나 링크가 끊기면(X_LINK_ERROR, 케이블 빠짐, 다른 프로세스가 사용 중) 노드는 살아 있고 장치만 다시 연다. 기다림 1→2→4…최대 10초, 영상을 받으면 1초로. 연결돼 있는데 NN 결과가 3초 넘게 안 오면 멈춘 것으로 보고 다시 연다(`reconnect.*`, `stall_timeout`. `reconnect.enabled: false`면 exit code 1)
-- `limbo_perception/oak.py`: 파이프라인·decode·프레임 짝짓기(NN 결과↔입력 프레임은 sequence 번호, 깊이는 가장 가까운 장치 시각). `tools/oak/oak_common.py`는 이것을 가져다 쓴다(카메라 구성은 한 곳에만)
-- person_detector `detector.source: yolo|oak`. oak면 YOLO를 올리지 않고, 받은 박스를 `yolo.classes`·`yolo.confidence`로 거른 뒤 `model.track()`과 같은 BoT-SORT(`yolo.tracker`)에 넣는다. 깊이 encoding이 16UC1이면 m로 바꾼다. 그 뒤(leg 합치기·깊이·칼만·의도·예측)는 그대로
-- `person_detector_oak.yaml`: source oak, `edge_min_width_px` 40→80(640 폭이라 같은 12 %). `oak_camera.yaml`: blob, `usb_speed: high`, NN 문턱
-- blob을 `tools/oak/models/`에서 `limbo_perception/models/`로 옮겨 설치본에 넣음
-- Gazebo 브리지 설정을 `bridge.yaml`(나머지)과 `bridge_camera.yaml`(컬러·깊이·CameraInfo)로 나눔. /rgbd_camera/points는 Nav2가 시뮬 월드를 보도록 camera:=oak여도 Gazebo 것을 씀
+- `geometry.py`: `SurfaceConfig`·`surface_check`(화면 15 % 이상 박스의 가운데 깊이가 역깊이 평면에 3 cm 안 95 % 이상 + 명암 라플라시안 편차 6 미만 → 면), `physical_width_m`·`too_narrow_for_person`(person 박스 실제 폭 < 0.15 m → 사람 아님, 박스 끝 ±2 px 여유, leg 제외)
+- `person_detector.py`: 박스마다 면 판정을 먼저 해 버린 것은 추적에 안 넣음. 진단 토픽 `/person_detector/boxes`를 `_detect`가 아니라 프레임 처리 끝에 발행하고 `surface` 목록 추가. 깊이 계산 뒤 폭 하한. `surface.*`·`min_person_width_m` 파라미터
+- `visualization.draw_surface`: 버린 박스를 회색으로
+- `person_detector.yaml`: `surface:` 절(min_box_area_ratio 0.15, inner_margin 0.30, plane_tol_m 0.03, min_planar_ratio 0.95, max_texture 6.0, min_valid_pixels 50), `min_person_width_m 0.15`
+- `test_logic.py`: 면 판정 7개(평평한 검은 벽, 비스듬한 벽, 가장자리 단차 있는 판, 벽 앞 두 다리, 둥근 몸통+옷 무늬, 벽에 기댄 사람, 작은 박스·깊이 없음), 폭 하한 1개
 
-**배경**
-- 실물에서 추론은 카메라 칩에서 하고 Jetson은 YOLO를 돌리지 않는다(변경 기록 45). 부하 시험도 그 구성으로 재야 해서 카메라 출처를 role과 따로 바꿀 수 있게 했다
-- 카메라는 시뮬 로봇과 같이 안 움직인다. camera:=oak는 로봇을 세워 두고 인식·부하를 잴 때만 쓴다. 시뮬에서는 stamp를 TF에 맞추려고 oak_camera가 /clock을 받는다(실물에는 없는 부하)
+**원인과 근거**(TROUBLESHOOTING 2026-10-22에 상세)
+- 하반신 모델이 크고 어두운 균일한 사각형을 person으로 봄. 보고된 장면을 모델에 넣으면 leg_640 0.34(문턱 넘음)·leg_512 0.25, 뒤집으면 둘 다 넘음 → 공통 약점. 문턱을 0.4로 올리면 가까운 손님 박스의 11~15 %를 잃어 택하지 않음
+- 10-19 비교 녹화에는 사람 검출률만 있고 사람 없는 곳의 박스(오탐)는 재지 않았음
 
-**확인**(이 노트북, 카메라 없음)
-- 단위 테스트 69개 통과(새 `test_oak.py`: decode·NMS·깊이 자르기·짝짓기·mm→m·클래스/문턱 거르기), flake8 통과
-- 가짜 oak_camera 토픽(2 m 앞 사람 박스, 16UC1)으로 person_detector source oak: BoT-SORT ID 1 → base_link x 2.1 m → 예측 발행
-- `camera:=oak gui:=false` 런치: 카메라 브리지 없음, /rgbd_camera/image 발행자 0, /rgbd_camera/points 1, person_detector `source oak`. 기본 런치는 `parameter_bridge_camera`가 뜨고 YOLO로 추적(이전과 같음)
-- 다시 연결: 가짜 depthai로 못 찾음 2번 → 연결 → X_LINK_ERROR → 다시 연결 → 결과 멈춤 3초 → 다시 연결 → 정상 15 Hz 순서를 확인. 실물로는 다른 프로세스가 장치를 잡고 있는 동안 `X_LINK_DEVICE_ALREADY_IN_USE`로 1·2·4초 기다리다 풀리자 연결됨
-- 실물 oak_camera 단독(노트북 USB 2.0, 시뮬 없이): 14.8~15.3 Hz, 지연 중앙값 232~233 ms, 깊이 짝 없음 0. 칩 온도 62~63°C(변경 기록 45의 37~46°C보다 높음, 계속 보기)
-- 시뮬과 같이 돌린 첫 시험(19:37)에서는 40초쯤 13.4 → 2.7 Hz로 떨어진 뒤 X_LINK_ERROR로 끊겼고, 커널 로그에 USB error -71·-110이 나왔다. 케이블·포트·전원 쪽으로 보고 작업자가 원인을 잡음(무엇을 바꿨는지 여기 적을 것)
-- 아직 실기에서 안 본 것: 깊이 4 px 자르기·CameraInfo cy 보정이 맞는지(줄자 대조), 케이블을 실제로 뽑았다 꽂을 때의 다시 연결
+**확인**(ktj 이 커밋, 시뮬)
+- 같은 녹화 프레임에 오프라인 적용: 노드가 사람으로 봤던 검은 판 박스(신뢰도 0.85) 평면 1.00·무늬 0.0 → 버림. 사람 장면(aischool_2f_scenarios 90 s) person 박스 469개 중 잘못 버린 것 0, 큰 박스 151개 평면 최대 0.84·무늬 최소 3.0
+- 회귀 세트(41과 같음): 손님 홀 왕복 4/4 × 3(복구 0, 구간 12 s), 상자 4/4 × 2(상자 최소 0.29·0.32 m, 복구 5·7), 순찰 3/3(180·185·186 s). 상자 1회차는 서 있는 사람 앞에서 기다리기 상태가 안 풀린 것(41에 적힌 ktj 기다리기 상태 기계 문제, 그때 사람은 정상 추적 중) → 재시험 2회 통과
+- 패키지 시험 67개 통과(flake8·pep257 포함)
 
-## 2026-10-23 (45) OAK-D Lite 점검 도구 + 하반신 모델(leg_640)을 카메라 안에서 돌리는 blob — `tools/oak/`, Jetson 검증 전
+## 2026-10-22 (43) split-sim 수정: 네트워크 실측 반영(포인트클라우드 850 Mbit/s), Nav2 컴포지션 인자 `nav2_composition`, 유선 필수
 
-(번호 43·44는 ktj에 있음: split-sim 대역폭·컴포지션, 벽 오인식 수정. 이 항목은 그 뒤 번호)
-
-**할 일**(OAK-D Lite를 맡은 사람)
-- venv 만들기: `python3 -m venv ~/limbo/venvs/limbo_oak && ~/limbo/venvs/limbo_oak/bin/pip install -r tools/oak/requirements.txt`
-- 처음 한 번 udev 규칙(sudo, `tools/oak/check_camera.py` 맨 위 설명). 넣은 뒤 카메라를 뽑았다 다시 꽂는다
-- `~/limbo/venvs/limbo_oak/bin/python tools/oak/check_camera.py` → 이름 OAK-D-LITE, rgb·depth 19.5 Hz 안팎이면 정상
-- `~/limbo/venvs/limbo_oak/bin/python tools/oak/run_leg_model.py` → 사람이 1.5~3 m 앞에 서면 person·leg 검출이 찍힘. 끝나면 `oak_last.png`에 박스 그림
-- **USB 케이블이 2.0이면 기본값(`--usb high`) 그대로. 3.0 케이블이면 `--usb super`.** 2.0 케이블에 super를 주면 장치가 8초 뒤 워치독 크래시로 꺼진다(아래 배경)
-- Jetson에서 돌린 결과(세 줄의 Hz·지연·온도)를 보고하면 다음 기록에 적는다. 문서에 적힌 구성(16:9·3 shave·USB 속도)은 바꾸지 않는다
+**할 일**
+- pull 뒤 `build_limbo`. 한 대 구성(기본 `nav2_composition:=False`)은 바뀌지 않음
+- Jetson 시험은 `.claude/skills/split-sim/SKILL.md` 수정본대로 (유선 1 GbE, Jetson은 `nav2_composition:=True`)
 
 **변경**
-- `tools/oak/oak_common.py`: 실물 배치와 같은 파이프라인(컬러 640x352 16:9, 깊이 640x360 컬러 정렬, NN), 모델 출력 풀기(decode, NMS), 공통 인자
-- `tools/oak/check_camera.py`: 연결·USB 속도·센서·프레임률·깊이 확인. `tools/oak/run_leg_model.py`: blob을 카메라에 올려 검출·프레임률·지연 측정
-- `tools/oak/export_blob.py`: .pt → ONNX(640x352) → blob 변환 절차. 모델을 다시 학습했을 때만
-- `tools/oak/models/leg_640_352_3shave.blob`: leg_640.pt를 변환한 것(FP16, 3 shave, BGR→RGB·/255 정규화 내장). `tools/oak/requirements.txt`: depthai<3 등
-- 저장소의 ROS 노드는 아직 안 건드림. person_detector에 OAK 입력 모드를 넣는 설계는 ktj에서 승인 뒤 진행
+- `start_simulation.launch.py`: `nav2_composition` 인자(기본 False) → nav2 `navigation_launch.py`의 `use_composition`으로 전달
+- `split-sim/SKILL.md`: 네트워크 표를 실측으로 교체(42의 "약 50 Mbit/s"는 카메라 영상만 센 값이었음), 브랜치 전제, 유선 필수, 2절 명령에 `nav2_composition:=True`, 3절에 대역폭 확인, 에이전트 규칙에 "문서에 적힌 것은 묻지 않는다"
 
-**배경**
-- 실물 카메라는 OAK-D Lite(IMX214 컬러 + OV7251 모노 640x480 ×2, 플래시 없음). IMU는 Mid-360 내장을 쓴다. 플래시가 없어 모델은 호스트(Jetson)가 켤 때마다 올리고, 추론은 카메라 칩(MyriadX)에서 한다. Jetson은 YOLO를 돌리지 않는다
-- 16:9(640x352)로 정한 이유: 카메라 높이 0.6 m 수평에서 1.5 m 앞 사람은 바닥~1.17 m까지 보여 하반신(발~골반)이 다 들어온다. 4:3(13 MP 모드)이 더 보는 건 배·가슴과 1.2 m 안 바닥뿐인데, 깊이 유효 비율은 4:3이 띠별 43~73 %로 16:9(52~80 %)보다 비고 지연도 20 ms 길다. 시뮬 카메라(320x240 4:3)는 아직 그대로라 뒤에 맞춘다
-- USB 2.0 링크에서 depthai 기본값(super)으로 열면 펌웨어는 부팅되지만 호스트 RPC 스트림이 안 열려 8초 뒤 워치독이 재부팅한다(`Device already closed or disconnected`). `dai.Device(pipeline, dai.UsbSpeed.HIGH)`로 링크를 2.0에 고정하면 붙는다. 노트북 USB 3 포트에 꽂아도 2.0으로 잡힌 것은 케이블이 2.0용이기 때문
-- shave: 스테레오를 같이 돌리면 NN에 shave 7개만 남아 6 shave 블롭은 9.8 Hz·지연 600 ms로 막혔다. 3 shave × 2 thread가 14.8 Hz·231 ms, 7 shave × 1 thread 10.4 Hz
-
-**확인**(이 노트북, USB 2.0)
-- blob과 PC ONNX 대조: 시뮬 녹화 56장에서 박스 92개 중 90개 일치(IoU 0.5, 같은 클래스), 점수 차 평균 −0.013·최대 0.065
-- check_camera: rgb·depth 19.5 Hz, 깊이 지연 79 ms, 유효 0.99, 온도 37°C. run_leg_model: NN 14.5 Hz·233 ms(깊이 포함), 17.2 Hz·200 ms(--no-depth)
-- Jetson(arm64)에서는 아직 안 돌려 봄. depthai는 aarch64 휠이 있어 같은 requirements로 깔린다
+**배경**(팀원 실측, PC에서 role:=sim만 띄우고 `ros2 topic bw`, aischool_2f)
+- /rgbd_camera/points 213 Mbit/s, /mid360/points_filtered 50, 카메라 컬러+깊이 65, 나머지 합계 1 미만. Nav2를 기본대로 프로세스 3개로 띄우면 코스트맵·collision_monitor가 포인트클라우드를 3벌 받아 약 850 Mbit/s → 컴포지션으로 1벌(약 330)로 줄이고 유선으로. 실물에서는 센서와 Nav2가 같은 본체라 생기지 않는 부담
 
 ## 2026-10-22 (42) 시뮬을 두 대로 나눠 돌리는 `role` 런치 인자 + 안내 스킬 `split-sim` — Jetson 부하 시험용, Jetson 검증 전
 
