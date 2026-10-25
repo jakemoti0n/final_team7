@@ -10,7 +10,8 @@
     <PipelineSequence name="FollowOperator">
       <!-- 따라가기용 MPPI(목표 근처 감속 문턱을 줄인 사본, nav2_params FollowOperator). 순찰의 FollowPath는 그대로 -->
       <ControllerSelector selected_controller="{selected_controller}" default_controller="FollowOperator" topic_name="controller_selector"/>
-      <PlannerSelector selected_planner="{selected_planner}" default_planner="GridBased" topic_name="planner_selector"/>
+      <!-- 따라가기용 플래너(Smac 2D). NavFn(A*)은 복도 입구에서 경로 시작부가 지그재그로 나와 제자리에서 떨었다(3단계 fw12·fw13) -->
+      <PlannerSelector selected_planner="{selected_planner}" default_planner="FollowPlanner" topic_name="planner_selector"/>
       <RateController hz="4.0">
         <Sequence>
           <GoalUpdater input_goal="{goal}" output_goal="{updated_goal}">
@@ -20,7 +21,6 @@
               <Wait wait_duration="0.5"/>
             </RecoveryNode>
           </GoalUpdater>
-          <TruncatePath distance="0.1" input_path="{path}" output_path="{truncated_path}"/>
         </Sequence>
       </RateController>
       <KeepRunningUntilFailure>
@@ -29,7 +29,10 @@
             <!-- 다른 사람 때문에 기다려야 하면 추종을 멈춘다. 매 tick 다시 물어 시작·끝이 즉시 반영된다 -->
             <Inverter><IsWaitingForPerson name="StopFollowingWhenWaiting" topic="/person_wait"/></Inverter>
             <Sequence>
-              <FollowPath path="{truncated_path}" controller_id="{selected_controller}" error_code_id="{follow_path_error_code}"/>
+              <!-- 경로를 자르지 않는다(TruncatePath 없음). 목표점이 이미 운용자 1.5 m 앞이라 자를 이유가 없고, TruncatePath는 마지막 자세의
+                   방향을 "잘린 점을 향한 방향"으로 덮어써서 제자리 목표(길이 0)의 yaw가 늘 지도 +x(atan2(0,0)=0)가 됐다 → 놓치고 돌아보기가
+                   안 되고, 서 있을 때 엉뚱한 방향으로 돌았다(2단계 fw6 0.6 m, 3단계 fw11). NavFn은 마지막 자세에 목표 yaw를 그대로 둔다 -->
+              <FollowPath path="{path}" controller_id="{selected_controller}" error_code_id="{follow_path_error_code}"/>
               <!-- 목표점에 닿아 추종이 끝나면 0.5 s 쉬고 다시 건다. 안 쉬면 20 Hz로 액션이 다시 걸려 MPPI가 매 tick 초기화
                    (Optimizer reset·잡음 재생성)되어 큰 부하가 난다 (2단계 1회차). 0.2 s는 서 있는 동안 5 Hz로 초기화가 남았다(6회차 411회) -->
               <Wait wait_duration="0.5"/>

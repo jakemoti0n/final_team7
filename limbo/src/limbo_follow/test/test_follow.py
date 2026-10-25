@@ -1,4 +1,4 @@
-"""따라가기 계산(follow.py) 단위 시험: 목표점 위치·방향, 가다 서다 히스테리시스."""
+"""따라가기 계산(follow.py) 단위 시험: 목표점 위치·방향, 가다 서다 히스테리시스, 놓쳤을 때 할 일."""
 
 import math
 
@@ -46,3 +46,36 @@ def test_search_goal_extends_along_heading():
     gx, gy = follow.search_goal((4.5, 10.0), math.pi, 1.5)
     assert abs(gx - 3.0) < 1e-6 and abs(gy - 10.0) < 1e-6
     assert follow.search_goal((4.5, 10.0), None, 1.5) == (4.5, 10.0)
+
+
+def test_lost_near_holds_pose():
+    # 가까이서 놓침: 자세 그대로 (돌리면 MPPI가 호를 그려 운용자에게 파고듦)
+    mode, goal, yaw = follow.lost_plan((0.0, 0.0, 0.3), (1.2, 0.5), 0.0, True, 1.3, follow.FollowConfig())
+    assert mode == 'hold' and goal == (0.0, 0.0) and yaw == 0.3
+
+
+def test_lost_out_of_view_turns_to_last_position_first():
+    # 경로가 꺾여 로봇이 75° 돌았다(fw10): 마지막 자리가 정면에서 벗어나 있으면 먼저 그쪽으로 돌아본다. 걷고 있었어도 내다보기는 뒤
+    mode, goal, yaw = follow.lost_plan((0.0, 0.0, math.radians(75)), (3.0, 0.0), 0.0, True, 3.0, follow.FollowConfig())
+    assert mode == 'look' and goal == (0.0, 0.0) and abs(yaw) < 1e-6
+
+
+def test_lost_in_view_and_walking_searches_ahead():
+    # 모퉁이 너머로 사라짐(fw8): 마지막 자리가 시야 안이고 걷고 있었으면 가던 방향으로 1.5 m 더 간 점
+    mode, goal, yaw = follow.lost_plan((0.0, 0.0, 0.0), (3.0, 0.5), math.pi / 2, True, 3.0, follow.FollowConfig())
+    assert mode == 'search' and abs(yaw - math.pi / 2) < 1e-6
+    assert abs(goal[0] - 3.0) < 1e-6 and abs(goal[1] - 2.0) < 1e-6
+
+
+def test_lost_in_view_but_operator_was_standing_watches_last_position():
+    # 운용자가 멈춘 뒤 검출이 끊김(fw9): 옛 진행 방향으로 내다보지 않고 마지막 자리를 보며 선다
+    mode, goal, yaw = follow.lost_plan((0.0, 0.0, 0.0), (1.7, 0.1), 0.0, False, 1.62, follow.FollowConfig())
+    assert mode == 'watch' and goal == (0.0, 0.0) and abs(yaw - math.atan2(0.1, 1.7)) < 1e-6
+    # 방향을 모르면(한 번도 걷는 걸 못 봄) 걷는 중이라도 내다볼 수 없어 마지막 자리를 본다
+    mode, _, _ = follow.lost_plan((0.0, 0.0, 0.0), (3.0, 0.0), None, True, 3.0, follow.FollowConfig())
+    assert mode == 'watch'
+
+
+def test_wrap_angle():
+    assert abs(follow.wrap_angle(math.radians(190)) - math.radians(-170)) < 1e-9
+    assert abs(follow.wrap_angle(-math.pi) + math.pi) < 1e-9 or abs(follow.wrap_angle(-math.pi) - math.pi) < 1e-9

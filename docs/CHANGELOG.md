@@ -10,6 +10,38 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-26 (132) 따라가기 주행 손질: 놓침 대응 규칙(돌아보기·내다보기·마지막 자리 보기) + 트리 `TruncatePath` 제거(제자리 목표 yaw가 0°로 먹히던 것) + 따라가기 전용 Smac 2D 플래너(NavFn 시작부 지그재그) — 시뮬 완주 fw14·fw15 2/2(평균 거리 1.9 m, 놓침 최대 3.4 s, 충돌 0)
+
+**할 일**
+- pull 뒤 `build_limbo`는 필요 없음(파이썬·yaml·xml만). 노드를 다시 띄우면 적용
+- `nav2_params.yaml`에 플래너 `FollowPlanner`가 늘었다(순찰 `GridBased`는 그대로). ktj로 옮길 때 이 파일은 `git diff origin/dev -- nav2_params.yaml`로 확인
+
+**변경**
+- `limbo_follow/follow.py`: `lost_plan()` — 놓쳤을 때 hold(가까이, 자세 그대로) / look(마지막 자리가 정면 `look_angle_deg` 25° 밖 → 제자리에서 돌아보기) / search(걷던 운용자 → 가던 방향 `search_ahead` 내다보기) / watch(멈춰 있던 운용자 → 마지막 자리를 보며 서기). `moving_speed` 0.1 m/s, `wrap_angle()`. 단위 시험 5개 추가(10개 통과)
+- `follow_node.py`: 마지막으로 봤을 때 걷고 있었는지(`target_moving`) 기억, 놓침 모드를 매 tick lost_plan으로 정하되 look → search/watch로 넘어간 뒤엔 되돌리지 않음, 놓침 로그에 모드·목표·yaw
+- `follow.yaml`: `moving_speed`, `look_angle_deg`
+- `limbo_navigation/behavior_trees/limbo_follow.xml`: `TruncatePath` 제거(FollowPath가 `{path}`를 그대로 받음), `default_planner="FollowPlanner"`
+- `nav2_params.yaml` `planner_server`: `FollowPlanner`(nav2_smac_planner::SmacPlanner2D, tolerance 0.25, use_final_approach_orientation false, smoother 기본)
+- `experiments/2026-10-22_follow_operator/`: README "주행 손질" 절(회차 fw11~fw15, 배운 것 10~12), `run2.sh`에 `BAG=1`(코스트맵·cmd_vel·plan 녹화)
+- `docs/TROUBLESHOOTING.md` 2026-10-26 항목 2개, `docs/KNOWN_ISSUES.md`에 NavFn 시작부 지그재그 메모, PROJECT.md 2-9
+
+**원인과 근거**(실험 기록에 상세)
+- fw9·fw10 규칙 구멍은 lost_plan으로 막았다. 그런데 look 목표를 보내도 로봇이 안 돌았다(fw11): 트리의 `TruncatePath`가 길이 0 경로의 마지막 자세 방향을 atan2(0,0)=0, 즉 지도 +x로 덮어썼다. 제자리 목표의 yaw는 2단계부터 한 번도 전달된 적이 없었다(fw6의 0.6 m 엉뚱한 회전도 이것)
+- 그다음 복도 입구(4.9, 2.0)에서 **운용자를 보면서 7 s 서 있다** 놓쳤다(fw12·fw13). bag `/plan`을 보니 NavFn(A*) 경로가 시작점에서 2 cm 폭 지그재그(되돌림 14~43점)로 시작해 MPPI가 제자리에서 떨었다(v 0.00, w ±1.0). 코스트맵은 비어 있었다(목표·경로 앞 1 m 비용 0). fw10~fw13이 전부 이 자리에서 끝났고 fw8은 기다리기 덕에 운용자가 멀어진 뒤 들어가 피했다
+- 값을 맞춘 게 아니라 원인을 바꿨다: 지그재그를 안 만드는 플래너(Smac 2D, 경로 다듬기 포함)를 따라가기 트리에만 썼다
+
+**확인**(시뮬 zz_follow2, `run2.sh`, 운용자 0.5 m/s 홀→복도 모퉁이 2개→위쪽 복도 19 m 뒤 정지)
+
+| 회차 | 활성 | 평균 거리 | 0.8~2.5 m | 놓침 | 끝 |
+|---|---|---|---|---|---|
+| fw11 (규칙만) | 39 s | 3.68 m | 36 % | 1회 14.8 s | 입구에서 look 목표가 안 먹혀 끝 |
+| fw12 (+TruncatePath 제거) | 46 s | 4.30 m | 37 % | 1회 14.8 s | 입구에서 7 s 정지 뒤 놓침 |
+| fw13 (+모드 되돌림 금지) | 42 s | 4.53 m | 28 % | 3회 14.8 s | 같은 자리, bag으로 원인 확인 |
+| fw14 (+Smac 2D) | 157 s | 1.93 m | 90 % | 3회, 최대 3.4 s | **완주**, 운용자가 선 뒤 1.65 m에서 마주 보며 100 s |
+| fw15 (같음) | 158 s | 1.87 m | 91 % | 2회, 최대 3.4 s | **완주**, 끝 1.60 m 마주 봄 |
+
+충돌 0(다른 사람 최소 0.89 m), 가로지르는 사람 기다리기 정상. limbo_follow 단위 시험 10개 통과. Smac 2D 기동 시 팽창 반경 오류 로그 한 줄(2D는 중심 비용만 봐 영향 없음, 계획 실패 2회는 재시도로 지나감) — 실험 기록 "남은 것"
+
 ## 2026-10-23 (131) 따라가기 3단계(관제): 운용자 등록·시작·정지 버튼 + 따라가기 카드 + 텔레메트리 `follow` — 관제 경로 시뮬 2회 정상, 주행은 2단계 규칙 구멍 2개 발견
 
 **할 일**

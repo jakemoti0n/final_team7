@@ -785,13 +785,31 @@ map_saver:
 planner_server:
   ros__parameters:
     expected_planner_frequency: 1.0
-    planner_plugins: ["GridBased"]
+    planner_plugins: ["GridBased", "FollowPlanner"]
     costmap_update_timeout: 1.0
     GridBased:
       plugin: "nav2_navfn_planner::NavfnPlanner"
       tolerance: 0.5
       use_astar: true
       allow_unknown: true
+    # 따라가기 전용 플래너 (limbo_follow.xml만 씀, 순찰은 GridBased 그대로). NavFn(A*)은 복도 입구 벽 모서리 옆에서 경로 시작부가
+    # 2 cm 폭 지그재그(되돌림 14~43점)로 나와 MPPI가 제자리에서 떨기만 했다(따라가기 3단계 fw12·fw13, 코스트맵은 비어 있었음).
+    # Smac 2D는 격자 A*에 경로 다듬기가 붙어 그런 시작부가 안 생긴다
+    FollowPlanner:
+      plugin: "nav2_smac_planner::SmacPlanner2D"
+      tolerance: 0.25
+      downsample_costmap: false
+      allow_unknown: true
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      max_planning_time: 1.0
+      cost_travel_multiplier: 2.0
+      use_final_approach_orientation: false   # 마지막 자세는 목표 yaw 그대로 (운용자 쪽을 보게)
+      smoother:
+        max_iterations: 1000
+        w_smooth: 0.3
+        w_data: 0.2
+        tolerance: 1.0e-10
 
 smoother_server:
   ros__parameters:

@@ -22,6 +22,13 @@ echo "##### $L 시작 $(date +%H:%M:%S) 커밋 $(git -C $R rev-parse --short HEA
 WORLD=zz_follow2 MAP=aischool_2f_map $T/sim_ctl.sh start $L || { echo "시뮬 시작 실패"; exit 1; }
 ( cd /tmp; exec python3 $E/rec2.py $OUT/$L.json ) > $LOGS/follow_rec_$L.log 2>&1 &
 REC=$!
+BAGP=""
+if [ "${BAG:-0}" = 1 ]; then   # 주행이 멈추는 원인을 볼 때: 코스트맵·속도 명령·경로를 같이 녹화 (ros2 bag, SIGINT로만 끝냄)
+  rm -rf $OUT/${L}_bag
+  ( cd /tmp; exec ros2 bag record -o $OUT/${L}_bag /cmd_vel /cmd_vel_nav /cmd_vel_smoothed /plan /goal_update /local_costmap/costmap \
+      /follow/state /follow/target /person_wait /collision_monitor_state /tf /tf_static /sim/people ) > $LOGS/bag_$L.log 2>&1 &
+  BAGP=$!
+fi
 for i in $(seq 1 60); do
   r=$(python3 $E/svc.py call /follow/enroll 5 2>/dev/null)
   echo "$(date +%H:%M:%S) enroll: $r"; echo "$r" | grep -q "success=True" && break; sleep 1
@@ -35,6 +42,7 @@ sleep 2; python3 $E/svc.py pub /follow/go >/dev/null 2>&1; echo "$(date +%H:%M:%
 sleep $DUR
 python3 $E/svc.py call /follow/stop 8 >/dev/null 2>&1
 kill -INT $REC; wait $REC 2>/dev/null
+[ -n "$BAGP" ] && { kill -INT $BAGP; wait $BAGP 2>/dev/null; }
 $T/sim_ctl.sh stop >/dev/null 2>&1
 rm -f $W/zz_follow2.sdf $W/zz_follow2_movers.json
 echo "##### $L 끝 $(date +%H:%M:%S)"

@@ -7,6 +7,8 @@
   두 값을 같게 두면(기본) 목표점이 운용자를 따라 조금씩 앞으로 가고 컨트롤러가 알아서 느려져 가다 서다가 없다.
   벌려 두면(1.2/1.5) 그 사이에서 완전히 서서 운용자 속도에 평균이 묶였다(2단계 4·5회차 홀 0.25 m/s).
 - 서 있을 때의 목표점은 로봇 자신의 자리다 (운용자 쪽으로 더 가지 않음). 후진은 쓰지 않으므로(2-3) 운용자가 다가와도 물러나지 않는다.
+- 놓쳤을 때(lost_plan): 가까이서 놓치면 자세 그대로, 마지막 자리가 정면에서 벗어나 있으면 먼저 그쪽으로 돌아보고, 운용자가 걷고
+  있었으면 가던 방향으로 search_ahead만큼 내다보고, 멈춰 있었으면 그 자리를 보며 선다 (3단계 fw9·fw10의 구멍 둘을 막는 규칙).
 """
 
 from dataclasses import dataclass
@@ -21,6 +23,35 @@ class FollowConfig:
     lost_stop_sec: float = 15.0    # s, 놓친 채 이 시간이 지나면 따라가기를 끝낸다 (경보). 그 전엔 마지막 자리로 가서 본다
     goal_min_move: float = 0.15    # m, 목표점이 이보다 덜 움직였으면 다시 보내지 않는다 (재계획 떨림 방지)
     search_ahead: float = 1.5      # m, 멀리서 놓치면 마지막 자리에서 가던 방향으로 이만큼 더 간 점을 목표로 (모퉁이 너머를 내다봄)
+    moving_speed: float = 0.1      # m/s, 운용자 속도가 이보다 크면 "걷는 중". 가던 방향도 이때만 기억한다. 멈춰 있던 운용자는 내다보지 않는다
+    look_angle_deg: float = 25.0   # °, 놓쳤을 때 마지막 자리가 로봇 정면에서 이 각도 밖이면 먼저 그쪽으로 돌아본다 (카메라 반각 34° 안쪽)
+
+
+def wrap_angle(angle):
+    """각도를 -pi~pi로."""
+    return (angle + math.pi) % (2.0 * math.pi) - math.pi
+
+
+def lost_plan(robot_pose, last_xy, heading, target_moving, distance, config):
+    """운용자를 놓쳤을 때 할 일. (mode, goal_xy, yaw)를 돌려준다.
+
+    - hold:   가까이(distance ≤ resume_distance)서 놓침. 운용자가 카메라 아래쪽으로 벗어난 것이라 그 자리로 가면 파고들고,
+              제자리 회전도 MPPI가 호를 그려 0.6 m 움직인다(2단계 6회차) → 자세 그대로 선다
+    - look:   마지막 자리가 정면에서 look_angle_deg 밖. 경로가 꺾여 운용자가 좁은 시야(±34°) 밖으로 나간 것(3단계 fw10)
+              → 제자리에서 그쪽으로 돌아본다. 돌아서 시야에 들어오면 다음 tick에 search/watch로 넘어간다
+    - search: 운용자가 걷고 있었다(모퉁이 너머) → 마지막 자리에서 가던 방향으로 search_ahead만큼 더 간 점을 목표로(2단계 fw8)
+    - watch:  운용자가 멈춰 있었다 → 내다보기를 쓰지 않고 마지막 자리를 보며 선다. 멈춘 운용자에게 옛 진행 방향으로
+              내다보기를 쓰면 운용자를 지나쳐 달린다(3단계 fw9)
+    """
+    rx, ry, ryaw = robot_pose
+    if distance <= config.resume_distance:
+        return 'hold', (rx, ry), ryaw
+    bearing = math.atan2(last_xy[1] - ry, last_xy[0] - rx)
+    if abs(wrap_angle(bearing - ryaw)) > math.radians(config.look_angle_deg):
+        return 'look', (rx, ry), bearing
+    if target_moving and heading is not None:
+        return 'search', search_goal(last_xy, heading, config.search_ahead), heading
+    return 'watch', (rx, ry), bearing
 
 
 def search_goal(last_xy, heading, ahead):
