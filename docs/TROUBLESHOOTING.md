@@ -276,6 +276,16 @@
 - **해결**: 없음, 무시한다. 순찰(NavFn)에는 나오지 않는다.
 - **확인**: fw14·fw15 각 1회, 설정 직후에만. 150 s 주행 중 계획 실패 1~2회는 운용자·사람이 경로를 막은 순간이고 RecoveryNode 0.5 s 재시도로 지나갔다(이 로그와 무관).
 
+### 분리 시뮬(PC role:=sim ↔ Jetson role:=robot): 로봇이 서 있고 TF가 밀림 — Jetson UDP 수신 버퍼 넘침 — 2026-10-26
+- **증상**: 유선 1 Gbps 직결(10.0.0.1 ↔ 10.0.0.2)인데 Jetson의 collision_monitor가 `Robot to stop due to invalid source`, 점군 `timestamps differ` 4.7 s. 코스트맵 메시지 필터 드롭, EKF TF `odom→base_footprint` 최대 312 ms, `/imu` 170 → 63 Hz, 컨테이너 CPU 170~190 %, load 17(코어 6개)
+- **원인**: PC → Jetson으로 가는 점군이 `/rgbd_camera/points` 27 MB/s(219 Mbit/s, 320×240 13 Hz) + `/mid360/points` 9 MB/s(74 Mbit/s, 43,200점 10 Hz) = 유선 263 Mbit/s. 한 장이 수백 개 UDP 조각으로 몰려 오는데 Jetson 커널 수신 버퍼 상한이 기본 208 KB(`net.core.rmem_max`)라 넘쳐서 버림(`/proc/net/snmp` Udp `RcvbufErrors` 초당 45개, `/proc/net/udp`에서 nav2_container 소켓 drops 17,291). 조각 하나만 잃어도 한 장이 통째로 사라져 묵은 점군만 남음. FastDDS 프로필에 소켓 버퍼를 안 적으면 커널 기본값을 쓴다
+- **해결**:
+  - Jetson `/etc/sysctl.d/60-limbo-dds.conf`: `net.core.rmem_max`·`rmem_default`·`wmem_max` = 67108864, `net.core.netdev_max_backlog` = 5000 (`sudo sysctl --system`)
+  - Jetson·노트북 `~/limbo_fastdds_wired.xml`의 UDPv4 transport_descriptor에 `<sendBufferSize>33554432</sendBufferSize>` `<receiveBufferSize>33554432</receiveBufferSize>` 추가 (커널 상한보다 작아야 잘리지 않음). 노트북도 같은 sysctl 적용
+  - 양쪽 런치 재시작(소켓은 프로세스 시작 때 만들어져 재시작 전엔 안 바뀜)
+- **확인**: `RcvbufErrors`·소켓 drops 10 s 동안 증가 0, collision_monitor 경고 없음, `/imu` 191 Hz, EKF `/odometry/filtered` 28.6 Hz, load 17 → 12, 1 m 목표 전송 → `/cmd_vel` 19.8 Hz로 성공. **"서 있다"의 나머지 절반은 목표를 아무도 안 보낸 것**이었다(`/behavior_tree_log` 없음). 남은 것: Jetson 전체 CPU 72 %(컨테이너 171 %, oak_camera 54 %, person_detector 39 %), TF 지연 최대 388 ms 튐 — 점군 양(특히 rgbd 219 Mbit/s)을 줄이는 B안은 PM 결정 대기
+- **재는 법**: `grep ^Udp: /proc/net/snmp`(RcvbufErrors 열) 5 s 간격 두 번, `awk 'NR>1 && $NF>0' /proc/net/udp`(소켓별 drops), `ros2 topic bw <토픽>`으로 토픽별 대역, `cat /sys/class/net/<if>/statistics/tx_bytes` 5 s 차이로 유선 총량
+
 ## 인지(person_detector)
 
 ### person_detector가 CPU를 8코어(775%)나 씀 — 2026-10-02
