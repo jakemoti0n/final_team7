@@ -270,6 +270,12 @@
 - **확인**: fw14·fw15 같은 입구를 서지 않고 통과, 19 m 완주. Smac 2D 기동 시 `Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking` 오류 한 줄(팽창 0.45, 외곽 0.5×0.59)이 뜨지만 2D는 중심 비용만 보므로 영향 없음(150 s 동안 계획 실패 2회, 0.5 s 재시도로 지나감)
 - **진단법**: `/plan`의 연속 세 점이 되돌아오는 횟수(`dist(a,c) < 0.5·dist(a,b)`)를 세면 로그 없이도 바로 보인다. 녹화는 `run2.sh`에 `BAG=1`
 
+### 따라가기: Smac 2D 플래너가 뜰 때 `Inflation layer either not found or inflation is not set sufficiently…` 오류 한 줄 — 2026-10-26
+- **증상**: planner_server 설정 중 `Configuring FollowPlanner of type SmacPlanner2D` 바로 다음 줄에 ERROR 1회(`sim_fw15.log` 306행). 그 뒤 계획·주행은 정상이고 팽창 반경을 키워도 사라지지 않는다.
+- **원인**: 설치된 nav2_smac_planner 1.3.13의 `SmacPlanner2D::configure`가 충돌 검사기를 `setFootprint(footprint, radius=true, possible_collision_cost=0.0)` **고정값**으로 부른다(소스 주석: 2D는 셀 중심 비용만 보므로 외접 비용이 무관). 검사기는 그 값이 0 이하면 이 오류를 찍는다. 즉 2D 플래너를 쓰면 설정과 무관하게 무조건 1회 나오는 상류 코드의 로그다. 우리 설정(팽창 0.45 m ≥ 외곽 0.5×0.59의 외접 반경 0.39 m)은 메시지가 권하는 조건도 이미 만족한다.
+- **해결**: 없음, 무시한다. 순찰(NavFn)에는 나오지 않는다.
+- **확인**: fw14·fw15 각 1회, 설정 직후에만. 150 s 주행 중 계획 실패 1~2회는 운용자·사람이 경로를 막은 순간이고 RecoveryNode 0.5 s 재시도로 지나갔다(이 로그와 무관).
+
 ## 인지(person_detector)
 
 ### person_detector가 CPU를 8코어(775%)나 씀 — 2026-10-02

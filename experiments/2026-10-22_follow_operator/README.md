@@ -158,8 +158,8 @@ fw14의 놓침 3회: 홀에서 0.2 s(한 프레임), 복도 입구에서 2.6 s(s
     세면 바로 보인다(`fw_timeline.py`·bag). 순찰의 "진전 없음" 사례 중 벽 모서리 옆에서 난 것은 같은 원인일 수 있다(KNOWN_ISSUES에 적음, 순찰 플래너는 PM 결정 뒤).
 12. **놓침 대응은 한 방향으로만 진행한다.** 매 tick 다시 고르면 경로가 조금만 꺾여도 모드가 오가며 아무것도 못 한다.
 
-### 남은 것
+### 남은 것 (2026-10-26 정리)
 
-- Smac 2D가 뜰 때 `Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking` 오류 한 줄을 낸다(전역 코스트맵 팽창 0.45,
-  외곽 0.5×0.59). 2D 플래너는 중심 비용만 보므로 주행엔 영향이 없었고, 150 s 동안 계획 실패 2회(0.5 s 뒤 재시도로 지나감). 원인은 안 팠다.
-- 서 있는 동안 FollowPath가 0.5 s마다 다시 걸리는 것(`Optimizer reset`)은 그대로다.
+- ~~Smac 2D 팽창 오류 로그~~ → 원인 확인: 상류 `SmacPlanner2D::configure`가 충돌 검사기에 비용 0.0을 고정값으로 넘겨 2D 플래너는 설정과 무관하게 1회 찍는다. 무해. TROUBLESHOOTING 2026-10-26 항목.
+- 서 있는 동안 FollowPath가 0.5 s마다 다시 걸리는 것(`Optimizer reset` 2 Hz)은 **PM 결정(10-26)으로 그대로 둔다.** 구조적이다: 서 있을 때 목표가 로봇 자리라 경로 길이 0 → FollowPath가 즉시 "도착" → 0.5 s 쉬고 다시 검. 이 반복이 운용자가 출발할 때 0.5 s 안에 따라나서는 장치이기도 하다. 고치는 길은 쉬는 시간 늘리기(출발 반응 지연)나 방향까지 보는 도착 조건 노드 신설(Nav2 `GoalReached`는 위치만 봐서 look 회전이 깨짐)뿐이고, 따라가기 트리 안의 일이라 순찰엔 영향이 없다.
+- 따라가기가 순찰에 남기는 흔적은 planner_server·controller_server에 같이 로드되는 `FollowPlanner`·`FollowOperator` 플러그인(순찰 중 미사용, 메모리 소량, 위 로그 1줄)뿐. 더 떼어내려면 이 블록을 별도 yaml로 빼서 `follow:=true`일 때만 싣는 방법이 있다(반나절, 급하지 않음).
