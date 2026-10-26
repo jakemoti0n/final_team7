@@ -8,6 +8,27 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-26 (48) 두 대 분리 시뮬에서 Jetson이 서던 원인(UDP 수신 버퍼 넘침) 해결: PC에서 카메라 점군을 5 cm 복셀로 줄이는 `rgbd_voxel` + 양쪽 소켓 버퍼 — 유선 263 → 49 Mbit/s, Jetson CPU 72 → 59 %, 1 m 목표 주행 성공
+
+**할 일**
+- pull 뒤 `build_limbo`(bridge.yaml·런치가 바뀜). 두 대 모두 split-sim 0절의 **UDP 소켓 버퍼**(sysctl + FastDDS 프로필)를 한 번 적용
+- PC 런치를 다시 띄우면 Jetson 런치도 다시 띄운다(스킬 2절)
+
+**변경**
+- `bridge.yaml`: Gazebo 카메라 점군을 ROS `/rgbd_camera/points_raw`로 받는다(gz 토픽은 그대로)
+- `start_simulation.launch.py`: `rgbd_voxel`(pcl_ros `filter_voxel_grid_node`, leaf 5 cm, role sim/all) 추가. `points_raw` → `/rgbd_camera/points`. Nav2 설정·Jetson 쪽은 손대지 않음
+- `split-sim/SKILL.md`: 대역 표를 실측값으로(rgbd 2 Mbit/s, 라이다 39, 유선 전체 약 50), 0절에 소켓 버퍼 적용 명령, 2절에 "PC 재시작이면 Jetson도", 3절 기대값, 막히면 5(서 있을 때: 목표 유무 → RcvbufErrors)
+
+**원인과 근거**
+- 유선 직결 1 Gbps인데 Jetson collision_monitor가 `Robot to stop due to invalid source`, 점군 4.7 s 묵음. `/proc/net/snmp` Udp RcvbufErrors 초당 45개: 카메라 점군 320×240 전 화소 76,800점(미반환 NaN 포함) 27 MB/s(219 Mbit/s) + 라이다 9 MB/s가 수백 개 UDP 조각으로 몰려 오는데 커널 수신 버퍼 상한이 기본 208 KB. 조각 하나만 잃어도 한 장이 사라짐
+- 소켓 버퍼(커널 64 MB, FastDDS 32 MB)만으로 드롭 0, /imu 63 → 191 Hz, 주행 성공. 다만 Jetson CPU 72 %·TF 지연 최대 388 ms가 남아 PM 결정으로 점군 자체를 줄임(1번: PC 쪽 복셀). 코스트맵 해상도가 5 cm라 코스트맵 결과는 같음
+- 복셀 뒤: 유선 49 Mbit/s, rgbd 1,482점 0.26 MB/s, Jetson CPU 59 %(주행 중), nav2_container 171 → 139 %, 주행 중 TF odom→base_footprint 지연 중앙 6 ms·최대 116 ms, 1 m 목표 7.0 s 성공(/cmd_vel 20 Hz), 경고 0
+- "서 있다"의 나머지 절반은 목표를 아무도 안 보낸 것이었다. 스킬 막히면 5에 적음
+
+**확인**(노트북 role:=sim camera:=oak ↔ Jetson role:=robot nav2_composition:=True, 유선 직결, 2026-10-26)
+- 위 숫자. 복도 7.5 m(스폰 → 순찰 경로점 A) 주행: 23.9 s 성공, 평균 0.44 m/s·최대 0.60, /cmd_vel 20 Hz, 경고 0, 주행 중 TF odom→base_footprint 28 Hz·지연 중앙 6 ms·최대 48 ms(버퍼 전 388 ms), UDP 드롭 0, Jetson CPU 평균 73 %(person_detector가 주행 중 99 %로 올라감 — 인식 쪽 별도 주제)
+- 노트북 한 대(role:=all) 구성은 아직 안 돌려 봄 — rgbd_voxel이 role all에서도 뜨므로 다음 순찰 시뮬에서 코스트맵이 같은지 한 번 본다
+
 ## 2026-10-25 (47) dev 병합에서 빠진 Nav2 컨테이너와 `camera:=oak` 되살림 — dev의 `nav2_composition`·벽 오인식 수정은 유지, Jetson 검증 전
 
 (dev를 itkwon에 합칠 때 충돌을 dev 쪽으로 정리하면서 itkwon의 45·46 내용과 Nav2 컨테이너가 빠졌다. 45·46 항목도 아래에 되살림)

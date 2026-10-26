@@ -18,18 +18,19 @@ Jetson은 실물에서 **로봇 스택만** 돌리는 컴퓨터다. 그래서 Ga
 | `robot` | EKF, wheel_slip_monitor, AMCL(map_server), Nav2, person_detector(YOLO, camera:=oak면 YOLO 없이 추적만), oak_camera(camera:=oak만), tof_node, person_wait | Jetson |
 | `all` (기본) | 전부 | 한 대 (지금까지와 같음) |
 
-네트워크로 오가는 것(PC에서 role:=sim만 띄워 `ros2 topic bw`로 실측, 2026-10-22):
+네트워크로 오가는 것(유선 직결 PC↔Jetson에서 `ros2 topic bw`·`tx_bytes`로 실측, 2026-10-26):
 
 | 토픽 | 받는 쪽 | 양 |
 |---|---|---|
-| /rgbd_camera/points (카메라 포인트클라우드) | Nav2 코스트맵·collision_monitor | 213 Mbit/s |
-| /mid360/points_filtered (라이다 포인트클라우드) | Nav2 코스트맵·collision_monitor | 50 Mbit/s |
-| 카메라 컬러+깊이 영상 | person_detector | 65 Mbit/s |
+| /rgbd_camera/points (카메라 포인트클라우드, PC의 rgbd_voxel이 5 cm로 줄인 것) | Nav2 코스트맵·collision_monitor | 2 Mbit/s (1,482점 11 Hz. 줄이기 전 76,800점 219 Mbit/s) |
+| /mid360/points_filtered (라이다 포인트클라우드) | Nav2 코스트맵·collision_monitor | 39 Mbit/s |
+| 카메라 컬러+깊이 영상 | person_detector | 65 Mbit/s (camera:=oak면 없음) |
 | /scan, /odom, /imu, /joint_states, /tof/points, TF, /clock | AMCL·EKF 등 | 합쳐 1 Mbit/s 미만 |
 | /cmd_vel (Jetson→PC) | Gazebo | 무시할 수준 |
 
-Nav2를 기본대로 프로세스 3개(controller·planner·collision_monitor)로 띄우면 포인트클라우드를 **3벌** 받아 약 850 Mbit/s가 된다.
-그래서 Jetson에서는 **`nav2_composition:=True`**(Nav2를 한 프로세스로)로 띄워 한 벌(약 330 Mbit/s)만 받고, 연결은 **유선 1 GbE 필수**다. Wi-Fi로는 안 된다.
+유선 전체는 약 50 Mbit/s다(2026-10-26, camera:=oak). 2026-10-26 전에는 카메라 점군을 전 화소 그대로 보내 한 벌에 약 260 Mbit/s였고, Jetson 커널 UDP 수신 버퍼(208 KB)가
+넘쳐 점군이 버려지고 collision_monitor가 묵은 데이터로 로봇을 세웠다. 지금은 PC의 `rgbd_voxel`이 줄이고, 양쪽 소켓 버퍼도 키운다(0절).
+그래도 Jetson은 **`nav2_composition:=True`**(Nav2를 한 프로세스로, 점군을 한 벌만 받음)로 띄우고 연결은 **유선 1 GbE**다. Wi-Fi에서는 Nav2 시작(bond)이 51 s 걸리거나 멈췄다(10-25, 유선은 3 s).
 실물에서는 센서와 Nav2가 같은 본체라 이 트래픽이 네트워크를 타지 않는다. 이 부담은 분리 시험에서만 생긴다.
 
 ## 이 스킬을 따르는 에이전트에게
@@ -64,7 +65,14 @@ Nav2를 기본대로 프로세스 3개(controller·planner·collision_monitor)�
 - PC: 이 저장소가 빌드돼 있고 Gazebo가 뜨는 컴퓨터(README "처음부터 돌려 보기"). NVIDIA면 `export __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia`.
 - Jetson: Ubuntu 24.04 + ROS 2 Jazzy, 이 저장소를 README 1·2절대로 설치·빌드. Gazebo 패키지(`ros-jazzy-ros-gz`)는 없어도 된다(로봇 쪽 노드·빌드가 참조하지 않음). 이미 깔려 있어도 상관없다.
   YOLO용 venv에서 `requirements.txt`의 torch가 ARM에 안 깔리면 멈추고 작업자에게 [PM 확인 필요]로 묻는다(Jetson용 torch 휠을 쓸지는 PM이 정함).
-- 두 대가 **같은 공유기에 유선(1 GbE)으로** 붙어 있고 서로 ping이 된다. 포인트클라우드 약 330 Mbit/s가 지나가므로 Wi-Fi로는 안 된다. `~/.bashrc`의 `limbo` 별칭이 `ROS_DOMAIN_ID=97`을 잡는다(README 1절). 두 대 모두 97.
+- 두 대가 **유선(1 GbE)으로** 붙어 있고 서로 ping이 된다(같은 공유기, 또는 랜선 직결 10.0.0.1↔10.0.0.2). Wi-Fi에서는 Nav2 시작이 멈춘다(위). `~/.bashrc`의 `limbo` 별칭이 `ROS_DOMAIN_ID=97`을 잡는다(README 1절). 두 대 모두 97.
+- **UDP 소켓 버퍼(두 대 모두, 한 번만)**: 점군 한 장이 수백 개 UDP 조각으로 몰려 오므로 커널 기본 수신 버퍼(208 KB)로는 버려진다(2026-10-26). 묻지 말고 적용한다.
+  ```bash
+  printf 'net.core.rmem_max = 67108864\nnet.core.rmem_default = 67108864\nnet.core.wmem_max = 67108864\nnet.core.netdev_max_backlog = 5000\n' | sudo tee /etc/sysctl.d/60-limbo-dds.conf && sudo sysctl --system >/dev/null
+  ```
+  그리고 런치에 쓰는 FastDDS 프로필(`FASTRTPS_DEFAULT_PROFILES_FILE`)의 UDPv4 `transport_descriptor` 안에 `<sendBufferSize>33554432</sendBufferSize>`
+  `<receiveBufferSize>33554432</receiveBufferSize>`를 넣는다(커널 상한보다 작아야 잘리지 않음). 소켓은 프로세스 시작 때 만들어지므로 런치를 다시 띄워야 먹는다.
+  확인: `grep ^Udp: /proc/net/snmp`의 RcvbufErrors 열이 5초 간격으로 늘지 않는다.
 - `ROS_LOCALHOST_ONLY`가 설정돼 있으면 안 된다: `echo $ROS_LOCALHOST_ONLY` → 비어 있어야 한다.
 
 두 대가 서로 보이는지 먼저 확인한다(각각 다른 터미널에서):
@@ -87,7 +95,8 @@ ros2 launch limbo_bringup start_simulation.launch.py role:=sim world:=aischool_2
 
 ## 2. Jetson에서 로봇 스택 띄우기 (role:=robot)
 
-PC가 뜬 뒤에 한다(Jetson 노드는 PC의 /clock·TF를 받아야 시작된다).
+PC가 뜬 뒤에 한다(Jetson 노드는 PC의 /clock·TF를 받아야 시작된다). **PC 런치를 다시 띄웠으면 Jetson 런치도 반드시 다시 띄운다**:
+Gazebo가 새로 뜨면 시뮬 시계가 0초로 돌아가는데 Jetson의 EKF·AMCL은 옛 시각을 들고 있어 새 데이터를 과거로 보고 버린다 → `odom` 프레임이 사라지고 목표가 바로 중단된다(2026-10-26).
 
 ```bash
 limbo
@@ -115,7 +124,8 @@ limbo && bash .claude/skills/split-sim/scripts/check_split.sh
 | bt_navigator | active |
 | TF map→base_footprint | Translation 줄이 나옴 (AMCL 동작) |
 
-대역폭도 Jetson에서 한 번 본다: `ros2 topic bw /rgbd_camera/points` → 약 200 Mbit/s, `ros2 topic bw /scan` → 끊김 없이 주기대로. 둘 중 하나가 크게 낮으면 "막히면 2".
+대역폭도 Jetson에서 한 번 본다: `ros2 topic bw /rgbd_camera/points` → 약 0.26 MB/s(1,500점 안팎, 11 Hz), `ros2 topic bw /mid360/points_filtered` → 약 5 MB/s, `ros2 topic bw /scan` → 끊김 없이 주기대로.
+rgbd가 20 MB/s를 넘으면 PC에서 `rgbd_voxel`이 안 뜬 것이다(`ros2 node list | grep rgbd_voxel`). `/scan`이 크게 낮으면 "막히면 2".
 
 ## 4. 부하 재기 (양쪽에서 같은 것을 2분)
 
@@ -189,7 +199,10 @@ ps -eo pid,args | grep -E 'ekf_node|parameter_bridge|gz sim|nav2|person_detector
    - 같은 주기인데도 경고가 나면 Jetson 자체가 밀리는 것이다. load_watch 결과(load1, CPU 상위 프로세스)를 붙여 [PM 확인 필요]. 값을 바꿔 맞추지 않는다.
 3. **person_detector의 "extrapolation into the future … 10~20 ms" 경고가 10초에 한두 건**: 한 대에서 돌릴 때도 나는 정상 범위다. 매 프레임 나면 2번.
 4. **Jetson에서 `package 'limbo_simulation' not found`**: 런치 파일이 시뮬 패키지 경로를 읽는다. 빌드에 포함돼야 한다(`build_limbo`가 전체를 빌드하면 들어 있다).
-5. **Nav2가 configure에서 멈춘다(lifecycle timeout)**: 시작 부하 문제로 한 대에서도 가끔 난다. Ctrl+C 뒤 5절대로 정리하고 한 번 다시 띄운다. 두 번째도 실패하면 [PM 확인 필요].
+5. **로봇이 서 있다**: 먼저 목표가 걸려 있는지 본다(`ros2 topic echo /behavior_tree_log --once`가 8초 안에 나와야 진행 중). 아무도 목표를 안 보냈으면 서 있는 게 정상이다(2026-10-26에 이걸로 한참 헤맴).
+   목표가 있는데 안 가고 Jetson 로그에 collision_monitor `Robot to stop due to invalid source` / `timestamps differ`가 나오면 UDP 수신 버퍼 넘침이다: Jetson에서 `grep ^Udp: /proc/net/snmp`
+   RcvbufErrors가 5초마다 늘면 0절의 소켓 버퍼를 적용하고 양쪽 런치를 다시 띄운다.
+6. **Nav2가 configure에서 멈춘다(lifecycle timeout)**: 시작 부하 문제로 한 대에서도 가끔 난다. Ctrl+C 뒤 5절대로 정리하고 한 번 다시 띄운다. 두 번째도 실패하면 [PM 확인 필요].
 
 ## 보고 형식
 

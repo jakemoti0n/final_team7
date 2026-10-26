@@ -63,8 +63,10 @@
 
 # 카메라 컬러·깊이·CameraInfo는 bridge_camera.yaml에 따로 있다 (camera:=oak이면 실물 OAK가 대신 냄)
 
-# 3D point cloud
-- ros_topic_name: "/rgbd_camera/points"
+# 3D point cloud. ROS 쪽 이름이 _raw인 이유: 320×240 전 화소(76,800점, 미반환 NaN 포함, 27 MB/s)를 그대로 Nav2에
+# 주면 두 대로 나눠 돌릴 때 유선의 대부분(219 Mbit/s)을 차지한다(2026-10-26). start_simulation.launch.py의
+# rgbd_voxel 노드가 이것을 5 cm 복셀로 줄여 /rgbd_camera/points로 낸다. Nav2·collision_monitor는 그 이름을 본다
+- ros_topic_name: "/rgbd_camera/points_raw"
   gz_topic_name: "/rgbd_camera/points"
   ros_type_name: "sensor_msgs/msg/PointCloud2"
   gz_type_name: "gz.msgs.PointCloudPacked"

@@ -144,6 +144,37 @@ def generate_launch_description():
 
 
     # ============================================================
+    # 2-1. 카메라 점군 줄이기
+    #
+    # /rgbd_camera/points_raw (Gazebo 320×240 전 화소 76,800점, 27 MB/s)
+    #       ↓
+    # rgbd_voxel (pcl_ros VoxelGrid, 5 cm)
+    #       ↓
+    # /rgbd_camera/points (Nav2 코스트맵·collision_monitor가 보는 이름)
+    #
+    # 두 대로 나눠 돌릴 때 이 점군이 유선 트래픽의 대부분(219 Mbit/s)이었고, Jetson 커널 수신 버퍼가 넘쳐
+    # 묵은 점군으로 로봇이 섰다(2026-10-26, TROUBLESHOOTING). 코스트맵 해상도가 5 cm라 5 cm 복셀로 줄여도
+    # 코스트맵 결과는 같다. 미반환(NaN) 화소도 여기서 빠진다. role과 무관하게 Gazebo가 있는 쪽에서 돈다
+    # ============================================================
+
+    rgbd_voxel = Node(
+        condition=on_sim,
+        package='pcl_ros',
+        executable='filter_voxel_grid_node',
+        name='rgbd_voxel',
+        output='screen',
+        remappings=[
+            ('input', '/rgbd_camera/points_raw'),
+            ('output', '/rgbd_camera/points'),
+        ],
+        parameters=[{
+            'use_sim_time': True,
+            'leaf_size': 0.05,
+        }],
+    )
+
+
+    # ============================================================
     # 3. PointCloud → LaserScan
     #
     # filtered PointCloud 사용
@@ -319,7 +350,7 @@ def generate_launch_description():
         if LaunchConfiguration('robot').perform(context) == 'legacy':
             params_file = write_legacy_nav2_params()
         # True면 Nav2 노드들을 한 프로세스(컨테이너)로 띄운다. 두 대로 나눠 돌릴 때(role:=robot) 포인트클라우드를
-        # 프로세스마다 한 벌씩(3벌, 약 850 Mbit/s) 받지 않고 한 벌(약 330 Mbit/s)만 받게 하려고 쓴다
+        # 프로세스마다 한 벌씩 받지 않고 한 벌만 받게 하려고 쓴다(rgbd_voxel 도입 뒤 한 벌 약 50 Mbit/s, 전에는 약 260 Mbit/s — 2026-10-26 실측)
         composed = LaunchConfiguration('nav2_composition').perform(context).lower() == 'true'
         container = []
         if composed:
@@ -488,7 +519,7 @@ def generate_launch_description():
         # Gazebo sensor / TF 준비 대기
         TimerAction(
             period=4.0,
-            actions=[self_filter]
+            actions=[self_filter, rgbd_voxel]
         ),
 
         # filtered PointCloud가 나온 뒤 실행
