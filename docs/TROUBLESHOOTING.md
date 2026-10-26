@@ -283,7 +283,8 @@
   - Jetson `/etc/sysctl.d/60-limbo-dds.conf`: `net.core.rmem_max`·`rmem_default`·`wmem_max` = 67108864, `net.core.netdev_max_backlog` = 5000 (`sudo sysctl --system`)
   - Jetson·노트북 `~/limbo_fastdds_wired.xml`의 UDPv4 transport_descriptor에 `<sendBufferSize>33554432</sendBufferSize>` `<receiveBufferSize>33554432</receiveBufferSize>` 추가 (커널 상한보다 작아야 잘리지 않음). 노트북도 같은 sysctl 적용
   - 양쪽 런치 재시작(소켓은 프로세스 시작 때 만들어져 재시작 전엔 안 바뀜)
-- **확인**: `RcvbufErrors`·소켓 drops 10 s 동안 증가 0, collision_monitor 경고 없음, `/imu` 191 Hz, EKF `/odometry/filtered` 28.6 Hz, load 17 → 12, 1 m 목표 전송 → `/cmd_vel` 19.8 Hz로 성공. **"서 있다"의 나머지 절반은 목표를 아무도 안 보낸 것**이었다(`/behavior_tree_log` 없음). 남은 것: Jetson 전체 CPU 72 %(컨테이너 171 %, oak_camera 54 %, person_detector 39 %), TF 지연 최대 388 ms 튐 — 점군 양(특히 rgbd 219 Mbit/s)을 줄이는 B안은 PM 결정 대기
+- **확인**: `RcvbufErrors`·소켓 drops 10 s 동안 증가 0, collision_monitor 경고 없음, `/imu` 191 Hz, EKF `/odometry/filtered` 28.6 Hz, load 17 → 12, 1 m 목표 전송 → `/cmd_vel` 19.8 Hz로 성공. **"서 있다"의 나머지 절반은 목표를 아무도 안 보낸 것**이었다(`/behavior_tree_log` 없음). 남은 Jetson CPU 72 %(컨테이너 171 %, oak_camera 54 %, person_detector 39 %)·TF 지연 최대 388 ms는 PM 결정으로 점군 자체를 줄여 해결(ktj 변경 기록 48, 2026-10-26): PC에서 카메라 점군을 5 cm 복셀로 줄이는 `rgbd_voxel`(76,800점 27 MB/s → 1,482점 0.26 MB/s) → 유선 263 → 49 Mbit/s, Jetson CPU 59 %(주행 중), 주행 중 TF 지연 중앙 6 ms·최대 116 ms, 1 m 목표 7.0 s 성공
+- **주의**: PC 런치를 다시 띄우면 Jetson 런치도 다시 띄운다. Gazebo가 새로 뜨면 시뮬 시계가 0초로 돌아가 Jetson의 EKF가 새 데이터를 과거로 보고 버린다(`odom` 프레임 사라짐, 목표 즉시 중단). 같은 날 이걸로 한 번 헛돌았다
 - **재는 법**: `grep ^Udp: /proc/net/snmp`(RcvbufErrors 열) 5 s 간격 두 번, `awk 'NR>1 && $NF>0' /proc/net/udp`(소켓별 drops), `ros2 topic bw <토픽>`으로 토픽별 대역, `cat /sys/class/net/<if>/statistics/tx_bytes` 5 s 차이로 유선 총량
 
 ## 인지(person_detector)
