@@ -21,6 +21,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav2_behavior_tree REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -88,6 +89,24 @@ ament_target_dependencies(limbo_compute_pull_over_pose_bt_node
   tf2_geometry_msgs
 )
 
+# BT 데코레이터: 따라가기에서 FollowPath를 새 경로가 왔고 목표가 바뀌었거나 직전 추종이 실패했을 때만 다시 건다 (타이머 없음)
+add_library(limbo_run_when_goal_changed_bt_node SHARED
+  src/run_when_goal_changed_decorator.cpp
+)
+target_include_directories(limbo_run_when_goal_changed_bt_node
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+target_compile_definitions(limbo_run_when_goal_changed_bt_node PRIVATE BT_PLUGIN_EXPORT)
+ament_target_dependencies(limbo_run_when_goal_changed_bt_node
+  behaviortree_cpp
+  geometry_msgs
+  nav_msgs
+  nav2_behavior_tree
+  rclcpp
+)
+
 install(
   DIRECTORY
     behavior_trees
@@ -98,7 +117,7 @@ install(
 )
 
 install(
-  TARGETS human_layer limbo_is_waiting_for_person_condition_bt_node limbo_compute_pull_over_pose_bt_node
+  TARGETS human_layer limbo_is_waiting_for_person_condition_bt_node limbo_compute_pull_over_pose_bt_node limbo_run_when_goal_changed_bt_node
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin

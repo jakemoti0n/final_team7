@@ -9,6 +9,9 @@
 - 서 있을 때의 목표점은 로봇 자신의 자리다 (운용자 쪽으로 더 가지 않음). 후진은 쓰지 않으므로(2-3) 운용자가 다가와도 물러나지 않는다.
 - 놓쳤을 때(lost_plan): 가까이서 놓치면 자세 그대로, 마지막 자리가 정면에서 벗어나 있으면 먼저 그쪽으로 돌아보고, 운용자가 걷고
   있었으면 가던 방향으로 search_ahead만큼 내다보고, 멈춰 있었으면 그 자리를 보며 선다 (3단계 fw9·fw10의 구멍 둘을 막는 규칙).
+- "걷고 있었나"는 추적기가 주는 한 프레임의 속도가 아니라 **최근 moving_window_sec 동안 본 위치의 이동량**(motion_from_history)으로
+  정한다. 운용자가 벽 모서리 뒤로 들어가며 박스가 잘리면 보이는 부분의 위치가 0.6 s쯤 멈춘 것처럼 보여 추적기가 속도 0을 냈고, 걷던
+  운용자를 "멈춤"으로 오판해 watch로 서 있다가 끝났다(fw18·fw20). 1 s 창이면 그 정체 구간을 넘어 그 전의 이동이 남는다.
 """
 
 from dataclasses import dataclass
@@ -25,6 +28,8 @@ class FollowConfig:
     search_ahead: float = 1.5      # m, 멀리서 놓치면 마지막 자리에서 가던 방향으로 이만큼 더 간 점을 목표로 (모퉁이 너머를 내다봄)
     moving_speed: float = 0.1      # m/s, 운용자 속도가 이보다 크면 "걷는 중". 가던 방향도 이때만 기억한다. 멈춰 있던 운용자는 내다보지 않는다
     look_angle_deg: float = 25.0   # °, 놓쳤을 때 마지막 자리가 로봇 정면에서 이 각도 밖이면 먼저 그쪽으로 돌아본다 (카메라 반각 34° 안쪽)
+    moving_window_sec: float = 1.0  # s, "걷는 중" 판단에 쓰는 위치 이력 창. 추적기 멈춤 창(0.6 s)보다 길어야 가려짐 정체를 넘어 본다.
+                                    # 길수록 멈춘 운용자를 늦게 알아채 (멈춘 뒤 이 시간 안에 끊기면 아직 걷는 중으로 봄 → 내다보기)
 
 
 def wrap_angle(angle):
@@ -86,3 +91,21 @@ def goal_changed(prev_goal, goal, min_move):
     if prev_goal is None:
         return True
     return math.hypot(goal[0] - prev_goal[0], goal[1] - prev_goal[1]) >= min_move
+
+
+def motion_from_history(history, window_sec, moving_speed):
+    """최근 window_sec 동안 본 운용자 위치 이력으로 (걷는 중인가, 가던 방향, 이력 길이)를 정한다.
+
+    history: [(t, x, y), ...] 시간순. 창 안의 가장 오래된 점과 마지막 점 사이의 평균 속도가 moving_speed보다 크면 걷는 중.
+    이력이 창의 절반도 못 채우면(막 다시 본 직후) 판단을 보류하고 (None, None, span)을 돌려준다 — 그때는 이전 판단을 유지한다.
+    한 프레임 속도(추적기)는 가려지며 잘린 박스에 속아 0이 되지만, 1 s 이동량은 그 전의 걸음이 남아 속지 않는다(fw18·fw20)."""
+    if not history:
+        return None, None, 0.0
+    t1, x1, y1 = history[-1]
+    t0, x0, y0 = next(h for h in history if h[0] >= t1 - window_sec)
+    span = t1 - t0
+    if span < window_sec / 2.0:
+        return None, None, span
+    dx, dy = x1 - x0, y1 - y0
+    moving = math.hypot(dx, dy) / span > moving_speed
+    return moving, (math.atan2(dy, dx) if moving else None), span

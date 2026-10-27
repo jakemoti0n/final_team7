@@ -10,6 +10,7 @@ ROS 입출력(서비스, 토픽, TF, Nav2 액션)만 여기서 하고 계산은 
 끝낸다(STOPPED + 경보 로그). 잘못 따라가느니 선다.
 """
 
+from collections import deque
 import math
 import threading
 import time
@@ -59,6 +60,7 @@ class FollowNode(Node):
             search_ahead=p('search_ahead', c.search_ahead).value,
             moving_speed=p('moving_speed', c.moving_speed).value,
             look_angle_deg=p('look_angle_deg', c.look_angle_deg).value,
+            moving_window_sec=p('moving_window_sec', c.moving_window_sec).value,
         )
         self.map_frame = p('map_frame', 'map').value
         self.robot_frame = p('robot_frame', 'base_link').value
@@ -74,6 +76,7 @@ class FollowNode(Node):
         self.target_map = None        # 마지막으로 본 운용자 map 위치 (x, y)
         self.target_heading = None    # 그때 운용자가 가던 방향 (걷고 있을 때만 갱신, 멈춰도 마지막 방향을 기억)
         self.target_moving = False    # 마지막으로 봤을 때 걷고 있었나 (moving_speed 기준). 멈춰 있던 운용자는 내다보지 않는다
+        self.target_history = deque()  # 최근 moving_window_sec 동안 본 (벽시계, map x, y). 걷는 중인지는 이 이동량으로 판단
         self.lost_mode = None         # 놓침 대응 모드 (follow.lost_plan): hold | look | search | watch
         self.target_id = -1           # 마지막으로 본 운용자 트랙 번호 (못 본 프레임의 -1로 덮지 않는다)
         self.lost_since = None
@@ -109,9 +112,17 @@ class FollowNode(Node):
                     self.target_map = xy
                     self.found_wall = time.monotonic()
                     self.target_id = int(msg.person_id)
-                    self.target_moving = math.hypot(msg.velocity.x, msg.velocity.y) > self.config.moving_speed
-                    if self.target_moving:
-                        self.target_heading = self._heading_to_map(msg.header.frame_id, msg.velocity.x, msg.velocity.y)
+                    # 걷는 중인지는 추적기 속도(msg.velocity)가 아니라 최근 위치 이력의 이동량으로 (follow.motion_from_history 설명)
+                    now = self.found_wall
+                    self.target_history.append((now, xy[0], xy[1]))
+                    while self.target_history and now - self.target_history[0][0] > self.config.moving_window_sec:
+                        self.target_history.popleft()
+                    moving, heading, _ = follow.motion_from_history(
+                        self.target_history, self.config.moving_window_sec, self.config.moving_speed)
+                    if moving is not None:          # 이력이 모자라면(막 다시 본 직후) 이전 판단 유지
+                        self.target_moving = moving
+                        if moving:
+                            self.target_heading = heading
 
     def _to_map(self, frame, stamp, x, y):
         pose = PoseStamped()

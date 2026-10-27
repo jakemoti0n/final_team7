@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 따라가기 2단계(주행): 운용자가 홀 → 오른쪽 복도(모퉁이) → 위쪽 복도로 약 19 m 걷고(0.5 m/s) 선다. 홀에서 사람 한 명이 가로지른다.
-# 등록 → /follow/start → 운용자 출발 신호(/follow/go) → 기록 → 분석. 사용법: run2.sh <라벨> [초(기본 150)]
+# 등록 → /follow/start → 운용자 출발 신호(/follow/go) → 기록 → 분석. 사용법: [MOVERS=zz_follow2_pause_movers.json] run2.sh <라벨> [초(기본 150)]
 set +u
 L=$1; DUR=${2:-150}; R=~/limbo; E=$R/experiments/2026-10-22_follow_operator; T=$R/tools/sim_trials; LOGS=~/limbo_bags/sim_trials/logs
 OUT=~/limbo_bags/follow_rec; mkdir -p $OUT
@@ -14,7 +14,7 @@ s = re.sub(r'    <actor name="walker_yield">.*?</actor>\n    <actor name="walker
 s = s.replace('  </world>', open(band).read() + ''.join(actor.replace('walker_yield', n) for n in ('operator', 'crosser_a')) + '  </world>')
 open(dst, 'w').write(s)
 PY
-cp $E/zz_follow2_movers.json $W/
+cp $E/${MOVERS:-zz_follow2_movers.json} $W/zz_follow2_movers.json   # MOVERS=zz_follow2_pause_movers.json: 운용자가 복도 중간에서 10 s 멈췄다 다시 걷는 장면
 source /opt/ros/jazzy/setup.bash; source $R/limbo/install/setup.bash; source $R/venvs/limbo_yolo/bin/activate; export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-97}
 $T/sim_ctl.sh stop >/dev/null 2>&1
 rm -f ~/.limbo/follow_operator.json

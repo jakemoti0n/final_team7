@@ -14,9 +14,10 @@ json:
   "map": "aischool_2f_map"                      — 벽 반발용 지도 (limbo_navigation/maps). 없으면 벽 힘 없음
   "robot": "limbo"                              — 로봇 모델 이름 (pose/info에서 위치를 읽음)
   "people": [{"name": actor 이름, "type": "yield" | "no_yield" | "approach",
-              "speed": m/s, "waypoints": [[x, y], ...], "loop": true, "wait": 초(approach가 로봇 앞에 머무는 시간),
+              "speed": m/s, "waypoints": [[x, y], [x, y, 멈춤 초], ...], "loop": true, "wait": 초(approach가 로봇 앞에 머무는 시간),
               "band": 월드 안 모델 이름(선택), "start_on": ROS 토픽 이름(선택)}]
   band: 따라가기 운용자 표시용. 그 이름의 모델(형광 밴드, 월드 SDF에 static으로 둔다)을 사람 발목 높이에 같이 옮긴다 (set_pose_vector)
+  waypoint 세 번째 값: 그 점에 닿으면 그 초만큼 멈춰 섰다가 다음 점으로 간다 (따라가기 "운용자가 중간에 멈춤" 장면용). 없으면 안 멈춘다
   start_on: 첫 waypoint에 서 있다가 그 토픽(std_msgs/Empty)에 메시지가 오면 걷기 시작한다 (시험 스크립트가 등록·시작을 마친 뒤 신호)
   유형:  yield     — 보통 사람. 로봇을 사람처럼 피해 간다
          no_yield  — 로봇을 안 보는 사람(폰 보는 사람). 로봇에서 밀려나는 힘이 없다. 로봇이 알아서 피하거나 멈춰야 한다
@@ -133,7 +134,9 @@ class Person:
         self.name = spec['name']
         self.type = spec.get('type', 'yield')
         self.speed = spec.get('speed', 0.8)
-        self.waypoints = [tuple(w) for w in spec['waypoints']]
+        self.waypoints = [tuple(w[:2]) for w in spec['waypoints']]
+        self.pauses = {i: w[2] for i, w in enumerate(spec['waypoints']) if len(w) > 2}   # waypoint 번호 → 거기서 멈춰 설 초
+        self.pause_until = None      # 경유점에서 멈춰 서 있는 중이면 떠나는 시각
         self.loop = spec.get('loop', True)
         self.wait = spec.get('wait', 5.0)
         self.band = spec.get('band')     # 같이 옮길 밴드 모델 이름 (따라가기 운용자), 없으면 None
@@ -178,7 +181,19 @@ class Person:
         if goal is None:
             self.vx = self.vy = 0.0
             return
-        if math.dist((self.x, self.y), goal) < GOAL_REACHED and goal is not robot:
+        if self.pause_until is not None:     # 경유점에서 멈춰 서 있는 중 (waypoint 세 번째 값)
+            if t < self.pause_until:
+                self.vx = self.vy = 0.0
+                return
+            self.pause_until = None
+            self._next_goal()
+            goal = self.waypoints[self.goal_index]
+        elif math.dist((self.x, self.y), goal) < GOAL_REACHED and goal is not robot:
+            pause = self.pauses.get(self.goal_index)
+            if pause:
+                self.pause_until = t + pause
+                self.vx = self.vy = 0.0
+                return
             self._next_goal()
             goal = self.waypoints[self.goal_index]
         ax, ay = self._goal_force(goal)

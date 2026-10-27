@@ -79,3 +79,26 @@ def test_lost_in_view_but_operator_was_standing_watches_last_position():
 def test_wrap_angle():
     assert abs(follow.wrap_angle(math.radians(190)) - math.radians(-170)) < 1e-9
     assert abs(follow.wrap_angle(-math.pi) + math.pi) < 1e-9 or abs(follow.wrap_angle(-math.pi) - math.pi) < 1e-9
+
+
+def test_motion_from_history_walking_and_heading():
+    # 0.5 m/s로 +y 방향 1 s → 걷는 중, 방향 90°
+    hist = [(t * 0.1, 0.0, 0.05 * t) for t in range(11)]
+    moving, heading, span = follow.motion_from_history(hist, 1.0, 0.1)
+    assert moving and abs(heading - math.pi / 2) < 1e-6 and abs(span - 1.0) < 1e-6
+
+
+def test_motion_from_history_survives_occlusion_stall():
+    # 걷다가 마지막 0.6 s 동안 위치가 멈춘 것처럼 보여도(벽 모서리에 잘린 박스, fw18) 1 s 이동량으로는 걷는 중
+    hist = [(t * 0.1, 0.05 * t, 0.0) for t in range(5)] + [(t * 0.1, 0.2, 0.0) for t in range(5, 11)]
+    moving, heading, _ = follow.motion_from_history(hist, 1.0, 0.1)
+    assert moving and abs(heading) < 1e-6
+
+
+def test_motion_from_history_standing_and_too_short():
+    # 멈춘 운용자(잡음 2 cm) → 멈춤
+    hist = [(t * 0.1, 0.02 * (t % 2), 0.0) for t in range(11)]
+    assert follow.motion_from_history(hist, 1.0, 0.1)[0] is False
+    # 이력이 창의 절반(0.5 s)도 안 되면 판단 보류
+    assert follow.motion_from_history(hist[:4], 1.0, 0.1)[0] is None
+    assert follow.motion_from_history([], 1.0, 0.1)[0] is None

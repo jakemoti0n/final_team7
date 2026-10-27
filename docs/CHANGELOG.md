@@ -10,6 +10,29 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-27 (138) 따라가기 마무리: 트리에서 타이머 제거(`RunWhenGoalChanged` 데코레이터) + "걷는 중"을 위치 이력으로 판정 + 순찰 회귀 3/3·따라가기 3/3 완주
+
+**할 일**
+- `build_limbo` (limbo_navigation에 C++ BT 플러그인 `limbo_run_when_goal_changed_bt_node`가 늘었다). 나머지는 파이썬·yaml·xml
+- 멈춤 장면: `MOVERS=zz_follow2_pause_movers.json experiments/2026-10-22_follow_operator/run2.sh <라벨> 165`
+
+**변경**
+- `limbo_navigation/src/run_when_goal_changed_decorator.cpp`(+hpp, CMakeLists, package.xml `nav_msgs`): 데코레이터 `RunWhenGoalChanged`(goal, path 포트). 새 경로(path stamp)가 왔고 목표가 마지막 성공 때와 다르거나 직전 추종이 실패했을 때만 자식(FollowPath)을 건다. 빈 경로(계획 실패 시 Nav2가 비움)는 안 건다
+- `limbo_navigation/behavior_trees/limbo_follow.xml`: `Wait` 두 곳 제거. 계획 실패 `ForceSuccess`, 기다리기 `ReactiveFallback(IsWaitingForPerson, ForceSuccess(RunWhenGoalChanged(FollowPath)))`
+- `nav2_params.yaml` `bt_navigator.plugin_lib_names`에 `limbo_run_when_goal_changed_bt_node`
+- `limbo_follow/follow.py`: `motion_from_history()`(최근 창의 위치 이동량으로 걷는 중·방향), `FollowConfig.moving_window_sec` 1.0. `follow_node.py`: `/follow/target`의 속도 대신 이 함수로 `target_moving`·`target_heading`. `follow.yaml` 항목 추가. 단위 시험 3개(13개 통과)
+- `limbo_simulation/scripts/moving_obstacles.py`: waypoint 세 번째 값 = 그 점에서 멈춰 설 초(`[x, y, 초]`). 실험 `zz_follow2_pause_movers.json`, `run2.sh`에 `MOVERS` 변수
+- 실험 README "마무리" 절(fw16~fw23, 배운 것 13~15), PROJECT.md 2-9, TROUBLESHOOTING 2026-10-27
+
+**원인과 근거**(실험 기록에 상세)
+- fw16: 내다보기 목표가 벽 안 → 계획 실패 Wait와 추종 뒤 Wait가 같은 순간 behavior_server에 걸려 선점 오류로 트리 전체 실패. 타이머를 "할 일이 생겼을 때"로 바꿔 없앴다(값을 바꾼 게 아니라 되풀이 방식을 바꿈)
+- fw18·fw20: 벽 모서리에 잘린 운용자의 박스 위치가 0.6 s 멈춘 것처럼 보여 추적기가 속도 0 → "멈춤" 오판 → watch로 서 있다 종료. 추적기 순간 속도 대신 1 s 위치 이력
+- 신호기(UWB) 보강은 PM 결정으로 하지 않음(보조 기능)
+
+**확인**
+- 순찰 회귀 `patrol_trial.sh fin1·2·3`: 3/3 완주(186·196·199 s)
+- 따라가기(zz_follow2, 운용자 0.5 m/s 19 m): fw21 완주 1.84 m·91 %·놓침 최대 3.2 s, fw22 완주 1.92 m·91 %·3.3 s, fw23(복도 중간 10 s 멈춤) 완주 1.90 m·89 %·7.0 s. 충돌 0. MPPI 초기화 393~439 → 33~49회. 계획 실패 8회(fw23)에도 트리 유지
+
 ## 2026-10-27 (137) `sim_ctl.sh stop`의 잔존 노드 정리 패턴에 `pcl_ros` 추가 — ktj 48의 `rgbd_voxel`(pcl_ros filter_voxel_grid_node)이 launch를 끈 뒤 혼자 남던 것
 
 **할 일**

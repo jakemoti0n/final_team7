@@ -276,6 +276,19 @@
 - **해결**: 없음, 무시한다. 순찰(NavFn)에는 나오지 않는다.
 - **확인**: fw14·fw15 각 1회, 설정 직후에만. 150 s 주행 중 계획 실패 1~2회는 운용자·사람이 경로를 막은 순간이고 RecoveryNode 0.5 s 재시도로 지나갔다(이 로그와 무관).
 
+### 따라가기: 계획 실패와 제자리 도착이 겹치는 순간 트리 전체가 끝남 (`Received a preemption request for wait, however feature is currently not implemented`) — 2026-10-27
+- **증상**: 따라가기 시작 19 s 만에 `nav_aborted`(실험 기록 fw16). 로그 순서:
+  ```
+  [planner_server] FollowPlanner plugin failed to plan from (3.27, 0.63) to (6.42, 1.40): "no valid path found"
+  [behavior_server] Running wait
+  [controller_server] Reached the goal!
+  [behavior_server] [ERROR] Received a preemption request for wait, however feature is currently not implemented. Aborting and stopping.
+  [bt_navigator] [ERROR] Failed to get result for wait in node halt!  →  Goal failed
+  ```
+- **원인**: `limbo_follow.xml`에 `Wait`가 두 곳 있었다(계획 실패 뒤 0.5 s 재시도, 추종이 끝난 뒤 0.5 s 쉼). 둘 다 behavior_server의 wait 액션 하나를 쓰는데 Nav2 wait는 선점을 지원하지 않아 두 번째 요청이 오면 둘 다 abort되고, halt 중인 Wait가 결과를 못 받아 트리가 실패한다. 내다보기 목표가 벽 안(지도 확인)이라 계획이 실패한 순간 로봇이 제자리 목표에 "도착"해 두 Wait가 겹쳤다. fw15의 "계획 실패 1회(재시도로 지나감)"는 겹치지 않은 운이었다
+- **해결**: 타이머를 없앴다. FollowPath는 `RunWhenGoalChanged` 데코레이터(`limbo_navigation/src/run_when_goal_changed_decorator.cpp`, `bt_navigator.plugin_lib_names`에 `limbo_run_when_goal_changed_bt_node`)가 "새 경로가 왔고 목표가 바뀌었거나 직전 추종이 성공으로 끝나지 못했을 때"만 건다. 계획 실패는 `ForceSuccess`로 넘겨 다음 재계획 주기(4 Hz)에 다시, 기다리기는 `ReactiveFallback`(기다리는 중이면 그 tick은 SUCCESS). 기다림을 `ReactiveSequence`+`Inverter`의 FAILURE로 두면 `KeepRunningUntilFailure`가 바로 끝나므로(전에는 `RecoveryNode`가 받아 줬다) 반드시 Fallback의 SUCCESS로 둔다
+- **확인**: fw21~fw23 3/3 완주, fw23은 계획 실패 8회(벽 안 목표)에도 트리 유지, 선점 오류 0. 서 있을 때 FollowPath 재호출이 없어져 `Optimizer reset` 393~439회 → 33~49회
+
 ### 분리 시뮬(PC role:=sim ↔ Jetson role:=robot): 로봇이 서 있고 TF가 밀림 — Jetson UDP 수신 버퍼 넘침 — 2026-10-26
 - **증상**: 유선 1 Gbps 직결(10.0.0.1 ↔ 10.0.0.2)인데 Jetson의 collision_monitor가 `Robot to stop due to invalid source`, 점군 `timestamps differ` 4.7 s. 코스트맵 메시지 필터 드롭, EKF TF `odom→base_footprint` 최대 312 ms, `/imu` 170 → 63 Hz, 컨테이너 CPU 170~190 %, load 17(코어 6개)
 - **원인**: PC → Jetson으로 가는 점군이 `/rgbd_camera/points` 27 MB/s(219 Mbit/s, 320×240 13 Hz) + `/mid360/points` 9 MB/s(74 Mbit/s, 43,200점 10 Hz) = 유선 263 Mbit/s. 한 장이 수백 개 UDP 조각으로 몰려 오는데 Jetson 커널 수신 버퍼 상한이 기본 208 KB(`net.core.rmem_max`)라 넘쳐서 버림(`/proc/net/snmp` Udp `RcvbufErrors` 초당 45개, `/proc/net/udp`에서 nav2_container 소켓 drops 17,291). 조각 하나만 잃어도 한 장이 통째로 사라져 묵은 점군만 남음. FastDDS 프로필에 소켓 버퍼를 안 적으면 커널 기본값을 쓴다
