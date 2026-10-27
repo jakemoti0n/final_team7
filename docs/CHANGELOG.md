@@ -8,6 +8,18 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-10-27 (49) README에 두 대로 나눠 돌리기·카메라 점군 토픽 추가, `limbo_bringup`에 pcl_ros 의존 선언 (48의 문서·선언 마무리)
+
+**할 일**
+- 없음 (`ros-jazzy-pcl-ros`는 README 설치 목록에 원래 있음)
+
+**변경**
+- `README.md`: "자주 쓰는 변형"에 PC `role:=sim` / Jetson `role:=robot nav2_composition:=True` 명령과 소켓 버퍼·순서는 split-sim 스킬을 보라는 줄, "주요 토픽"에 `/rgbd_camera/points_raw → /rgbd_camera/points`, "시뮬레이션 참고"의 런치 순서에 `rgbd_voxel`
+- `limbo_bringup/package.xml`: `<exec_depend>pcl_ros</exec_depend>` (48에서 런치가 pcl_ros 노드를 띄우게 됐는데 선언이 빠져 있었음)
+
+**원인과 근거**
+- 48은 코드·스킬만 올리고 README를 안 고쳐 팀원이 README만 보면 두 대 구성과 새 토픽을 모른다. 의존 선언은 `rosdep`으로 설치하는 환경을 위해 맞춘다
+
 ## 2026-10-26 (48) 두 대 분리 시뮬에서 Jetson이 서던 원인(UDP 수신 버퍼 넘침) 해결: PC에서 카메라 점군을 5 cm 복셀로 줄이는 `rgbd_voxel` + 양쪽 소켓 버퍼 — 유선 263 → 49 Mbit/s, Jetson CPU 72 → 59 %, 1 m 목표 주행 성공
 
 **할 일**

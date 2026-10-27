@@ -134,6 +134,11 @@ ros2 launch limbo_bringup start_simulation.launch.py camera:=oak
 
 # 주행 평가 기록: Goal이 끝날 때마다 ~/limbo_results/nav_<월드>_<시각>.csv에 한 줄
 ros2 launch limbo_bringup start_simulation.launch.py record:=true
+
+# 두 대로 나눠 돌리기: PC는 Gazebo·센서 가공(sim), Jetson은 실물에서 돌릴 로봇 스택(robot). 유선 1 GbE로 연결, PC 먼저.
+# 처음 한 번 두 대 모두 UDP 소켓 버퍼를 키워야 한다(안 하면 점군이 버려져 로봇이 선다). 순서·확인·막히면은 .claude/skills/split-sim/SKILL.md
+ros2 launch limbo_bringup start_simulation.launch.py role:=sim world:=aischool_2f map:=aischool_2f_map                                   # PC
+ros2 launch limbo_bringup start_simulation.launch.py role:=robot nav2_composition:=True world:=aischool_2f map:=aischool_2f_map gui:=false   # Jetson
 ```
 
 | 월드 (`world:=` / `map:=`) | 내용 | 순찰 waypoint (`waypoints:=`) |
@@ -176,7 +181,7 @@ source /opt/ros/jazzy/setup.bash && python -c "import torch, ultralytics, cv_bri
 
 ### 시뮬레이션 참고
 
-- launch 하나로 Gazebo, EKF, self filter, LiDAR→`/scan`, AMCL, Nav2, RViz, 사람 인식, 바퀴 헛돎 감시가 순서대로 뜬다
+- launch 하나로 Gazebo, EKF, self filter, 카메라 점군 줄이기(`rgbd_voxel`), LiDAR→`/scan`, AMCL, Nav2, RViz, 사람 인식, 바퀴 헛돎 감시가 순서대로 뜬다. `role:=sim|robot`으로 두 대에 나눌 수 있다(위 "자주 쓰는 변형")
 - AMCL은 스폰 위치(0, 0, 0°)에서 시작한다. 위치가 틀어지면 RViz의 2D Pose Estimate로 다시 맞춘다
 - 로봇 모델은 실제 로봇 v14가 기본. 자세한 내용은 `limbo_description/README.md`
 - 학원 2층 월드·지도는 문 폭 0.9 m(실제 기준)로 만들었다. 월드 물리 스텝은 2 ms (1 ms면 실시간 비율이 0.6에 머묾)
@@ -261,6 +266,7 @@ ros2 service call /collision_monitor/toggle nav2_msgs/srv/Toggle "{enable: false
 | 토픽 | 내용 |
 |---|---|
 | `/mid360/points` → `/mid360/points_filtered` → `/scan` | 3D LiDAR → 몸체 제거 → 2D 스캔 |
+| `/rgbd_camera/points_raw` → `/rgbd_camera/points` | 카메라 3D 점군 → 5 cm 복셀로 줄인 것 (`rgbd_voxel`). Nav2 코스트맵·collision_monitor가 보는 건 줄인 쪽 |
 | `/imu` | MID-360 내장 IMU (200 Hz) |
 | `/odom` | 바퀴 odom. `odom → base_footprint` TF는 EKF가 냄 (`/odometry/filtered`) |
 | `/person_detector/predictions` | 사람별 현재 위치·속도·2초 앞 예측 (→ `human_layer`) |

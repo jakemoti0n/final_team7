@@ -27,6 +27,7 @@
 
   <exec_depend>robot_self_filter</exec_depend>
   <exec_depend>pointcloud_to_laserscan</exec_depend>
+  <exec_depend>pcl_ros</exec_depend>
   <exec_depend>robot_localization</exec_depend>
   <exec_depend>limbo_monitor</exec_depend>
   <exec_depend>limbo_evaluation</exec_depend>
