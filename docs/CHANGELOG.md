@@ -10,6 +10,17 @@
 
 > 번호는 push 순서다. 2026-10-13에 lab과 ktj를 합치면서 ktj 쪽 (22)~(30) 뒤에 lab 쪽을 (31)부터 이어 붙였다.
 
+## 2026-10-27 (137) `sim_ctl.sh stop`의 잔존 노드 정리 패턴에 `pcl_ros` 추가 — ktj 48의 `rgbd_voxel`(pcl_ros filter_voxel_grid_node)이 launch를 끈 뒤 혼자 남던 것
+
+**할 일**
+- 없음
+
+**변경**
+- `tools/sim_trials/sim_ctl.sh` `sweep_nodes`: `/opt/ros/jazzy/lib/(…)` 패턴에 `pcl_ros` 추가
+
+**원인과 근거**
+- 2026-10-26 ktj 48에서 PC 쪽에 `rgbd_voxel` 노드가 생겼는데 정리 패턴에 없어, 분리 시뮬을 끝낸 뒤 `stop`을 돌려도 `filter_voxel_grid_node`가 남았다(PID로 따로 종료). 남은 노드는 다음 시작 불안정의 주범(2026-10-14)이라 패턴에 넣는다
+
 ## 2026-10-26 (136) 분리 시뮬 기록 마무리(문서만): 점군 줄이기(ktj 48 `rgbd_voxel`) 결과와 "PC 런치 재시작이면 Jetson도" 주의를 TROUBLESHOOTING 항목에 덧붙임
 
 **할 일**
