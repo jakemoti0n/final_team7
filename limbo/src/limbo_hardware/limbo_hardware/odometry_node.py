@@ -86,9 +86,10 @@ class OdometryNode(Node):
         self.output_count = 0
         self.get_logger().info(
             'Raw /odom from verified wheel counts: radii=%s/%s m, separation=%s m, '
-            'CPR right=%s left=%s provisional; no TF or motor commands' %
+            'CPR right=%s left=%s provisional; TF odom->base_footprint %s; no motor commands' %
             (s['left_wheel_radius'], s['right_wheel_radius'], s['wheel_separation'],
-             s['right_counts_per_revolution'], s['left_counts_per_revolution']))
+             s['right_counts_per_revolution'], s['left_counts_per_revolution'],
+             'ON' if self.tf_broadcaster is not None else 'off'))
 
     @staticmethod
     def _parameter_change(parameters):

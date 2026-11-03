@@ -48,6 +48,9 @@ class FakeTransport:
                 'stop_reasons': status_names(self.status, STOP_STATUS_BITS),
                 'notes': status_names(self.status, NOTE_STATUS_BITS)}
 
+    def recover(self):
+        pass
+
     def close(self):
         self.writes.append((0, 0))
         self.closed = True
@@ -203,14 +206,46 @@ class DriveNodeTests(unittest.TestCase):
         self.assertEqual(fake.writes[-1], (0, 0))
         self.assertIn('main_voltage_high_warning', node.last_control['reasons'])
 
-    def test_transport_error_shuts_down_with_zero(self):
+    def test_transient_transport_errors_are_tolerated_then_fatal(self):
         node, fake = self.make()
+        fake.recovers = 0
+        fake.recover = lambda: setattr(fake, 'recovers', fake.recovers + 1)
+        self.command(0.1)
+        self.step(left=2, right=2)
         fake.sample_error = RuntimeError('synthetic CRC')
-        self.step()
-        self.assertTrue(node.closed)
+        self.step()   # 1회째: 넘김
+        self.step()   # 2회째: 넘김
+        self.assertFalse(node.closed)
+        self.assertEqual(node.transient_errors, 2)
+        self.assertEqual(fake.recovers, 2)
+        self.assertEqual(fake.writes[-1], (0, 0))
+        fake.sample_error = None
+        self.command(0.1)
+        self.step(left=2, right=2)   # 회복: 연속 카운터 초기화
+        self.assertEqual(node.consecutive_errors, 0)
+        fake.sample_error = RuntimeError('synthetic CRC')
+        for _ in range(3):
+            self.step()
+        self.assertTrue(node.closed)   # 연속 3회째에 종료
         self.assertTrue(fake.closed)
         self.assertEqual(fake.writes[-1], (0, 0))
         self.assertTrue(any('synthetic CRC' in e for e in node.errors))
+
+    def test_open_failure_is_fatal_immediately(self):
+        self.node = None
+
+        def factory(**kwargs):
+            fake = FakeTransport(self, **kwargs)
+            fake.open = lambda: (_ for _ in ()).throw(RuntimeError('no device'))
+            self.transport = fake
+            return fake
+        values = {'left_wheel_radius': .075, 'right_wheel_radius': .075, 'wheel_separation': .54,
+                  'left_counts_per_revolution': 3688., 'right_counts_per_revolution': 3607.}
+        self.node = DriveNode(parameter_overrides=[Parameter(k, value=v) for k, v in values.items()],
+                              transport_factory=factory, monotonic=lambda: self.now)
+        self.node.count_pub, self.node.joint_pub, self.node.diag_pub = Mock(), Mock(), Mock()
+        self.node._tick()
+        self.assertTrue(self.node.closed)
 
     def test_control_gap_resets_and_sends_zero(self):
         node, fake = self.make()

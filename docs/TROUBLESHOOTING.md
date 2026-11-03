@@ -9,6 +9,7 @@
 - [주행·위치 추정](#주행위치-추정)
 - [시뮬레이션](#시뮬레이션)
 - [인지(person_detector)](#인지person_detector)
+- [실물(Jetson·RoboClaw·센서)](#실물jetsonroboclaw센서)
 - [빌드·git](#빌드git)
 - [개발 환경(노트북)](#개발-환경노트북)
 - [리팩터링 이전 (README에 있던 내용)](#리팩터링-이전-readme에-있던-내용)
@@ -268,6 +269,33 @@
   2. `geometry.too_narrow_for_person`: person 박스의 실제 폭(픽셀 폭+2 × 거리 ÷ 초점 거리)이 0.15 m 미만이면 버림(판 가장자리 세로 띠 17 px·1.5 m = 0.11 m를 person 0.69로 보고 추적까지 됐음). leg 박스는 제외
 - **확인**: 시뮬 녹화 같은 프레임에 적용 — 노드가 사람으로 봤던 검은 판 박스 평면 1.00·무늬 0.0 → 버림, 사람 장면 person 박스 151개(큰 것) 평면 중앙값 0.09·최대 0.84, 무늬 최소 3.0·중앙값 39 → 전부 유지, 469개 중 잘못 버린 것 0. 폭 하한에 걸리는 사람 박스는 4.6~4.9 m의 7 px짜리뿐이라 ±2 px 여유로 살림. 회귀: 손님 4/4×3(복구 0), 상자 4/4×2(최소 0.29~0.32 m), 순찰 3/3(180~186 s). 단위 시험 8개
 - **진단**: 버린 박스는 `/person_detector/boxes` JSON의 `surface`에 [x1,y1,x2,y2,평면 비율,무늬]로 남고, 주석 영상에 회색 `surface plane:.. tex:..`로 그려짐. 실물에서 사람을 잘못 버리면 이 값으로 `person_detector.yaml`의 `surface.*`를 조정
+
+## 실물(Jetson·RoboClaw·센서)
+
+### Jetson에서 YOLO가 `torch.cuda.is_available(): False`, GPU를 못 봄 — 2026-11-03
+- **증상**: 어제까지 GPU로 돌던 검출기가 `cuda False`로 CPU로 떨어짐. `nvpmodel -q`가 `Error opening /sys/devices/platform/17000000.gpu/devfreq_dev/min_freq`.
+  커널 로그(`journalctl -b 0 -k`)에 `nvgpu ... ACR bootstrap failed`, `RISCV ucode patch wpr info failed`, `libnvrm_gpu.so: NvRmGpuLibOpen failed, error=4`
+- **원인**: 그 부팅에서 GPU 펌웨어 부트스트랩이 실패한 것. 이전 부팅들엔 같은 메시지가 없고 패키지 변경도 없었다. 로봇 전원을 만진 직후 올라온 부팅이었다
+- **해결**: `sudo reboot` 한 번. 재부팅 뒤 오류 0건, `cuda True (Orin)`
+- **확인**: 전원을 건드린 뒤 YOLO를 띄우기 전에 `journalctl -b 0 -k | grep -c "ACR bootstrap failed"`가 0인지 본다. 0이 아니면 바로 재부팅
+
+### 실물 slam_toolbox가 `/scan`을 구독하지 않고 `/map`·`map→odom`이 안 나옴 — 2026-11-03
+- **증상**: `ros2 run slam_toolbox async_slam_toolbox_node`로 띄우면 노드는 뜨는데 `ros2 topic info -v /scan`의 구독자에 slam_toolbox가 없고 지도가 안 생김
+- **원인**: Jazzy의 slam_toolbox는 lifecycle 노드라 configure·activate 전에는 아무것도 안 한다. 시뮬 런치는 `nav2_lifecycle_manager`가 자동으로 해 줬다
+- **해결**: 지도 작성 런치(`start_mapping.launch.py`)에 lifecycle_manager(autostart, bond_timeout 0) 추가. 손으로는 `ros2 lifecycle set /slam_toolbox configure` → `activate`
+- **확인**: `ros2 lifecycle get /slam_toolbox`가 `active`, `/map`이 나오고 `tf2_echo map base_footprint`에 Translation이 찍힘
+
+### RoboClaw가 PWM은 15 %로 나가는데 전류 0, 바퀴가 안 돎 (충전 직후) — 2026-11-03
+- **증상**: 배터리를 충전해 12.1 V가 됐는데 벤치 주행이 무동작. 보드 상태값에 `0x00040000`(Main Battery High Warning)
+- **원인**: 보드의 최대 전압이 자동 모드("켤 때 전압 + 2 V")라, 배터리가 9.8 V일 때 켜면 상한 11.8 V가 되고 충전 뒤 12.1 V는 그 위. 매뉴얼: 이 경고 동안 "모터를 제동으로 멈춤"
+- **해결(권고, 미적용)**: Motion Studio General Settings에서 자동 감지 끄고 Max Main Battery 16 V(납축 충전 전압 14.7 V 위), Min 10 V. 소프트웨어 쪽은 `roboclaw_drive`가 이 비트를 보면 출력을 0으로 두고 진단에 이유를 적는다
+- **확인**: `probe_settings`(명령 59)의 max가 배터리 전압보다 위이고, 상태값에 0x40000이 없음
+
+### 전원 재투입 뒤 RoboClaw 명령 timeout이 0으로 돌아감 — 2026-11-03
+- **증상**: 어제 0.5 s로 넣어 둔 명령 timeout(명령 15)이 오늘 0으로 읽힘. 벤치 도구는 이 값이 5가 아니면 시작을 거부
+- **원인**: 명령 14로 넣은 값은 런타임 값이라 전원을 끄면 사라진다(NVM 저장 명령 94는 일부러 안 씀)
+- **해결**: `roboclaw_drive`가 시작할 때 0이면 0.5 s를 다시 넣는다(`ensure_timeout`). 벤치 도구를 쓸 때는 `configure_timeout.py`를 먼저
+- **확인**: 노드 시작 로그 `opened {... "command_timeout_s": 0.5 ...}`
 
 ## 빌드·git
 

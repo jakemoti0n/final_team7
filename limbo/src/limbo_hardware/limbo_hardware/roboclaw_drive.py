@@ -17,9 +17,10 @@ FIRMWARE_PREFIX = 'USB Roboclaw 2x15A'
 # 읽기 명령과 응답 길이(CRC 제외). 21 펌웨어 문자열, 15 명령 timeout, 24 주전원 전압, 48 PWM, 49 전류, 78 엔코더, 90 상태
 READ_LENGTHS = {21: None, 15: 1, 24: 2, 48: 4, 49: 4, 78: 8, 90: 4}
 DUTY_FULL = 32767
-# 출력 상한이 넘을 수 없는 천장. 30 %: 12 V·약 0.5 Ω 모터(표기 12 V 25 A)가 완전히 잠겨도 3.6 V/0.5 Ω ≈ 7 A로
-# 보드 채널 연속 정격 15 A 안이다. 이보다 올리려면 모터 단자 전류를 재고 PM이 정한다.
-DUTY_CEILING = 9830
+# 출력 상한이 넘을 수 없는 천장. 50 %(PM 결정 11-03): 12 V·약 0.5 Ω 모터(표기 12 V 25 A)가 완전히 잠겨도 6 V/0.5 Ω ≈ 12 A로
+# 보드 채널 연속 정격 15 A 안이고, 잠김은 drive_node가 1 s 안에 끊는다. duty는 속도 비율이기도 해서(25 % ≈ 0.15 m/s, 11-03 실측)
+# 0.25 m/s를 내려면 40 %대가 필요하다. 이보다 올리려면 모터 단자 전류를 재고 PM이 정한다.
+DUTY_CEILING = 16383
 # 명령 timeout 단위는 0.1 s. 5 = 0.5 s: 노드가 죽어도 이 시간 안에 보드가 스스로 모터를 끊는다
 TIMEOUT_UNIT_S = 0.1
 TIMEOUT_RAW_DEFAULT = 5
@@ -205,6 +206,13 @@ class DriveTransport:
 
     def write_duty(self, m1, m2):
         return self._exchange(duty_packet(m1, m2, self.duty_cap), expect_ack=True)
+
+    def recover(self):
+        """교환 하나가 실패한 뒤 다음 교환 전에 부른다. 늦게 도착한 응답 조각이 다음 응답에 섞이지 않게 입력 버퍼를 비운다.
+        12 ms: 보드가 한 응답을 다 보내는 데 걸리는 시간(38400 bps에서 10바이트 ≈ 2.6 ms)보다 넉넉히."""
+        if self.serial is not None and not self.closed:
+            time.sleep(0.012)
+            self.serial.reset_input_buffer()
 
     def stop(self, attempts=3):
         """양쪽 0을 ACK 받을 때까지 최대 attempts번. 실패하면 False (보드 timeout이 마지막 안전망)."""

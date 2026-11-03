@@ -12,6 +12,9 @@ duty 명령을 20 Hz로 보낸다. 엔코더 카운트·관절 상태를 벤치 
 - 잠김(stall): 출력이 상한에 붙었는데 그 바퀴 엔코더가 stall_seconds 동안 안 움직임. 11-03 축 수리 뒤 왼쪽 바퀴가 15 %
   상한에서 8 s 동안 0카운트였다. 정상 출발은 0.3 s 안에 카운트가 오르므로 1 s면 "미는 중"이 아니라 "잠김"이다.
   잠김은 양쪽 목표가 0이 될 때(키를 떼거나 Nav2가 멈추면) 풀린다.
+
+직렬 오류는 연속 MAX_CONSECUTIVE_ERRORS번까지 넘긴다(그 틱은 0 출력 시도). 11-03 19분 주행이 USB 쓰기 timeout 한 번으로 끝났는데,
+한 번 삐끗한 것과 USB가 빠진 것은 다르다. 3틱 = 0.15 s는 보드 timeout 0.5 s 안이라 그 사이 모터는 마지막 명령대로 돌다 보드가 끊는다.
 """
 from dataclasses import asdict, replace
 import json
@@ -36,6 +39,9 @@ from .roboclaw_readonly import CounterTracker
 from .roboclaw_drive import DriveTransport, DriveError, DUTY_CEILING
 from .speed_pi import PIConfig, WheelSpeedPI
 from .speed_estimator import CountWindowEstimator
+
+# 연속 직렬 오류 허용 횟수. 3틱(0.15 s)은 보드 명령 timeout(0.5 s)보다 짧아, 넘기는 동안에도 보드 쪽 안전망이 먼저 걸린다
+MAX_CONSECUTIVE_ERRORS = 3
 
 
 def limit_twist(linear, angular, max_linear, max_angular):
@@ -114,6 +120,8 @@ class DriveNode(Node):
         self.previous = None               # 직전 sample
         self.last_control = None
         self.errors = []
+        self.consecutive_errors = 0
+        self.transient_errors = 0          # 넘긴 직렬 오류 누계 (진단에 표시)
         self.closed = False
         self.state = 'opening'
 
@@ -247,6 +255,7 @@ class DriveNode(Node):
                 reasons = ['stall_left' if self.stalled[0] else 'stall_right']
             duties = (outputs[1].duty_raw, outputs[0].duty_raw)  # M1=오른쪽, M2=왼쪽
             self.transport.write_duty(*duties)
+            self.consecutive_errors = 0
             self.state = 'driving' if any(duties) else 'idle'
             self.last_control = {
                 'monotonic_s': row['monotonic_s'], 'dt': dt, 'command': list(self.command), 'reasons': reasons,
@@ -256,9 +265,21 @@ class DriveNode(Node):
                 'pi_left_right': [asdict(o) for o in outputs]}
             self._record('control', self.last_control)
         except Exception as error:
-            # 통신·장치 오류: 출력 0을 시도하고 노드를 끝낸다. 재접속은 사람이 원인을 보고 다시 띄운다
-            self.errors.append(type(error).__name__ + ': ' + str(error))
-            self.get_logger().error('구동 중단: ' + self.errors[-1])
+            text = type(error).__name__ + ': ' + str(error)
+            if self.state != 'opening' and self.consecutive_errors + 1 < MAX_CONSECUTIVE_ERRORS:
+                # 한 번 삐끗한 교환: 버퍼를 비우고 이번 틱은 0 출력을 시도한 뒤 다음 틱에 다시 간다
+                self.consecutive_errors += 1
+                self.transient_errors += 1
+                self._event('serial_error_tolerated', error=text, consecutive=self.consecutive_errors)
+                try:
+                    self.transport.recover()
+                    self.transport.write_duty(0, 0)
+                except Exception:
+                    pass
+                return
+            # 시작 실패이거나 연속 오류 상한: 출력 0을 시도하고 노드를 끝낸다. 재접속은 사람이 원인을 보고 다시 띄운다
+            self.errors.append(text)
+            self.get_logger().error('구동 중단: ' + text)
             self.shutdown('error')
 
     def _check_battery(self, now):
@@ -297,7 +318,8 @@ class DriveNode(Node):
         values = {'state': self.state, 'battery_volts': self.battery_volts, 'battery_low': self.battery_low,
                   'command_timeout_s': self.command_timeout_s, 'max_duty_raw': self.s['max_duty_raw'],
                   'board_stop_bits': ','.join(self.board_stop), 'board_notes': ','.join(self.board_notes),
-                  'stalled_left_right': self.stalled, 'errors': ' | '.join(self.errors)}
+                  'stalled_left_right': self.stalled, 'transient_serial_errors': self.transient_errors,
+                  'errors': ' | '.join(self.errors)}
         if self.last_control:
             for key in ('command', 'target_left_right_rad_s', 'measured_left_right_rad_s', 'duty_m1_m2'):
                 values[key] = self.last_control[key]

@@ -31,6 +31,10 @@ def _actions(context):
             launch_arguments={'profile': 'mounted'}.items()),
         Node(package='slam_toolbox', executable='async_slam_toolbox_node', name='slam_toolbox', output='screen',
              parameters=[os.path.join(navigation, 'config', 'slam.yaml'), {'use_sim_time': False, 'mode': 'mapping'}]),
+        # Jazzy의 slam_toolbox는 lifecycle 노드라 configure·activate를 해 줘야 /scan을 구독한다(시뮬 런치와 같은 방식).
+        # bond_timeout 0: 지도가 커지면 heartbeat를 놓쳐 manager가 노드를 내리는 일을 막는다(시뮬 런치 주석 참고)
+        Node(package='nav2_lifecycle_manager', executable='lifecycle_manager', name='lifecycle_manager_slam', output='screen',
+             parameters=[{'use_sim_time': False, 'autostart': True, 'bond_timeout': 0.0, 'node_names': ['slam_toolbox']}]),
     ]
     if get('bag').lower() == 'true':
         label = get('label') or time.strftime('%m%d_%H%M%S')
@@ -44,7 +48,8 @@ def _actions(context):
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument('max_duty_raw', default_value='', description='출력 상한 raw. 비우면 drive.yaml 값'),
+        # 35 %(11468, PM 11-03): 지도 작성은 0.15~0.2 m/s면 충분하고, 25 %는 배터리 11.3 V에서 0.1 m/s에도 상한에 붙었다
+        DeclareLaunchArgument('max_duty_raw', default_value='11468', description='출력 상한 raw (32767=100 %)'),
         DeclareLaunchArgument('bag', default_value='true'),
         DeclareLaunchArgument('label', default_value=''),
         OpaqueFunction(function=_actions),

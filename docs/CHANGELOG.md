@@ -8,6 +8,26 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-03 (52) 주행 브리지 손질: 출력 천장 50 %·기본 25 %·지도 작성 35 %, 직렬 오류 연속 3회까지 허용, 지도 런치에 slam_toolbox lifecycle manager. 첫 실물 키보드 주행·풀 세트 부하 측정 결과
+
+**할 일**
+- Jetson에서 `limbo_hardware limbo_bringup` 다시 빌드. 키보드 주행은 `run_teleop.sh`(기본 25 %), 지도 작성은 `run_mapping.sh`(35 %). 더 올릴 땐 `max_duty_raw:=<raw>`(천장 16383)
+- Motion Studio에서 RoboClaw 최대 전압 자동 감지 끄고 16 V 고정(TROUBLESHOOTING 실물 절). 배터리(Volten 12 V 25 Ah 납축) 15 h 충전 뒤 12.0 V, 주행 후 11.3 V → 멀티미터로 단자 전압 확인, 12.2 V 이하면 교체 검토
+
+**변경**
+- `roboclaw_drive.py`: `DUTY_CEILING` 9830 → 16383(50 %, PM 결정). 잠겨도 약 12 A로 보드 15 A 안. `recover()`(실패한 교환 뒤 입력 버퍼 비움)
+- `drive_node.py`: 직렬 오류를 연속 3틱(0.15 s, 보드 timeout 0.5 s 안)까지 넘기고 그 틱은 0 출력 시도. 11-03 19분 주행이 USB 쓰기 timeout 한 번으로 끝난 것. 진단에 `transient_serial_errors`
+- `config/drive.yaml`: 기본 상한 8191(25 %). 15 %는 축 수리 뒤 왼쪽이 못 굴렀고 25 %로 19분 주행 확인
+- `start_mapping.launch.py`: 상한 기본 11468(35 %), slam_toolbox용 `nav2_lifecycle_manager`(autostart, bond_timeout 0). Jazzy slam_toolbox는 lifecycle 노드라 activate 전엔 `/scan`을 구독하지 않았다
+- `odometry_node.py`: 시작 로그에 TF on/off 표시(옛 문구 "no TF"가 오해를 불렀음)
+- 테스트: 일시 오류 2회 허용·3회 종료·시작 실패 즉시 종료 추가(전체 187)
+- TROUBLESHOOTING "실물" 절 신설: GPU 부트스트랩 실패(재부팅), slam_toolbox lifecycle, RoboClaw 자동 최대 전압, 전원 재투입 뒤 timeout 0
+
+**원인과 근거 (11-03 실물 기록)**
+- 수리 후 1회차(15 %): 왼쪽 1.4 cm/오른쪽 27.4 cm, 왼쪽 상한에서 8 s 0카운트 → 들면 돌아 체결 저항으로 확정, 나사 조정
+- 키보드 주행 19분(25 %, `~/limbo_bags/drive_1103_1537`): 전진 33 m, 목표 0.25 m/s에 실제 0.15 m/s(양쪽 상한 포화 90 %), 좌/우 거리비 0.96. duty≈속도 비율이라 상한을 올려야 속도가 나고 PI 여유가 생겨 쏠림도 잡힌다
+- 풀 세트 부하 2분(카메라+YOLO+라이다+SLAM+브리지+bag, `~/limbo_bags/load_1103_1709`): CPU 48 %(최대 66), GPU 8 %, RAM 3.2/7.5 GB, 55 °C, /scan 10 Hz·/odom 20 Hz·YOLO 10.4 Hz 유지, SLAM 드롭 2건. 기준(카메라+YOLO만) CPU 21 %. CPU 1위 YOLO 81 %, Livox 19 %
+
 ## 2026-11-03 (51) 실물 주행 명령 브리지 `/cmd_vel`→RoboClaw(`roboclaw_drive`) + 바퀴 odom TF + 키보드 주행·지도 작성 런치. 브랜치 `jetson`
 
 **할 일**

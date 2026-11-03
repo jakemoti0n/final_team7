@@ -11,9 +11,9 @@ roboclaw_drive:
     feedforward_gain: 0.25
     left_feedforward_gain: 0.2375     # 왼쪽이 같은 출력에서 조금 빨라 FF를 5 % 낮춤 (10-30 좌우 특성 측정)
     right_feedforward_gain: 0.2625
-    # 출력 상한(raw, 32767 = 100 %). 4915 = 15 %: 팀원이 바닥 시험에 쓴 값. 11-03 축 수리 뒤 왼쪽이 15 %로 안 굴러
-    # 25 %(8191)로 올릴지는 PM 결정. 코드 천장은 30 %(roboclaw_drive.DUTY_CEILING)
-    max_duty_raw: 4915
+    # 출력 상한(raw, 32767 = 100 %). 25 %(8191): 11-03 축 수리 뒤 15 %로는 왼쪽이 안 굴러 올린 값으로 19분 주행 확인.
+    # duty는 곧 속도 비율이라 25 % ≈ 0.15 m/s가 한계. 지도 작성 런치는 35 %(11468), 코드 천장은 50 %(roboclaw_drive.DUTY_CEILING, PM 11-03)
+    max_duty_raw: 8191
     # 목표 각속도 변화율 2.0 rad/s² = 바퀴 0.15 m/s². 키보드 0.1 m/s에 0.7 s면 도달. 벤치의 0.4는 10 s 시험용이라 너무 느림
     target_slew_rad_s2: 2.0
     output_slew_per_s: 0.15           # duty 변화율(초당 15 %). 벤치와 같음. 급출발 방지, 상한까지 1 s
