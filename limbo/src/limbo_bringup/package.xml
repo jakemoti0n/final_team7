@@ -42,4 +42,6 @@
 
   <exec_depend>nav2_bringup</exec_depend>
   <exec_depend>rviz2</exec_depend>
+  <exec_depend>limbo_hardware</exec_depend>
+  <exec_depend>slam_toolbox</exec_depend>
 </package>

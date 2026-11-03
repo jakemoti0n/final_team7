@@ -109,6 +109,24 @@ class OdometryNodeTests(unittest.TestCase):
         self.assertEqual(values['motor_commands_enabled'], 'False')
         self.assertEqual(values['left_counts_per_revolution'], '3688.0')
 
+    def test_publish_tf_sends_odom_to_base_transform(self):
+        self.node.destroy_node()
+        self.node = OdometryNode(
+            parameter_overrides=[Parameter(k, value=v) for k, v in self.parameters.items()] +
+            [Parameter('publish_tf', value=True)],
+            monotonic=lambda: self.now, clock_ns=lambda: self.now_ns)
+        self.node.odom_pub = Mock()
+        self.node.diag_pub = Mock()
+        self.node.tf_broadcaster = Mock()
+        self.node._on_counts(self.message(0, baseline=True))
+        self.node._on_counts(self.message(1, 3607, 3688, 3607, 3688))
+        tf = self.node.tf_broadcaster.sendTransform.call_args.args[0]
+        self.assertEqual((tf.header.frame_id, tf.child_frame_id), ('odom', 'base_footprint'))
+        self.assertAlmostEqual(tf.transform.translation.x, .15*math.pi)
+        self.node._diagnostics()
+        values = {e.key: e.value for e in self.node.diag_pub.publish.call_args.args[0].status[0].values}
+        self.assertEqual(values['tf_published'], 'True')
+
     def test_missing_geometry_does_not_start_with_a_simulation_default(self):
         candidate = OdometryNode.__new__(OdometryNode)
         try:

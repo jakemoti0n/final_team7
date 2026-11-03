@@ -38,8 +38,9 @@ class PIConfig:
             raise ValueError('At least one PI gain must be positive')
         if self.feedforward_gain > .375:
             raise ValueError('feedforward_gain must be within 0..0.375')
-        if type(self.max_duty_raw) is not int or not 1 <= self.max_duty_raw <= 4915:
-            raise ValueError('max_duty_raw must be an integer in 1..4915')
+        # 물리 최대 32767. 벤치의 15 %(4915)·주행의 30 % 천장은 각 transport가 따로 검증한다
+        if type(self.max_duty_raw) is not int or not 1 <= self.max_duty_raw <= 32767:
+            raise ValueError('max_duty_raw must be an integer in 1..32767')
         if not 0.02 <= self.min_dt <= self.max_dt <= 0.15:
             raise ValueError('The dt interval must stay inside 0.02..0.15 seconds')
 

@@ -8,6 +8,28 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-03 (51) 실물 주행 명령 브리지 `/cmd_vel`→RoboClaw(`roboclaw_drive`) + 바퀴 odom TF + 키보드 주행·지도 작성 런치. 브랜치 `jetson`
+
+**할 일**
+- Jetson에서 빌드: `limbo_hardware limbo_bringup`. 키보드 주행은 터미널 둘: `tools/drive/run_teleop.sh`(브리지+odom) / `tools/drive/teleop_keyboard.sh`(키). 지도 작성은 `run_teleop.sh` 대신 `tools/drive/run_mapping.sh`(라이다·slam_toolbox·bag 포함), 저장은 `tools/drive/save_map.sh <이름>`
+- 첫 시험은 바퀴를 띄우고: 전진·후진·제자리 회전·키 떼면 0.5 s 안에 정지. 그 다음 바닥 저속
+- 출력 상한은 `drive.yaml` 15 %(4915) 그대로. 11-03 축 수리 뒤 왼쪽이 15 %로 안 굴러 25 %(8191)로 올릴지는 PM 결정 → `run_teleop.sh max_duty_raw:=8191`
+
+**변경**
+- `limbo_hardware/roboclaw_drive.py`(새): 연속 주행용 직렬 계층. 쓰기는 duty(34)와 명령 timeout(14, 런타임) 둘뿐. 출력 천장 30 %(`DUTY_CEILING` 9830, 모터 잠겨도 약 7 A로 보드 15 A 안). 펌웨어 4.x 상태 비트 표(`STOP_STATUS_BITS`: E-stop·드라이버 고장·과전압/저전압 오류·경고)
+- `limbo_hardware/drive_node.py`(새, 실행파일 `roboclaw_drive`): `/cmd_vel` 구독 → 좌우 바퀴 목표(기존 `calculate_drive_targets`) → 바퀴별 PI(기존 `WheelSpeedPI`)+좌우 FF → duty 20 Hz. 엔코더 카운트·관절 상태는 벤치와 같은 토픽. 출력을 0으로 두는 신호: 명령 끊김(보드 timeout과 같은 시간, 보드에서 읽음), 배터리 10.0 V 아래(10.3에서 복귀), 보드 정지 비트, 잠김(상한 출력인데 1 s 동안 엔코더 0 → 양쪽 목표 0이 올 때 풀림). 시작 때 보드 timeout이 0이면 0.5 s로 켠다(전원 재투입마다 0으로 돌아오던 것). 방향 전환은 PI를 0으로 거쳐서. 선속도 0.25 m/s·각속도 0.8 rad/s 상한(둘 다 같은 비율로 줄여 회전 반경 유지)
+- `limbo_hardware/config/drive.yaml`(새): 위 값과 근거. PI 이득은 11-03 마지막으로 움직인 설정(kp 0.02, ki 0.10, FF 0.2375/0.2625)
+- `limbo_hardware/odometry_node.py`: `publish_tf` 파라미터(기본 false). true면 `odom→base_footprint` TF 발행(SLAM·AMCL 요구). EKF를 붙이면 끈다
+- `limbo_hardware/speed_pi.py`: `max_duty_raw` 검사 상한 4915 → 물리 최대 32767 (벤치 15 %는 벤치 노드가, 주행 30 % 천장은 `roboclaw_drive`가 각자 검사)
+- `limbo_hardware/launch/teleop_drive.launch.py`(새), `limbo_bringup/launch/start_mapping.launch.py`(새: teleop_drive + `start_mid360 profile:=mounted` + slam_toolbox(`limbo_navigation/config/slam.yaml`, mapping, 실물 시계) + bag 녹화 `~/limbo_bags/mapping_<label>`)
+- `tools/drive/`(새): `run_teleop.sh`, `teleop_keyboard.sh`(repeat_rate 10·key_timeout 0.6: 기본 "키 누를 때 한 번 발행"은 0.5 s 끊김 정지에 걸림), `run_mapping.sh`, `save_map.sh`. 도메인 97·탐색 SUBNET(노트북 rviz가 Wi-Fi로 보게)
+- 테스트: `test_roboclaw_drive.py`(패킷·상한·상태 비트·timeout·CRC), `test_drive_node.py`(끊김·제한·전환·잠김·저전압·정지 비트·오류 종료·gap), odom TF 1개. 전체 186 통과(노트북)
+- `limbo_bringup/package.xml`: `limbo_hardware`, `slam_toolbox` 의존. `limbo_hardware/package.xml`: `tf2_ros`, `teleop_twist_keyboard`
+
+**원인과 근거**
+- 지금까지 실물 모터는 벤치 노드(고정 목표 한 개, 최대 10 s)로만 움직였고 `/cmd_vel` 경로가 없어 키보드 주행도 Nav2 주행도 불가능했다. PM 결정 순서: 브리지로 키보드 주행 → 지도 작성 → 목표점 주행 → 자율 주행
+- 11-03 수리 후 1회차(0.03 m/s 10 s): 오른쪽 27.4 cm, 왼쪽 1.4 cm. 왼쪽은 15 % 상한에서 8 s 동안 카운트 0 → 잠김 가드의 근거. 11-03 아침 충전 후 무동작은 보드 과전압 경고(자동 상한 = 켤 때 전압+2 V)가 모터를 제동한 것과 맞아 정지 비트 가드의 근거
+
 ## 2026-11-03 (50) Jetson 실물 작업 스냅샷(10-27~11-03, 팀원이 Codex 에이전트로 진행): OAK 카메라 ROS 입력·호스트 YOLO, RoboClaw 엔코더·바퀴 odom·저속 구동 벤치(`limbo_hardware`), MID-360S 입력·`/scan` 연결. 브랜치 `jetson`에만 올림
 
 **할 일**

@@ -18,5 +18,6 @@ setup(
         'wheel_odometry = limbo_hardware.odometry_node:main',
         'drive_preview = limbo_hardware.drive_preview_node:main',
         'wheel_speed_bench = limbo_hardware.speed_bench_node:main',
+        'roboclaw_drive = limbo_hardware.drive_node:main',
     ]},
 )

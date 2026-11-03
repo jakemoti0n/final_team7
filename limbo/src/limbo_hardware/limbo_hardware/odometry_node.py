@@ -1,4 +1,7 @@
-"""Raw encoder odometry for Limbo; deliberately no device, motor, EKF or TF API."""
+"""Raw encoder odometry for Limbo; deliberately no device, motor or EKF API.
+
+TF odom→base_footprint는 publish_tf=true일 때만 낸다(SLAM·AMCL이 요구). EKF를 쓰게 되면 EKF가 TF를 내야 하므로 끈다.
+"""
 import math
 import signal
 import time
@@ -9,6 +12,7 @@ from rclpy.executors import ExternalShutdownException
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
 from nav_msgs.msg import Odometry
+from geometry_msgs.msg import TransformStamped
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from limbo_interfaces.msg import WheelEncoderCounts
 
@@ -34,6 +38,7 @@ class OdometryNode(Node):
             'angular_velocity_variance': 0.04, 'unobserved_variance': 1e6,
             'odom_frame': 'odom', 'base_frame': 'base_footprint',
             'input_topic': '/wheel/encoder_counts', 'output_topic': '/odom',
+            'publish_tf': False,
         }
         descriptor = ParameterDescriptor(read_only=True)
         self.settings = {key: self.declare_parameter(key, value, descriptor).value
@@ -69,6 +74,10 @@ class OdometryNode(Node):
                          reliability=ReliabilityPolicy.RELIABLE)
         self.odom_pub = self.create_publisher(Odometry, s['output_topic'], qos)
         self.diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 5)
+        self.tf_broadcaster = None
+        if s['publish_tf'] is True:
+            from tf2_ros import TransformBroadcaster
+            self.tf_broadcaster = TransformBroadcaster(self)
         self.count_sub = self.create_subscription(
             WheelEncoderCounts, s['input_topic'], self._on_counts, qos)
         self.diag_timer = self.create_timer(1.0, self._diagnostics)
@@ -122,6 +131,14 @@ class OdometryNode(Node):
         odom.pose.covariance = pose_covariance
         odom.twist.covariance = twist_covariance
         self.odom_pub.publish(odom)
+        if self.tf_broadcaster is not None:
+            tf = TransformStamped()
+            tf.header = odom.header
+            tf.child_frame_id = odom.child_frame_id
+            tf.transform.translation.x = estimate.x
+            tf.transform.translation.y = estimate.y
+            tf.transform.rotation = odom.pose.pose.orientation
+            self.tf_broadcaster.sendTransform(tf)
         self.last_output_mono = now
         self.output_count += 1
 
@@ -159,7 +176,7 @@ class OdometryNode(Node):
             'calibration': 'provisional', 'covariance': 'provisional_diagonal_budget',
             'stamp_source': 'encoder_host_ros_receive_time',
             'twist_interval_source': 'successive_encoder_header_stamps',
-            'tf_published': False, 'motor_commands_enabled': False,
+            'tf_published': self.tf_broadcaster is not None, 'motor_commands_enabled': False,
             'discontinuity_policy': 'preserve_pose_skip_unobserved_motion',
         }
         status.values = [KeyValue(key=str(key), value=str(value)) for key, value in values.items()]

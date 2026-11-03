@@ -85,6 +85,9 @@ class SpeedBenchNode(Node):
             geometry=(self.s['left_wheel_radius'],self.s['right_wheel_radius'],self.s['wheel_separation'])
             if duration!=10. or self.expected!=(.4,.4) or geometry!=(.075,.075,.54):
                 raise ValueError('Extended distance observation requires 10s, both +0.4 rad/s, and geometry .075/.075/.54')
+        # 벤치의 15 % 상한은 벤치가 직접 지킨다 (PIConfig는 물리 최대까지 허용하고, 주행 브리지는 자기 천장을 따로 둔다)
+        if type(self.s['max_duty_raw']) is not int or not 1<=self.s['max_duty_raw']<=4915:
+            raise ValueError('max_duty_raw must be an integer in 1..4915 for the bench')
         config=PIConfig(kp=self.s['kp'],ki=self.s['ki'],max_duty_raw=self.s['max_duty_raw'],
                         feedforward_gain=self.s['feedforward_gain'])
         configs=_resolve_wheel_pi_configs(config,self.s['left_feedforward_gain'],

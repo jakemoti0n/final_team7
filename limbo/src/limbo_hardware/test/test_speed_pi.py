@@ -105,7 +105,7 @@ class SpeedPITests(unittest.TestCase):
 
     def test_configuration_validation(self):
         for kwargs in ({'kp':-1},{'ki':float('nan')},{'kp':0.,'ki':0.},
-                       {'max_duty_raw':4916},{'max_duty_raw':True},
+                       {'max_duty_raw':32768},{'max_duty_raw':True},
                        {'output_slew_per_s':0},{'target_slew_rad_s2':float('inf')},
                        {'min_dt':.01},{'max_dt':.2},{'min_dt':.1,'max_dt':.05}):
             with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
