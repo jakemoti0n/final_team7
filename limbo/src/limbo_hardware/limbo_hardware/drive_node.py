@@ -9,6 +9,8 @@ duty 명령을 20 Hz로 보낸다. 엔코더 카운트·관절 상태를 벤치 
 - 배터리 저전압: 납축 12 V는 10.5 V 아래로 쓰면 수명이 급히 준다. 부하 중 순간 처짐을 고려해 10.0 V(설정값) 아래면 멈추고
   0.3 V 올라올 때까지 유지(보드 분해능 0.1 V·부하 변동에 떨지 않게).
 - 보드 상태 비트: E-stop, 드라이버 고장, 과전압·저전압 등 (roboclaw_drive.STOP_STATUS_BITS).
+- 사람 기다리기: /person_wait(limbo_interfaces/PersonWait).wait가 참인 동안(2-7, 시뮬 BT의 IsWaitingForPerson과 같은 필드).
+  Nav2 없이 키보드로 몰 때도 사람 앞에서 서게 한다. 마지막 값을 그대로 쓴다(person_wait 노드가 죽으면 마지막 값에 머무름).
 - 잠김(stall): 출력이 상한에 붙었는데 그 바퀴 엔코더가 stall_seconds 동안 안 움직임. 11-03 축 수리 뒤 왼쪽 바퀴가 15 %
   상한에서 8 s 동안 0카운트였다. 정상 출발은 0.3 s 안에 카운트가 오르므로 1 s면 "미는 중"이 아니라 "잠김"이다.
   잠김은 양쪽 목표가 0이 될 때(키를 떼거나 Nav2가 멈추면) 풀린다.
@@ -32,7 +34,7 @@ from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import JointState
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
-from limbo_interfaces.msg import WheelEncoderCounts
+from limbo_interfaces.msg import PersonWait, WheelEncoderCounts
 
 from .drive_preview_core import calculate_drive_targets
 from .roboclaw_readonly import CounterTracker
@@ -67,6 +69,7 @@ class DriveNode(Node):
             'max_linear_m_s': 0.25, 'max_angular_rad_s': 0.8,
             'min_battery_volts': 10.0, 'battery_recover_volts': 0.3, 'battery_period_s': 0.5,
             'stall_seconds': 1.0, 'record_dir': '',
+            'wait_topic': '/person_wait',   # 비우면 사람 기다리기 게이트를 안 쓴다
         }
         descriptor = ParameterDescriptor(read_only=True)
         self.s = {k: self.declare_parameter(k, v, descriptor).value for k, v in defaults.items()}
@@ -117,6 +120,8 @@ class DriveNode(Node):
         self.stalled = [False, False]
         self.board_stop = []               # 보드 상태 비트 이름들
         self.board_notes = []
+        self.person_wait = False           # /person_wait.wait 마지막 값
+        self.person_wait_reason = ''
         self.previous = None               # 직전 sample
         self.last_control = None
         self.errors = []
@@ -129,6 +134,8 @@ class DriveNode(Node):
         self.joint_pub = self.create_publisher(JointState, '/wheel/joint_states', 5)
         self.diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 5)
         self.command_sub = self.create_subscription(Twist, '/cmd_vel', self._on_command, 1)
+        self.wait_sub = (self.create_subscription(PersonWait, s['wait_topic'], self._on_person_wait, 5)
+                         if s['wait_topic'] else None)
         self.timer = self.create_timer(s['control_period_s'], self._tick)
         self.diag_timer = self.create_timer(0.25, self._diagnostics)
 
@@ -170,6 +177,11 @@ class DriveNode(Node):
             self.stall_since = [None, None]
             self._event('stall_cleared')
 
+    def _on_person_wait(self, msg):
+        if msg.wait != self.person_wait:
+            self._event('person_wait', wait=msg.wait, state=msg.state, reason=msg.reason)
+        self.person_wait, self.person_wait_reason = msg.wait, msg.reason
+
     def _targets_now(self, now):
         """이번 틱의 좌우 바퀴 목표 각속도와, 0으로 둔 이유."""
         reasons = []
@@ -179,6 +191,8 @@ class DriveNode(Node):
             reasons.append('battery_low')
         if self.board_stop:
             reasons.extend(self.board_stop)
+        if self.person_wait:
+            reasons.append('person_wait')
         if any(self.stalled):
             reasons.append('stall_left' if self.stalled[0] else 'stall_right')
         if reasons:
@@ -319,6 +333,7 @@ class DriveNode(Node):
                   'command_timeout_s': self.command_timeout_s, 'max_duty_raw': self.s['max_duty_raw'],
                   'board_stop_bits': ','.join(self.board_stop), 'board_notes': ','.join(self.board_notes),
                   'stalled_left_right': self.stalled, 'transient_serial_errors': self.transient_errors,
+                  'person_wait': self.person_wait, 'person_wait_reason': self.person_wait_reason,
                   'errors': ' | '.join(self.errors)}
         if self.last_control:
             for key in ('command', 'target_left_right_rad_s', 'measured_left_right_rad_s', 'duty_m1_m2'):

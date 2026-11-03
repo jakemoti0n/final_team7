@@ -198,6 +198,27 @@ class DriveNodeTests(unittest.TestCase):
         self.run_half_second()
         self.assertFalse(node.battery_low)
 
+    def test_person_wait_zeroes_output_until_cleared(self):
+        from limbo_interfaces.msg import PersonWait
+        node, fake = self.make()
+        self.command(0.1)
+        for _ in range(4):
+            self.step(left=2, right=2)
+            self.command(0.1)
+        self.assertNotEqual(fake.writes[-1], (0, 0))
+        msg = PersonWait(); msg.wait = True; msg.state = 'WAITING'; msg.reason = 'in_zone'
+        node._on_person_wait(msg)
+        self.command(0.1)
+        self.step(left=2, right=2)
+        self.assertEqual(fake.writes[-1], (0, 0))
+        self.assertIn('person_wait', node.last_control['reasons'])
+        msg.wait = False; msg.state = 'DRIVING'; msg.reason = 'zone_clear'
+        node._on_person_wait(msg)
+        for _ in range(3):
+            self.command(0.1)
+            self.step(left=2, right=2)
+        self.assertNotEqual(fake.writes[-1], (0, 0))
+
     def test_board_stop_bit_zeroes_output(self):
         node, fake = self.make()
         fake.status = 0x03040000

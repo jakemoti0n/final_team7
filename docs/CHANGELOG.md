@@ -8,6 +8,20 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-03 (53) 실물 사람 앞 기다리기 시험 준비: 브리지에 `/person_wait` 정지 게이트 + 임시 카메라 장착 TF + person_wait 실물 런치
+
+**할 일**
+- Jetson 빌드 `limbo_hardware limbo_bringup`. 시험 순서: 카메라·검출기 → `run_teleop.sh`(새로 띄워야 게이트가 듦) → 라이다+SLAM → `tools/drive/run_person_wait.sh`. 로그가 `NOT_READY → DRIVING`이 되면 사람이 앞에 서 있는 쪽으로 키보드 전진. 설 때 범퍼~사람 발 거리를 줄자로 잰다
+- `limbo_bringup/config/real_robot_mount.yaml`의 카메라 x 0.20 m·pitch 0은 **임시값**. 줄자 결과와 person_wait가 본 거리 차이만큼 x를 고친다(실물 URDF가 생기면 그쪽으로 옮김)
+
+**변경**
+- `drive_node.py`: `/person_wait`(limbo_interfaces/PersonWait) 구독, `wait`가 참인 동안 출력 0(reason `person_wait`). 시뮬 BT의 IsWaitingForPerson과 같은 필드. 파라미터 `wait_topic`(비우면 끔). 테스트 1개 추가(188)
+- `start_person_wait_real.launch.py`(새): `base_footprint→oak_device_frame` 고정 TF(mount yaml) + person_wait(실물 override: base_frame base_footprint, bumper_frame 없음→bumper_x, odom `/odom`). ToF 없음·EKF 없음이 시뮬과 다른 점
+- `tools/drive/run_person_wait.sh`(새)
+
+**원인과 근거**
+- PM: "전진하다 사람 앞 몇 cm 남기고 서는지"를 Nav2 전에 보고 싶음. person_wait는 사람 위치를 odom 좌표로 받아 범퍼 앞 1.5 m 구역·진로 접근으로 판단하므로 카메라 TF와 map 프레임(SLAM)만 있으면 키보드 주행에서도 동작한다
+
 ## 2026-11-03 (52) 주행 브리지 손질: 출력 천장 50 %·기본 25 %·지도 작성 35 %, 직렬 오류 연속 3회까지 허용, 지도 런치에 slam_toolbox lifecycle manager. 첫 실물 키보드 주행·풀 세트 부하 측정 결과
 
 **할 일**
