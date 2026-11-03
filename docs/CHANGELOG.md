@@ -8,6 +8,28 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-03 (50) Jetson 실물 작업 스냅샷(10-27~11-03, 팀원이 Codex 에이전트로 진행): OAK 카메라 ROS 입력·호스트 YOLO, RoboClaw 엔코더·바퀴 odom·저속 구동 벤치(`limbo_hardware`), MID-360S 입력·`/scan` 연결. 브랜치 `jetson`에만 올림
+
+**할 일**
+- 이 항목은 Jetson `~/limbo` 작업 트리(커밋 d1da95a 기준)를 그대로 커밋한 것. dev·ktj에 합치기 전에 아래 "주의"의 설계 결정이 먼저
+- Jetson에서 빌드: `limbo_interfaces limbo_hardware limbo_bringup limbo_perception`. 카메라는 `~/limbo_oak_ros_compat`의 DepthAI SDK 3.6.1·ROS v3 3.2.1 overlay(`tools/oak/ros_input_env.sh`), 라이다는 `~/livox_ws`(SDK2 spdlog 패치본)가 Jetson에 따로 있어야 돈다. 자세한 경위는 팀원 문서 `LIMBO_OAK_CONNECTION_LOG.md`(저장소 밖)
+
+**변경**
+- 새 패키지 `limbo_hardware`: RoboClaw USB 읽기 전용 엔코더 노드(`/wheel/encoder_counts`, `/wheel/joint_states`), 바퀴 odom(`/odom`, TF는 안 냄), 모터 출력 없는 목표 속도 미리보기, 저속 속도 벤치(`/limbo/drive_bench/cmd_vel`, Jetson PI → RoboClaw duty, 최대 10 s·출력 상한 15 %). `/cmd_vel`→모터 브리지가 아니고 명령 끊김 watchdog도 없음
+- `limbo_interfaces/msg/WheelEncoderCounts.msg`
+- `limbo_bringup`: `start_oak_camera.launch.py`(DepthAI v3 드라이버 → `/rgbd_camera/*` remap), `start_mid360.launch.py`(profile preview/mounted, 몸체 상자 필터 → `/mid360/points_filtered` → `/scan`, 고정 TF base_footprint→mid360_link (0, 0, 0.837)), `scripts/lidar_cloud_guard.py`, config 4개(`oak_usb2_rgbd.yaml`, `fastdds_camera.xml`, `MID360s_limbo.json`, `MID360s_mount.json`)
+- `limbo_perception`: `person_detector.py`에 yolo.device 전달·최신 프레임만 처리하는 `latest_frame_worker.py`(`processing.latest_only`)·종료 순서 보완, `config/person_detector_oak_ros.yaml`
+- `tools/oak`(ROS 입력·YOLO 실행·검증 스크립트, requirements 버전 고정), `tools/encoders`, `tools/motors`
+- `.gitignore`에 `.pytest_cache/`
+
+**확인된 것 / 안 된 것**
+- 통과: 카메라 USB 2, 640×400, 10 fps. 호스트 YOLO(leg_640) 약 10 Hz, 지연 p95 609→138 ms. 엔코더 M1=오른쪽·M2=왼쪽, 1회전 카운트 임시 R 3607·L 3688, 반지름 0.075 m·중심 간격 0.54 m, odom 전후진 0.5 m·좌우 90° 확인. MID-360S(192.168.1.113 ↔ Jetson 192.168.1.50) 점군 10 Hz·IMU 200 Hz, 정지 장애물 costmap 표시·제거 확인
+- 미해결: 저속 속도 추종 기준 미달(끊김·좌우 교대), 11-02~03 15 % 상한에서 무동작했다가 재동작한 원인 미확정(차체 약 25 kg), 축·바퀴 기울어짐(가수리 상태), Nav2 costmap 종료 SIGSEGV(센서 없이도 재현), 카메라 장착 TF·EKF·AMCL·Nav2 통합·센서 동시 부하 미수행
+
+**주의(합치기 전에 정할 것)**
+- `start_mid360.launch.py`는 자체 몸체 상자 필터와 자체 TF를 내는데, `start_simulation.launch.py role:=robot`는 robot_self_filter로 같은 `/mid360/points_filtered`를 만들고 URDF가 TF를 낸다. 같이 띄우면 중복 발행이라 한쪽으로 정해야 함
+- `person_detector.py` 수정은 lab(밴드 재식별)·dev(camera:=oak 카메라 내 NN)와 세 갈래로 갈림
+- `tools/motors`의 README 9개는 하나로 합칠 대상
 ## 2026-10-26 (48) 두 대 분리 시뮬에서 Jetson이 서던 원인(UDP 수신 버퍼 넘침) 해결: PC에서 카메라 점군을 5 cm 복셀로 줄이는 `rgbd_voxel` + 양쪽 소켓 버퍼 — 유선 263 → 49 Mbit/s, Jetson CPU 72 → 59 %, 1 m 목표 주행 성공
 
 **할 일**

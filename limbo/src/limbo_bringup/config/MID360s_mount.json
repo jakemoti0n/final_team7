@@ -1,0 +1,13 @@
+{
+  "status": "Initial stationary mount estimate; remeasure after axle/body changes; lid must remain closed",
+  "parent_frame": "base_footprint",
+  "sensor_frame": "mid360_link",
+  "sensor_translation_m": [0.0, 0.0, 0.837],
+  "sensor_rpy_rad": [0.0, 0.0, 0.0],
+  "body_min_base_m": [-0.225, -0.225, 0.0],
+  "body_max_base_m": [0.225, 0.225, 0.79],
+  "body_padding_m": 0.01,
+  "scan_min_height_sensor_m": -0.15,
+  "scan_max_height_sensor_m": 0.20,
+  "basis": "User: body 45x45cm, direct sensor mounting on 79cm top. MID-360S manual: optical origin 47mm above bottom. Front chair A/B supports +X forward; zero roll/pitch/yaw is provisional, not calibrated."
+}

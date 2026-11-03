@@ -1,6 +1,9 @@
 # OAK-D Lite 점검·모델 실행용 Python 환경. 설치: python3 -m venv ~/limbo/venvs/limbo_oak && ~/limbo/venvs/limbo_oak/bin/pip install -r tools/oak/requirements.txt
 # depthai 3.x는 API가 달라 2.x로 고정한다. blobconverter는 export_blob.py의 blob 단계에만 필요.
-depthai<3
-opencv-python
-numpy
+depthai==2.33.0.0
+opencv-python==4.11.0.86
+numpy==1.26.4
 blobconverter
+
+# ROS Jazzy cv_bridge uses the NumPy 1.x ABI. Keep this tested Python tool environment pinned.
+# The C++ ROS v3 driver uses the separate SDK 3.6.1 overlay; pip depthai is for tools/oak only.
