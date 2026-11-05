@@ -1,0 +1,34 @@
+# 화면 B — 수거함 적재율 (PPT 4~5페이지)
+# 좌표는 1920×1080 설계 기준 [x, y, 너비, 높이] (px). rect_rel은 상자 안의 비율 [x, y, w, h].
+# 색은 app.yaml theme 이름(text, accent, muted ...) 또는 "#RRGGBB".
+# font: size(px), weight(normal|medium|bold), min_size(넘치면 여기까지 줄임), family(생략 시 theme),
+#       wrap(wrap_first: 줄바꿈 먼저 | shrink_first: TXT 줄바꿈을 지키고 글자를 먼저 줄임)
+# 이 파일에 빠진 항목은 프로그램 기본값을 쓴다. 저장하면 몇 초 안에 반영된다.
+
+boxes:
+  general:
+    rect: [160, 120, 760, 840]
+    label_text: content/text/bin_general_label.txt
+    label_default: 일반
+  recycling:
+    rect: [1000, 120, 760, 840]
+    label_text: content/text/bin_recycle_label.txt
+    label_default: 재활용
+box: {corner_radius: 56, border_width: 8, border_color: text, fill_color: accent, unavailable_border_color: muted}
+label:
+  rect_rel: [0.05, 0.22, 0.9, 0.2]
+  font: {size: 120, weight: bold, min_size: 60}
+  color: text
+percent:
+  rect_rel: [0.05, 0.44, 0.9, 0.26]
+  font: {size: 170, weight: bold, min_size: 80}
+  color: text
+  decimals: 0
+unavailable:
+  text: content/text/bin_unavailable.txt
+  default: 정보 없음
+  font: {size: 96, weight: bold, min_size: 48}
+  color: muted
+mock_badge:
+  text: MOCK
+  rect_rel: [0.66, 0.04, 0.3, 0.07]

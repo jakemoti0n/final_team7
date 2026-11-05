@@ -1,0 +1,18 @@
+# 부팅 후 그래픽 로그인 세션에서 하단 디스플레이 자동 실행 (systemd 사용자 유닛, PRD FR-20)
+# 아직 Raspberry Pi 실기에서 검증하지 않음. 설치 방법은 README "부팅 시 자동 실행" 참고.
+[Unit]
+Description=Automaton 로봇 하단 디스플레이
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+# 경로는 설치 위치에 맞게 고친다
+ExecStart=%h/limbo/signage/run.sh --fullscreen
+Restart=always
+RestartSec=3
+# Wayland(Raspberry Pi OS Bookworm 기본)에서 안 뜨면 xcb로 바꿔 본다
+Environment=QT_QPA_PLATFORM=wayland;xcb
+
+[Install]
+WantedBy=graphical-session.target

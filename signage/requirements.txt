@@ -1,0 +1,5 @@
+# Automaton 하단 디스플레이 실행 의존성 (PC Ubuntu 24.04 / Python 3.12에서 시험한 버전)
+# PySide6-Essentials = QtCore/QtGui/QtWidgets만. 전체 PySide6(WebEngine 등 수백 MB)는 필요 없다.
+PySide6-Essentials==6.12.0
+openpyxl==3.1.5
+PyYAML==6.0.3

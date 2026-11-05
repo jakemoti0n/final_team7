@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "observed_at": null,
+  "source": "unavailable",
+  "bins": {
+    "general": {
+      "fill_percent": null,
+      "measurement_method": "unknown",
+      "quality": "unavailable"
+    },
+    "recycling": {
+      "fill_percent": null,
+      "measurement_method": "unknown",
+      "quality": "unavailable"
+    }
+  }
+}

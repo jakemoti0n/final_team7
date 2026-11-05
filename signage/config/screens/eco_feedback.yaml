@@ -1,0 +1,29 @@
+# 화면 C — 환경 피드백 나무 (PPT 6~8페이지)
+# 좌표는 1920×1080 설계 기준 [x, y, 너비, 높이] (px). rect_rel은 상자 안의 비율 [x, y, w, h].
+# 색은 app.yaml theme 이름(text, accent, muted ...) 또는 "#RRGGBB".
+# font: size(px), weight(normal|medium|bold), min_size(넘치면 여기까지 줄임), family(생략 시 theme),
+#       wrap(wrap_first: 줄바꿈 먼저 | shrink_first: TXT 줄바꿈을 지키고 글자를 먼저 줄임)
+# 이 파일에 빠진 항목은 프로그램 기본값을 쓴다. 저장하면 몇 초 안에 반영된다.
+
+message:
+  rect: [96, 200, 800, 520]
+  font: {size: 84, weight: bold, min_size: 44, wrap: shrink_first}
+  align: center
+  color: text
+pending:
+  show: true
+  rect: [96, 780, 800, 110]
+  text: content/text/eco_pending.txt
+  default: 평가 준비 중
+  font: {size: 52, min_size: 28}
+  color: muted
+image:
+  rect: [944, 100, 880, 880]
+  corner_radius: 36
+states:
+  initial: {text: content/text/eco_initial.txt, image: assets/images/tree_initial.png}
+  positive: {text: content/text/eco_positive.txt, image: assets/images/tree_positive.png}
+  negative: {text: content/text/eco_negative.txt, image: assets/images/tree_negative.png}
+mock_badge:
+  text: MOCK
+  rect_rel: [0.74, 0.03, 0.23, 0.07]

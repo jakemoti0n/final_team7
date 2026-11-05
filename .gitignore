@@ -23,3 +23,7 @@ limbo/src/limbo_navigation/maps/race_track_map.*
 # slam_toolbox 포즈그래프(수십 MB)는 커밋하지 않는다
 limbo/src/limbo_navigation/maps/*_posegraph.*
 limbo/src/limbo_navigation/maps/*_autosave.*
+
+# 하단 디스플레이(signage) 로그 (venv는 위 venvs/로 무시됨)
+signage/logs/
+.pytest_cache/
