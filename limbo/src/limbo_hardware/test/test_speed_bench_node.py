@@ -41,6 +41,10 @@ class FakeTransport:
         self.stop_error = None
         self.stop_signal_states = None
         self.stop_result = {'zero_acked': True, 'stationary_verified': True, 'closed': True}
+        self.encoder_modes = (0, 0)   # 보드 엔코더 모드 (M1, M2)
+
+    def read_encoder_modes(self):
+        return self.encoder_modes
 
     def open(self):
         self.open_calls += 1
@@ -148,6 +152,17 @@ class SpeedBenchNodeTests(unittest.TestCase):
     def step(self, node, seconds=.05):
         self.now += seconds
         node._tick()
+
+    def test_forward_signs_follow_board_encoder_mode(self):
+        node, fake = self.make()
+        node._tick()   # opening
+        self.assertEqual(node.tracker.signs, (1, -1))          # 지금 배선·보드 기본 설정
+        self.assertEqual(node.summary['forward_signs_m1_m2'], [1, -1])
+        node, fake = self.make()
+        fake.encoder_modes = (0, 0x40)                           # 보드에서 왼쪽(M2) 엔코더 방향을 뒤집은 뒤
+        node._tick()
+        self.assertEqual(node.tracker.signs, (1, 1))
+        self.assertEqual(fake.writes, [])
 
     def test_default_distance_and_voltage_preserve_legacy_no_extra_queries(self):
         node,fake=self.make()

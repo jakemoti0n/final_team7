@@ -13,7 +13,7 @@ from .roboclaw_readonly import DEFAULT_PORT, check_device_identity, crc16, signe
 
 ADDRESS = 128
 FIRMWARE = 'USB Roboclaw 2x15A v4.4.9'
-READ_LENGTHS = {21: None, 15: 1, 24: 2, 48: 4, 49: 4, 78: 8, 90: 4}
+READ_LENGTHS = {21: None, 15: 1, 24: 2, 48: 4, 49: 4, 78: 8, 90: 4, 91: 2}  # 91: encoder modes (M1, M2), read only
 MAX_DUTY = 3276  # Default remains the previously tested ~10% cap.
 ABSOLUTE_MAX_DUTY = 4915  # Explicit startup-margin comparison only; ~15%.
 DUTY_ENVELOPE = 'duty_ceiling_4915_v1'
@@ -231,6 +231,11 @@ class BenchTransport:
         if command not in READ_LENGTHS:
             self._fail('Read command not allowed')
         return self.exchange(bytes((ADDRESS, command)), deadline)
+
+    def read_encoder_modes(self):
+        """Board encoder modes (M1, M2); roboclaw_readonly.forward_signs() turns them into forward signs."""
+        data = self.query(91)
+        return data[0], data[1]
 
     def write_duty(self, m1, m2):
         try:

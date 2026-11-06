@@ -18,7 +18,7 @@ from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from limbo_interfaces.msg import WheelEncoderCounts
 
 from .drive_preview_core import calculate_drive_targets
-from .roboclaw_readonly import CounterTracker
+from .roboclaw_readonly import CounterTracker, WIRED_FORWARD_SIGNS, forward_signs
 from .roboclaw_bench import BenchTransport, GuardError, DUTY_ENVELOPE, observation_duration_limit, observation_count_limit
 from .speed_pi import CONTROLLER_MODEL, PIConfig, WheelSpeedPI
 from .speed_estimator import VELOCITY_ESTIMATOR, CountWindowEstimator
@@ -115,7 +115,8 @@ class SpeedBenchNode(Node):
         self.started=self.mono()
         self.deadline=None
         self.previous=None
-        self.tracker=CounterTracker(signs=(1,-1))
+        # 전진 부호는 열 때 보드의 엔코더 모드에서 읽어 정한다(_tick의 opening). 그전까지는 배선 기본값
+        self.tracker=CounterTracker(signs=WIRED_FORWARD_SIGNS)
         self.session=str(uuid.uuid4())
         self.sequence=0
         self.control_steps=0
@@ -248,6 +249,9 @@ class SpeedBenchNode(Node):
         try:
             if self.state=='opening':
                 self.summary['firmware']=self.transport.open()
+                signs=forward_signs(self.transport.read_encoder_modes())
+                self.tracker=CounterTracker(signs=signs)
+                self.summary['forward_signs_m1_m2']=list(signs)
                 self.opened=True
                 self.state='ready'
                 self._status()
