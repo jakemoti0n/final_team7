@@ -12,6 +12,7 @@ from limbo_hardware.encoder_node import EncoderNode
 class FakeReader:
     def __init__(self, **kwargs):
         self.raw = (100, 1000)
+        self.modes = (0, 0)   # 보드 엔코더 모드 (M1, M2)
         self.fail = False
         self.closed = False
         self.open_calls = 0
@@ -20,6 +21,9 @@ class FakeReader:
         self.open_calls += 1
         self.closed = False
         return 'USB Roboclaw 2x15A fake transport'
+
+    def read_encoder_modes(self):
+        return self.modes
 
     def read_counts(self):
         if self.fail:
@@ -166,6 +170,26 @@ class NodeTests(unittest.TestCase):
         self.assertEqual(list(joints.velocity), [0.0, 0.0])
         self.assertAlmostEqual(joints.position[0], 2 * math.pi)
         self.assertEqual(joints.position[1], 0.0)
+
+    def test_left_forward_sign_follows_board_encoder_mode(self):
+        self.enable_left_angle(4000.0)
+        self.node.reader.modes = (0, 0x40)    # 보드에서 왼쪽(M2) 엔코더 방향을 뒤집어 둔 상태
+        self.node._poll()
+        self.now += 2.0
+        self.node.reader.raw = (3787, 1000 + 4000)   # 왼쪽도 전진에서 숫자가 올라간다
+        self.node._poll()
+        counts = self.node.count_pub.publish.call_args.args[0]
+        self.assertEqual(counts.left_total, 4000)
+        self.assertEqual(counts.right_total, 3687)
+        self.node._diagnostics()
+        values = {v.key: v.value for v in self.node.diag_pub.publish.call_args.args[0].status[0].values}
+        self.assertEqual(values['left_forward_sign'], '1')
+
+    def test_motor_reverse_setting_publishes_nothing(self):
+        self.node.reader.modes = (0, 0x20)
+        self.node._poll()
+        self.assertEqual(self.node.count_pub.publish.call_count, 0)
+        self.assertEqual(self.node.diag_pub.publish.call_args.args[0].status[0].level, DiagnosticStatus.ERROR)
 
     def test_left_angle_reconnect_clears_both_positions_and_velocity(self):
         self.enable_left_angle()

@@ -1,8 +1,12 @@
 """연속 주행용 RoboClaw USB 직렬 계층 (/cmd_vel 브리지가 쓴다).
 
 벤치용 BenchTransport(한 번·유한 시간·고정 목표)와 달리 세션 제한이 없다. 대신 보드 자체 안전장치(명령 timeout)를
-켜고, 상태 비트로 출력을 막을 상황을 알려 준다. 모터 명령은 duty(명령 34)뿐이고 설정 쓰기는 명령 timeout(명령 14,
-런타임 값·NVM 저장 안 함) 하나다. 정지는 호출자가 반드시 close()로 끝낸다.
+켜고, 상태 비트로 출력을 막을 상황을 알려 준다. 모터 명령은 duty(명령 34)와 속도(명령 40) 둘이고 설정 쓰기는
+명령 timeout(명령 14, 런타임 값·NVM 저장 안 함) 하나다. 정지는 언제나 duty 0으로 하고, 호출자가 반드시 close()로 끝낸다.
+
+속도 명령(40)은 보드 안의 속도 제어기에 "초당 몇 카운트"를 맡기는 것이다. 보드에 속도 제어 값(QPPS·PID)이 저장돼 있어야
+쓸 수 있어서, read_velocity_settings()로 읽어 확인한 뒤에만 write_speed()가 열린다. 속도 제어 값 자체는 여기서 쓰지 않는다
+(모션스튜디오 자동 튜닝으로 넣고 보드에 저장).
 """
 import math
 import os
@@ -14,8 +18,10 @@ from .roboclaw_readonly import DEFAULT_PORT, check_device_identity, crc16
 
 ADDRESS = 128
 FIRMWARE_PREFIX = 'USB Roboclaw 2x15A'
-# 읽기 명령과 응답 길이(CRC 제외). 21 펌웨어 문자열, 15 명령 timeout, 24 주전원 전압, 48 PWM, 49 전류, 78 엔코더, 90 상태
-READ_LENGTHS = {21: None, 15: 1, 24: 2, 48: 4, 49: 4, 78: 8, 90: 4}
+# 읽기 명령과 응답 길이(CRC 제외). 21 펌웨어 문자열, 15 명령 timeout, 24 주전원 전압, 48 PWM, 49 전류, 78 엔코더, 90 상태,
+# 55·56 M1·M2 속도 제어 값(P, I, D, QPPS 각 4바이트), 91 엔코더 모드(M1, M2)
+READ_LENGTHS = {21: None, 15: 1, 24: 2, 48: 4, 49: 4, 78: 8, 90: 4, 55: 16, 56: 16, 91: 2}
+PID_SCALE = 65536.0   # 보드의 P·I·D는 16.16 고정소수점 (매뉴얼 기본값 P = 0x00010000 = 1.0)
 DUTY_FULL = 32767
 # 사용자 요청(2026-11-04): 연속 주행 출력은 30 %를 넘지 않는다.
 # PWM 상한은 실제 속도·전류 보장이 아니며, 낮은 상한으로 실행할 수는 있다.
@@ -60,6 +66,21 @@ def duty_packet(m1, m2, cap):
     return payload + crc16(payload).to_bytes(2, 'big')
 
 
+def speed_packet(m1, m2, accel, caps):
+    """명령 40(양쪽 속도 + 가속도) 패킷. 속도는 부호 있는 카운트/초, 가속도는 카운트/초².
+
+    caps는 모터별 속도 한계(보드에서 읽은 QPPS = 그 모터가 100 % 출력에서 내는 속도). 그 위는 보드도 낼 수 없으므로 거부한다.
+    """
+    if len(caps) != 2 or any(type(cap) is not int or cap < 1 for cap in caps):
+        raise DriveError('속도 한계(QPPS)를 보드에서 먼저 읽어야 함')
+    if any(type(v) is not int or abs(v) > cap for v, cap in zip((m1, m2), caps)):
+        raise DriveError('속도 명령이 모터 한계(QPPS)를 넘음')
+    if type(accel) is not int or not 1 <= accel <= 0xffffffff:
+        raise DriveError('가속도는 1 이상의 정수(카운트/초²)')
+    payload = bytes((ADDRESS, 40)) + struct.pack('>Iii', accel, m1, m2)
+    return payload + crc16(payload).to_bytes(2, 'big')
+
+
 def timeout_packet(raw):
     if type(raw) is not int or not 0 <= raw <= 255:
         raise DriveError('timeout raw는 0..255')
@@ -68,7 +89,7 @@ def timeout_packet(raw):
 
 
 class DriveTransport:
-    """독점 직렬 연결 하나. 쓰기는 duty(34)와 명령 timeout(14)만 허용한다."""
+    """독점 직렬 연결 하나. 쓰기는 duty(34), 속도(40), 명령 timeout(14)만 한다."""
 
     def __init__(self, *, port=DEFAULT_PORT, serial_timeout=0.09, duty_cap=DUTY_CEILING,
                  connection=None, clock=time.monotonic, wire_sink=None):
@@ -81,6 +102,7 @@ class DriveTransport:
         self.firmware = None
         self.closed = False
         self.device = None
+        self.speed_caps = None   # read_velocity_settings() 뒤에 (M1 QPPS, M2 QPPS)
 
     # ---- 연결 ----
     def open(self):
@@ -180,14 +202,31 @@ class DriveTransport:
     def read_battery_volts(self):
         return int.from_bytes(self.query(24), 'big') / 10.0
 
+    def read_encoder_modes(self):
+        """보드의 엔코더 모드 (M1, M2). roboclaw_readonly.forward_signs()가 전진 부호를 여기서 정한다."""
+        data = self.query(91)
+        return data[0], data[1]
+
+    def read_velocity_settings(self):
+        """보드에 저장된 속도 제어 값 [M1, M2]. QPPS가 둘 다 양수면 속도 명령 한계로 기억한다."""
+        settings = []
+        for command in (55, 56):
+            p, i, d, qpps = struct.unpack('>IIII', self.query(command))
+            settings.append({'p': p / PID_SCALE, 'i': i / PID_SCALE, 'd': d / PID_SCALE, 'qpps': qpps})
+        caps = tuple(row['qpps'] for row in settings)
+        self.speed_caps = caps if all(cap > 0 for cap in caps) else None
+        return settings
+
     def sample(self):
-        """엔코더·상태·PWM 한 벌. counts는 보드 원시값(uint32 M1, M2)."""
+        """엔코더·상태·PWM·전류 한 벌. counts는 보드 원시값(uint32 M1, M2), 전류는 A(M1, M2)."""
         counts = struct.unpack('>II', self.query(78))
         stamp = self.clock()
         status = int.from_bytes(self.query(90), 'big')
         pwm = struct.unpack('>hh', self.query(48))
+        currents = struct.unpack('>hh', self.query(49))
         return {'monotonic_s': stamp, 'counts': list(counts), 'status': status,
                 'status_hex': f'0x{status:08x}', 'pwms': list(pwm),
+                'currents_a': [value / 100.0 for value in currents],
                 'stop_reasons': status_names(status, STOP_STATUS_BITS),
                 'notes': status_names(status, NOTE_STATUS_BITS)}
 
@@ -205,6 +244,12 @@ class DriveTransport:
 
     def write_duty(self, m1, m2):
         return self._exchange(duty_packet(m1, m2, self.duty_cap), expect_ack=True)
+
+    def write_speed(self, m1, m2, accel):
+        """양쪽 속도 목표(카운트/초)와 가속도(카운트/초²). 보드의 속도 제어 값을 읽어 확인한 뒤에만 쓸 수 있다."""
+        if self.speed_caps is None:
+            raise DriveError('보드에 속도 제어 값(QPPS)이 없거나 아직 읽지 않음')
+        return self._exchange(speed_packet(m1, m2, accel, self.speed_caps), expect_ack=True)
 
     def recover(self):
         """교환 하나가 실패한 뒤 다음 교환 전에 부른다. 늦게 도착한 응답 조각이 다음 응답에 섞이지 않게 입력 버퍼를 비운다.

@@ -1,4 +1,5 @@
-"""/cmd_vel 브리지 노드 검사: 가짜 transport로 명령 끊김·속도 제한·방향 전환·잠김·저전압·보드 상태 비트."""
+"""/cmd_vel 브리지 노드 검사: 가짜 transport로 명령 끊김·속도 제한·방향 전환·잠김·저전압·보드 상태 비트,
+보드 속도 제어 모드(board_speed)와 보드에서 읽는 엔코더 전진 부호."""
 import math
 import unittest
 from unittest.mock import Mock
@@ -22,6 +23,24 @@ class FakeTransport:
         self.writes = []
         self.closed = False
         self.sample_error = None
+        self.encoder_modes = (0, 0)      # 보드 엔코더 모드 (M1, M2). 0x40 = 엔코더 방향 반전
+        self.velocity = [{'p': 1.5, 'i': 0.3, 'd': 0.0, 'qpps': 5000}, {'p': 1.5, 'i': 0.3, 'd': 0.0, 'qpps': 5100}]
+        self.speed_caps = None
+        self.speed_writes = []           # (M1, M2, 가속도)
+        self.pwms = [0, 0]
+        self.currents = [0.0, 0.0]
+
+    def read_encoder_modes(self):
+        return self.encoder_modes
+
+    def read_velocity_settings(self):
+        caps = tuple(row['qpps'] for row in self.velocity)
+        self.speed_caps = caps if all(cap > 0 for cap in caps) else None
+        return self.velocity
+
+    def write_speed(self, m1, m2, accel):
+        assert self.speed_caps is not None and abs(m1) <= self.speed_caps[0] and abs(m2) <= self.speed_caps[1]
+        self.speed_writes.append((m1, m2, accel))
 
     def open(self):
         self.firmware = 'USB Roboclaw 2x15A v4.4.9'
@@ -44,7 +63,7 @@ class FakeTransport:
             raise self.sample_error
         from limbo_hardware.roboclaw_drive import status_names, STOP_STATUS_BITS, NOTE_STATUS_BITS
         return {'monotonic_s': self.owner.now, 'counts': list(self.counts), 'status': self.status,
-                'status_hex': f'0x{self.status:08x}', 'pwms': [0, 0],
+                'status_hex': f'0x{self.status:08x}', 'pwms': list(self.pwms), 'currents_a': list(self.currents),
                 'stop_reasons': status_names(self.status, STOP_STATUS_BITS),
                 'notes': status_names(self.status, NOTE_STATUS_BITS)}
 
@@ -57,9 +76,10 @@ class FakeTransport:
         return True
 
     def spin_wheels(self, left_counts, right_counts):
-        """전진 회전: M1(오른쪽)은 +, M2(왼쪽)는 원시 −."""
+        """전진 회전: M1(오른쪽)은 +, M2(왼쪽)는 원시 −. 보드에서 M2 엔코더 방향을 뒤집었으면 M2도 +."""
+        left_sign = 1 if self.encoder_modes[1] & 0x40 else -1
         self.counts[0] = (self.counts[0] + right_counts) % 2**32
-        self.counts[1] = (self.counts[1] - left_counts) % 2**32
+        self.counts[1] = (self.counts[1] + left_sign * left_counts) % 2**32
 
 
 class LimitTwistTests(unittest.TestCase):
@@ -84,13 +104,16 @@ class DriveNodeTests(unittest.TestCase):
         if rclpy.ok():
             rclpy.shutdown()
 
-    def make(self, **overrides):
+    def make(self, board=None, **overrides):
+        """board: 열기 전에 가짜 보드 상태(엔코더 모드·속도 제어 값)를 바꾸는 함수."""
         values = {'left_wheel_radius': .075, 'right_wheel_radius': .075, 'wheel_separation': .54,
                   'left_counts_per_revolution': 3688., 'right_counts_per_revolution': 3607.}
         values.update(overrides)
 
         def factory(**kwargs):
             self.transport = FakeTransport(self, **kwargs)
+            if board is not None:
+                board(self.transport)
             return self.transport
         self.node = DriveNode(parameter_overrides=[Parameter(k, value=v) for k, v in values.items()],
                               transport_factory=factory, monotonic=lambda: self.now)
@@ -330,6 +353,155 @@ class DriveNodeTests(unittest.TestCase):
         self.step(0.2)
         self.assertEqual(fake.writes[-1], (0, 0))
         self.assertFalse(node.closed)
+
+    # ---- 보드에서 읽는 엔코더 전진 부호 ----
+    @staticmethod
+    def left_encoder_reversed(fake):
+        fake.encoder_modes = (0, 0x40)
+
+    def test_forward_sign_follows_board_encoder_mode(self):
+        node, fake = self.make(board=self.left_encoder_reversed)
+        self.assertEqual(node.forward_signs, (1, 1))
+        self.command(0.1)
+        for _ in range(6):
+            self.step(left=2, right=2)   # 가짜 보드는 이제 왼쪽도 원시 +로 센다
+            self.command(0.1)
+        count = node.count_pub.publish.call_args.args[0]
+        self.assertGreater(count.left_total, 0)
+        self.assertGreater(count.right_total, 0)
+        self.assertGreater(fake.writes[-1][1], 0)
+        self.assertEqual(node.errors, [])
+
+    def test_motor_reverse_setting_refuses_to_start(self):
+        def board(fake):
+            fake.encoder_modes = (0x20, 0)
+        node, fake = self.make(board=board)
+        self.assertTrue(node.closed)
+        self.assertTrue(any('모터 방향 반전' in e for e in node.errors))
+        self.assertTrue(all(w == (0, 0) for w in fake.writes))
+
+    # ---- board_speed: 속도 맞추기를 보드에 맡기는 모드 ----
+    def make_speed(self, board=None, **overrides):
+        def prepared(fake):
+            self.left_encoder_reversed(fake)
+            if board is not None:
+                board(fake)
+        return self.make(board=prepared, control_mode='board_speed', **overrides)
+
+    @staticmethod
+    def qpps(linear_m_s, cpr):
+        return round(linear_m_s / .075 * cpr / math.tau)
+
+    def test_board_speed_refuses_board_without_velocity_settings(self):
+        def board(fake):
+            fake.velocity = [{'p': 0.0, 'i': 0.0, 'd': 0.0, 'qpps': 0}] * 2
+        node, fake = self.make_speed(board=board)
+        self.assertTrue(node.closed)
+        self.assertTrue(any('자동 튜닝' in e for e in node.errors))
+        self.assertEqual(fake.speed_writes, [])
+
+    def test_board_speed_refuses_encoder_that_counts_down_on_forward(self):
+        def board(fake):
+            fake.encoder_modes = (0, 0)   # 왼쪽이 아직 전진에서 내려가는 상태
+        node, fake = self.make_speed(board=board)
+        self.assertTrue(node.closed)
+        self.assertTrue(any('엔코더 방향' in e for e in node.errors))
+        self.assertEqual(fake.speed_writes, [])
+
+    def test_board_speed_sends_wheel_speeds_and_never_duty_while_driving(self):
+        node, fake = self.make_speed()
+        self.assertEqual(node.state, 'ready')
+        self.command(0.1)
+        self.step(left=2, right=2)
+        accel = round(2.0 * 3688. / math.tau)   # 목표 변화율 2.0 rad/s²를 카운트/초²로
+        self.assertEqual(fake.speed_writes[-1], (self.qpps(0.1, 3607.), self.qpps(0.1, 3688.), accel))
+        self.assertTrue(all(w == (0, 0) for w in fake.writes))   # duty는 시작할 때의 0뿐
+        self.assertEqual(node.last_control['control_mode'], 'board_speed')
+        self.assertEqual(node.last_control['reasons'], [])
+        self.command(0.0, 0.4)   # 제자리 왼쪽 회전: 오른쪽(M1) 전진, 왼쪽(M2) 후진
+        self.step()
+        m1, m2, _ = fake.speed_writes[-1]
+        self.assertGreater(m1, 0)
+        self.assertLess(m2, 0)
+
+    def test_board_speed_stop_reasons_send_duty_zero_not_speed_zero(self):
+        from limbo_interfaces.msg import PersonWait
+        node, fake = self.make_speed()
+        self.command(0.1)
+        self.step(left=2, right=2)
+        sent = len(fake.speed_writes)
+        duty_writes = len(fake.writes)
+        msg = PersonWait(); msg.wait = True; msg.state = 'WAITING'; msg.reason = 'in_zone'
+        node._on_person_wait(msg)
+        self.command(0.1)
+        self.step(left=2, right=2)
+        self.assertEqual(len(fake.speed_writes), sent)
+        self.assertEqual(len(fake.writes), duty_writes + 1)
+        self.assertEqual(fake.writes[-1], (0, 0))
+        self.assertIn('person_wait', node.last_control['reasons'])
+        msg.wait = False
+        node._on_person_wait(msg)
+        for _ in range(12):   # 명령이 0.5 s 넘게 안 오면 역시 duty 0
+            self.step()
+        self.assertIn('command_timeout', node.last_control['reasons'])
+        self.assertEqual(fake.writes[-1], (0, 0))
+
+    def test_board_speed_stall_when_target_set_but_encoder_silent(self):
+        node, fake = self.make_speed(stall_seconds=1.0)
+        for _ in range(40):
+            self.command(0.1)
+            self.step(left=0, right=2)   # 왼쪽만 안 돈다 (끼었거나 엔코더 선이 빠짐)
+            if node.stalled[0]:
+                break
+        self.assertTrue(node.stalled[0])
+        self.assertEqual(fake.writes[-1], (0, 0))
+        self.assertIn('stall_left', node.last_control['reasons'])
+        self.command(0.0)
+        self.assertEqual(node.stalled, [False, False])
+
+    def test_board_speed_target_below_one_count_per_window_is_not_a_stall(self):
+        node, fake = self.make_speed(stall_seconds=1.0)
+        for _ in range(40):
+            self.command(0.0005)   # 약 4 카운트/초: 속도 창 0.1 s 안에 한 카운트가 안 들어온다
+            self.step()
+        self.assertEqual(node.stalled, [False, False])
+        self.assertEqual(node.last_control['reasons'], [])
+
+    def test_board_speed_wheel_speeding_up_the_wrong_way_is_fatal(self):
+        node, fake = self.make_speed()
+        for back in (2, 4, 6, 8, 10, 12, 14):   # 전진 목표인데 뒤로 점점 빨라진다
+            self.command(0.1)
+            self.step(left=-back, right=-back)
+            if node.closed:
+                break
+        self.assertTrue(node.closed)
+        self.assertTrue(any('반대 방향' in e for e in node.errors))
+        self.assertEqual(fake.writes[-1], (0, 0))
+
+    def test_board_speed_reversal_while_still_rolling_forward_is_normal(self):
+        node, fake = self.make_speed()
+        for _ in range(6):
+            self.command(0.1)
+            self.step(left=40, right=40)
+        for rolling in (30, 20, 10, 0, -10, -20):   # 후진 명령: 앞으로 구르던 바퀴가 느려졌다가 뒤로
+            self.command(-0.1)
+            self.step(left=rolling, right=rolling)
+        self.assertFalse(node.closed)
+        self.assertEqual(node.errors, [])
+        self.assertLess(fake.speed_writes[-1][0], 0)
+
+    def test_board_speed_clamps_target_to_what_the_motor_can_do(self):
+        def board(fake):
+            fake.velocity = [{'p': 1.0, 'i': 0.2, 'd': 0.0, 'qpps': 500}, {'p': 1.0, 'i': 0.2, 'd': 0.0, 'qpps': 500}]
+        node, fake = self.make_speed(board=board)
+        self.command(0.25)
+        self.step(left=2, right=2)
+        self.assertEqual(fake.speed_writes[-1][:2], (500, 500))
+
+    def test_unknown_control_mode_refuses(self):
+        self.node = None
+        with self.assertRaises(ValueError):
+            self.make(control_mode='auto')
 
     def test_missing_geometry_refuses(self):
         self.node = None

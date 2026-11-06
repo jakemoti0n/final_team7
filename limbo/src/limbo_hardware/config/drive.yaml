@@ -4,7 +4,11 @@ roboclaw_drive:
   ros__parameters:
     use_sim_time: false
     port: /dev/serial/by-id/usb-Basicmicro_Inc._USB_Roboclaw_2x15A-if00
-    # 바퀴별 PI + 피드포워드. 10-30~11-03 바닥 시험에서 실제로 움직인 마지막 설정(pi_baseline_02)을 그대로 둔다.
+    # 제어 방식. host_duty: 아래 PI·피드포워드로 이 노드가 출력(duty)을 정한다(지금까지의 방식).
+    # board_speed: 바퀴별 목표 속도만 보드에 보내고 속도 맞추기는 보드가 한다. 보드에 속도 제어 값이 저장돼 있고(모션스튜디오
+    # 자동 튜닝) 왼쪽 엔코더 방향이 맞춰져 있어야 시작한다. 실물 시험(11-06 설계의 4단계)을 통과하기 전까지 기본은 host_duty
+    control_mode: host_duty
+    # 바퀴별 PI + 피드포워드. (host_duty에서만 쓴다. board_speed는 kp·ki·피드포워드·출력 상한·output_slew를 쓰지 않는다) 10-30~11-03 바닥 시험에서 실제로 움직인 마지막 설정(pi_baseline_02)을 그대로 둔다.
     # 정밀 추종 기준은 아직 못 넘겼으므로 "검증된 최선"이지 최종값이 아니다
     kp: 0.02
     ki: 0.10
@@ -18,6 +22,7 @@ roboclaw_drive:
     # 9830 / 32767 ≈ 30 %. PWM 상한이며 목표 속도나 실제 속도의 비율을 뜻하지 않는다.
     max_duty_raw: 9830
     # 목표 각속도 변화율 2.0 rad/s² = 바퀴 0.15 m/s². 키보드 0.1 m/s에 0.7 s면 도달. 벤치의 0.4는 10 s 시험용이라 너무 느림
+    # board_speed에서는 이 값을 카운트/초²로 바꿔 보드의 가속도로 넘긴다
     target_slew_rad_s2: 2.0
     output_slew_per_s: 0.15           # duty 변화율(초당 15 %). 0에서 30 % 상한까지 최소 2 s
     # 실물 직진 출발 시험에서만 활성화하고, 반복 검증 뒤 기본값을 결정한다.

@@ -15,6 +15,17 @@ duty 명령을 20 Hz로 보낸다. 엔코더 카운트·관절 상태를 벤치 
   상한에서 8 s 동안 0카운트였다. 정상 출발은 0.3 s 안에 카운트가 오르므로 1 s면 "미는 중"이 아니라 "잠김"이다.
   잠김은 양쪽 목표가 0이 될 때(키를 떼거나 Nav2가 멈추면) 풀린다.
 
+제어 방식은 control_mode 하나로 고른다(기본 host_duty, 위에 적은 방식).
+- board_speed: 속도 맞추기를 보드에 맡긴다. 이 노드는 바퀴별 목표 속도(카운트/초)와 가속도만 명령 40으로 보내고, 보드 안의
+  속도 제어기가 출력을 정한다. 20 Hz·USB 왕복으로는 멈춘 바퀴를 밀어 올리는 데 1~2 s가 걸리고 저속 목표에서 바퀴가 서던 것
+  (11-06 목표점 주행)을 보드의 빠른 고리로 푼다. 보드에 속도 제어 값이 저장돼 있고(모션스튜디오 자동 튜닝) 양쪽 엔코더가
+  "양수 명령 = 카운트 증가"로 맞춰져 있어야 시작한다. 아니면 시작을 거부한다.
+  위의 출력 0 상황은 그대로이고, 그때는 속도 0이 아니라 duty 0을 보낸다(보드 제어기를 끄고 즉시 정지).
+  이 모드의 잠김: 목표 속도가 있는데 엔코더가 stall_seconds 동안 0(엔코더 선이 빠져 보드가 출력을 끝까지 올리는 경우도 여기 걸린다).
+  반대로 달림: 목표와 반대 방향으로 점점 빨라지는 틱이 MAX_CONSECUTIVE_ERRORS번 이어지면 노드를 끝낸다(방향 설정이 실제와 다름).
+
+전진 카운트 부호는 시작할 때 보드의 엔코더 모드에서 읽어 정한다(roboclaw_readonly.forward_signs). 보드 설정을 바꿔도 따라간다.
+
 직렬 오류는 연속 MAX_CONSECUTIVE_ERRORS번까지 넘긴다(그 틱은 0 출력 시도). 11-03 19분 주행이 USB 쓰기 timeout 한 번으로 끝났는데,
 한 번 삐끗한 것과 USB가 빠진 것은 다르다. 3틱 = 0.15 s는 보드 timeout 0.5 s 안이라 그 사이 모터는 마지막 명령대로 돌다 보드가 끊는다.
 """
@@ -37,7 +48,7 @@ from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from limbo_interfaces.msg import PersonWait, WheelEncoderCounts
 
 from .drive_preview_core import calculate_drive_targets
-from .roboclaw_readonly import CounterTracker
+from .roboclaw_readonly import CounterTracker, forward_signs
 from .roboclaw_drive import DriveTransport, DriveError, DUTY_CEILING
 from .speed_pi import PIConfig, WheelSpeedPI
 from .speed_estimator import CountWindowEstimator
@@ -122,6 +133,7 @@ class DriveNode(Node):
             'min_battery_volts': 10.0, 'battery_recover_volts': 0.3, 'battery_period_s': 0.5,
             'stall_seconds': 1.0, 'record_dir': '',
             'wait_topic': '/person_wait',   # 비우면 사람 기다리기 게이트를 안 쓴다
+            'control_mode': 'host_duty',    # host_duty: 이 노드의 PI가 duty를 정함 / board_speed: 보드 속도 제어기에 목표만 보냄
         }
         descriptor = ParameterDescriptor(read_only=True)
         self.s = {k: self.declare_parameter(k, v, descriptor).value for k, v in defaults.items()}
@@ -138,6 +150,9 @@ class DriveNode(Node):
                 raise ValueError(f'{name}은 양수여야 함 (실물 치수는 설정 파일에서 와야 한다)')
         if type(s['max_duty_raw']) is not int or not 1 <= s['max_duty_raw'] <= DUTY_CEILING:
             raise ValueError(f'max_duty_raw는 1..{DUTY_CEILING} 정수')
+        if s['control_mode'] not in ('host_duty', 'board_speed'):
+            raise ValueError('control_mode는 host_duty 또는 board_speed')
+        self.board_speed = s['control_mode'] == 'board_speed'
         # 바퀴 목표 각속도의 상한: 선속도·각속도 상한을 둘 다 꽉 채웠을 때 바깥 바퀴 값. PI가 이 위를 거부한다
         radius = min(s['left_wheel_radius'], s['right_wheel_radius'])
         max_wheel = (s['max_linear_m_s'] + s['max_angular_rad_s'] * s['wheel_separation'] / 2.0) / radius
@@ -163,7 +178,14 @@ class DriveNode(Node):
         )
         self.estimator = CountWindowEstimator(s['left_counts_per_revolution'],
                                               s['right_counts_per_revolution'], s['velocity_window_s'])
-        self.tracker = CounterTracker(signs=(1, -1))  # M1=오른쪽 전진 +, M2=왼쪽 전진 −(원시) → 둘 다 전진 +
+        self.tracker = None                # 전진 부호를 보드에서 읽은 뒤 _open에서 만든다 (M1=오른쪽, M2=왼쪽)
+        self.forward_signs = None
+        self.velocity_settings = None      # board_speed에서 보드가 가진 [M1, M2] 속도 제어 값
+        # 보드에 넘길 가속도(카운트/초²): 바퀴 목표 변화율 설정을 단위만 바꾼 것. 좌우 CPR 중 큰 쪽 기준(두 바퀴가 한 값을 같이 쓴다)
+        self.accel_qpps2 = max(1, round(s['target_slew_rad_s2'] * max(
+            s['left_counts_per_revolution'], s['right_counts_per_revolution']) / math.tau))
+        self.wrong_way = [0, 0]            # 바퀴별: 목표 반대 방향으로 빨라진 연속 틱 수
+        self.wrong_way_speed = [0.0, 0.0]  # 직전 틱의 |실측 속도|
         self.session = str(uuid.uuid4())
         self.sequence = 0
         self.files = {}
@@ -223,6 +245,18 @@ class DriveNode(Node):
         self.battery_low = self.battery_volts < self.s['min_battery_volts']
         # 이전 프로세스가 비정상 종료해 남긴 출력이 있을 수 있으니 0부터 시작
         self.transport.write_duty(0, 0)
+        modes = self.transport.read_encoder_modes()
+        self.forward_signs = forward_signs(modes)
+        self.tracker = CounterTracker(signs=self.forward_signs)
+        if self.board_speed:
+            self.velocity_settings = self.transport.read_velocity_settings()
+            if self.transport.speed_caps is None or any(v['p'] == 0 and v['i'] == 0 for v in self.velocity_settings):
+                raise DriveError('보드에 속도 제어 값이 없음 (읽힌 값 %s). 모션스튜디오에서 양쪽 속도 자동 튜닝을 하고 '
+                                 '보드에 저장한 뒤 다시 시작할 것' % (self.velocity_settings,))
+            if self.forward_signs != (1, 1):
+                raise DriveError('엔코더 방향이 보드 속도 제어와 맞지 않음 (전진 부호 M1 %+d, M2 %+d, 엔코더 모드 %s). '
+                                 '양수 명령에서 카운트가 올라가도록 모션스튜디오 Encoder 2 Mode의 방향을 뒤집고 저장할 것'
+                                 % (self.forward_signs + (list(modes),)))
         row = self.transport.sample()
         self.board_stop, self.board_notes = row['stop_reasons'], row['notes']
         self._publish_feedback(row, None)
@@ -230,7 +264,10 @@ class DriveNode(Node):
         self.estimator.update(row['monotonic_s'], 0, 0)
         self.state = 'ready'
         self._event('opened', firmware=firmware, command_timeout_s=self.command_timeout_s,
-                    battery_volts=self.battery_volts, status=row['status_hex'], max_duty_raw=self.s['max_duty_raw'])
+                    battery_volts=self.battery_volts, status=row['status_hex'], max_duty_raw=self.s['max_duty_raw'],
+                    control_mode=self.s['control_mode'], encoder_modes=list(modes),
+                    forward_signs_m1_m2=list(self.forward_signs), velocity_settings=self.velocity_settings,
+                    accel_qpps2=self.accel_qpps2)
 
     # ---- 명령 ----
     def _on_command(self, msg):
@@ -322,6 +359,9 @@ class DriveNode(Node):
                 self._check_battery(now)
             targets, reasons = self._targets_now(now)
             measured = (estimate.left_rad_s, estimate.right_rad_s)
+            if self.board_speed:
+                self._step_board_speed(row, dt, count, targets, reasons, measured, now)
+                return
             left_rise = 1.0
             if self.straight_start is not None:
                 left_rise = self.straight_start.update(
@@ -349,7 +389,9 @@ class DriveNode(Node):
                 'duty_m1_m2': list(duties), 'left_total': count.left_total, 'right_total': count.right_total,
                 'battery_volts': self.battery_volts, 'status': row['status_hex'],
                 'straight_start_phase': self.straight_start.phase if self.straight_start else 'off',
-                'left_rise_scale': left_rise, 'pi_left_right': [asdict(o) for o in outputs]}
+                'left_rise_scale': left_rise, 'pi_left_right': [asdict(o) for o in outputs],
+                'control_mode': 'host_duty', 'board_pwm_m1_m2': row.get('pwms'),
+                'currents_m1_m2_a': row.get('currents_a')}
             self._record('control', self.last_control)
         except Exception as error:
             text = type(error).__name__ + ': ' + str(error)
@@ -368,6 +410,75 @@ class DriveNode(Node):
             self.errors.append(text)
             self.get_logger().error('구동 중단: ' + text)
             self.shutdown('error')
+
+    def _step_board_speed(self, row, dt, count, targets, reasons, measured, now):
+        """board_speed 한 틱: 멈출 이유가 있으면 duty 0, 없으면 바퀴별 속도 목표(카운트/초)를 보드에 보낸다."""
+        cpr = (self.s['left_counts_per_revolution'], self.s['right_counts_per_revolution'])
+        caps = (self.transport.speed_caps[1], self.transport.speed_caps[0])   # [왼쪽=M2, 오른쪽=M1]
+        speeds = [0, 0]                                                       # [왼쪽, 오른쪽] 카운트/초
+        if not reasons:
+            for index, target in enumerate(targets):
+                wanted = round(target * cpr[index] / math.tau)
+                speeds[index] = max(-caps[index], min(caps[index], wanted))   # 모터가 낼 수 있는 속도(QPPS)까지만
+                if self._runs_wrong_way(index, speeds[index], measured[index]):
+                    text = ('%s 바퀴가 목표와 반대 방향으로 빨라짐 (목표 %d 카운트/초, 실측 %.2f rad/s). 엔코더 방향 설정이 '
+                            '실제와 다르다' % ('왼쪽' if index == 0 else '오른쪽', speeds[index], measured[index]))
+                    self.errors.append(text)
+                    self.get_logger().error('구동 중단: ' + text)
+                    self.shutdown('error')
+                    return
+                self._watch_board_stall(index, speeds[index], measured[index], row, now)
+            if any(self.stalled):
+                reasons = ['stall_left' if self.stalled[0] else 'stall_right']
+        if reasons:
+            speeds = [0, 0]
+            self.stall_since = [None, None]
+            self.wrong_way = [0, 0]
+            self.transport.write_duty(0, 0)
+        else:
+            self.transport.write_speed(speeds[1], speeds[0], self.accel_qpps2)   # M1=오른쪽, M2=왼쪽
+        self.consecutive_errors = 0
+        self.state = 'driving' if any(speeds) else 'idle'
+        self.last_control = {
+            'monotonic_s': row['monotonic_s'], 'dt': dt, 'command': list(self.command), 'reasons': reasons,
+            'target_left_right_rad_s': list(targets), 'measured_left_right_rad_s': list(measured),
+            'duty_m1_m2': list(row['pwms']),   # 이 모드에서는 보드가 정한 출력(읽은 값)
+            'left_total': count.left_total, 'right_total': count.right_total,
+            'battery_volts': self.battery_volts, 'status': row['status_hex'],
+            'straight_start_phase': 'off', 'left_rise_scale': 1.0,
+            'control_mode': 'board_speed', 'speed_m1_m2_qpps': [speeds[1], speeds[0]],
+            'accel_qpps2': self.accel_qpps2, 'board_pwm_m1_m2': row.get('pwms'),
+            'currents_m1_m2_a': row.get('currents_a')}
+        self._record('control', self.last_control)
+
+    def _watch_board_stall(self, index, speed_qpps, measured_rad_s, row, now):
+        """board_speed의 잠김: 목표 속도가 있는데 엔코더가 stall_seconds 동안 0.
+
+        속도 추정 창 안에 한 카운트도 안 들어올 만큼 작은 목표는 0으로 보여도 정상이므로 세지 않는다.
+        """
+        measurable = abs(speed_qpps) * self.s['velocity_window_s'] >= 1.0
+        if measurable and measured_rad_s == 0.0:
+            if self.stall_since[index] is None:
+                self.stall_since[index] = now
+            elif now - self.stall_since[index] >= self.s['stall_seconds'] and not self.stalled[index]:
+                self.stalled[index] = True
+                self._event('stall', wheel='left' if index == 0 else 'right', speed_qpps=speed_qpps,
+                            board_pwm_m1_m2=row.get('pwms'), currents_m1_m2_a=row.get('currents_a'),
+                            seconds=now - self.stall_since[index])
+        else:
+            self.stall_since[index] = None
+
+    def _runs_wrong_way(self, index, speed_qpps, measured_rad_s):
+        """목표와 반대 방향으로 '점점 빨라지는' 틱이 MAX_CONSECUTIVE_ERRORS번 이어지면 참.
+
+        방향을 바꾸는 중에도 잠깐 반대로 돌지만 그때는 느려진다. 빨라진다면 보드가 엔코더를 거꾸로 읽어 출력을 계속 올리는 것이다.
+        """
+        speed = abs(measured_rad_s)
+        opposite = speed_qpps != 0 and measured_rad_s != 0.0 and (measured_rad_s > 0) != (speed_qpps > 0)
+        growing = speed > self.wrong_way_speed[index]
+        self.wrong_way_speed[index] = speed
+        self.wrong_way[index] = self.wrong_way[index] + 1 if opposite and growing else 0
+        return self.wrong_way[index] >= MAX_CONSECUTIVE_ERRORS
 
     def _check_battery(self, now):
         self.battery_volts = self.transport.read_battery_volts()
@@ -402,7 +513,10 @@ class DriveNode(Node):
         status.level = (DiagnosticStatus.ERROR if self.errors else
                         DiagnosticStatus.WARN if reasons and reasons != ['command_timeout'] else DiagnosticStatus.OK)
         status.message = self.state if not reasons else self.state + ': ' + ','.join(reasons)
-        values = {'state': self.state, 'battery_volts': self.battery_volts, 'battery_low': self.battery_low,
+        values = {'state': self.state, 'control_mode': self.s['control_mode'],
+                  'encoder_forward_signs_m1_m2': self.forward_signs,
+                  'board_qpps_m1_m2': [v['qpps'] for v in self.velocity_settings] if self.velocity_settings else '',
+                  'battery_volts': self.battery_volts, 'battery_low': self.battery_low,
                   'command_timeout_s': self.command_timeout_s, 'max_duty_raw': self.s['max_duty_raw'],
                   'board_stop_bits': ','.join(self.board_stop), 'board_notes': ','.join(self.board_notes),
                   'stalled_left_right': self.stalled, 'transient_serial_errors': self.transient_errors,
@@ -410,8 +524,10 @@ class DriveNode(Node):
                   'errors': ' | '.join(self.errors)}
         if self.last_control:
             for key in ('command', 'target_left_right_rad_s', 'measured_left_right_rad_s', 'duty_m1_m2',
-                        'straight_start_phase', 'left_rise_scale'):
+                        'straight_start_phase', 'left_rise_scale', 'board_pwm_m1_m2', 'currents_m1_m2_a'):
                 values[key] = self.last_control[key]
+            if 'speed_m1_m2_qpps' in self.last_control:
+                values['speed_m1_m2_qpps'] = self.last_control['speed_m1_m2_qpps']
         status.values = [KeyValue(key=k, value=str(v)) for k, v in values.items()]
         msg = DiagnosticArray()
         msg.header.stamp = self.get_clock().now().to_msg()

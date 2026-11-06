@@ -15,7 +15,8 @@ from sensor_msgs.msg import JointState
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from limbo_interfaces.msg import WheelEncoderCounts
 
-from .roboclaw_readonly import ReadOnlyRoboClaw, CounterTracker, DEFAULT_PORT
+from .roboclaw_readonly import (ReadOnlyRoboClaw, CounterTracker, DEFAULT_PORT, WIRED_FORWARD_SIGNS,
+                                forward_signs)
 
 
 class EncoderNode(Node):
@@ -63,7 +64,8 @@ class EncoderNode(Node):
         self.reader = reader_factory(
             port=self.settings['port'], timeout=self.settings['serial_timeout'],
             wire_observer=self._wire_observer if self._wire_file else None)
-        self.tracker = CounterTracker(signs=(1, -1),
+        # 전진 부호는 연결할 때마다 보드의 엔코더 모드에서 읽어 정한다(_poll). 그전까지는 배선 기본값
+        self.tracker = CounterTracker(signs=WIRED_FORWARD_SIGNS,
                                       max_delta_counts=self.settings['max_delta_counts'])
         self.session_id = ''
         self.sequence = 0
@@ -107,6 +109,10 @@ class EncoderNode(Node):
         try:
             if not self.connected:
                 self.firmware = self.reader.open()
+                signs = forward_signs(self.reader.read_encoder_modes())
+                if signs != self.tracker.signs:
+                    self.get_logger().info('보드 엔코더 방향 설정에 맞춰 전진 부호를 바꿈: M1 %+d, M2 %+d' % signs)
+                    self.tracker = CounterTracker(signs=signs, max_delta_counts=self.settings['max_delta_counts'])
                 self.tracker.reset()
                 self.session_id = str(uuid.uuid4())
                 self.sequence = 0
@@ -187,8 +193,8 @@ class EncoderNode(Node):
             'successful_reads': self.successful_reads, 'failures': self.failures,
             'connections': self.connections, 'last_success_age_seconds': age,
             'last_read_seconds': self.last_read_duration, 'firmware': self.firmware.strip(),
-            'right_channel': 'M1', 'right_forward_sign': 1,
-            'left_channel': 'M2', 'left_forward_sign': -1,
+            'right_channel': 'M1', 'right_forward_sign': self.tracker.signs[0],
+            'left_channel': 'M2', 'left_forward_sign': self.tracker.signs[1],
             'right_counts_per_revolution': self.settings['right_counts_per_revolution'],
             'right_calibration': 'provisional',
             'left_counts_per_revolution': self.settings['left_counts_per_revolution']

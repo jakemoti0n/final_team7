@@ -22,6 +22,10 @@ def counts(m1=17, m2=0xfffffff0):
 VERSION = response(rc.VERSION_REQUEST, b'USB Roboclaw 2x15A v4.4.9\n\0')
 
 
+def modes(m1=0, m2=0):
+    return response(rc.ENCODER_MODE_REQUEST, bytes((m1, m2)))
+
+
 class FakeSerial:
     def __init__(self, replies, **kwargs):
         self.replies = deque(replies)
@@ -96,6 +100,15 @@ class TransportTests(unittest.TestCase):
         transport.close()
         self.assertFalse(transport.is_open)
         self.assertFalse(serial.is_open)
+
+    def test_encoder_modes_are_a_read_only_query(self):
+        transport = self.make_transport(replies=[VERSION, modes(0, 0x40), counts()])
+        transport.open()
+        self.assertEqual(transport.read_encoder_modes(), (0, 0x40))
+        self.assertEqual(transport.read_counts(), (17, 0xfffffff0))
+        self.assertEqual(self.serials[0].writes,
+                         [rc.VERSION_REQUEST, rc.ENCODER_MODE_REQUEST, rc.COUNTS_REQUEST])
+        self.assertTrue(all(row['crc_valid'] and row['length_valid'] and row['success'] for row in self.wire))
 
     def test_crc_failure_closes_without_retry_or_extra_query(self):
         bad = bytearray(counts())
@@ -225,6 +238,24 @@ class IdentityTests(unittest.TestCase):
     def test_unexpected_model_rejected(self):
         with self.assertRaisesRegex(rc.DeviceIdentityError, 'identity'):
             self.check([Path('/sys/class/tty/ttyACM0')], {'ID_VENDOR_ID': '03eb', 'ID_MODEL_ID': '2404'})
+
+
+class ForwardSignTests(unittest.TestCase):
+    def test_wiring_default_and_board_reversal(self):
+        self.assertEqual(rc.forward_signs((0, 0)), (1, -1))          # 지금 배선: 왼쪽(M2)은 전진에서 내려감
+        self.assertEqual(rc.forward_signs((0, 0x40)), (1, 1))        # 보드에서 M2 엔코더 방향을 뒤집음
+        self.assertEqual(rc.forward_signs((0x40, 0x40)), (-1, 1))
+        self.assertEqual(rc.forward_signs((0x80, 0x81)), (1, -1))    # 다른 비트는 방향과 무관
+
+    def test_motor_reversal_is_refused(self):
+        for pair in ((0x20, 0), (0, 0x20), (0x60, 0x40)):
+            with self.subTest(pair=pair), self.assertRaises(rc.RoboClawError):
+                rc.forward_signs(pair)
+
+    def test_malformed_modes_are_refused(self):
+        for pair in ((0,), (0, 256), (0, '0'), (0, 0, 0)):
+            with self.subTest(pair=pair), self.assertRaises(ValueError):
+                rc.forward_signs(pair)
 
 
 class CounterTests(unittest.TestCase):

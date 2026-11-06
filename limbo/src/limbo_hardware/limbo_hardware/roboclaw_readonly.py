@@ -1,8 +1,11 @@
 """Bounded, read-only RoboClaw USB transport and epoch-local counter tracking.
 
-Only ReadVersion (21) and GetEncoders (78) can cross the serial write boundary.
-The two counts returned by command 78 are unsigned 32-bit values; that command
-does not return channel status bits. No motor/configuration/reset API is exposed.
+Only ReadVersion (21), GetEncoders (78) and ReadEncoderMode (91) can cross the serial
+write boundary. The two counts returned by command 78 are unsigned 32-bit values; that
+command does not return channel status bits. No motor/configuration/reset API is exposed.
+
+엔코더가 세는 방향은 보드 설정(엔코더 모드)으로 뒤집을 수 있다. 그래서 "전진이 +인가 −인가"를 코드에 박아 두지 않고
+보드에서 읽은 모드로 정한다(forward_signs). 보드 설정을 바꿔도 코드가 따라간다.
 """
 
 from dataclasses import dataclass
@@ -18,7 +21,14 @@ from typing import Callable, Optional, Tuple
 DEFAULT_PORT = '/dev/serial/by-id/usb-Basicmicro_Inc._USB_Roboclaw_2x15A-if00'
 VERSION_REQUEST = b'\x80\x15'
 COUNTS_REQUEST = b'\x80\x4e'
-ALLOWED_REQUESTS = frozenset((VERSION_REQUEST, COUNTS_REQUEST))
+ENCODER_MODE_REQUEST = b'\x80\x5b'   # 명령 91: [M1 모드, M2 모드]
+ALLOWED_REQUESTS = frozenset((VERSION_REQUEST, COUNTS_REQUEST, ENCODER_MODE_REQUEST))
+# 엔코더 모드 비트 (RoboClaw 매뉴얼 rev 6.0, 명령 91). 6 = 엔코더 방향 반전, 5 = 모터 방향 반전
+ENCODER_REVERSED_BIT = 0x40
+MOTOR_REVERSED_BIT = 0x20
+# 모드 비트가 둘 다 0일 때 이 로봇 배선에서 "전진"의 원시 카운트 부호 (M1=오른쪽, M2=왼쪽).
+# 좌우 모터가 마주 보게 달려 왼쪽은 전진할 때 숫자가 내려간다 (2026-10-29 손회전·바닥 밀기로 확인)
+WIRED_FORWARD_SIGNS = (1, -1)
 EXPECTED_USB = ('03eb', '2404', 'USB_Roboclaw_2x15A', 'cdc_acm')
 
 
@@ -42,8 +52,23 @@ def validate_request(data: bytes) -> bytes:
     """The final write boundary rejects every packet other than two read queries."""
     packet = bytes(data)
     if packet not in ALLOWED_REQUESTS:
-        raise ValueError('Only exact 0x80 ReadVersion/GetEncoders requests are allowed')
+        raise ValueError('Only exact 0x80 ReadVersion/GetEncoders/ReadEncoderMode requests are allowed')
     return packet
+
+
+def forward_signs(modes) -> Tuple[int, int]:
+    """보드에서 읽은 엔코더 모드 (M1, M2)로 전진 카운트 부호 (M1, M2)를 정한다.
+
+    엔코더 방향 반전 비트가 켜진 쪽은 배선 부호가 뒤집힌다. 모터 방향 반전 비트는 "양수 명령 = 전진"이라는
+    전제를 깨므로 받지 않는다(그 설정으로는 어떤 구동 코드도 맞지 않는다).
+    """
+    if len(modes) != 2 or any(type(mode) is not int or not 0 <= mode <= 255 for mode in modes):
+        raise ValueError('Two encoder mode bytes are required')
+    if any(mode & MOTOR_REVERSED_BIT for mode in modes):
+        raise RoboClawError('보드에 모터 방향 반전이 켜져 있음 (엔코더 모드 %s). 이 설정은 지원하지 않는다: '
+                            '모션스튜디오 Motor Reverse를 끄고 방향은 엔코더 쪽으로만 맞출 것' % (list(modes),))
+    return tuple(-sign if mode & ENCODER_REVERSED_BIT else sign
+                 for sign, mode in zip(WIRED_FORWARD_SIGNS, modes))
 
 
 def crc16(data: bytes) -> int:
@@ -177,6 +202,13 @@ class ReadOnlyRoboClaw:
         payload = self._exchange(COUNTS_REQUEST)
         return int.from_bytes(payload[:4], 'big'), int.from_bytes(payload[4:8], 'big')
 
+    def read_encoder_modes(self) -> Tuple[int, int]:
+        """보드의 엔코더 모드 (M1, M2). forward_signs()에 넘겨 전진 부호를 정한다."""
+        if not self.is_open or self.firmware is None:
+            raise RoboClawError('RoboClaw is not connected')
+        payload = self._exchange(ENCODER_MODE_REQUEST)
+        return payload[0], payload[1]
+
     def close(self) -> None:
         connection, self._serial = self._serial, None
         self.firmware = None
@@ -220,8 +252,9 @@ class ReadOnlyRoboClaw:
                 read_exact(2)
                 record['length_valid'] = 3 <= len(response) <= 50 and response[-3] == 0
             else:
-                read_exact(10)
-                record['length_valid'] = len(response) == 10
+                expected = 4 if request == ENCODER_MODE_REQUEST else 10   # 데이터 2 또는 8 + CRC 2
+                read_exact(expected)
+                record['length_valid'] = len(response) == expected
             record['crc_valid'] = crc16(request + response[:-2]) == int.from_bytes(response[-2:], 'big')
             if not record['length_valid'] or not record['crc_valid']:
                 raise ProtocolError('Invalid RoboClaw response length or CRC')

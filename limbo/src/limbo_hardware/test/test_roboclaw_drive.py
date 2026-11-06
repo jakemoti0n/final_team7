@@ -3,7 +3,7 @@ import struct
 import unittest
 
 from limbo_hardware.roboclaw_drive import (DriveTransport, DriveError, DUTY_CEILING, STOP_STATUS_BITS,
-                                           duty_packet, timeout_packet, status_names)
+                                           duty_packet, speed_packet, timeout_packet, status_names)
 from limbo_hardware.roboclaw_readonly import crc16
 
 
@@ -20,6 +20,10 @@ class FakeSerial:
         self.status = 0x03000000
         self.volts = 119
         self.pwm = (0, 0)
+        self.currents = (0, 0)                  # 10 mA 단위
+        self.encoder_modes = (0, 0)
+        # 속도 제어 값 (P, I, D, QPPS). P·I·D는 16.16 고정소수점. 처음에는 한 번도 설정 안 된 보드처럼 0
+        self.velocity = {55: (0, 0, 0, 0), 56: (0, 0, 0, 0)}
 
     def reset_input_buffer(self):
         self.rx.clear()
@@ -27,7 +31,7 @@ class FakeSerial:
     def write(self, packet):
         self.sent.append(bytes(packet))
         command = packet[1]
-        if command in (34, 14):
+        if command in (34, 14, 40):
             if command == 14:
                 self.timeout_raw = packet[2]
             self.rx += b'\xff'
@@ -41,7 +45,11 @@ class FakeSerial:
         elif command == 48:
             body = struct.pack('>hh', *self.pwm)
         elif command == 49:
-            body = struct.pack('>hh', 0, 0)
+            body = struct.pack('>hh', *self.currents)
+        elif command in (55, 56):
+            body = struct.pack('>IIII', *self.velocity[command])
+        elif command == 91:
+            body = bytes(self.encoder_modes)
         elif command == 78:
             body = struct.pack('>II', *self.counts)
         elif command == 90:
@@ -75,6 +83,20 @@ class PacketTests(unittest.TestCase):
         for bad in ((4916, 0, 4915), (0, 0, DUTY_CEILING + 1), (1.0, 0, 4915), (0, 0, 0)):
             with self.subTest(bad=bad), self.assertRaises(DriveError):
                 duty_packet(*bad)
+
+    def test_speed_packet_is_command_40_accel_then_signed_speeds(self):
+        packet = speed_packet(765, -783, 1174, (5000, 5100))
+        self.assertEqual(packet[:2], bytes((128, 40)))
+        self.assertEqual(struct.unpack('>Iii', packet[2:14]), (1174, 765, -783))
+        self.assertEqual(int.from_bytes(packet[14:], 'big'), crc16(packet[:14]))
+        with self.assertRaises(DriveError):
+            speed_packet(5001, 0, 1174, (5000, 5100))     # M1 한계(QPPS) 초과
+        with self.assertRaises(DriveError):
+            speed_packet(0, -5101, 1174, (5000, 5100))    # M2 한계 초과(부호 무관)
+        with self.assertRaises(DriveError):
+            speed_packet(100, 100, 0, (5000, 5100))       # 가속도 0은 "즉시"가 아니라 잘못된 값
+        with self.assertRaises(DriveError):
+            speed_packet(100.0, 100, 1174, (5000, 5100))  # 정수만
 
     def test_timeout_packet(self):
         packet = timeout_packet(5)
@@ -139,6 +161,35 @@ class TransportTests(unittest.TestCase):
                 DriveTransport(connection=fake, duty_cap=invalid_cap)
         self.assertEqual(len(fake.sent), sent)
         transport.close()
+
+    def test_sample_includes_motor_currents_in_amps(self):
+        transport, fake = make()
+        fake.currents = (123, 45)
+        self.assertEqual(transport.sample()['currents_a'], [1.23, 0.45])
+
+    def test_encoder_modes_are_read_from_the_board(self):
+        transport, fake = make()
+        fake.encoder_modes = (0, 0x40)
+        self.assertEqual(transport.read_encoder_modes(), (0, 0x40))
+
+    def test_speed_command_needs_velocity_settings_read_from_the_board(self):
+        transport, fake = make()
+        with self.assertRaises(DriveError):            # 아직 안 읽음
+            transport.write_speed(100, 100, 1174)
+        self.assertEqual([row['qpps'] for row in transport.read_velocity_settings()], [0, 0])
+        with self.assertRaises(DriveError):            # 읽었지만 보드가 튜닝 전(QPPS 0)
+            transport.write_speed(100, 100, 1174)
+        fake.velocity = {55: (0x00018000, 0x00004000, 0, 5000), 56: (0x00010000, 0x00008000, 0, 5100)}
+        settings = transport.read_velocity_settings()
+        self.assertEqual(settings[0], {'p': 1.5, 'i': 0.25, 'd': 0.0, 'qpps': 5000})
+        self.assertEqual(settings[1], {'p': 1.0, 'i': 0.5, 'd': 0.0, 'qpps': 5100})
+        self.assertEqual(transport.speed_caps, (5000, 5100))
+        sent = len(fake.sent)
+        transport.write_speed(765, -783, 1174)
+        self.assertEqual(fake.sent[-1], speed_packet(765, -783, 1174, (5000, 5100)))
+        with self.assertRaises(DriveError):
+            transport.write_speed(5001, 0, 1174)       # 한계를 넘는 값은 직렬로 나가지 않는다
+        self.assertEqual(len(fake.sent), sent + 1)
 
     def test_close_sends_zero_and_closes_port(self):
         transport, fake = make()

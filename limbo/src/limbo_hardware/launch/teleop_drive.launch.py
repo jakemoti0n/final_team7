@@ -1,7 +1,8 @@
 """실물 주행 명령: /cmd_vel 브리지(roboclaw_drive) + 바퀴 odom(/odom, TF odom→base_footprint).
 
 키보드는 터미널이 있어야 하므로 따로 띄운다: tools/drive/teleop_keyboard.sh
-인자: max_duty_raw(출력 상한 raw, 기본은 drive.yaml), max_linear_m_s, max_angular_rad_s, record_dir, publish_tf
+인자: max_duty_raw(출력 상한 raw, 기본은 drive.yaml), max_linear_m_s, max_angular_rad_s, record_dir, publish_tf,
+control_mode(host_duty 또는 board_speed, 기본은 drive.yaml)
 """
 import math
 import os
@@ -37,6 +38,8 @@ def _nodes(context):
             if value not in ('true', 'false'):
                 raise ValueError(f'{key}는 true/false')
             overrides[key] = value == 'true'
+    if get('control_mode'):
+        overrides['control_mode'] = get('control_mode')   # 값 검사는 노드가 한다
     for key in ('max_linear_m_s', 'max_angular_rad_s', 'left_feedforward_gain'):
         if get(key):
             overrides[key] = float(get(key))
@@ -59,6 +62,7 @@ def generate_launch_description():
         'odom_params_file': os.path.join(share, 'config', 'wheel_odometry.yaml'),
         'max_duty_raw': '', 'max_linear_m_s': '', 'max_angular_rad_s': '', 'record_dir': '',
         'publish_tf': 'true', 'balance_straight_start': '', 'use_right_forward_curve': '', 'left_feedforward_gain': '',
+        'control_mode': '',
     }
     return LaunchDescription([*[DeclareLaunchArgument(k, default_value=v) for k, v in defaults.items()],
                               OpaqueFunction(function=_nodes)])
