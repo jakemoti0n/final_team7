@@ -8,6 +8,25 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-06 (54) 팀원의 실물 작업(11-04~06, Jetson 보드에만 있던 커밋 2485d9c)을 그대로 올림: 실물 Nav2·AMCL·지도, 바퀴 치수 재측정, 목표점 주행 시험 기록
+
+**할 일**
+- 이 항목은 보드에 있던 커밋을 **내용 변경 없이** 원격에 올린 것이다. 노트북에서는 `limbo_hardware` 테스트 195개 통과만 확인했고, 나머지 패키지(실물 런치·Nav2 설정·STVL)는 노트북에서 빌드·실행하지 않았다
+- 보드 작업 트리에는 커밋되지 않은 변경(`tools/motors/README_*.md` 9개 삭제, `tools/oak/README_ROS_*.md` 수정, `tools/motors/README.md`·`tools/navigation/` 새 파일)이 남아 있다. 이번에 올리지 않았다
+- 실물 스택을 쓰려면 STVL 오버레이가 필요하다: `tools/stvl/build_stvl_compat.sh`(작업공간 `~/limbo_stvl_compat`, spatio_temporal_voxel_layer 2.5.5에 `limbo_stvl_jazzy.patch`)
+
+**변경 (커밋에 들어 있는 것)**
+- 실물 런치: `start_real.launch.py`(센서·odom·TF, 모터 출력 없음), `start_real_frames.launch.py`(base 별칭·카메라 장착 TF 한 곳), `start_rgbd_points.launch.py` + `scripts/near_depth_filter.py`(가까운 깊이의 작은 조각 제거 뒤 5 cm 복셀), `start_nav2_real.launch.py`(실물 Nav2, 속도 출력은 기본으로 분리). 스크립트 `tools/drive/run_real.sh`·`run_nav2_real.sh`·`build_real_configs.py`(시뮬 설정에서 실물용 설정을 만들어 냄)
+- 설정: `limbo_navigation/config/nav2_real.yaml`·`amcl_real.yaml`·`slam_real.yaml`, 실물용 BT xml 2개, 지도 `maps/real_open_space_20261105`, `limbo_perception/config/person_wait_real.yaml`
+- 바퀴 치수(11-05 재측정, 손으로 3바퀴 연속): 1회전 카운트 왼쪽 3688 → 3674·오른쪽 3607 → 3687, 바퀴 중심 간격 0.54 → 0.53 m(바퀴를 양쪽 5 mm씩 안으로 옮김)
+- 센서 장착: 라이다 yaw +90°(`MID360s_mount.json`, 정면 사람 점으로 확인), 카메라 앞 0.22 m·높이 0.68 m(`real_robot_mount.yaml`, 실측)
+- 주행 브리지: 출력 상한·천장 30 %(9830, 11-04), 오른쪽 전진 피드포워드 곡선(`use_right_forward_curve`, 기본 끔), 직진 출발 때 왼쪽 출력 상승 제한(`balance_straight_start`, 기본 끔). 테스트 추가(195)
+- 기록: `tools/motors/tracking_trials_20261106.txt`(오른쪽 바퀴 PWM 시험 10회 + 목표점 주행 2회의 콘솔 출력), `tools/motors/drive_telemetry_20261103.tar.gz`
+
+**원인과 근거**
+- 보드는 https 원격에 쓸 자격이 없어 11-06 15:11 커밋이 보드에만 있었다. 번들로 받아 노트북에서 올렸다(변경 기록 50과 같은 방법)
+- 11-06 목표점 주행 2회(5.65 m 직선, MPPI 0.13 m/s)는 4.4 m·4.2 m에서 시험 도구가 "좌우 바퀴 이동량 불균형"으로 취소했다. 같은 기록에서 odom 방향 변화는 AMCL과 0.4°·3.8° 차이, 거리는 +3.7 %·+3.6 %였다. 출발 2 s 동안 명령 0.13 m에 실제 0.03·0.006 m, 저속 목표에서 한쪽 바퀴가 섰다(오른쪽 출력 21 %에서 0 m/s). 대응은 다음 항목에서
+
 ## 2026-11-03 (53) 실물 사람 앞 기다리기 시험 준비: 브리지에 `/person_wait` 정지 게이트 + 임시 카메라 장착 TF + person_wait 실물 런치
 
 **할 일**
