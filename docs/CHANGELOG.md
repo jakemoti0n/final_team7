@@ -8,6 +8,84 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-06 (52) AWS 배포 파일과 가이드: Dockerfile·docker-compose(관제 서버 + Caddy HTTPS·basic auth)·`docs/AWS_DEPLOY.md`, Caddy 뒤에서 start 명령이 깨지던 압축 문제 수정 (인터넷 공개 준비 3단계)
+
+**할 일**
+- 없음 (로컬 실행 방법은 그대로). 배포할 때 `docs/AWS_DEPLOY.md`
+
+**변경**
+- `dashboard/Dockerfile`(+ `Dockerfile.dockerignore`): node 24에서 UI 빌드 → python 3.12-slim, `requirements.lock` 설치, `uvicorn --workers 1`, uid 10001. context는 저장소 루트이고 `limbo/`의 지도(yaml·pgm)와 `limbo_patrol/config`만 넣는다
+- `dashboard/docker-compose.yml`: `dashboard`(8000은 밖으로 안 엶) + `caddy:2.10`(80·443). 볼륨 `waypoints`(화면에서 편집한 waypoint, 컨테이너를 다시 만들어도 남음)·`caddy_data`(인증서)
+- `dashboard/Caddyfile`: `{$DOMAIN}` 자동 HTTPS. 로봇용 4경로(정규식)와 `/healthz`는 basic auth 없이, 나머지는 basic auth
+- `dashboard/deploy/config.json`·`entrypoint.sh`: waypoint는 `/data/waypoints.yaml`, 볼륨이 비었을 때만 `INITIAL_WAYPOINTS`를 복사, `MAP_YAML`을 설정에 끼움, 잘못된 이름이면 고를 수 있는 목록을 출력하고 끝냄. `allow_no_robot_token: false`라 `ROBOT_TOKEN`이 없으면 서버가 시작하지 않음
+- `dashboard/.env.example`(sslip.io 예, 해시는 작은따옴표), `.gitignore`에 `dashboard/.env`
+- `docs/AWS_DEPLOY.md`: Lightsail(또는 EC2 t3.micro)·고정 IP·방화벽(80·443, 22는 내 IP만)·스왑·Docker 설치·배포·로그·업데이트·waypoint 백업·지도 바꾸기·sslip.io·로봇 `bridge.yaml`(server_url, token_file, use_sim_time)·확인 체크리스트·문제 해결
+- `dashboard/README.md` 「인터넷(AWS) 배포」
+- Bridge `transport.py`: 모든 요청에 `Accept-Encoding: identity`(압축하지 말라). `Caddyfile`의 `encode`는 브라우저 경로에만
+- `relay_prog/tools/receiver.py`(시험 서버): Caddy처럼 gzip을 받겠다는 요청엔 512 B 이상 응답을 압축
+- `dashboard/deploy/local_https_bridge.sh`: 내 PC에서 Docker 서버 + Caddy + 실제 Bridge(HTTPS·토큰)를 한 번에. 시뮬레이션만 따로 켜면 AWS와 같은 구성으로 시험(`AWS_DEPLOY.md` 16절). 이미지에는 안 넣음
+
+**원인과 근거**
+- 지도·waypoint 경로는 "저장소 루트 기준 상대경로" 규칙이라 이미지 안에서도 `/srv`를 저장소 루트로 두고 `limbo/...` 경로를 그대로 살렸다(서버 코드 변경 없음)
+- 이 PC에서 화면 빌드에 메모리를 많이 써서(vite 약 2.8 GB) 1 GB 인스턴스는 스왑을 필수로 적었다
+- Caddy 뒤에서 **주행 시작이 `no_response`로 실패**했다: Bridge는 응답 크기를 세며 읽으려고 자동 압축 풀기를 꺼 두었는데(`auto_decompress=False`) aiohttp가 기본으로 `Accept-Encoding: gzip, deflate`를 보내서, Caddy가 512 B가 넘는 start 명령(waypoint 목록)을 gzip으로 보냈고 Bridge는 `invalid_command`로 버렸다. 텔레메트리 응답과 pause/resume은 작아서 압축되지 않아 드러나지 않았다. 다른 앞단(nginx 등)에서도 같은 일이 생기지 않게 Bridge 쪽을 고쳤다
+
+**확인**(PC 한 대, Docker 29.9 + Compose 5.7, `DOMAIN=localhost`, 2026-11-06)
+- `docker compose build` 성공(약 3분 20초, 이미지 215 MB), `up -d`로 두 컨테이너 실행, 서버는 uid 10001로 돎, 첫 시작 때 `test_waypoints.yaml`을 볼륨에 복사
+- basic auth: `/`·`/api/v1/state`·`POST /api/v1/commands`·WebSocket `/api/v1/stream` 로그인 없음·틀린 비밀번호 401, 맞으면 200(WS는 101), JS·CSS 200, `/healthz` 200, http→https 308
+- 로봇 경로: telemetry·commands/next·claim·result 토큰 없음·틀림 401, basic auth만 있어도 401, 맞는 토큰이면 서버까지 감. `tools.sender.sample()` 한 건 `"accepted":true`
+- 지도 302×302·`map.png`, waypoint 이름 변경 → `docker compose down`·`up`(새 컨테이너) 후에도 남음
+- **실제 Bridge → Caddy(HTTPS, Caddy 내부 루트 인증서를 `SSL_CERT_FILE`로 신뢰) → 컨테이너**: 연결·launcher v3, 주행 시작 `confirmed`(로봇 쪽 YAML에 화면에서 바꾼 이름, `waypoints:=<절대경로>`), 실행 중 편집 409 `patrol_active`, 순찰 종료 `confirmed`(exit 0). 고치기 전엔 start가 `no_response`(위 원인), Bridge만 고친 상태(Caddy는 전 경로 압축)와 둘 다 고친 상태 모두 통과
+- `local_https_bridge.sh`: 컨테이너가 꺼진 상태에서 실행 → 컨테이너 켜고 Bridge 연결, 주행 시작·순찰 종료 `confirmed`, 두 번째 실행은 Bridge 중복으로 거절, Ctrl+C로 Bridge·순찰 노드 모두 정리(종료 코드 0)
+- `test_start_command_reaches_launcher_with_route`가 고치기 전 코드에서 실패·고친 뒤 통과, relay pytest 93 통과
+- 빌드 경고 `Ignored build scripts: esbuild`(pnpm 10)는 무해: `@esbuild/linux-x64` 바이너리가 따로 설치돼 vite 빌드가 됨
+
+## 2026-11-06 (51) 로봇용 경로에 공유 토큰 인증 (`Authorization: Bearer`): 인터넷 공개 준비 2단계
+
+**할 일**
+- 로컬 개발은 할 일 없음 (기본 `config.json`의 `allow_no_robot_token: true`, `bridge.yaml`의 `token_file: null`)
+- 자기 `config.json`을 따로 쓰면: 토큰을 설정하거나 `"allow_no_robot_token": true`를 넣는다. 둘 다 없으면 서버가 시작하지 않는다
+- 자기 `bridge.yaml`을 따로 쓰면 `token_file: null` 줄을 추가 (없으면 Bridge가 시작하지 않음)
+
+**변경**
+- 서버: telemetry, commands/next·claim·result 4경로가 본문을 읽기 전에 토큰 검사(`hmac.compare_digest`). 없거나 틀리면 401 `unauthorized` + `WWW-Authenticate: Bearer`. 토큰은 환경 변수 `ROBOT_TOKEN` → `robot_token_file`. 없으면 `allow_no_robot_token`일 때만 열고 아니면 시작 거부. 16자 미만·공백·빈 파일도 시작 거부. 브라우저용 경로는 그대로(앞단 Caddy basic auth 전제, 3단계)
+- Bridge: 환경 변수 `LIMBO_ROBOT_TOKEN` → `bridge.yaml`의 `token_file`. 모든 요청에 헤더. 401이면 10초 간격 재시도 + 토큰 확인 경고. 토큰을 평문 `http://`로 다른 컴퓨터에 보내면 시작할 때 경고
+- Mock 서버(`relay_prog/tools/receiver.py`)·가상 송신기(`dashboard/tools/sender.py --token`)도 토큰 지원
+- 문서: `dashboard/README.md` 「로봇 토큰과 인터넷 공개」(로컬에서 토큰 시험하는 법), `relay_prog/README.md` 설정 표, `docs/CONTROL_API_DRAFT.md` 원칙·인증 결정
+
+**원인과 근거**
+- 서버를 인터넷에 열면 누구나 가짜 텔레메트리를 보내거나 명령을 가로챌 수 있다. 로봇은 브라우저가 아니라 basic auth 대신 공유 토큰을 쓴다. 화면 쪽 로그인은 서버에 넣지 않고 앞단 Caddy가 맡는다(서버는 한 프로세스·메모리 상태라 단순하게 유지)
+
+**확인**(PC 한 대, 2026-11-06)
+- `dashboard` pytest 102, `relay_prog` pytest 93 통과
+- 실제 서버(`ROBOT_TOKEN`, `allow_no_robot_token: false`) + 실제 Bridge: 토큰 없이 서버 시작 → 거부. curl 토큰 없음/틀림 → 401, `/api/v1/state` → 200. 맞는 토큰 Bridge → 연결됨, start·stop confirmed. 틀린 토큰 Bridge → `http_401` + 토큰 확인 경고
+
+## 2026-11-06 (50) 주행 시작·순찰 종료를 Bridge 경유 명령으로: 서버는 명령만 쌓고 로봇 컴퓨터의 Bridge가 `patrol_node`를 띄우고 끈다. waypoint 목록은 시작 명령에 실어 보낸다 (AWS 배포 준비 1단계)
+
+**할 일**
+- pull 뒤 `relay_prog`를 다시 빌드(새 파일 `launcher.py`). Bridge는 **저장소 루트에서** 실행(`patrol_launch`의 상대 경로 기준)
+- 실물 로봇이면 `bridge.yaml`의 `patrol_launch.use_sim_time: false`
+- 자기 `config.json`에 `patrol_ros_domain_id`·`patrol_use_sim_time`이 있으면 지운다(남아 있으면 서버가 시작하지 않음)
+- 서버와 Bridge를 같이 올린다. 새 Bridge(v3)는 옛 서버에 거절되고, 옛 Bridge(v2)에는 새 서버가 시작·종료 버튼을 잠근다
+
+**변경**
+- 서버: `server/patrol_launch.py`(서버에서 subprocess 실행·`/proc` 검사) 삭제. `/api/v1/patrol/start`·`stop`·`launch` 삭제 → `POST /api/v1/commands`에 `start`·`stop`. start는 그 순간의 서버 YAML 목록·`revision`·지도 범위를 명령 `route`에 고정. 확인: start는 `waiting_localization`·`patrolling`(60초), stop은 노드 종료 보고나 순찰 상태 사라짐(30초). 새 설정 `command_start_*`·`command_stop_*`. waypoint 편집 잠금·중복 시작 거절은 텔레메트리 순찰 상태 + Bridge 보고(`patrol_running`)로. `config.json`에서 `patrol_ros_domain_id`·`patrol_use_sim_time` 삭제
+- 텔레메트리 **v3**: v2 + `launcher`(지원 명령, idle/running/exited, pid, exit code, 경로 revision, 로그 경로, 다른 곳에서 띄운 노드 여부)
+- Bridge: `launcher.py` 새로(예전 서버의 `_other_patrol_running` 옮김). 받은 경로를 서버와 같은 규칙으로 검사 → `patrol_launch.waypoint_dir/dashboard_waypoints.yaml`에 원자적 저장 → 절대 경로로 `patrol_node` 실행. 종료는 자기가 띄운 노드에만 SIGTERM. Bridge가 끝나면 띄운 노드도 끔. `bridge.yaml`에 `patrol_launch:`(ros_setup, workspace, waypoint_dir, use_sim_time). 시작할 때 경로를 확인해 틀리면 바로 알림. 명령 응답 한도 8 → 64 KiB
+- 화면: 주행 시작·순찰 종료도 일시정지와 같은 3단계 결과 상자. `/api/v1/patrol/*` 폴링 제거. 이전 Bridge면 「로봇의 Bridge를 업데이트해야 사용할 수 있습니다」. `/demo`도 같은 흐름 + 「Bridge 버전」 선택
+- 검증 규칙 사례표 `relay_prog/tests/data/route_cases.json`을 서버·Bridge 시험이 함께 읽음 (한쪽만 바꾸면 시험이 깨짐)
+- 문서: `dashboard/README.md`, `docs/CONTROL_API_DRAFT.md`(§1.3·§2.5), `docs/CONTROL_SCREEN.md`(A 5단계), `relay_prog/README.md`, `relay_prog/docs/PRD.md`
+
+**원인과 근거**
+- 서버를 AWS에 올리면 서버 컴퓨터에 ROS가 없고 DDS는 인터넷을 못 넘는다. 서버가 직접 `patrol_node`를 띄우는 방식은 서버와 로봇이 같은 컴퓨터일 때만 됐다. 로봇은 서버로 나가는 HTTP(S)만 쓰고, 들어오는 포트를 열지 않는다
+- 명령 통로(`next → claim → result`, TTL, 응답·확인 제한)를 새로 만들지 않고 그대로 써서 재전송 금지·늦은 실행 방지 규칙을 그대로 받는다
+
+**확인**(PC 한 대, 2026-11-06)
+- `dashboard` pytest 77, `relay_prog` pytest 91(ROS 환경 source), UI 단위 30, Playwright e2e 25(`CHROME_PATH=/opt/google/chrome/chrome`) 모두 통과, UI 빌드 성공
+- 실제 서버 + 실제 Bridge + 실제 `patrol_node`(Gazebo·Nav2 없이, ROS_DOMAIN_ID 93): waypoint 이동 → 주행 시작 confirmed(`waiting_localization`) → 로봇 쪽 YAML에 이동한 좌표, `patrol_node` 인자 `waypoints:=<절대 경로>` → 실행 중 편집 409 `patrol_active`·재시작 409 → 순찰 종료 confirmed(exit 0) → 다른 터미널에서 띄운 노드가 있으면 시작 409·종료 409 → Bridge Ctrl+C 때 띄운 노드도 종료
+- 하지 못함: 시뮬레이션에서 주행 중 일시정지·재개. 이 경로(서비스 호출)는 바꾸지 않았고 e2e로만 확인
+- 남은 것: 순찰 종료 때 순찰 노드가 `failed` · `stopped by operator`를 내서 「순찰 실패」 알림이 하나 생긴다(전에도 같음)
+
 ## 2026-10-27 (49) README에 두 대로 나눠 돌리기·카메라 점군 토픽 추가, `limbo_bringup`에 pcl_ros 의존 선언 (48의 문서·선언 마무리)
 
 **할 일**

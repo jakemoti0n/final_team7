@@ -1,0 +1,18 @@
+# BuildKit은 Dockerfile 옆의 <이름>.dockerignore를 쓴다. context가 저장소 루트라 필요한 것만 넣는다
+*
+!dashboard/server
+!dashboard/deploy
+dashboard/deploy/local_https_bridge.sh
+!dashboard/requirements.lock
+!dashboard/ui/package.json
+!dashboard/ui/pnpm-lock.yaml
+!dashboard/ui/index.html
+!dashboard/ui/tsconfig.json
+!dashboard/ui/vite.config.ts
+!dashboard/ui/playwright.config.ts
+!dashboard/ui/src
+!dashboard/ui/e2e
+!limbo/src/limbo_navigation/maps/*.yaml
+!limbo/src/limbo_navigation/maps/*.pgm
+!limbo/src/limbo_patrol/config
+**/__pycache__

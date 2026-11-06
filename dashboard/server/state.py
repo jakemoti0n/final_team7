@@ -14,7 +14,8 @@ NAMES = {"odom": "주행 정보", "lidar_raw": "LiDAR 원본",
 # 관제 명령 단계 (docs/CONTROL_API_DRAFT.md §3). FINAL에 들어가면 결과가 바뀌지 않는다
 FINAL = {"confirmed", "rejected", "service_unavailable", "no_response", "expired", "unconfirmed",
          "connection_lost"}
-COMMAND_TEXT = {"pause": "정지", "resume": "재개"}
+COMMAND_TEXT = {"pause": "정지", "resume": "재개", "start": "순찰 시작", "stop": "순찰 종료"}
+ACTIVE_PATROL = ("waiting_localization", "patrolling", "pausing", "paused")
 RESULT_TEXT = {  # (알림 중요도, 문구)
     "confirmed": ("info", "{c} 상태 확인됨"),
     "rejected": ("error", "{c} 요청 실패: {m}"),
@@ -66,8 +67,34 @@ class Store:
 
     # ---- 관제 명령 ----
 
-    def issue(self, command):
-        """화면의 명령 요청. (HTTP 상태, 본문)"""
+    # ---- Bridge가 띄운 순찰 노드 (텔레메트리 v3 launcher) ----
+
+    def launcher(self):
+        """연결된 Bridge가 보고한 순찰 노드 실행 상태. v1·v2 Bridge면 None (시작·종료 미지원)"""
+        return (self.payload or {}).get("launcher")
+
+    def patrol_running(self):
+        """순찰 노드가 돌고 있다고 볼 근거가 있는가 (시작 거절·waypoint 편집 잠금).
+
+        Bridge가 띄운 노드가 실행 중이거나 다른 곳에서 띄운 노드가 있으면 참.
+        순찰 상태가 활성이어도 Bridge가 띄운 노드가 끝났다고 보고했으면(오래된 상태) 거짓."""
+        launcher = self.launcher()
+        patrol = (self.payload or {}).get("patrol") or {}
+        if launcher and (launcher["state"] == "running" or launcher["other_patrol_running"]):
+            return True
+        return patrol.get("state") in ACTIVE_PATROL and not (launcher and launcher["state"] == "exited")
+
+    def timeouts(self, command):
+        """(응답 제한, 확인 제한). 시작·종료는 노드 기동·Nav2 목표 취소를 기다리므로 따로 둔다."""
+        cfg = self.settings
+        if command == "start":
+            return cfg.command_start_response_timeout_s, cfg.command_start_confirm_timeout_s
+        if command == "stop":
+            return cfg.command_stop_response_timeout_s, cfg.command_stop_confirm_timeout_s
+        return cfg.command_response_timeout_s, cfg.command_confirm_timeout_s
+
+    def issue(self, command, route=None):
+        """화면의 명령 요청. (HTTP 상태, 본문). route는 start일 때 Bridge에 실어 보낼 waypoint 경로"""
         if self.command and self.command["stage"] not in FINAL:
             return 409, ("command_in_progress", "Another command is still in progress")
         if self.connection()[0] != "connected":
@@ -76,7 +103,8 @@ class Store:
         self.command = dict(request_id=str(uuid.uuid4()), command=command, stage="queued", message="",
                             issued_at=self.utc(), updated_at=self.utc(), issued_mono=now,
                             delivered_mono=None, claimed_mono=None, accepted_mono=None, session=self.session,
-                            count_at_call=None)
+                            count_at_call=None, route=route, accepted_launcher=None,
+                            accepted_patrol_state=None)
         return 202, self.command_view()
 
     def take_command(self, session):
@@ -91,7 +119,10 @@ class Store:
             self.finish("expired")
             return None
         c.update(stage="delivered", delivered_mono=now, updated_at=self.utc())
-        return dict(request_id=c["request_id"], command=c["command"], ttl_ms=remaining * 1000)
+        command = dict(request_id=c["request_id"], command=c["command"], ttl_ms=remaining * 1000)
+        if c["command"] == "start":
+            command["route"] = c["route"]
+        return command
 
     def claim(self, request_id, session):
         """Bridge가 서비스를 부르기 직전에 묻는다. 아직 전달됨 단계이고 응답 제한 안이면 허락.
@@ -113,8 +144,12 @@ class Store:
             return {"accepted": False, "reason": "command_closed"}
         c["message"] = result.message
         if result.outcome == "accepted":
+            launcher = self.launcher() or {}
             c.update(stage="accepted", accepted_mono=self.monotonic(), updated_at=self.utc(),
-                     count_at_call=result.patrol_update_count_at_call)
+                     count_at_call=result.patrol_update_count_at_call,
+                     # 수락 시점의 마지막 보고. 이보다 먼저 찍힌 텔레메트리가 늦게 와도 새 결과로 보지 않게
+                     accepted_launcher=(launcher.get("state"), launcher.get("pid")),
+                     accepted_patrol_state=((self.payload or {}).get("patrol") or {}).get("state"))
             self.check_confirmation()
         else:
             self.finish(result.outcome)
@@ -126,9 +161,25 @@ class Store:
         if not c or c["stage"] != "accepted" or not p or p["bridge_session_id"] != c["session"]:
             return
         patrol = p.get("patrol")
+        launcher = p.get("launcher") or {}
+        if c["command"] == "stop":
+            # 노드 종료 보고, 또는 수락 때 있던 순찰 상태가 사라짐(/patrol/state 발행자 없음)
+            if launcher.get("state") == "exited" or (
+                    c["accepted_patrol_state"] is not None and patrol and patrol["update_count"]
+                    and patrol["state"] is None):
+                self.finish("confirmed")
+            return
+        if (c["command"] == "start" and launcher.get("state") == "exited"
+                and c["accepted_launcher"] != ("exited", launcher.get("pid"))):
+            # 새로 띄운 노드가 순찰 상태를 내기 전에 끝남. 수락 때 이미 끝나 있던 이전 실행(같은 pid)은 제외
+            c["message"] = f"patrol_node exited (code {launcher.get('exit_code')}), log: {launcher.get('log') or '-'}"[:200]
+            self.finish("rejected")
+            return
         if not patrol or patrol["update_count"] <= c["count_at_call"]:
             return
-        if c["command"] == "resume" and patrol["state"] == "patrolling":
+        if c["command"] == "start" and patrol["state"] in ("waiting_localization", "patrolling"):
+            self.finish("confirmed")
+        elif c["command"] == "resume" and patrol["state"] == "patrolling":
             self.finish("confirmed")
         elif c["command"] == "pause" and patrol["state"] == "paused":
             motion, cfg = p["motion"], self.settings
@@ -144,14 +195,15 @@ class Store:
             return
         now = self.monotonic() if now is None else now
         cfg = self.settings
+        response_timeout, confirm_timeout = self.timeouts(c["command"])
         if c["stage"] in ("delivered", "accepted") and (
                 self.session != c["session"] or self.connection(now)[0] == "disconnected"):
             self.finish("connection_lost")
         elif c["stage"] == "queued" and now - c["issued_mono"] >= cfg.command_ttl_s:
             self.finish("expired")
-        elif c["stage"] == "delivered" and now - (c["claimed_mono"] or c["delivered_mono"]) >= cfg.command_response_timeout_s:
+        elif c["stage"] == "delivered" and now - (c["claimed_mono"] or c["delivered_mono"]) >= response_timeout:
             self.finish("no_response")
-        elif c["stage"] == "accepted" and now - c["accepted_mono"] >= cfg.command_confirm_timeout_s:
+        elif c["stage"] == "accepted" and now - c["accepted_mono"] >= confirm_timeout:
             self.finish("unconfirmed")
 
     def finish(self, stage):
@@ -301,4 +353,5 @@ class Store:
                                 age_s=motion_age, last_valid=retained),
                     alerts=deepcopy(list(self.alerts)), settings=cfg.model_dump(),
                     patrol=aged("patrol"), pose=pose, command=self.command_view(),
+                    launcher=deepcopy(self.launcher()), patrol_running=self.patrol_running(),
                     map_available=self.map_available)

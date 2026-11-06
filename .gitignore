@@ -27,3 +27,9 @@ limbo/src/limbo_navigation/maps/*_autosave.*
 # 하단 디스플레이(signage) 로그 (venv는 위 venvs/로 무시됨)
 signage/logs/
 .pytest_cache/
+
+# Bridge가 서버에서 받은 순찰 경로 (patrol_launch.waypoint_dir)
+relay_prog/state/
+
+# 배포 비밀값 (dashboard/.env.example을 복사해 채움)
+dashboard/.env

@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { LiveControl, driveControl, fromServer, lockReason, pauseReason, resumeReason, stageShapes } from './control'
+import { LiveControl, driveControl, fromServer, lockReason, pauseReason, resumeReason, stageShapes, startReason, stopReason, waypointLocked } from './control'
 import { headingDeg, isMapInfo, toPixel, uncertaintyPx } from './map'
 import { MockProvider } from './demo'
 import { overall, patrolLabel } from './App'
@@ -92,12 +92,51 @@ it('patrol card: retrying and stopped after navigation failure are shown apart f
   expect(patrolLabel('patrolling', 'lap 2 started')).toMatchObject({ label: '순찰 중', tone: 'good' })
 })
 
+const stopped = (s: Snapshot) => { s.launcher = { ...s.launcher!, state: 'exited', exit_code: 0 }; s.patrol_running = false }
 it('one drive control maps state to start, stop, and resume', () => {
   expect(driveControl(view(), null)).toEqual({ action: 'resume', reason: '' })
   expect(driveControl(view(s => { s.patrol!.state = 'patrolling' }), null)).toEqual({ action: 'pause', reason: '' })
-  expect(driveControl(view(s => { s.patrol!.state = 'patrolling' }), null, true)).toEqual({ action: 'start', reason: '' })
-  expect(driveControl(view(s => { s.patrol!.state = 'completed' }), null)).toEqual({ action: 'start', reason: '' })
-  expect(driveControl(view(s => { s.patrol!.state = null; s.patrol!.update_count = 0 }), null)).toEqual({ action: 'start', reason: '' })
-  expect(driveControl(view(s => { s.patrol!.state = null; s.patrol!.update_count = 3 }), null)).toEqual({ action: 'start', reason: '' })
+  // Bridge가 띄운 노드가 끝났으면 남은 순찰 상태는 오래된 것 → 시작
+  expect(driveControl(view(s => { s.patrol!.state = 'patrolling'; stopped(s) }), null)).toEqual({ action: 'start', reason: '' })
+  expect(driveControl(view(s => { s.patrol!.state = 'completed'; stopped(s) }), null)).toEqual({ action: 'start', reason: '' })
+  expect(driveControl(view(s => { s.patrol!.state = null; s.patrol!.update_count = 0; stopped(s) }), null)).toEqual({ action: 'start', reason: '' })
+  expect(driveControl(view(s => { s.patrol!.state = null; s.patrol!.update_count = 3; stopped(s) }), null)).toEqual({ action: 'start', reason: '' })
   expect(driveControl(view(s => { s.patrol = null }), null).reason).toContain('확인할 수 없습니다')
+  // 노드는 떴는데 아직 순찰 상태를 안 냄 → 시작 잠금
+  expect(driveControl(view(s => { s.patrol!.state = null }), null)).toEqual({ action: 'start', reason: '이미 순찰 노드가 실행 중입니다' })
+  // 시작 요청 처리 중에는 "주행 시작 중"
+  const starting = fromServer({ ...command('accepted'), command: 'start' })
+  expect(driveControl(view(s => { s.patrol!.state = 'waiting_localization' }), starting)).toEqual({ action: 'start', reason: '요청을 처리하고 있습니다' })
+})
+it('start and stop need a Bridge that reports the launcher; stop only for its own node', () => {
+  expect(startReason(view(stopped), '')).toBe('')
+  expect(startReason(view(), '')).toBe('이미 순찰 노드가 실행 중입니다')
+  expect(startReason(view(s => { s.launcher = null }), '')).toContain('Bridge를 업데이트')
+  expect(startReason(view(s => { s.launcher!.commands = ['pause', 'resume'] }), '')).toContain('Bridge를 업데이트')
+  expect(stopReason(view(), '')).toBe('')
+  expect(stopReason(view(stopped), '')).toBe('실행 중인 순찰 노드가 없습니다')
+  expect(stopReason(view(s => { stopped(s); s.launcher!.other_patrol_running = true }), '')).toContain('다른 곳에서 띄운')
+  expect(stopReason(view(s => { s.launcher = null }), '')).toContain('Bridge를 업데이트')
+  expect(stopReason(view(), '잠김')).toBe('잠김')
+})
+it('waypoint editing follows the server lock and pending start/stop', () => {
+  expect(waypointLocked(view(), null)).toBe(true)
+  expect(waypointLocked(view(stopped), null)).toBe(false)
+  expect(waypointLocked(view(stopped), fromServer({ ...command('queued'), command: 'start' }))).toBe(true)
+  expect(waypointLocked(view(stopped), fromServer({ ...command('queued'), command: 'pause' }))).toBe(false)
+  expect(waypointLocked(view(s => { delete s.patrol_running }), null)).toBe(true)   // 이전 서버: 순찰 상태로 판단
+})
+it('live control sends start and stop through the command API', async () => {
+  const post = vi.fn().mockResolvedValue(new Response(JSON.stringify({ request_id: 'r2', command: 'start', stage: 'queued', issued_at: '2026-10-13T00:00:00.000Z' }), { status: 202 }))
+  const control = new LiveControl(vi.fn(), post as unknown as typeof fetch)
+  await control.send(view(stopped), 'start')
+  expect(post.mock.calls[0][0]).toBe('/api/v1/commands')
+  expect(JSON.parse(post.mock.calls[0][1].body)).toEqual({ command: 'start' })
+  post.mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'bridge_unsupported', message: '' } }), { status: 409 }))
+  const refused = new LiveControl(vi.fn(), post as unknown as typeof fetch)
+  await refused.send(view(), 'stop')
+  expect(refused.current(view())?.detail).toContain('relay_prog를 업데이트')
+  await new LiveControl(vi.fn(), post as unknown as typeof fetch).send(view(), 'start')   // 잠김: 보내지 않음
+  expect(post).toHaveBeenCalledTimes(2)
+  expect(fromServer({ ...command('rejected', 'patrol_already_running'), command: 'start' }).detail).toContain('실행하지 못했습니다. 사유: patrol_already_running')
 })

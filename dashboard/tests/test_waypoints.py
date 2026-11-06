@@ -126,3 +126,23 @@ def test_active_patrol_rejects_every_waypoint_change(tmp_path):
         client.app.state.store.payload = {'patrol': {'state': 'completed'}}
         response = client.put('/api/v1/waypoints', json={'revision': revision, 'action': 'rename', 'name': 'A', 'new_name': 'Changed'})
         assert response.status_code == 200
+
+
+def test_route_rules_match_bridge_cases():
+    """Bridge(relay_prog launcher.validate_route)와 같은 사례표. 한쪽만 바꾸면 여기서 드러난다."""
+    import json
+    from pathlib import Path
+    import pytest
+    from server.waypoints import WaypointError, WaypointFile
+    cases = json.loads((Path(__file__).resolve().parents[2] / 'relay_prog/tests/data/route_cases.json').read_text())
+    b = cases['bounds']
+    route = WaypointFile('unused.yaml', {'origin': [b['x_min'], b['y_min'], 0], 'resolution': 1,
+                                         'width': b['x_max'] - b['x_min'], 'height': b['y_max'] - b['y_min']})
+    assert route.bounds() == b
+    for case in cases['cases']:
+        if case['error'] is None:
+            route._validate(case['waypoints'])
+        else:
+            with pytest.raises(WaypointError) as raised:
+                route._validate(case['waypoints'])
+            assert str(raised.value) == case['error'], case['name']

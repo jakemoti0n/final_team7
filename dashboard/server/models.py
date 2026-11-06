@@ -123,8 +123,33 @@ class Pose(StrictModel):
         return self
 
 
+LauncherStateName = Literal["idle", "running", "exited"]
+Revision = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+
+class Launcher(StrictModel):
+    """v3: Bridge가 로봇 컴퓨터에서 띄운 순찰 노드(start·stop 명령). 로그 경로는 로봇 컴퓨터 기준"""
+    commands: Annotated[list[Literal["pause", "resume", "start", "stop"]], Field(max_length=4)]
+    state: LauncherStateName
+    pid: Annotated[int, Field(gt=0)] | None
+    exit_code: int | None
+    waypoints_revision: Revision | None
+    log: Annotated[str, Field(max_length=500)] | None
+    other_patrol_running: bool
+
+    @model_validator(mode="after")
+    def coherent(self):
+        if len(set(self.commands)) != len(self.commands):
+            raise ValueError("commands must be unique")
+        if (self.state == "idle") != (self.pid is None):
+            raise ValueError("pid only after a launch")
+        if self.exit_code is not None and self.state != "exited":
+            raise ValueError("exit_code only after exit")
+        return self
+
+
 class Telemetry(StrictModel):
-    schema_version: Annotated[int, Field(ge=1, le=2)]
+    schema_version: Annotated[int, Field(ge=1, le=3)]
     robot_id: Annotated[str, Field(min_length=1)]
     bridge_session_id: Annotated[str, AfterValidator(uuid_string)]
     sequence: Annotated[int, Field(gt=0)]
@@ -133,15 +158,20 @@ class Telemetry(StrictModel):
     topics: Topics
     motion: Motion
     patrol: Patrol | None = None   # v2에만 있음
-    pose: Pose | None = None       # v2에만 있음
+    pose: Pose | None = None       # v2부터
+    launcher: Launcher | None = None   # v3에만 있음
 
     @model_validator(mode="after")
     def coherent(self):
         v2 = {"patrol", "pose"} & self.model_fields_set
-        if self.schema_version == 2 and (len(v2) != 2 or self.patrol is None or self.pose is None):
+        if self.schema_version >= 2 and (len(v2) != 2 or self.patrol is None or self.pose is None):
             raise ValueError("v2 requires patrol and pose")
         if self.schema_version == 1 and v2:
             raise ValueError("v1 must not include patrol or pose")
+        if self.schema_version == 3 and ("launcher" not in self.model_fields_set or self.launcher is None):
+            raise ValueError("v3 requires launcher")
+        if self.schema_version < 3 and "launcher" in self.model_fields_set:
+            raise ValueError("launcher is v3 only")
         if self.motion.age_ms is not None:
             odom = self.topics.odom
             if odom.received_count == 0:
@@ -152,7 +182,7 @@ class Telemetry(StrictModel):
         return self
 
 
-CommandName = Literal["pause", "resume"]
+CommandName = Literal["pause", "resume", "start", "stop"]
 
 
 class CommandRequest(StrictModel):
@@ -204,11 +234,20 @@ class Settings(StrictModel):
     command_ttl_s: Annotated[float, Field(gt=0)] = 5.0
     command_response_timeout_s: Annotated[float, Field(gt=0)] = 5.0
     command_confirm_timeout_s: Annotated[float, Field(gt=0)] = 5.0
+    # 순찰 시작·종료: Bridge가 로봇 컴퓨터에서 노드를 띄우고 끄므로 더 길다
+    # (시작은 Nav2·위치 확인을 기다리고, 종료는 진행 중인 Nav2 목표 취소를 기다림)
+    command_start_response_timeout_s: Annotated[float, Field(gt=0)] = 10.0
+    command_start_confirm_timeout_s: Annotated[float, Field(gt=0)] = 60.0
+    command_stop_response_timeout_s: Annotated[float, Field(gt=0)] = 10.0
+    command_stop_confirm_timeout_s: Annotated[float, Field(gt=0)] = 30.0
     # 지도·waypoint 파일 (저장소 루트 기준 상대경로 또는 절대경로). 없으면 지도 API가 404
     map_yaml: str | None = None
     waypoints_yaml: str | None = None
-    patrol_ros_domain_id: Annotated[int, Field(ge=0, le=232)] | None = None
-    patrol_use_sim_time: bool = True
+    # 로봇용 경로(telemetry, commands/next·claim·result)의 공유 토큰 (Authorization: Bearer).
+    # 환경 변수 ROBOT_TOKEN이 우선, 없으면 이 파일(저장소 루트 기준 상대경로 또는 절대경로, git에 올리지 않음)
+    robot_token_file: str | None = None
+    # 토큰 없이 로봇용 경로를 열어 둔다. 127.0.0.1에서만 쓰는 로컬 개발용. 인터넷에 열 때는 false
+    allow_no_robot_token: bool = False
 
     @model_validator(mode="after")
     def ordered(self):

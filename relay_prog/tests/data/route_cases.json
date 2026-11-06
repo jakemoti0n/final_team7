@@ -1,0 +1,30 @@
+{
+  "_comment": "서버(dashboard/server/waypoints.py _validate)와 Bridge(launcher.validate_route)가 같은 결과를 내야 하는 사례. 지도 범위 x,y 0~10. error가 null이면 통과",
+  "bounds": {"x_min": 0, "y_min": 0, "x_max": 10, "y_max": 10},
+  "cases": [
+    {"name": "ok", "error": null, "waypoints": [
+      {"name": "A", "type": "pass", "x": 1, "y": 1, "yaw": 0, "wait_sec": 0},
+      {"name": "B", "type": "stop", "x": 9.5, "y": 2, "yaw": -124.0, "wait_sec": 5}]},
+    {"name": "empty", "error": "The final waypoint must be a stop", "waypoints": []},
+    {"name": "last pass", "error": "The final waypoint must be a stop", "waypoints": [
+      {"name": "A", "type": "pass", "x": 1, "y": 1, "yaw": 0, "wait_sec": 0}]},
+    {"name": "blank name", "error": "Each waypoint needs a name of 1–32 characters", "waypoints": [
+      {"name": "  ", "type": "stop", "x": 1, "y": 1, "yaw": 0, "wait_sec": 0}]},
+    {"name": "long name", "error": "Each waypoint needs a name of 1–32 characters", "waypoints": [
+      {"name": "abcdefghijklmnopqrstuvwxyz0123456", "type": "stop", "x": 1, "y": 1, "yaw": 0, "wait_sec": 0}]},
+    {"name": "duplicate", "error": "Waypoint names must be unique", "waypoints": [
+      {"name": "a", "type": "pass", "x": 1, "y": 1, "yaw": 0, "wait_sec": 0},
+      {"name": "A ", "type": "stop", "x": 1, "y": 1, "yaw": 0, "wait_sec": 0}]},
+    {"name": "bad type", "error": "Waypoint type must be pass or stop", "waypoints": [
+      {"name": "A", "type": "fly", "x": 1, "y": 1, "yaw": 0, "wait_sec": 0},
+      {"name": "B", "type": "stop", "x": 1, "y": 1, "yaw": 0, "wait_sec": 0}]},
+    {"name": "bool x", "error": "Waypoint x must be finite", "waypoints": [
+      {"name": "A", "type": "stop", "x": true, "y": 1, "yaw": 0, "wait_sec": 0}]},
+    {"name": "string yaw", "error": "Waypoint yaw must be finite", "waypoints": [
+      {"name": "A", "type": "stop", "x": 1, "y": 1, "yaw": "0", "wait_sec": 0}]},
+    {"name": "outside", "error": "Waypoint position must be inside the map", "waypoints": [
+      {"name": "A", "type": "stop", "x": 10.5, "y": 1, "yaw": 0, "wait_sec": 0}]},
+    {"name": "negative wait", "error": "wait_sec cannot be negative", "waypoints": [
+      {"name": "A", "type": "stop", "x": 1, "y": 1, "yaw": 0, "wait_sec": -1}]}
+  ]
+}

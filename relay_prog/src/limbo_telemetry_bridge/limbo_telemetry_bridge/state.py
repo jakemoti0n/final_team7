@@ -7,9 +7,15 @@ import time
 import uuid
 
 TOPICS = ('odom', 'lidar_raw', 'lidar_filtered', 'camera_raw')
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3   # v3: launcher (순찰 시작·종료, docs/CONTROL_API_DRAFT.md §1.3)
 PATROL_STATES = ('waiting_localization', 'patrolling', 'pausing', 'paused', 'completed', 'failed')
 REASON_LIMIT = 200
+
+
+def no_launcher():
+    """순찰 시작·종료를 맡지 않는 Bridge(시험 등). 서버는 이때 주행 시작·순찰 종료를 쌓지 않는다"""
+    return dict(commands=['pause', 'resume'], state='idle', pid=None, exit_code=None,
+                waypoints_revision=None, log=None, other_patrol_running=False)
 
 
 def utc_now():
@@ -18,8 +24,9 @@ def utc_now():
 
 class State:
     def __init__(self, robot_id='LIMBO-01', source_clock='ros_sim',
-                 monotonic=time.monotonic, utc=utc_now):
+                 monotonic=time.monotonic, utc=utc_now, launcher_status=no_launcher):
         self.robot_id, self.source_clock = robot_id, source_clock
+        self.launcher_status = launcher_status   # launcher.PatrolLauncher.status (스레드 안전, poll만 함)
         self.monotonic, self.utc = monotonic, utc
         self.started = monotonic()
         self.session_id = str(uuid.uuid4())
@@ -109,6 +116,7 @@ class State:
                 receive_hz=None if not topic['count'] or now-self.started < 5 else
                 sum(n for b, n in topic['buckets'] if bucket-50 < b <= bucket)/5.0,
             )
+        launcher = self.launcher_status()
         patrol_fields = (patrol['alive'] and patrol['fields']) or dict.fromkeys(
             ('state', 'waypoint_index', 'waypoint_count', 'waypoint_name', 'has_resumable_task', 'reason'))
         return dict(
@@ -128,4 +136,5 @@ class State:
                       position_std_m=None if pose is None else pose[4],
                       last_received_at=None if pose is None else pose[5],
                       age_ms=None if pose is None else max(0.0, (now-pose[6])*1000)),
+            launcher=launcher,
         )

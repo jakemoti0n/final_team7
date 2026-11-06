@@ -1,6 +1,6 @@
 # LIMBO 상태 전달 Bridge
 
-[PRD의 공통 전송 계약 v1](docs/PRD.md)에 순찰 상태·위치를 더한 **텔레메트리 v2**와 관제 명령(정지·재개)을 구현하는 별도 ROS2 Jazzy 워크스페이스다. v2와 명령 계약은 [`../docs/CONTROL_API_DRAFT.md`](../docs/CONTROL_API_DRAFT.md)에 있다. 기존 `limbo/` launch나 코드를 수정하지 않는다. 다만 순찰 상태 메시지 `PatrolState`는 `limbo/`의 `limbo_interfaces` 패키지에 있으므로, **`limbo/`를 먼저 빌드하고 그 설치본을 source해야 Bridge가 실행된다.** 네 센서 구독 콜백은 헤더·수신 UTC·누적 횟수와 odom의 평면 선속도/각속도 숫자만 추출한다. 원본 `Image.data`/`PointCloud2.data`에 접근하거나 메시지를 추가 저장·변환·전송하지 않는다. ROS2 자체 수신·역직렬화 비용은 발생한다.
+[PRD의 공통 전송 계약 v1](docs/PRD.md)에 순찰 상태·위치를 더한 **텔레메트리 v2**, 순찰 노드 실행 상태를 더한 **v3**, 관제 명령(정지·재개·주행 시작·순찰 종료)을 구현하는 별도 ROS2 Jazzy 워크스페이스다. v2와 명령 계약은 [`../docs/CONTROL_API_DRAFT.md`](../docs/CONTROL_API_DRAFT.md)에 있다. 기존 `limbo/` launch나 코드를 수정하지 않는다. 다만 순찰 상태 메시지 `PatrolState`는 `limbo/`의 `limbo_interfaces` 패키지에 있으므로, **`limbo/`를 먼저 빌드하고 그 설치본을 source해야 Bridge가 실행된다.** 네 센서 구독 콜백은 헤더·수신 UTC·누적 횟수와 odom의 평면 선속도/각속도 숫자만 추출한다. 원본 `Image.data`/`PointCloud2.data`에 접근하거나 메시지를 추가 저장·변환·전송하지 않는다. ROS2 자체 수신·역직렬화 비용은 발생한다.
 
 > **`tools/receiver.py`는 실제 Server Program(Dashboard 서버)을 대신하는 테스트용 Mock 서버(Mockup)다.** 실제 서버가 준비되지 않아도 Bridge의 JSON 전송과 장애 복구를 검증할 수 있도록 제공한다. 운영용 서버나 Dashboard UI가 아니며, 실제 서버에 연결할 때는 실행하지 않는다.
 
@@ -57,6 +57,7 @@ sudo apt install python3-venv python3-colcon-common-extensions python3-pytest py
 | `reliability` | `best_effort` 또는 `reliable` |
 | `durability` | `volatile` 또는 `transient_local` |
 | `depth` | Keep Last 깊이, 기본 1 |
+| `token_file` | `null`; 서버 로봇용 경로 토큰 파일(`Authorization: Bearer`). 환경 변수 `LIMBO_ROBOT_TOKEN`이 우선. 비우면 헤더를 안 보냄(로컬 개발). git에 올리지 않는다(예: `relay_prog/state/robot_token`). 만드는 법·서버 쪽 설정은 [Dashboard README](../dashboard/README.md) 「로봇 토큰과 인터넷 공개」 |
 | `control.*` | 순찰 상태·위치 토픽, TF 프레임, 정지·재개 서비스, 명령 long poll 대기(`command_wait_s`, 기본 10초)와 서비스 응답 제한(`service_timeout_s`, 기본 3초). 아래 둘째 표 |
 
 | 키 | 기본 토픽 | 형식 |
@@ -74,6 +75,17 @@ v2 순찰 상태·위치와 명령에 쓰는 `control` 항목:
 | `pose_topic` | `/amcl_pose` | `geometry_msgs/msg/PoseWithCovarianceStamped`. 위치 불확실성만 사용 |
 | `map_frame` → `base_frame` | `map` → `base_footprint` | 위치·방향은 이 TF를 0.5초마다 읽는다 |
 | `pause_service`, `resume_service` | `/patrol/pause`, `/patrol/resume` | `std_srvs/srv/Trigger` |
+
+주행 시작·순찰 종료(`start`·`stop` 명령)에 쓰는 `patrol_launch` 항목. Bridge가 **이 컴퓨터에서** `patrol_node`를 띄우고 끈다. 상대 경로는 Bridge를 실행한 디렉터리 기준이다(아래 실행 명령과 `start_dashboard.launch.py`는 저장소 루트에서 실행). Bridge는 시작할 때 이 경로들을 확인하고, 틀리면 ROS를 켜기 전에 어떤 설정의 어떤 경로가 왜 안 되는지 출력하고 끝난다.
+
+| 키 | 기본값 | 용도 |
+|---|---|---|
+| `ros_setup` | `/opt/ros/jazzy/setup.bash` | 순찰 노드를 띄우기 전에 source |
+| `workspace` | `limbo` | `install/setup.bash`와 `install/limbo_patrol/lib/limbo_patrol/patrol_node`가 있어야 함 (`limbo/`를 먼저 빌드) |
+| `waypoint_dir` | `relay_prog/state/waypoints` | 서버가 보낸 경로를 `dashboard_waypoints.yaml`로 원자적으로 저장(없으면 만듦, git 제외). 이 절대 경로를 `waypoints` 파라미터로 넘긴다 |
+| `use_sim_time` | `true` | 순찰 노드의 `use_sim_time`. **실물은 `false`** |
+
+순찰 노드의 `ROS_DOMAIN_ID`는 Bridge 프로세스 환경을 그대로 쓴다. 다른 터미널에서 띄운 `patrol_node`가 있으면 시작을 거절하고(2초마다 `/proc` 확인), 종료는 Bridge가 띄운 노드에만 SIGTERM을 보낸다. **Bridge를 끄면 Bridge가 띄운 순찰 노드도 같이 끈다**(15초 안에 안 끝나면 SIGKILL). 순찰 노드 출력은 `/tmp/limbo-patrol-*.log`에 남고 경로가 텔레메트리 `launcher.log`로 화면에 보인다. 계약은 [`../docs/CONTROL_API_DRAFT.md`](../docs/CONTROL_API_DRAFT.md) §1.3·§2.5.
 
 순찰 노드나 AMCL이 없어도 Bridge는 실행된다. v2의 `patrol`·`pose`는 객체 자체가 `null`이 되지 않는다. 순찰 상태를 한 번도 받지 못했다면 `patrol.update_count`는 0이고 나머지 내부 필드는 `null`이며, 위치를 한 번도 얻지 못했다면 `pose`의 내부 필드는 모두 `null`이다. 해당 순찰 서비스를 사용할 수 없을 때 명령 결과는 `service_unavailable`이 된다.
 
@@ -133,7 +145,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/commands -H 'Content-Type: application
 ROS2 토픽 → Bridge → 실제 Server Program(Dashboard 서버)
 ```
 
-1. 실제 서버가 [공통 전송 계약 v1](docs/PRD.md)의 `POST /api/v1/telemetry` 수신 API와 응답 규격을 구현했는지 확인한다.
+1. 실제 서버가 [공통 전송 계약 v1](docs/PRD.md)의 `POST /api/v1/telemetry` 수신 API와 응답 규격을 구현했는지 확인한다. 이 Bridge는 **v3**를 보내므로 서버도 v3를 받는 버전이어야 한다(옛 서버는 422로 거절). 서버를 먼저 업데이트한다.
 2. Bridge 설정 파일의 `server_url`을 실제 서버의 주소로 변경한다. 주소에는 `/api/v1/telemetry` 경로를 붙이지 않는다. 예를 들어 서버 PC의 주소가 `192.168.0.10`, 포트가 `8000`이면 `http://192.168.0.10:8000`으로 설정한다.
 3. 실제 서버를 실행하고, 위와 동일한 Bridge 실행 명령으로 시작한다. 이미 실행 중인 Bridge는 설정 변경 후 다시 시작한다.
 
@@ -163,7 +175,7 @@ ros2 topic info /rgbd_camera/image -v --no-daemon
 - 헤더는 ROS sec/nanosec 그대로 유지한다. 수신/전송 표시는 UTC, age·빈도·주기·재시도는 단조 증가 시계를 사용한다. `/clock` 정지·역행과 무관하게 전송한다.
 - 선속도는 `hypot(linear.x, linear.y)`, 각속도는 `angular.z`다. 어느 성분이든 무효이면 motion 네 필드 전체를 null로 보내며, odom 수신 횟수는 계속 증가한다.
 - 실패 후 완료 시점부터 1·2·4·8·10초 간격으로 재시도한다. 4xx/종료 세션은 10초 간격이다. 성공 후 기본 주기로 복귀한다. 동일 오류는 상태가 바뀔 때만 로그에 남긴다.
-- HTTP 200의 응답 필드·세션·순번·UTC를 검증한다. 리다이렉트를 따라가지 않는다. 요청/응답 본문은 각각 8 KiB로 제한한다. [aiohttp의 전체 timeout](https://docs.aiohttp.org/en/stable/client_reference.html#aiohttp.ClientTimeout)에 더해 전체 비동기 작업 deadline을 적용한다.
+- HTTP 200의 응답 필드·세션·순번·UTC를 검증한다. 리다이렉트를 따라가지 않는다. 요청/응답 본문은 각각 8 KiB로 제한한다(명령 가져오기 응답만 64 KiB: `start`에 waypoint 목록이 실림). [aiohttp의 전체 timeout](https://docs.aiohttp.org/en/stable/client_reference.html#aiohttp.ClientTimeout)에 더해 전체 비동기 작업 deadline을 적용한다.
 
 ## 독립 HTTP 검증
 

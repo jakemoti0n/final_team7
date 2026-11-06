@@ -30,7 +30,8 @@ def test_v2_patrol_and_pose_snapshot():
     state = State(monotonic=clock.mono, utc=clock.utc)
     first = state.snapshot()
     validate(first)
-    assert first['schema_version'] == 2
+    assert first['schema_version'] == 3
+    assert first['launcher']['commands'] == ['pause', 'resume'] and first['launcher']['state'] == 'idle'
     assert first['patrol']['update_count'] == 0
     assert all(v is None for k, v in first['patrol'].items() if k != 'update_count')
     assert all(v is None for v in first['pose'].values())
@@ -63,14 +64,20 @@ def test_v2_patrol_and_pose_snapshot():
 
 
 def test_v1_payload_still_valid_and_v2_rules_enforced():
-    v2 = State().snapshot()
+    v3 = State().snapshot()
+    v2 = {k: v for k, v in v3.items() if k != 'launcher'} | {'schema_version': 2}
+    validate(v2)
+    with pytest.raises(ValueError):
+        validate(v2 | {'launcher': v3['launcher']})                       # v2에 v3 필드
+    with pytest.raises(ValueError):
+        validate({**v3, 'launcher': {**v3['launcher'], 'pid': 5}})        # idle인데 pid
     v1 = {k: v for k, v in v2.items() if k not in ('patrol', 'pose')}
     v1['schema_version'] = 1
     validate(v1)
     for mutate in (lambda p: p.pop('patrol'),
                    lambda p: p['patrol'].update(state='paused'),          # 미수신인데 값
                    lambda p: p['pose'].update(x=1.0),                     # 일부만 채움
-                   lambda p: p.update(schema_version=3)):
+                   lambda p: p.update(schema_version=4)):
         payload = json.loads(json.dumps(v2))
         mutate(payload)
         with pytest.raises(ValueError):
@@ -241,7 +248,7 @@ def test_telemetry_keeps_flowing_while_service_hangs(server):
         before = server.accepted
         time.sleep(1.0)                           # 서비스를 기다리는 동안
         assert server.accepted - before >= 5      # 텔레메트리 0.1초 주기는 계속
-        assert server.latest['schema_version'] == 2
+        assert server.latest['schema_version'] == 3
     finally:
         sender.stop()
 

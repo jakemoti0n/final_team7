@@ -3,6 +3,7 @@ import logging
 import math
 from pathlib import Path
 import rclpy
+from rclpy.clock import Clock as WallClock
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.parameter import Parameter
@@ -14,7 +15,9 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, PointCloud2
 from std_srvs.srv import Trigger
 from tf2_ros import Buffer, TransformException, TransformListener
-from .config import load_config
+from urllib.parse import urlsplit
+from .config import load_config, resolve_patrol_launch, resolve_token
+from .launcher import LaunchError, PatrolLauncher
 from .state import State
 from .transport import Sender
 
@@ -22,6 +25,7 @@ from .transport import Sender
 # (docs/CONTROL_SCREEN.md B). /amcl_pose는 위치 불확실성(공분산)만 쓴다
 POSE_PERIOD_S = 0.5
 POSE_MAX_AGE_S = 1.0   # 이보다 오래된 TF(오도메트리 끊김)면 위치를 갱신하지 않는다 → 서버가 stale로 봄
+LAUNCHER_PERIOD_S = 2.0   # 다른 곳에서 띄운 patrol_node 검사 (/proc 읽기)
 
 
 def yaw_of(q):
@@ -29,11 +33,13 @@ def yaw_of(q):
 
 
 class BridgeNode(Node):
-    def __init__(self, config):
+    def __init__(self, config, patrol_launch, token=None):
         super().__init__('limbo_telemetry_bridge', parameter_overrides=[
             Parameter('use_sim_time', value=config['source_clock'] == 'ros_sim')])
-        self.state = State(config['robot_id'], config['source_clock'])
-        self.sender = Sender(self.state, config, controller=self)
+        self.launcher = PatrolLauncher(patrol_launch)
+        self.launcher.refresh()
+        self.state = State(config['robot_id'], config['source_clock'], launcher_status=self.launcher.status)
+        self.sender = Sender(self.state, config, controller=self, token=token)
         types = {'odom': Odometry, 'lidar_raw': PointCloud2,
                  'lidar_filtered': PointCloud2, 'camera_raw': Image}
         self.topic_subscriptions = []
@@ -69,7 +75,23 @@ class BridgeNode(Node):
         self.patrol_timer = self.create_timer(POSE_PERIOD_S, self._check_patrol_publisher)
         self.patrol_clients = {'pause': self.create_client(Trigger, control['pause_service']),
                          'resume': self.create_client(Trigger, control['resume_service'])}
+        # 벽시계 타이머: 시뮬레이션 시계가 멈춰도 검사가 돈다
+        self.launcher_timer = self.create_timer(LAUNCHER_PERIOD_S, self.launcher.refresh,
+                                                clock=WallClock())
         self.sender.start()
+
+    def launch(self, command):
+        """명령 작업 스레드에서 부른다 (start·stop). 거절 사유는 '코드: 설명' 문자열로 서버 result에 실림"""
+        try:
+            if command['command'] == 'start':
+                message = self.launcher.start(command['route'])
+            else:
+                message = self.launcher.stop()
+        except LaunchError as exc:
+            self.get_logger().warning(f"{command['command']} rejected: {exc}")
+            return False, str(exc)
+        self.get_logger().info(f"{command['command']}: {message}")
+        return True, message
 
     def call(self, command):
         """명령 작업(HTTP 스레드)에서 부른다. 서비스가 없으면 기다리지 않고 None."""
@@ -117,7 +139,10 @@ class BridgeNode(Node):
         return callback
 
     def destroy_node(self):
-        self.sender.stop()
+        try:
+            self.sender.stop()
+        finally:
+            self.launcher.shutdown()   # Bridge가 띄운 순찰 노드도 같이 끈다 (원격 일시정지 없이 계속 돌지 않게)
         return super().destroy_node()
 
 
@@ -126,11 +151,18 @@ def main(args=None):
     parser.add_argument('--config', type=Path, required=True)
     parsed, ros_args = parser.parse_known_args(args)
     config = load_config(parsed.config)
+    patrol_launch = resolve_patrol_launch(config)   # 잘못된 경로면 ROS를 켜기 전에 바로 알림
+    token = resolve_token(config)
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+    host = urlsplit(config['server_url']).hostname
+    if token and config['server_url'].startswith('http://') and host not in ('127.0.0.1', 'localhost', '::1'):
+        logging.warning('robot token is sent over plain HTTP to %s; use https:// outside the local network', host)
+    if not token:
+        logging.warning('no robot token configured; the server must allow requests without a token')
     rclpy.init(args=ros_args)
     node = None
     try:
-        node = BridgeNode(config)
+        node = BridgeNode(config, patrol_launch, token)
         rclpy.spin(node)
     except (KeyboardInterrupt, ExternalShutdownException):
         pass

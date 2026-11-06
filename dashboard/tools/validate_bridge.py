@@ -51,6 +51,7 @@ def main():
         with server() as url, tempfile.TemporaryDirectory(prefix='limbo-dashboard-') as tmp:
             config = yaml.safe_load((relay / 'src/limbo_telemetry_bridge/config/bridge.yaml').read_text())
             config['server_url'] = url
+            config['patrol_launch'].update(workspace=str(ROOT.parent / 'limbo'), waypoint_dir=str(Path(tmp) / 'waypoints'))  # 검증 중 실행 디렉터리와 무관하게 Bridge가 뜨도록 순찰 실행 경로를 절대 경로로
             config_path = Path(tmp) / 'bridge.yaml'
             config_path.write_text(yaml.safe_dump(config))
             with (ROOT / 'artifacts/bridge.log').open('w') as log:

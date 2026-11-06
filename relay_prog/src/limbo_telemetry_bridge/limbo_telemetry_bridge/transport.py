@@ -15,18 +15,31 @@ import aiohttp
 
 LOG = logging.getLogger(__name__)
 MAX_BYTES = 8192
-COMMANDS = ('pause', 'resume')
+COMMAND_MAX_BYTES = 65536   # start 명령은 waypoint 목록을 싣는다 (서버가 200개로 제한)
+COMMANDS = ('pause', 'resume', 'start', 'stop')
+LAUNCH_COMMANDS = ('start', 'stop')   # 서비스가 아니라 이 컴퓨터에서 patrol_node를 띄우고 끔
 MESSAGE_LIMIT = 200
+# 응답을 풀지 않고(auto_decompress=False) 크기를 세며 읽으므로 압축하지 말라고 요청한다.
+# 안 그러면 aiohttp 기본값(gzip, deflate) 때문에 Caddy 같은 앞단이 큰 응답(start의 waypoint 목록)을 압축해 JSON이 깨진다
+PLAIN_BODY = {'Accept-Encoding': 'identity'}
 # 서비스를 부르기 직전 서버에 "아직 유효한가"를 묻는 왕복 시간 한도. 넘으면 부르지 않는다.
 # ttl_ms만으로는 서버가 넘긴 뒤 Bridge가 읽기까지 걸린 시간을 알 수 없다 (2026-10-13 실패 시험 문제 1)
 CLAIM_MAX_RTT_S = 1.0
 
 
 def command_from(body):
-    """commands/next 200 응답 검증. 정의된 세 필드만 허용한다."""
+    """commands/next 200 응답 검증. 정의된 필드만 허용한다 (start만 route가 더 있음).
+    route 내용은 실행할 때 launcher.validate_route가 서버와 같은 규칙으로 검사한다."""
     reply = json.loads(body)
-    if not isinstance(reply, dict) or set(reply) != {'request_id', 'command', 'ttl_ms'}:
+    fields = {'request_id', 'command', 'ttl_ms'}
+    if isinstance(reply, dict) and reply.get('command') == 'start':
+        fields.add('route')
+    if not isinstance(reply, dict) or set(reply) != fields:
         raise ValueError('unexpected command fields')
+    if 'route' in fields and (not isinstance(reply['route'], dict)
+                              or set(reply['route']) != {'revision', 'bounds', 'waypoints'}
+                              or not isinstance(reply['route']['revision'], str)):
+        raise ValueError('invalid route')
     if not isinstance(reply['request_id'], str):
         raise ValueError('invalid request_id')
     uuid.UUID(reply['request_id'])
@@ -83,9 +96,12 @@ class Retry:
 
 
 class Sender:
-    def __init__(self, state, config, monotonic=time.monotonic, sleep=asyncio.sleep, controller=None):
-        # controller: call(command) -> 서비스 future 또는 None(서비스 없음). None이면 명령 작업을 안 돈다
+    def __init__(self, state, config, monotonic=time.monotonic, sleep=asyncio.sleep, controller=None, token=None):
+        # controller: call(command) -> 서비스 future 또는 None(서비스 없음),
+        #             launch(command) -> (성공 여부, 메시지) (start·stop). None이면 명령 작업을 안 돈다
         self.state, self.config, self.controller = state, config, controller
+        # 서버 로봇용 경로 인증. 모든 요청(텔레메트리·명령 가져오기·claim·결과)에 붙인다
+        self.auth = {'Authorization': f'Bearer {token}'} if token else {}
         self.monotonic, self.sleep = monotonic, sleep
         self.stop_event = threading.Event()
         self.thread = threading.Thread(target=self._thread_main, name='telemetry-http', daemon=True)
@@ -145,7 +161,7 @@ class Sender:
             # Includes DNS/connect/headers/body; redirects and decompression are disabled.
             async with asyncio.timeout(self.config['request_timeout_s']):
                 async with client.post(self.config['server_url'].rstrip('/') + '/api/v1/telemetry',
-                                       data=body, headers={'Content-Type': 'application/json'},
+                                       data=body, headers={'Content-Type': 'application/json', **self.auth},
                                        allow_redirects=False) as response:
                     if response.status != 200:
                         # Status is sufficient even when proxy body is absent or malformed.
@@ -168,7 +184,7 @@ class Sender:
         async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=self.config['request_timeout_s']),
                 connector=aiohttp.TCPConnector(limit=1), cookie_jar=aiohttp.DummyCookieJar(),
-                auto_decompress=False, read_bufsize=8192) as client:
+                auto_decompress=False, read_bufsize=8192, headers=PLAIN_BODY) as client:
             while not self.stop_event.is_set():
                 started = self.monotonic()
                 status, outcome = await self.post(client, self.state.snapshot())
@@ -176,6 +192,9 @@ class Sender:
                 if status != self.status:
                     LOG.log(logging.INFO if outcome == 'success' else logging.WARNING,
                             'transport=%s next_delay_s=%.2f', status, delay)
+                    if status == 'http_401':
+                        LOG.warning('server rejected the robot token: check token_file / LIMBO_ROBOT_TOKEN '
+                                    'matches the server ROBOT_TOKEN')
                     self.status = status
                 # Normal cadence is start-to-start; failures wait after completion.
                 deadline = (started if outcome == 'success' else self.monotonic()) + delay
@@ -192,14 +211,16 @@ class Sender:
         try:
             async with asyncio.timeout(control['command_wait_s'] + self.config['request_timeout_s']):
                 async with client.get(self.config['server_url'].rstrip('/') + '/api/v1/commands/next',
-                                      params=params, allow_redirects=False) as response:
+                                      params=params, headers=self.auth, allow_redirects=False) as response:
                     if response.status == 204:
                         return ('empty',)
                     if response.status != 200:
                         return (f'http_{response.status}', 'slow' if 400 <= response.status < 500 else 'failure')
-                    body = await response.content.read(MAX_BYTES + 1)
-                    if len(body) > MAX_BYTES:
-                        return ('response_too_large', 'failure')
+                    body = bytearray()
+                    async for chunk in response.content.iter_chunked(8192):
+                        body.extend(chunk)
+                        if len(body) > COMMAND_MAX_BYTES:
+                            return ('response_too_large', 'failure')
                     received = self.monotonic()
                     return ('command', command_from(body), received)
         except (ValueError, KeyError, TypeError, AttributeError):
@@ -214,7 +235,7 @@ class Sender:
         started = self.monotonic()
         try:
             async with asyncio.timeout(CLAIM_MAX_RTT_S):
-                async with client.post(url, data=body, headers={'Content-Type': 'application/json'},
+                async with client.post(url, data=body, headers={'Content-Type': 'application/json', **self.auth},
                                        allow_redirects=False) as response:
                     status = 'claimed' if response.status == 200 else 'refused'
         except (aiohttp.ClientError, TimeoutError, OSError) as exc:
@@ -235,6 +256,11 @@ class Sender:
         if rtt > CLAIM_MAX_RTT_S:
             return {**result, 'outcome': 'expired', 'message': f'claim too slow ({rtt:.2f} s)'}
         started = self.monotonic()
+        if command['command'] in LAUNCH_COMMANDS:
+            # 파일 저장·/proc 검사·프로세스 실행은 짧지만 막히는 작업이므로 별도 스레드에서
+            ok, message = await asyncio.to_thread(self.controller.launch, command)
+            return {**result, 'outcome': 'accepted' if ok else 'rejected', 'message': str(message)[:MESSAGE_LIMIT],
+                    'service_latency_ms': (self.monotonic() - started) * 1000}
         future = self.controller.call(command['command'])
         if future is None:
             return {**result, 'outcome': 'service_unavailable', 'message': 'patrol service not available'}
@@ -257,7 +283,7 @@ class Sender:
         body = json.dumps(result, allow_nan=False, separators=(',', ':')).encode('utf-8')
         try:
             async with asyncio.timeout(self.config['request_timeout_s'] + 1):
-                async with client.post(url, data=body, headers={'Content-Type': 'application/json'},
+                async with client.post(url, data=body, headers={'Content-Type': 'application/json', **self.auth},
                                        allow_redirects=False) as response:
                     return f'http_{response.status}'
         except (aiohttp.ClientError, TimeoutError, OSError) as exc:
@@ -269,7 +295,7 @@ class Sender:
         async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=control['command_wait_s'] + self.config['request_timeout_s']),
                 connector=aiohttp.TCPConnector(limit=1), cookie_jar=aiohttp.DummyCookieJar(),
-                auto_decompress=False, read_bufsize=8192) as client:
+                auto_decompress=False, read_bufsize=8192, headers=PLAIN_BODY) as client:
             while not self.stop_event.is_set():
                 fetched = await self.stoppable(self.fetch_command(client))
                 if fetched is None:

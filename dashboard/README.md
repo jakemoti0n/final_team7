@@ -5,12 +5,12 @@ FastAPI 수신·관제 서버와 React/TypeScript 관제 화면(LIMBO 관제). �
 
 - `/`: 실제 수신 화면. 순찰 상태에 따라 주행 시작·정지·재개가 한 버튼에 나타나며 waypoint 편집을 지원한다.
 - `/demo`: 독립 Mock 공급자. 실제 서버 API/WebSocket에 접속하지 않는다. 가상 데이터·알림·명령 결과는 이 페이지의 메모리에만 존재한다.
-- 서버 자체는 ROS2 Python 패키지를 가져오지 않는다. 주행 시작을 사용하려면 ROS 2 Jazzy와 빌드된 `limbo_patrol`, Bridge가 필요하다. 한 로봇, 단일 프로세스, 메모리 최신 상태 및 최근 알림 100건을 지원한다. 서버 재시작 시 관제 상태가 초기화되며 브라우저 새로고침은 서버 이력을 지우지 않는다.
+- 서버 자체는 ROS2를 쓰지 않는다. 주행 시작·순찰 종료도 서버는 명령을 쌓기만 하고, **로봇 컴퓨터의 Bridge**가 그 컴퓨터에서 `patrol_node`를 띄우고 끈다. 그래서 서버를 ROS가 없는 다른 컴퓨터(예: AWS)에 두어도 된다. 로봇 쪽에는 ROS 2 Jazzy, 빌드된 `limbo_patrol`, Bridge가 필요하다. 한 로봇, 단일 프로세스, 메모리 최신 상태 및 최근 알림 100건을 지원한다. 서버 재시작 시 관제 상태가 초기화되며 브라우저 새로고침은 서버 이력을 지우지 않는다.
 
 - `/`: 실제 관제 화면. 맨 위 상태 한 줄 요약(정상 / 확인 필요 / 연결 끊김), 순찰·이동 카드, 지도(로봇 위치·방향, 순찰 경로, 다음 목표, 로봇 따라가기), **일시정지·순찰 재개** 버튼, 접어 둔 「센서 수신 상세」(토픽 4개), 알림으로 구성된다. 두 버튼은 서버 명령 API를 거쳐 Bridge가 순찰 노드의 `/patrol/pause`·`/patrol/resume` 서비스를 부르는 **실제 제어**다. 프로그램 재시작 버튼은 없다.
 - `/demo`: 독립 Mock 공급자. 실제 서버 API/WebSocket에 접속하지 않는다. 가상 데이터·순찰·위치·알림·명령 결과는 이 페이지의 메모리에만 존재한다.
 - 서버는 ROS2 설치 없이 실행된다. 한 로봇, 단일 프로세스, 메모리 최신 상태, 마지막 명령 하나, 최근 알림 100건을 지원한다. 서버 재시작 시 초기화되며 브라우저 새로고침은 서버 이력을 지우지 않는다.
-- 순찰 상태·위치·제어는 텔레메트리 **v2**를 보내는 Bridge(`relay_prog`)와 순찰 노드(`limbo_patrol`)가 있어야 동작한다. v1 송신기만 연결하면 순찰 카드·지도 위 로봇은 비어 있고, 순찰 재개는 잠긴다. 일시정지는 눌러서 요청을 만들 수 있지만 v1 송신기는 명령을 가져가지 않으므로 실행되지 않는다(「버튼 잠금」 참고).
+- 순찰 상태·위치·제어는 텔레메트리 **v2 이상**을 보내는 Bridge(`relay_prog`)와 순찰 노드(`limbo_patrol`)가 있어야 동작한다. 주행 시작·순찰 종료는 **v3**(`launcher` 추가)를 보내는 Bridge가 있어야 열린다. v2를 보내는 이전 Bridge가 연결되면 두 버튼은 「로봇의 Bridge를 업데이트해야 사용할 수 있습니다」로 잠긴다. v1 송신기만 연결하면 순찰 카드·지도 위 로봇은 비어 있고, 순찰 재개는 잠긴다. 일시정지는 눌러서 요청을 만들 수 있지만 v1 송신기는 명령을 가져가지 않으므로 실행되지 않는다(「버튼 잠금」 참고).
 
 
 ## 명령 실행 디렉터리
@@ -62,7 +62,7 @@ ros2 launch limbo_bringup start_dashboard.launch.py
 
 서버가 준비되면 기본 브라우저에서 `http://127.0.0.1:8000/`을 자동으로 연다. 자동 열기를 끄려면 `open_browser:=false`를 붙인다.
 
-종료는 해당 터미널에서 `Ctrl+C`. 한 프로세스가 먼저 끝나도 launch가 다른 프로세스를 정리한다. 기존 Dashboard 서버나 Bridge가 실행 중이면 먼저 종료해야 한다. 기본 경로는 이 저장소의 `dashboard/`와 `relay_prog/`이며, 다른 배치에서는 `repo_root:=/absolute/path/to/repo`를 지정한다. `ros_domain_id` 기본값은 launch 파일에 지정된 `97`이다. 다른 도메인을 사용할 때는 `ros_domain_id:=번호`로 바꾸고, Dashboard의 `patrol_ros_domain_id` 설정도 같은 값으로 유지한다.
+종료는 해당 터미널에서 `Ctrl+C`. 한 프로세스가 먼저 끝나도 launch가 다른 프로세스를 정리한다. 기존 Dashboard 서버나 Bridge가 실행 중이면 먼저 종료해야 한다. 기본 경로는 이 저장소의 `dashboard/`와 `relay_prog/`이며, 다른 배치에서는 `repo_root:=/absolute/path/to/repo`를 지정한다. `ros_domain_id` 기본값은 launch 파일에 지정된 `97`이다. 다른 도메인을 사용할 때는 `ros_domain_id:=번호`로 바꾼다. 주행 시작 때 Bridge가 띄우는 순찰 노드도 Bridge 프로세스의 `ROS_DOMAIN_ID`를 그대로 쓴다(Dashboard 서버에는 ROS 설정이 없다).
 
 ## 실행·종료
 
@@ -74,7 +74,7 @@ cd /home/itkwon/limbo_ros2_workspace/final_team7/dashboard
 ```
 
 실제 수신: <http://127.0.0.1:8000/> · 가상 제어: <http://127.0.0.1:8000/demo>.
-종료는 `Ctrl+C`. 서버는 빌드된 UI를 직접 제공한다. `--workers`는 반드시 1이며, 상태 공유 저장소와 명령 대기열이 프로세스 메모리에 있으므로 다중 worker를 사용하지 않는다. 외부 인터넷 공개·인증은 범위 밖이다. 인증이 없으므로 화면에 접속할 수 있는 사람은 누구나 일시정지·재개를 누를 수 있다. 서버를 `127.0.0.1` 밖으로 열 때 이 점을 고려한다.
+종료는 `Ctrl+C`. 서버는 빌드된 UI를 직접 제공한다. `--workers`는 반드시 1이며, 상태 공유 저장소와 명령 대기열이 프로세스 메모리에 있으므로 다중 worker를 사용하지 않는다. 기본 `config.json`은 로컬 개발용이라 로봇 토큰 없이 연다(`allow_no_robot_token: true`). 서버 자체에는 화면 로그인이 없으므로 `127.0.0.1` 밖으로 열 때는 아래 「로봇 토큰과 인터넷 공개」를 따른다.
 
 개발 시에는 위 일반 실행 서버를 종료하고 다음 두 터미널을 사용한다.
 
@@ -94,19 +94,79 @@ corepack pnpm dev
 
 개발 UI는 <http://127.0.0.1:5173/>. Vite가 `/api` HTTP/WebSocket과 `/healthz`를 8000으로 프록시한다. 양쪽 터미널에서 `Ctrl+C`로 종료한다. 서버 포트를 바꾸면 개발 프록시의 대상도 `ui/vite.config.ts`에서 맞춘다.
 
+## 로봇 토큰과 인터넷 공개
+
+서버의 경로는 두 종류다.
+
+| 종류 | 경로 | 보호 |
+|---|---|---|
+| 로봇용 (Bridge가 부름) | `POST /api/v1/telemetry`, `GET /api/v1/commands/next`, `POST /api/v1/commands/{id}/claim`, `POST /api/v1/commands/{id}/result` | 서버가 **공유 토큰**으로 검사: `Authorization: Bearer <토큰>`. 없거나 틀리면 401 `unauthorized` |
+| 브라우저용 | 화면(`/`, `/demo`, `/assets`), 나머지 `/api/v1/*`(명령 요청·상태·WebSocket·지도·waypoint), `/healthz` | 서버는 검사하지 않는다. 인터넷에 열 때는 **앞단 Caddy의 basic auth**로 막는다(로봇용 4경로는 basic auth에서 빼고 토큰만). 배포는 `docs/AWS_DEPLOY.md` |
+
+토큰은 서버와 Bridge가 **같은 값**을 쓴다. git에 올리지 않는다. 16자 이상, 공백 없이. 만들기:
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+서버가 토큰을 읽는 순서: 환경 변수 `ROBOT_TOKEN` → `config.json`의 `robot_token_file`(파일 내용, 저장소 루트 기준 상대경로 또는 절대경로). 둘 다 없으면 `allow_no_robot_token: true`일 때만 토큰 없이 열고, 아니면 **서버가 시작하지 않는다**(`RuntimeError: Set ROBOT_TOKEN or robot_token_file`). 파일이 없거나 비었거나 짧아도 시작하지 않는다.
+
+Bridge가 토큰을 읽는 순서: 환경 변수 `LIMBO_ROBOT_TOKEN` → `bridge.yaml`의 `token_file`. 둘 다 없으면 헤더를 보내지 않는다. 서버가 401을 돌려주면 Bridge는 10초 간격으로 다시 시도하며 `server rejected the robot token` 경고를 남긴다. 토큰을 `http://`로 다른 컴퓨터에 보내면(평문) 시작할 때 경고한다. 인터넷 너머는 `https://`를 쓴다.
+
+**로컬 개발(127.0.0.1)**: 기본 설정 그대로면 토큰 없이 된다(서버 `allow_no_robot_token: true`, Bridge `token_file: null`). 로컬에서 토큰까지 시험하려면:
+
+```bash
+# 저장소 루트에서. relay_prog/state/는 git에서 제외됨
+mkdir -p relay_prog/state
+python3 -c "import secrets; print(secrets.token_urlsafe(32))" > relay_prog/state/robot_token
+chmod 600 relay_prog/state/robot_token
+
+# 서버 (dashboard에서): 토큰을 환경 변수로
+cd dashboard
+ROBOT_TOKEN=$(cat ../relay_prog/state/robot_token) .venv/bin/python -m uvicorn server.app:app --host 127.0.0.1 --port 8000 --workers 1
+
+# Bridge (다른 터미널, 저장소 루트에서): 환경 변수로 주거나 bridge.yaml에 token_file: relay_prog/state/robot_token
+LIMBO_ROBOT_TOKEN=$(cat relay_prog/state/robot_token) ros2 run limbo_telemetry_bridge bridge --config relay_prog/src/limbo_telemetry_bridge/config/bridge.yaml
+
+# 확인: 토큰 없으면 401, 있으면 422(본문 검사까지 감)
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H 'content-type: application/json' -d '{}' http://127.0.0.1:8000/api/v1/telemetry
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H 'content-type: application/json' -H "Authorization: Bearer $(cat ../relay_prog/state/robot_token)" -d '{}' http://127.0.0.1:8000/api/v1/telemetry
+```
+
+환경 변수 `ROBOT_TOKEN`이 있으면 `allow_no_robot_token: true`여도 토큰을 검사한다. 가상 송신기도 `--token`(기본값은 환경 변수 `ROBOT_TOKEN`)으로 헤더를 붙인다.
+
+## 인터넷(AWS) 배포
+
+컨테이너 두 개(관제 서버 + Caddy)로 올린다. 처음부터 끝까지의 순서는 [docs/AWS_DEPLOY.md](../docs/AWS_DEPLOY.md)를 따른다.
+
+| 파일 | 내용 |
+|---|---|
+| `Dockerfile` | UI 빌드(node 24, pnpm lockfile 그대로) → Python 3.12 서버. `uvicorn --workers 1` 고정, root 아닌 사용자. 빌드 context는 저장소 루트(지도·기본 waypoint가 `limbo/`에 있음), 넣는 파일은 `Dockerfile.dockerignore`가 고름 |
+| `docker-compose.yml` | `dashboard`(8000, 밖으로 안 엶) + `caddy`(80·443). 볼륨: `waypoints`(편집한 waypoint), `caddy_data`(인증서) |
+| `Caddyfile` | HTTPS 자동 발급, 화면·브라우저 API는 basic auth, 로봇용 4경로와 `/healthz`는 basic auth 없이 서버로(로봇은 토큰) |
+| `.env.example` | `DOMAIN`, `BASIC_AUTH_USER`/`BASIC_AUTH_HASH`, `ROBOT_TOKEN`, `MAP_YAML`, `INITIAL_WAYPOINTS`. 복사해 `.env`로(git 제외) |
+| `deploy/config.json`, `deploy/entrypoint.sh` | 컨테이너용 설정(waypoint는 `/data/waypoints.yaml`, `allow_no_robot_token: false`). 처음 시작 때 볼륨이 비었으면 `INITIAL_WAYPOINTS`를 복사하고, `MAP_YAML`을 설정에 끼운 뒤 서버 실행 |
+
 ## 주행 시작·정지·재개·종료
 
-실제 화면의 제어 버튼은 Bridge가 보고한 순찰 상태에 따라 **주행 시작 → 주행 정지 → 주행 재개**로 바뀐다. 정지는 기존 `/patrol/pause` 서비스를 이용하는 **일시정지**이며 노드를 종료하지 않는다. 재개는 `/patrol/resume`으로 현재 순찰을 이어 간다. 시작은 Dashboard 서버가 설치된 `limbo_patrol`의 `patrol_node` 실행 파일을 직접 실행한다. 시작 요청은 Bridge 연결과 순찰 상태를 확인하며, 기존 `patrol_node` 프로세스가 있으면 중복 실행을 거부한다.
+실제 화면의 제어 버튼은 Bridge가 보고한 순찰 상태에 따라 **주행 시작 → 주행 정지 → 주행 재개**로 바뀐다. 정지는 기존 `/patrol/pause` 서비스를 이용하는 **일시정지**이며 노드를 종료하지 않는다. 재개는 `/patrol/resume`으로 현재 순찰을 이어 간다. 주행 정지는 일시정지, **순찰 종료**는 노드 종료다.
 
-Dashboard 시작은 `waypoints_yaml`의 **절대 경로**를 `waypoints` ROS 파라미터로 전달하므로 화면에서 편집한 바로 그 파일을 읽는다. 기본 `config.json`의 `patrol_ros_domain_id`는 이 작업 환경의 `97`이고 `patrol_use_sim_time`은 `true`다. 다른 도메인이나 실제 로봇을 쓰면 이 설정을 맞춘 뒤 Dashboard 서버를 다시 시작한다. ROS 환경은 `/opt/ros/jazzy/setup.bash`와 `limbo/install/setup.bash`에서 읽는다. 시작 로그 경로는 `/api/v1/patrol/start` 응답에 들어간다. Dashboard 서버를 재시작해도 이미 시작한 순찰 노드는 계속 실행되며 Bridge 상태를 다시 읽어 주행 버튼을 결정한다. **순찰 종료** 버튼은 Dashboard가 현재 서버 실행 중에 시작한 노드에 SIGTERM을 보낸다. 순찰 노드는 진행 중인 Nav2 목표를 취소하고 취소 결과를 받은 뒤 종료한다. 실제 노드가 종료된 것을 확인하면 주행 버튼이 다시 **주행 시작**으로 바뀌며, Bridge에 오래된 순찰 상태가 남아 있어도 새 노드를 시작할 수 있다. 별도 터미널에서 시작한 노드나 서버 재시작 전에 시작한 노드는 이 버튼의 종료 대상이 아니다. 주행 정지는 일시정지, 순찰 종료는 노드 종료다.
+네 동작 모두 같은 명령 통로를 쓴다: 화면 → `POST /api/v1/commands` → 서버 대기열 → Bridge가 `commands/next`로 가져가 `claim` → 실행 → `result` 보고 → 서버가 텔레메트리로 확인. 서버는 subprocess도 ROS도 쓰지 않는다. 로봇은 서버로 나가는 HTTP(S) 연결만 쓰므로 로봇 쪽에 들어오는 포트를 열 필요가 없다.
 
-일반 터미널에서 `ros2 run limbo_patrol patrol_node`를 파라미터 없이 실행하면 설치된 패키지의 `test_waypoints.yaml`을 읽는다. 현재 환경에서는 설치 파일이 원본 YAML의 별도 사본이므로 Dashboard의 변경이 그 수동 실행에는 자동으로 반영되지 않는다. 수동 실행에서도 편집한 경로를 쓰려면 `-p waypoints:=/home/david/limbo/limbo/src/limbo_patrol/config/test_waypoints.yaml`처럼 파일의 절대 경로를 지정한다.
+- **주행 시작**(`start`): 서버는 명령을 만드는 순간 `waypoints_yaml`을 읽어 검사하고, waypoint 목록·`revision`·지도 범위를 명령에 담는다(서버 YAML이 원본). Bridge는 받은 목록을 서버와 같은 규칙으로 다시 검사한 뒤, 로봇 컴퓨터의 `patrol_launch.waypoint_dir/dashboard_waypoints.yaml`에 원자적으로 저장하고(임시 파일 → `os.replace`) 그 **절대 경로**를 `waypoints` 파라미터로 넘겨 `patrol_node`를 띄운다. 순찰 노드가 `waiting_localization` 또는 `patrolling`을 보고하면 성공이다(기본 60초, `command_start_confirm_timeout_s`). 노드가 그 전에 끝나면 종료 코드와 로봇 쪽 로그 경로를 담아 실패로 끝낸다.
+- **순찰 종료**(`stop`): Bridge가 **자기가 띄운** 노드에만 SIGTERM을 보낸다. 순찰 노드는 진행 중인 Nav2 목표를 취소하고 취소 결과를 받은 뒤 끝난다. Bridge가 노드 종료를 보고하거나 순찰 상태가 사라지면 성공이다(기본 30초, `command_stop_confirm_timeout_s`). 다른 터미널에서 띄운 노드는 끌 수 없다(버튼에 「다른 곳에서 띄운 순찰 노드는 여기서 끌 수 없습니다」).
+- **중복 실행 거부**: 이미 순찰 노드가 돌고 있으면 시작 버튼이 잠기고, 서버도 409 `patrol_already_running`으로 거절한다. Bridge는 로봇 컴퓨터의 `/proc`를 2초마다 검사해 다른 터미널에서 띄운 `patrol_node`도 `other_patrol_running`으로 보고하고, 실행 직전에도 다시 검사해 있으면 `rejected`(사유 `patrol_already_running`)로 알린다.
+- 노드가 끝났는데 Bridge에 오래된 순찰 상태가 남아 있어도(`launcher.state`가 `exited`) 주행 버튼은 **주행 시작**으로 돌아온다.
+- **Bridge를 끄면 Bridge가 띄운 순찰 노드도 SIGTERM으로 같이 끈다**(Bridge 없이는 화면에서 일시정지도 할 수 없으므로). 15초 안에 안 끝나면 그때만 SIGKILL.
+- Bridge 쪽 설정(ROS setup 경로, 워크스페이스, waypoint 저장 디렉터리, `use_sim_time`)은 [relay_prog README](../relay_prog/README.md) 「설정」의 `patrol_launch`를 본다.
+
+일반 터미널에서 `ros2 run limbo_patrol patrol_node`를 파라미터 없이 실행하면 설치된 패키지의 `test_waypoints.yaml`을 읽는다. 화면에서 편집한 경로는 주행 시작 때 로봇으로 보내지므로 그 수동 실행에는 반영되지 않는다. 수동 실행에서도 편집한 경로를 쓰려면 한 번 화면에서 시작한 뒤 생긴 `-p waypoints:=<저장소>/relay_prog/state/waypoints/dashboard_waypoints.yaml`을 지정한다.
 
 ## Waypoint 지도 편집
 
-실제 화면(`/`)에서 주행 제어 버튼과 순찰 종료 버튼 아래의 Waypoint 목록을 조회하고 `새 지점 만들기`, `이름 변경`, `위치 교체`, `삭제`를 사용할 수 있다. 목록의 ⋮⋮ 손잡이를 다른 행으로 끌어 놓으면 순서가 바뀐다. 마지막 지점은 `stop`이어야 하므로 이를 어기는 순서 변경은 저장하지 않는다. 추가하거나 위치를 바꿀 때 지도를 클릭하여 좌표를 고른다. 저장하면 `config.json`의 `waypoints_yaml` 파일에 반영되고 목록과 지도도 갱신된다. 기본 설정은 `limbo/src/limbo_patrol/config/test_waypoints.yaml`이다. 다른 월드 또는 순찰 파일을 쓸 때는 `map_yaml`과 `waypoints_yaml`을 실제 실행 설정에 맞추고 Dashboard 서버를 다시 시작해야 한다.
+실제 화면(`/`)에서 주행 제어 버튼과 순찰 종료 버튼 아래의 Waypoint 목록을 조회하고 `새 지점 만들기`, `이름 변경`, `위치 교체`, `삭제`를 사용할 수 있다. 목록의 ⋮⋮ 손잡이를 다른 행으로 끌어 놓으면 순서가 바뀐다. 마지막 지점은 `stop`이어야 하므로 이를 어기는 순서 변경은 저장하지 않는다. 추가하거나 위치를 바꿀 때 지도를 클릭하여 좌표를 고른다. 저장하면 서버 컴퓨터의 `config.json`의 `waypoints_yaml` 파일(원본)에 반영되고 목록과 지도도 갱신된다. 로봇에는 다음 **주행 시작** 때 명령에 실려 전달된다. 기본 설정은 `limbo/src/limbo_patrol/config/test_waypoints.yaml`이다. 다른 월드 또는 순찰 파일을 쓸 때는 `map_yaml`과 `waypoints_yaml`을 실제 실행 설정에 맞추고 Dashboard 서버를 다시 시작해야 한다.
 
-순찰 노드는 시작할 때 waypoint 파일을 한 번 읽어 메모리에 보관한다. 주행 중과 일시정지 중에는 waypoint 추가·이름 변경·위치 교체·삭제·순서 변경을 사용할 수 없고, 버튼에 마우스를 올리면 "주행 완료 후 변경 가능합니다"가 표시된다. 저장 API도 해당 상태의 변경을 거절한다. 순찰이 완료되거나 노드가 종료된 뒤 편집한 경로는 다음 순찰 시작 시 적용된다. 파일은 저장 중 문제가 생겨도 기존 내용을 지키도록 원자적으로 교체한다. 다른 편집자가 먼저 파일을 바꾸면 저장 요청이 거절되고 화면의 목록을 다시 불러온다. 마지막 지점은 `stop`이어야 하므로 마지막 정지 지점을 바로 삭제할 수 없다. 새 `pass` 지점은 마지막 정지 지점 앞에 삽입된다. 새 지점의 `yaw`와 `wait_sec`는 0으로 저장하고, 기존 지점을 이동할 때 기존 값은 유지한다.
+순찰 노드는 시작할 때 waypoint 파일을 한 번 읽어 메모리에 보관한다. 주행 중과 일시정지 중에는 waypoint 추가·이름 변경·위치 교체·삭제·순서 변경을 사용할 수 없고, 버튼에 마우스를 올리면 "주행 완료 후 변경 가능합니다"가 표시된다. 저장 API도 409 `patrol_active`로 거절한다. 판단 근거는 Bridge가 보고한 상태다: Bridge가 띄운 노드가 실행 중이거나, 다른 곳에서 띄운 노드가 있거나, 순찰 상태가 활성(위치 확인 중·순찰 중·멈추는 중·일시정지)인데 Bridge가 띄운 노드가 끝났다고 하지 않은 경우. 주행 시작·순찰 종료 요청을 처리하는 동안에도 잠근다(보낸 경로와 파일이 어긋나지 않게). 순찰이 완료되거나 노드가 종료된 뒤 편집한 경로는 다음 순찰 시작 시 적용된다. 파일은 저장 중 문제가 생겨도 기존 내용을 지키도록 원자적으로 교체한다. 다른 편집자가 먼저 파일을 바꾸면 저장 요청이 거절되고 화면의 목록을 다시 불러온다. 마지막 지점은 `stop`이어야 하므로 마지막 정지 지점을 바로 삭제할 수 없다. 새 `pass` 지점은 마지막 정지 지점 앞에 삽입된다. 새 지점의 `yaw`와 `wait_sec`는 0으로 저장하고, 기존 지점을 이동할 때 기존 값은 유지한다.
 
 API: `GET /api/v1/waypoints`로 목록과 `revision`을 읽고, `PUT /api/v1/waypoints`에 `revision` 및 변경 작업을 보낸다. 작업은 `add`(`waypoint`의 `name/type/x/y`), `move`(`name/x/y`), `delete`(`name`), `rename`(`name/new_name`), `reorder`(`order`에 현재 이름 전체를 원하는 순서로 지정)다. `GET /api/v1/map`도 저장된 목록을 다시 읽는다.
 
@@ -132,8 +192,14 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 | `command_ttl_s` | 5초. 이 안에 Bridge가 가져가지 않으면 `expired`(실행 안 함) |
 | `command_response_timeout_s` | 5초. 전달(또는 claim) 후 로봇 응답 제한, 넘으면 `no_response` |
 | `command_confirm_timeout_s` | 5초. 응답 후 순찰 상태로 확인하는 제한, 넘으면 `unconfirmed` |
+| `command_start_response_timeout_s` / `command_start_confirm_timeout_s` | 10초 / 60초. 주행 시작 전용 (노드 기동·위치 확인을 기다림) |
+| `command_stop_response_timeout_s` / `command_stop_confirm_timeout_s` | 10초 / 30초. 순찰 종료 전용 (Nav2 목표 취소 후 노드 종료를 기다림) |
 | `map_yaml` | `limbo/src/limbo_navigation/maps/human_test_map.yaml`. 생략하면 지도 API가 404 |
-| `waypoints_yaml` | `limbo/src/limbo_patrol/config/test_waypoints.yaml`. 지도 위 순찰 경로 |
+| `waypoints_yaml` | `limbo/src/limbo_patrol/config/test_waypoints.yaml`. 순찰 경로의 원본. 주행 시작 명령에 실려 로봇으로 간다 |
+| `robot_token_file` | `null`. 로봇용 경로 토큰 파일. 환경 변수 `ROBOT_TOKEN`이 우선 (「로봇 토큰과 인터넷 공개」) |
+| `allow_no_robot_token` | 기본 `config.json`은 `true`(로컬 개발), 설정에서 빼면 `false`. 토큰이 없을 때 로봇용 경로를 열어 둘지. **인터넷에 열 때는 `false`** |
+
+예전 `patrol_ros_domain_id`·`patrol_use_sim_time`은 지웠다(서버가 순찰 노드를 띄우지 않으므로). 설정 파일에 남아 있으면 서버가 시작하지 않으니 지운다. 같은 역할은 Bridge 프로세스의 `ROS_DOMAIN_ID`와 `bridge.yaml`의 `patrol_launch.use_sim_time`이 한다.
 
 `map_yaml`·`waypoints_yaml`은 절대경로이거나 **저장소 루트 기준** 상대경로다. 지도는 8비트 P5 PGM만 읽으며 서버 시작 때 한 번만 읽는다. 읽기에 실패하면 서버는 그대로 뜨고 로그에 `map not loaded`를 남기며, 화면에는 「서버에 지도가 설정되지 않았습니다」가 보인다. 지도나 waypoint를 바꾸면 서버를 다시 실행한다.
 
@@ -147,18 +213,18 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 - 상태 한 줄 요약: 서버 문제·로봇 연결 끊김이면 `연결 끊김`, 연결 확인 중·수신 지연이나 수신 중이 아닌 토픽이 있으면 `확인 필요`(해당 토픽 이름 표시), 그 외는 `정상`.
 - 순찰 카드: v2 `patrol.state`(위치 확인 중·순찰 중·멈추는 중·일시정지·순찰 완료·순찰 실패)와 다음 목표를 보인다. 연결이 원활하지 않으면 회색 `(마지막 상태)`로 표시한다. 받은 적은 있는데 상태가 비면 `순찰 상태 확인 불가`(순찰 노드 꺼짐)다. 순찰 노드가 사유로 이동 실패를 알리면 `순찰 중 · 이동 다시 시도 (n/m)` 또는 `이동 실패 · 확인 후 재개`로 바꾸고, 서버가 알림도 남긴다(순찰이 다시 진행되면 닫힘).
 - 지도: 로봇 위치는 v2 `pose`(지도 좌표)로 그리며, 원은 위치 표준편차의 2배다. pose age가 odom 지연 기준 이상이거나 연결이 불확실하면 `위치 확인 불가 · 마지막 위치`로 흐리게 표시한다. 「로봇 따라가기」는 로봇 중심 10 m 범위를 보인다.
-- 버튼 잠금: 서버 문제나 로봇 연결이 `연결됨`이 아니면 둘 다 잠긴다. 처리 중인 요청이 있어도 잠긴다. 일시정지는 순찰 노드가 이미 `paused`·`pausing`이라고 알린 경우만 잠그며, **순찰 상태를 모를 때(v1 연결, 순찰 노드 꺼짐)는 열어 둔다**(멈추는 쪽은 막지 않음). 순찰 재개는 순찰 노드의 `has_resumable_task`가 참일 때만 열린다(속도로 추정하지 않음).
-- 명령 결과: 서버 단계 `queued → delivered → accepted → confirmed`를 화면의 3단계(서버 접수·로봇 응답·상태 확인)로 보인다. **성공은 서버가 `confirmed`라고 판정한 것만**이다. 서버는 명령 이후 Bridge가 센 순찰 상태 수신 횟수가 늘고, 재개는 `patrolling`, 일시정지는 `paused`이면서 odom 기준 정지 속도일 때 확인한다. 그 밖의 결과는 `rejected`·`service_unavailable`·`expired`(실패), `no_response`·`unconfirmed`·`connection_lost`(확인 불가)다. 자동 재전송하지 않으며 결과는 1분 뒤 한 줄로 접힌다.
+- 버튼 잠금: 서버 문제나 로봇 연결이 `연결됨`이 아니면 모두 잠긴다. 주행 시작·순찰 종료는 Bridge가 v3 `launcher`를 보고해야 열리고, 순찰 종료는 Bridge가 띄운 노드가 실행 중일 때만 열린다. 처리 중인 요청이 있어도 잠긴다. 일시정지는 순찰 노드가 이미 `paused`·`pausing`이라고 알린 경우만 잠그며, **순찰 상태를 모를 때(v1 연결, 순찰 노드 꺼짐)는 열어 둔다**(멈추는 쪽은 막지 않음). 순찰 재개는 순찰 노드의 `has_resumable_task`가 참일 때만 열린다(속도로 추정하지 않음).
+- 명령 결과: 서버 단계 `queued → delivered → accepted → confirmed`를 화면의 3단계(서버 접수·로봇 응답·상태 확인)로 보인다. **성공은 서버가 `confirmed`라고 판정한 것만**이다. 서버는 명령 이후 Bridge가 센 순찰 상태 수신 횟수가 늘고, 재개는 `patrolling`, 일시정지는 `paused`이면서 odom 기준 정지 속도, 주행 시작은 `waiting_localization`·`patrolling`일 때 확인한다. 순찰 종료는 Bridge의 노드 종료 보고나 순찰 상태가 사라진 것으로 확인한다. 그 밖의 결과는 `rejected`·`service_unavailable`·`expired`(실패), `no_response`·`unconfirmed`·`connection_lost`(확인 불가)다. 자동 재전송하지 않으며 결과는 1분 뒤 한 줄로 접힌다.
 
 ## 인터페이스와 구조
 
 | 경로 | 역할 |
 |---|---|
-| `POST /api/v1/telemetry` | 텔레메트리 v1 또는 v2(`patrol`·`pose` 추가), 최대 UTF-8 8192바이트 |
+| `POST /api/v1/telemetry` | 텔레메트리 v1, v2(`patrol`·`pose` 추가) 또는 v3(`launcher` 추가), 최대 UTF-8 8192바이트 |
 | `GET /api/v1/state` | 전체 현재 판정, 마지막 값, 순찰·위치, 마지막 명령, 설정, 알림 |
 | `WS /api/v1/stream` | 연결 즉시, 새 유효 수신·명령 변화 시, 1초 타이머마다 전체 상태 |
-| `POST /api/v1/commands` | 화면 → 서버. `{"command":"pause"\|"resume"}`. 202와 요청 정보, 처리 중이면 409 `command_in_progress`, 로봇 연결이 `connected`가 아니면 409 `bridge_not_connected` |
-| `GET /api/v1/commands/next` | Bridge → 서버. `robot_id`, `bridge_session_id`, `wait_s`(최대 10초 long poll). 명령이 있으면 `request_id`·`command`·`ttl_ms`, 없으면 204. 현재 세션에 한 번만 내준다 |
+| `POST /api/v1/commands` | 화면 → 서버. `{"command":"pause"\|"resume"\|"start"\|"stop"}`. 202와 요청 정보, 처리 중이면 409 `command_in_progress`, 로봇 연결이 `connected`가 아니면 409 `bridge_not_connected`. start·stop은 추가로 409 `bridge_unsupported`(이전 Bridge)·`patrol_already_running`·`patrol_not_running`·`invalid_route`, 503 `waypoints_unavailable` |
+| `GET /api/v1/commands/next` | Bridge → 서버. `robot_id`, `bridge_session_id`, `wait_s`(최대 10초 long poll). 명령이 있으면 `request_id`·`command`·`ttl_ms`(start는 `route`도: `revision`·`bounds`·`waypoints`), 없으면 204. 현재 세션에 한 번만 내준다 |
 | `POST /api/v1/commands/{request_id}/claim` | Bridge가 서비스를 부르기 직전 아직 유효한지 확인. 허락되면 응답 제한을 이 시각부터 다시 센다. 끝난 명령이면 409 `command_closed` |
 | `POST /api/v1/commands/{request_id}/result` | Bridge의 결과 보고(`accepted`·`rejected`·`no_response`·`service_unavailable`·`expired`). 끝난 명령의 늦은 보고는 결과를 바꾸지 않는다 |
 | `GET /api/v1/map` | 지도 메타데이터(해상도·원점·크기·waypoint). 지도 미설정 시 404 `map_not_configured` |
@@ -167,7 +233,7 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 
 명령 API 본문도 텔레메트리와 같이 `application/json`, 8192바이트 이하만 받는다. 명령은 한 번에 하나만 처리하며 마지막 명령은 다음 명령 전까지 스냅샷에 남는다.
 
-스냅샷에는 `server_run_id`, `revision`, `server_utc`, `robot_id`, `bridge`, `topics`, `motion`, `alerts`, `settings`, `patrol`, `pose`, `command`, `map_available`이 포함된다. v1 Bridge면 `patrol`·`pose`는 null이다. `motion.current`와 `motion.last_valid`, 토픽 `receive_hz`와 `last_receive_hz`를 구분한다. `patrol`·`pose`·`command`의 `age_s`는 서버가 잰 값이며 브라우저 시계와 비교하지 않는다. 이전 run의 revision과 새 서버 revision을 비교하지 않는다.
+스냅샷에는 `server_run_id`, `revision`, `server_utc`, `robot_id`, `bridge`, `topics`, `motion`, `alerts`, `settings`, `patrol`, `pose`, `command`, `map_available`, `launcher`, `patrol_running`이 포함된다. v1 Bridge면 `patrol`·`pose`, v1·v2 Bridge면 `launcher`가 null이다. `patrol_running`은 서버가 판단한 "순찰 노드가 돌고 있음"(시작 거절·편집 잠금 기준)이다. `motion.current`와 `motion.last_valid`, 토픽 `receive_hz`와 `last_receive_hz`를 구분한다. `patrol`·`pose`·`command`의 `age_s`는 서버가 잰 값이며 브라우저 시계와 비교하지 않는다. 이전 run의 revision과 새 서버 revision을 비교하지 않는다.
 
 스키마는 누락·추가 필드, 숫자 강제 변환, bool 숫자, NaN/Infinity, 음수 범위, 비UTC 시각, null 관계를 검사한다. v2는 `patrol`·`pose`가 모두 있어야 하고 v1은 둘 다 없어야 한다. motion은 최신 odom과 같은 시각·age여야 한다. 오류 코드는 Bridge PRD를 따른다. 종료된 세션은 최근 100개만 기억한다. 느린 WebSocket에는 대기 스냅샷 한 개만 유지하고 전송이 3초 이상 막히면 연결을 닫는다. UI 빌드가 없으면 `/`와 `/demo`는 안내 JSON과 503을 반환한다.
 

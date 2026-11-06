@@ -3,10 +3,12 @@
 작성: 2026-10-12 (ktj) · 상태: **초안, itkwon과 합의 전**
 
 `docs/CONTROL_SCREEN.md` A-2단계(정지·재개 명령)와 B(로봇 위치·지도)에 필요한 Bridge ↔ 서버 ↔ 화면 계약이다.
+2026-11-06: 주행 시작·순찰 종료도 같은 명령 통로로 옮겼다 (텔레메트리 v3 `launcher`, 명령 `start`·`stop`, §1.3·§2.5). 서버를 ROS가 없는 곳(AWS)에 둘 수 있게 하려는 것이다.
 합의되면 내용을 Bridge PRD(`relay_prog/docs/PRD.md` §3, 계약의 단일 기준)와 Dashboard PRD로 옮기고 이 파일은 지운다.
 
 ## 지키는 원칙 (v1 그대로)
 
+- 로봇용 요청(§1 텔레메트리, §2.2~2.4)에는 토큰을 설정했으면 `Authorization: Bearer <토큰>`을 붙인다. 서버는 본문을 읽기 전에 검사해 401을 돌려준다 (2026-11-06)
 - 모든 필드는 필수. 값이 없을 때만 `null`. 정의 안 된 필드는 거부
 - 시각은 UTC ISO 8601 밀리초 + `Z`. **로봇 시각과 서버 시각을 빼서 판단하지 않는다** (경과 시간은 각자의 단조 증가 시계로 잼)
 - 응답이 없어도 같은 요청을 다시 보내지 않는다. 명령은 특히 자동 재전송 금지 (Dashboard PRD §5.3)
@@ -16,6 +18,7 @@
 
 ```
 [화면] ──POST /api/v1/commands──► [서버] ◄──GET /api/v1/commands/next (long poll)── [Bridge] ──/patrol/pause, /patrol/resume──► [순찰 노드]
+                                                                                     [Bridge] ──start: YAML 저장 + patrol_node 실행 / stop: SIGTERM──► (로봇 컴퓨터)
                                     ▲     ◄──POST /api/v1/commands/{id}/result────
 [화면] ◄──WS /api/v1/stream──────── │     ◄──POST /api/v1/telemetry (v2: 순찰 상태·위치 추가)── [Bridge] ◄── /patrol/state, TF map→base_footprint, /amcl_pose
 [화면] ◄──GET /api/v1/map(.png)──── [서버] (지도 파일은 서버 설정에서 읽음)
@@ -26,6 +29,7 @@
 | 순찰 상태·로봇 위치 | **텔레메트리 v2**에 `patrol`, `pose` 추가 | 1초 heartbeat·세션·순번·경과 시간 규칙을 그대로 씀. 통로를 더 만들 필요 없음 |
 | 명령 | **별도 API** (Bridge가 서버에 먼저 묻는 long poll) | 텔레메트리 응답에 실으면 최대 1초 늦어지고, 전송 실패 중(최대 10초 간격)엔 명령도 막힘. 정지는 빨라야 함 |
 | 지도 | 서버가 직접 파일에서 읽음 | 주행 중 바뀌지 않아 로봇에서 보낼 이유 없음 |
+| 순찰 시작·종료 (11-06) | 같은 명령 API에 `start`·`stop`. Bridge가 로봇 컴퓨터에서 실행. waypoint는 `start`에 실음 | 서버 컴퓨터에 ROS가 없어도 되고, 로봇은 나가는 HTTP(S)만 씀. 로봇에 들어오는 포트를 열지 않음 |
 
 ---
 
@@ -65,6 +69,33 @@ v1 필드는 전부 그대로, `schema_version: 2`와 아래 두 객체만 추�
 
 추가 크기는 약 400바이트로 8 KiB 안에 들어간다.
 
+### `launcher` (v3, 2026-11-06 추가)
+
+v2 필드는 전부 그대로, `schema_version: 3`과 `launcher`만 추가한다. 서버는 v1·v2·v3를 모두 받는다. v1·v2면 `launcher`를 `null`로 보고 **주행 시작·순찰 종료를 쌓지 않는다**(409 `bridge_unsupported`, 화면 버튼 잠금). 새 Bridge(v3)는 옛 서버에 422로 거절되므로 **서버를 먼저 올린다**.
+
+```json
+"launcher": {
+  "commands": ["pause", "resume", "start", "stop"],
+  "state": "running",
+  "pid": 41233, "exit_code": null,
+  "waypoints_revision": "3b9e…(64자 sha256)",
+  "log": "/tmp/limbo-patrol-xxxx.log",
+  "other_patrol_running": false
+}
+```
+
+| 필드 | 형식 | 의미 |
+|---|---|---|
+| `commands` | 문자열 목록 (중복 없음) | 이 Bridge가 처리하는 명령. `start`가 없으면 서버가 시작을 쌓지 않음 |
+| `state` | `idle` · `running` · `exited` | Bridge가 **이 세션에서 띄운** 순찰 노드의 실행 상태 |
+| `pid` | 양의 정수 또는 `null` | `idle`일 때만 `null` |
+| `exit_code` | 정수 또는 `null` | `exited`일 때만 값 (SIGTERM으로 끝나면 0) |
+| `waypoints_revision` | 64자 16진 또는 `null` | 마지막으로 띄운 경로의 `revision` |
+| `log` | 문자열(최대 500자) 또는 `null` | 순찰 노드 출력 파일. **로봇 컴퓨터 기준 경로** |
+| `other_patrol_running` | 불 | Bridge가 띄우지 않은 `patrol_node`가 로봇 컴퓨터에 있는가 (`/proc`, 2초마다) |
+
+추가 크기는 약 250바이트.
+
 ---
 
 ## 2. 명령 API
@@ -75,12 +106,18 @@ v1 필드는 전부 그대로, `schema_version: 2`와 아래 두 객체만 추�
 {"command": "pause"}
 ```
 
+`command`는 `pause` · `resume` · `start` · `stop`.
+
 | 응답 | 경우 |
 |---|---|
 | 202 `{"request_id": "...", "command": "pause", "issued_at": "...Z", "stage": "queued"}` | 접수 |
 | 409 `command_in_progress` | 끝나지 않은 명령이 있음 (화면도 그동안 버튼을 잠금) |
 | 409 `bridge_not_connected` | Bridge 상태가 `connected`가 아님 |
-| 422 `invalid_command` | `pause`, `resume` 외 |
+| 422 `invalid_command` | `pause`, `resume`, `start`, `stop` 외 |
+| 409 `bridge_unsupported` | (start·stop) Bridge가 `launcher`를 보고하지 않거나 `commands`에 없음 |
+| 409 `patrol_already_running` | (start) 서버의 `patrol_running`이 참 (§2.5) |
+| 409 `patrol_not_running` | (stop) `launcher.state`가 `running`이 아님 |
+| 409 `invalid_route` · 503 `waypoints_unavailable` · 404 `waypoints_not_configured` | (start) 서버 YAML이 규칙 위반 / 읽기 실패 / 미설정 |
 
 - `request_id`는 서버가 만든 UUID. 화면은 이 ID로 진행 상황을 본다
 - 한 번에 명령 하나만 (진행 중이면 거절). 명령 대기열은 길이 1
@@ -91,7 +128,7 @@ v1 필드는 전부 그대로, `schema_version: 2`와 아래 두 객체만 추�
 
 | 응답 | 경우 |
 |---|---|
-| 200 `{"request_id": "...", "command": "pause", "ttl_ms": 4870}` | 보낼 명령이 있음. 서버는 이때 `stage`를 `delivered`로 바꿈 |
+| 200 `{"request_id": "...", "command": "pause", "ttl_ms": 4870}` | 보낼 명령이 있음. 서버는 이때 `stage`를 `delivered`로 바꿈. `start`만 `route`가 더 붙는다 (§2.5) |
 | 204 | `wait_s` 동안 명령이 없음 → Bridge는 바로 다시 요청 |
 | 409 `robot_id_mismatch` / `retired_session` | v1과 같은 의미 |
 
@@ -138,6 +175,49 @@ v1 필드는 전부 그대로, `schema_version: 2`와 아래 두 객체만 추�
 - Bridge는 `ttl_ms` 확인 뒤, 서비스를 부르기 **직전**에 묻는다. 거절되거나 **왕복이 1초를 넘으면** 부르지 않고 `expired`로 보고
 - 이유: `ttl_ms`는 서버가 넘긴 뒤 Bridge가 실제로 읽기까지 걸린 시간을 모른다. 그래서 늦게 읽은 명령이 화면에서 "응답 없음"으로 끝난 뒤에 실행될 수 있었다 (2026-10-13 실패 시험). 왕복 시간은 Bridge 혼자 재므로 두 시계를 비교하지 않는다
 
+### 2.5 순찰 시작·종료 `start` · `stop` (2026-11-06 추가)
+
+서버는 명령을 **쌓기만** 한다. 로봇 컴퓨터의 Bridge가 가져가 그 컴퓨터에서 `patrol_node`를 띄우거나 끈다. 통로(`next` → `claim` → `result`)·TTL·응답/확인 제한 구조는 pause·resume과 같다.
+
+`start`의 `commands/next` 응답:
+
+```json
+{
+  "request_id": "6f1c…", "command": "start", "ttl_ms": 4870,
+  "route": {
+    "revision": "3b9e…(서버 YAML 파일의 sha256)",
+    "bounds": {"x_min": -7.546, "y_min": -7.524, "x_max": 7.554, "y_max": 7.576},
+    "waypoints": [
+      {"name": "Start", "type": "pass", "x": 6.026, "y": 4.909, "yaw": 0.0, "wait_sec": 0},
+      {"name": "C", "type": "stop", "x": -1.722, "y": 2.035, "yaw": -124.0, "wait_sec": 5}
+    ]
+  }
+}
+```
+
+1. 서버는 `POST /api/v1/commands` 순간 `waypoints_yaml`을 읽어 검사하고 목록·`revision`·지도 범위를 명령에 고정한다. **서버 YAML이 원본**이다. 그 뒤 파일이 바뀌어도 실린 경로는 그대로
+2. Bridge가 가져가 `claim`한다 (pause와 같음)
+3. Bridge가 서버와 **같은 규칙**으로 다시 검사한다: 마지막이 `stop`, 200개 이하, 이름 1–32자·대소문자 무시 중복 없음, `type`은 `pass`·`stop`, `x`·`y`·`yaw`·`wait_sec` 유한 숫자(불 아님), 지도 범위 안, `wait_sec ≥ 0`. Bridge는 정의된 6개 필드 외는 거절. 두 구현은 `relay_prog/tests/data/route_cases.json` 사례표를 함께 시험한다
+4. 로봇 컴퓨터의 `patrol_launch.waypoint_dir/dashboard_waypoints.yaml`에 원자적으로 저장 (임시 파일 → fsync → `os.replace`)
+5. 그 절대 경로를 `waypoints`, `patrol_launch.use_sim_time`을 `use_sim_time` 파라미터로 `patrol_node`를 띄운다. ROS 환경은 Bridge 프로세스 그대로 (`ROS_DOMAIN_ID` 포함)
+
+`stop`은 3필드 그대로. Bridge는 **자기가 띄운** 프로세스 그룹에만 SIGTERM을 보낸다(순찰 노드가 진행 중인 Nav2 목표를 취소하고 끝남).
+
+결과 보고는 §2.3 형식 그대로. `accepted`는 "프로세스를 띄웠다 / SIGTERM을 보냈다"까지, `service_latency_ms`는 그 처리 시간. 실행하지 못하면 `rejected`와 `message`에 `코드: 설명`:
+
+| `message` 코드 | 경우 |
+|---|---|
+| `patrol_already_running` | (start) Bridge가 띄운 노드가 실행 중이거나 다른 `patrol_node`가 있음 |
+| `invalid_route` | (start) 3의 검사 실패 |
+| `patrol_not_installed` | (start) ROS setup·워크스페이스 setup·`patrol_node` 실행 파일이 없음 |
+| `waypoint_save_failed` / `patrol_launch_failed` | (start) 저장 / 실행 실패 |
+| `patrol_not_running` / `patrol_stop_failed` | (stop) Bridge가 띄운 노드가 없음 / 신호 실패 |
+
+서버의 `patrol_running`(스냅샷에도 있음, 시작 거절·waypoint 편집 잠금 기준):
+`launcher.state == "running"` 또는 `launcher.other_patrol_running` 또는 (`patrol.state`가 활성이고 `launcher.state != "exited"`). `launcher`가 없으면 `patrol.state`가 활성일 때만. waypoint 편집은 `start`·`stop` 명령이 처리 중일 때도 잠근다.
+
+Bridge가 끝날 때 자기가 띄운 노드가 실행 중이면 SIGTERM으로 같이 끈다(15초 안에 안 끝나면 SIGKILL). Bridge 없이는 화면에서 일시정지도 할 수 없기 때문이다.
+
 ---
 
 ## 3. 서버의 명령 판정
@@ -161,6 +241,7 @@ queued → delivered → accepted → confirmed        (성공)
 | `no_response`, `unconfirmed`, `expired`, 중간에 Bridge 끊김 | 정지 여부 확인 불가 / 재개 여부 확인 불가 |
 
 제한 시간은 Dashboard PRD 데모 기본값과 같은 **응답 5초, 상태 확인 5초**. 서버 설정으로 바꿀 수 있게 한다.
+`start`는 응답 10초·확인 60초(`command_start_*`), `stop`은 응답 10초·확인 30초(`command_stop_*`)로 따로 둔다. 노드 기동·위치 확인과 Nav2 목표 취소를 기다리기 때문이다. TTL(5초)은 같다.
 
 ### 3.2 성공 조건 (Dashboard PRD §5.4)
 
@@ -168,6 +249,8 @@ queued → delivered → accepted → confirmed        (성공)
 |---|---|
 | pause | `accepted` 이후 텔레메트리에서 `patrol.update_count > patrol_update_count_at_call` **이고** `patrol.state == "paused"` **이고** 그 뒤 `motion`이 최신 값이면서 정지 기준(0.05 m/s, 0.05 rad/s) 미만 |
 | resume | `accepted` 이후 `patrol.update_count > patrol_update_count_at_call` **이고** `patrol.state == "patrolling"`. 속도로 판단하지 않음 |
+| start | `accepted` 이후 `patrol.update_count > patrol_update_count_at_call` **이고** `patrol.state`가 `waiting_localization` 또는 `patrolling`. 그 전에 `launcher.state == "exited"`(수락 때 이미 끝나 있던 같은 pid는 제외)가 오면 `rejected`(종료 코드·로그 경로) |
+| stop | `launcher.state == "exited"` **또는** 수락 때 있던 순찰 상태가 사라짐(`update_count > 0`인데 `state == null`, 발행자 없음) |
 
 ### 3.3 왜 `update_count`로 비교하나
 
@@ -202,7 +285,8 @@ queued → delivered → accepted → confirmed        (성공)
 | 작업 | 내용 |
 |---|---|
 | 텔레메트리 (기존) | v2로 `patrol`, `pose` 추가. 1초 주기·재시도 규칙 그대로 |
-| 명령 (새로) | 별도 비동기 작업: `commands/next` long poll → 받으면 서비스 비동기 호출(제한 3초) → 결과 보고. 실패 시 1·2·4·8·10초 재시도는 **가져오기에만** 적용, 결과 보고는 한 번 (유실되면 서버가 `no_response`로 처리) |
+| 순찰 시작·종료 (11-06) | `start`·`stop`은 서비스 대신 `limbo_telemetry_bridge/launcher.py`가 처리(§2.5). `/proc` 검사는 2초 벽시계 타이머 |
+| 명령 (새로) | 별도 비동기 작업: `commands/next` long poll → 받으면 서비스 비동기 호출(제한 3초) → 결과 보고. 명령 응답은 64 KiB까지 읽음(`start`의 waypoint). 실패 시 1·2·4·8·10초 재시도는 **가져오기에만** 적용, 결과 보고는 한 번 (유실되면 서버가 `no_response`로 처리) |
 | 구독 추가 | `/patrol/state` (reliable + transient_local, 순찰 노드와 맞춤), `/amcl_pose` (reliable + transient_local, AMCL과 맞춤), TF |
 | 서비스 대기 | 호출 전에 서비스가 없으면 기다리지 않고 바로 `service_unavailable` |
 
@@ -215,6 +299,6 @@ queued → delivered → accepted → confirmed        (성공)
 | 버전 | 텔레메트리를 v2로 올릴지, v1에 선택 필드로 넣을지 | v2 (v1은 모르는 필드를 거부하므로 선택 필드도 결국 호환 깨짐) |
 | 명령 통로 | long poll vs 텔레메트리 응답에 싣기 | long poll (정지 지연·전송 실패 중 막힘) |
 | 제한 시간 | 응답 5초 / 확인 5초 / 명령 유효 5초 / 서비스 3초 | 데모 값 그대로 시작, 실물에서 조정 |
-| 인증 | 화면 → 서버 명령에 인증이 없으면 같은 네트워크 누구나 로봇을 멈출 수 있음 | 학원망에서만 쓰는 동안은 서버 `127.0.0.1` 또는 관제 PC만 허용, 실배치 전 따로 결정 |
+| 인증 | 화면 → 서버 명령에 인증이 없으면 같은 네트워크 누구나 로봇을 멈출 수 있음 | **2026-11-06 결정**: 로봇용 4경로(telemetry, commands/next·claim·result)는 서버가 공유 토큰(`Authorization: Bearer`, 없거나 틀리면 401 `unauthorized`)으로, 브라우저용은 앞단 Caddy basic auth로 막는다. 로컬 개발은 `allow_no_robot_token`. `dashboard/README.md` 「로봇 토큰과 인터넷 공개」 |
 | 재시작 버튼 | PRD의 프로그램 재시작 | 이번 범위에서 뺌 (`CONTROL_SCREEN.md`) |
 | 담당 | Bridge·서버·화면 구현을 누가 | 계약 합의 후 나눔 |

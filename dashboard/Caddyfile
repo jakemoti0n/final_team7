@@ -1,0 +1,23 @@
+# 앞단 Caddy: HTTPS 자동 발급(Let's Encrypt), 화면·브라우저 API는 basic auth.
+# 로봇용 4경로는 basic auth에서 빼고 서버가 공유 토큰(Authorization: Bearer)으로만 검사한다.
+# 값은 docker-compose.yml이 .env에서 넘긴다. DOMAIN=localhost이면 Caddy 내부 인증서(로컬 시험용)
+{$DOMAIN} {
+	@robot path_regexp robot ^/api/v1/(telemetry|commands/next|commands/[^/]+/(claim|result))$
+	handle @robot {
+		reverse_proxy dashboard:8000
+	}
+
+	# 상태 확인용(서버 생존만 알려 줌, 정보 없음)
+	handle /healthz {
+		reverse_proxy dashboard:8000
+	}
+
+	# 압축은 브라우저 쪽만. 로봇 경로는 Bridge가 압축 없이 크기를 세며 읽는다
+	handle {
+		encode zstd gzip
+		basic_auth {
+			{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+		}
+		reverse_proxy dashboard:8000
+	}
+}

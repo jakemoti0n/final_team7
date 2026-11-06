@@ -3,6 +3,7 @@ import argparse
 from copy import deepcopy
 from datetime import datetime, timezone
 import json
+import os
 import time
 import urllib.error
 import urllib.request
@@ -40,6 +41,8 @@ def main():
     parser.add_argument("--scenario", choices=["normal", "empty", "partial", "all-stopped", "bridge-stopped",
                                               "new-session", "duplicate", "out-of-order", "invalid", "zero", "rotation", "invalid-motion"], default="normal")
     parser.add_argument("--duration", type=float, default=20)
+    parser.add_argument("--token", default=os.environ.get("ROBOT_TOKEN", ""),
+                        help="서버 로봇용 경로 토큰 (기본: 환경 변수 ROBOT_TOKEN). 비우면 헤더를 안 보냄")
     args = parser.parse_args()
     print("개발용 가상 송신기 · 실제 로봇 데이터가 아닙니다. 전용 서버에서만 사용하세요.", flush=True)
     started = time.monotonic()
@@ -76,10 +79,14 @@ def main():
         if args.scenario == "invalid":
             payload["unexpected"] = True
         request = urllib.request.Request(args.url.rstrip("/") + "/api/v1/telemetry",
-                                         data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
+                                         data=json.dumps(payload).encode(),
+                                         headers={"Content-Type": "application/json",
+                                                  **({"Authorization": f"Bearer {args.token}"} if args.token else {})})
         try:
             with urllib.request.urlopen(request, timeout=1) as response:
                 print(response.status, response.read().decode(), flush=True)
+        except urllib.error.HTTPError as exc:
+            print(exc.code, exc.read().decode(errors="replace"), flush=True)
         except (urllib.error.URLError, TimeoutError) as exc:
             print(str(exc), flush=True)
         time.sleep(1)

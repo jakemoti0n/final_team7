@@ -1,8 +1,8 @@
 import { useEffect, useReducer, useState, type ReactNode } from 'react'
 import { LiveProvider } from './live'
-import { MockProvider, demoMap, scenarios, type Patrol, type Scenario } from './demo'
+import { MockProvider, demoMap, scenarios, type BridgeVersion, type Patrol, type Scenario } from './demo'
 import { commandNames, resultLabels, type Command, type Outcome, type RequestResult } from './commands'
-import { LiveControl, driveControl } from './control'
+import { LiveControl, driveControl, lockReason, stopReason, waypointLocked } from './control'
 import { fromPixel, headingDeg, isMapInfo, toPixel, uncertaintyPx, type MapInfo, type Waypoint } from './map'
 import { names, topicKeys, type Provider, type Snapshot, type View } from './types'
 
@@ -45,7 +45,6 @@ function ResultBox({ result, delta }: { result: RequestResult; delta: number }) 
     <small>요청 시각 {timeText(result.at)} · {ageText(age)}</small>{result.id !== '—' && <small className="request-id">요청 ID {result.id}</small>}
   </div>
 }
-const waypointLocked = (view: View) => ['waiting_localization', 'patrolling', 'pausing', 'paused'].includes(view.snapshot?.patrol?.state ?? '')
 const waypointLockHint = '주행 완료 후 변경 가능합니다'
 type WaypointMode = { kind: 'add' } | { kind: 'move'; index: number }
 type WaypointDocument = { revision: string; waypoints: Waypoint[]; file: string; applies: string }
@@ -140,92 +139,25 @@ function WaypointPanel({ demo, map, document, problem, locked, onChange, mode, p
 }
 function Controls({ demo, live, view, delta, map, waypointDocument, waypointProblem, changeWaypoint, waypointMode, picked, setWaypointMode, setPicked }: { demo: MockProvider | null; live: LiveControl | null; view: View; delta: number; map: MapInfo | null; waypointDocument: WaypointDocument | null; waypointProblem: string | null; changeWaypoint: (change: WaypointChange) => Promise<void>; waypointMode: WaypointMode | null; picked: [number, number] | null; setWaypointMode: (mode: WaypointMode | null) => void; setPicked: (point: [number, number] | null) => void }) {
   const request = demo ? demo.machine.current : live!.current(view)
-  const [starting, setStarting] = useState<'idle' | 'launching' | 'waiting' | 'started' | 'failed'>('idle')
-  const [startMessage, setStartMessage] = useState('')
-  const [startLog, setStartLog] = useState('')
-  const [startPatrolCount, setStartPatrolCount] = useState(0)
-  const [launchStatus, setLaunchStatus] = useState<'idle' | 'running' | 'exited' | 'stopping'>('idle')
-  const [stopping, setStopping] = useState(false)
-  const [stopMessage, setStopMessage] = useState('')
-  const patrolExited = !demo && launchStatus === 'exited'
-  const { action, reason } = driveControl(view, request, patrolExited || starting === 'launching' || starting === 'waiting')
-  const active = !patrolExited && waypointLocked(view)
-  useEffect(() => {
-    if (starting === 'waiting' && active && (view.snapshot?.patrol?.update_count ?? 0) > startPatrolCount) { setStarting('started'); setStartMessage('순찰 노드의 상태를 수신했습니다.') }
-  }, [active, starting, startPatrolCount, view.snapshot?.patrol?.update_count])
-  useEffect(() => {
-    if (starting !== 'waiting' || demo) return
-    let done = false
-    let attempts = 0
-    const timer = setInterval(async () => {
-      if (done) return
-      attempts++
-      const status = await fetch('/api/v1/patrol/launch').then(r => r.ok ? r.json() : null).catch(() => null)
-      if (done) return
-      if (status?.status === 'exited') {
-        setStarting('failed')
-        setStartMessage(`순찰 노드가 종료되었습니다${status.exit_code == null ? '' : ` (종료 코드 ${status.exit_code})`}. 로그: ${status.log || startLog}`)
-      } else if (attempts >= 30) {
-        setStarting('failed')
-        setStartMessage(`순찰 시작 상태를 확인하지 못했습니다. 로그: ${startLog}`)
-      }
-    }, 1000)
-    return () => { done = true; clearInterval(timer) }
-  }, [starting, demo, startLog])
-  const start = async () => {
-    if (demo) { demo.startPatrol(); setStarting('started'); setStartMessage('데모 순찰을 시작했습니다.'); return }
-    setStartPatrolCount(view.snapshot?.patrol?.update_count ?? 0)
-    setStopMessage('')
-    setStarting('launching'); setStartMessage('순찰 노드를 시작하고 있습니다.')
-    try {
-      const response = await fetch('/api/v1/patrol/start', { method: 'POST', signal: AbortSignal.timeout(5000) })
-      const body = await response.json().catch(() => null)
-      if (!response.ok) throw new Error(({ bridge_not_connected: 'Bridge 연결을 확인한 뒤 시작하세요.', patrol_already_running: '이미 순찰 노드가 실행 중입니다.', patrol_state_unavailable: '순찰 상태를 확인할 수 없습니다.', ros_domain_not_configured: 'Dashboard의 ROS_DOMAIN_ID 설정이 필요합니다.' } as Record<string, string>)[body?.error?.code] || body?.error?.message || `시작 요청 실패 (${response.status})`)
-      setStartLog(body?.log || '')
-      setLaunchStatus('running')
-      setStarting('waiting'); setStartMessage('순찰 노드를 실행했습니다. 상태 보고를 기다립니다.')
-    } catch (err) { setStarting('failed'); setStartMessage(err instanceof Error ? err.message : '순찰 시작 요청에 실패했습니다.') }
-  }
-  useEffect(() => {
-    if (demo) return
-    let cancelled = false
-    const refresh = async () => {
-      const status = await fetch('/api/v1/patrol/launch').then(r => r.ok ? r.json() : null).catch(() => null)
-      if (!cancelled && status?.status) setLaunchStatus(current => current === 'stopping' && status.status === 'running' ? current : status.status)
-    }
-    void refresh()
-    const timer = setInterval(() => void refresh(), 2000)
-    return () => { cancelled = true; clearInterval(timer) }
-  }, [demo])
-  const stop = async () => {
-    if (demo) { demo.stopPatrol(); setStopMessage('데모 순찰을 종료했습니다.'); return }
-    setStopping(true); setStopMessage('순찰 노드를 종료하고 있습니다.')
-    try {
-      const response = await fetch('/api/v1/patrol/stop', { method: 'POST', signal: AbortSignal.timeout(5000) })
-      const body = await response.json().catch(() => null)
-      if (!response.ok) throw new Error(body?.error?.code === 'patrol_not_running' ? 'Dashboard가 시작한 순찰 노드가 실행 중이지 않습니다.' : body?.error?.message || `종료 요청 실패 (${response.status})`)
-      setLaunchStatus('stopping')
-      setStarting('idle'); setStartMessage('')
-      setStopMessage('순찰 노드에 종료 신호를 보냈습니다.')
-    } catch (err) { setStopMessage(err instanceof Error ? err.message : '순찰 종료 요청에 실패했습니다.') }
-    finally { setStopping(false) }
-  }
-  useEffect(() => {
-    if (launchStatus === 'exited' && stopMessage === '순찰 노드에 종료 신호를 보냈습니다.')
-      setStopMessage('순찰 노드가 종료되었습니다. 다시 시작할 수 있습니다.')
-  }, [launchStatus, stopMessage])
-  const busy = request?.result === 'pending' || starting === 'launching' || starting === 'waiting'
-  const disabled = !!reason || busy || (!demo && launchStatus === 'stopping')
+  // 주행 시작·순찰 종료도 일시정지·재개와 같은 명령 통로: 서버가 쌓고 로봇의 Bridge가 로봇 컴퓨터에서 실행한다
+  const { action, reason } = driveControl(view, request)
+  const stopLock = stopReason(view, lockReason(view, request))
+  const pending = request?.result === 'pending'
+  const stopping = pending && request?.command === 'stop'
+  const locked = waypointLocked(view, request)
+  const launcher = view.snapshot?.launcher
+  const send = (command: Command) => { if (demo) demo.request(command); else void live!.send(view, command) }
   const label = action === 'start' ? '주행 시작' : action === 'pause' ? '주행 정지' : '주행 재개'
-  const send = () => { if (action === 'start') void start(); else { setStartMessage(''); if (demo) demo.request(action); else void live!.send(view, action) } }
+  const busyLabel = action === 'start' ? '주행 시작 중' : action === 'pause' ? '정지 요청 중' : '재개 요청 중'
+  // 노드가 0이 아닌 코드로 끝났으면 알려 준다. 로그는 로봇 컴퓨터에 있다
+  const exitNote = launcher?.state === 'exited' && launcher.exit_code ? `순찰 노드가 종료 코드 ${launcher.exit_code}로 끝났습니다. 로그(로봇 컴퓨터): ${launcher.log ?? '—'}` : ''
   return <Card title="로봇 제어" className="controls">
-    <div className="control-body"><p id="control-reason" role="status" className="muted">{reason || (action === 'start' ? '저장된 waypoint 경로로 새 순찰을 시작합니다.' : action === 'pause' ? '현재 순찰을 일시정지합니다.' : '멈춘 지점부터 순찰을 이어서 합니다.')}</p>
-      <button className={`command ${action === 'pause' ? 'pause' : 'resume'}`} disabled={disabled} aria-busy={busy} aria-describedby="control-reason" onClick={send}><span aria-hidden="true">{action === 'pause' ? '■' : '▷'}</span>{busy ? action === 'start' ? '주행 시작 중' : action === 'pause' ? '정지 요청 중' : '재개 요청 중' : label}</button>
-      <button className="patrol-stop" type="button" disabled={stopping || (demo ? !active : launchStatus !== 'running')} onClick={() => void stop()}>{stopping ? '순찰 종료 중' : '순찰 종료'}</button>
-      {stopMessage && <p className="muted" role="status">{stopMessage}</p>}
+    <div className="control-body"><p id="control-reason" role="status" className="muted">{reason || (action === 'start' ? '저장된 waypoint 경로를 로봇에 보내 새 순찰을 시작합니다.' : action === 'pause' ? '현재 순찰을 일시정지합니다.' : '멈춘 지점부터 순찰을 이어서 합니다.')}</p>
+      <button className={`command ${action === 'pause' ? 'pause' : 'resume'}`} disabled={!!reason || pending} aria-busy={pending && request?.command !== 'stop'} aria-describedby="control-reason" onClick={() => send(action)}><span aria-hidden="true">{action === 'pause' ? '■' : '▷'}</span>{pending && request?.command !== 'stop' ? busyLabel : label}</button>
+      <span title={stopLock || undefined}><button className="patrol-stop" type="button" disabled={!!stopLock} aria-busy={stopping} onClick={() => send('stop')}>{stopping ? '순찰 종료 중' : '순찰 종료'}</button></span>
+      {exitNote && <p className="muted" role="status">{exitNote}</p>}
       {request && <ResultBox key={request.id} result={request} delta={delta} />}
-      {startMessage && <p className="muted" role="status">{startMessage}</p>}
-      <WaypointPanel demo={demo} map={map} document={waypointDocument} locked={active || launchStatus === 'running' || launchStatus === 'stopping' || starting === 'launching' || starting === 'waiting' || stopping} problem={waypointProblem} onChange={changeWaypoint} mode={waypointMode} picked={picked} setMode={setWaypointMode} setPicked={setPicked} />
+      <WaypointPanel demo={demo} map={map} document={waypointDocument} locked={locked} problem={waypointProblem} onChange={changeWaypoint} mode={waypointMode} picked={picked} setMode={setWaypointMode} setPicked={setPicked} />
     </div>
   </Card>
 }
@@ -293,6 +225,7 @@ function DemoTools({ demo }: { demo: MockProvider }) {
   return <aside className="demo-tools" aria-label="데모 시나리오 도구"><div className="container tools-inner">
     <div><strong>데모 시나리오 도구</strong><small>시나리오 변경·초기화 시 진행 요청과 결과가 지워집니다.</small></div>
     <label>화면 상태<select aria-label="화면 상태" value={demo.scenario} onChange={e => demo.reset(e.target.value as Scenario)}>{Object.entries(scenarios).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+    <label>Bridge 버전<select aria-label="Bridge 버전" value={demo.bridgeVersion} onChange={e => demo.setBridgeVersion(e.target.value as BridgeVersion)}><option value="current">현재 (주행 시작·순찰 종료 지원)</option><option value="legacy">이전 버전 (시작·종료 미지원)</option></select></label>
     <label>가상 순찰 상태<select aria-label="가상 순찰 상태" value={demo.patrol} onChange={e => demo.setPatrol(e.target.value as Patrol)}><option value="paused">일시 중단 · 재개할 작업 있음</option><option value="patrolling">이미 순찰 중</option><option value="empty">재개할 작업 없음</option><option value="unknown">상태 미확인</option></select></label>
     {(Object.keys(commandNames) as Command[]).map(command => <label key={command}>{commandNames[command]} 결과<select aria-label={`${commandNames[command]} 결과`} value={demo.outcomes[command]} onChange={e => { demo.outcomes[command] = e.target.value as Outcome; redraw(n => n + 1) }}>{Object.entries(outcomes).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>)}
     <label>응답 제한 시간(초)<input aria-label="응답 제한 시간(초)" type="number" min="0.1" max="60" step="0.1" defaultValue="5" onChange={e => { const n = Number(e.target.value); if (Number.isFinite(n) && n >= .1 && n <= 60) demo.machine.responseTimeout = n * 1000 }} /></label>

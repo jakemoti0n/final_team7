@@ -34,6 +34,7 @@ def main():
             temp = Path(tmp)
             config = yaml.safe_load((ROOT/'src/limbo_telemetry_bridge/config/bridge.yaml').read_text())
             config['server_url'] = f'http://127.0.0.1:{server.server_port}'
+            config['patrol_launch'].update(workspace=str(ROOT.parent/'limbo'), waypoint_dir=str(temp/'waypoints'))  # 검증 중 실행 디렉터리와 무관하게 Bridge가 뜨도록 순찰 실행 경로를 절대 경로로
             path = temp/'config.yaml'
             path.write_text(yaml.safe_dump(config))
             command = [sys.executable,'-m','limbo_telemetry_bridge.node','--config',str(path)]

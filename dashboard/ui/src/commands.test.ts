@@ -80,6 +80,25 @@ it('mock isolation, patrol gating independent of speed, and reset', () => {
   expect(first.machine.current).toBeNull(); expect(first.current.snapshot?.alerts).toHaveLength(0)
   first.dispose(); second.dispose()
 })
+it('demo start and stop follow the same command flow as the real screen', () => {
+  const demo = new MockProvider(); demo.start()
+  demo.request('start'); expect(demo.machine.current).toBeNull()          // 순찰 노드가 돌고 있으면 시작 잠김
+  demo.request('stop'); vi.advanceTimersByTime(1600)
+  expect(demo.machine.current).toMatchObject({ command: 'stop', result: 'success' })
+  expect(demo.current.snapshot?.launcher?.state).toBe('exited')
+  expect(demo.current.snapshot?.patrol?.state).toBeNull()                   // 실제처럼 상태 비움
+  expect(demo.current.snapshot?.patrol_running).toBe(false)
+  demo.request('stop'); expect(demo.machine.current?.command).toBe('stop') // 끈 뒤 다시 종료는 잠김 (새 요청 없음)
+  demo.request('start'); vi.advanceTimersByTime(1600)
+  expect(demo.machine.current).toMatchObject({ command: 'start', result: 'success' })
+  expect(demo.current.snapshot?.patrol?.state).toBe('patrolling')
+  demo.setBridgeVersion('legacy')
+  expect(demo.current.snapshot?.launcher).toBeNull()
+  demo.request('stop'); expect(demo.machine.current?.command).toBe('start') // 이전 Bridge: 종료 잠김
+  demo.request('pause'); vi.advanceTimersByTime(1600)
+  expect(demo.machine.current).toMatchObject({ command: 'pause', result: 'success' }) // 일시정지·재개는 그대로
+  demo.dispose()
+})
 it('age and Seoul time formatting', () => {
   expect(ageText(null, 10)).toBe('—'); expect(ageText(-3)).toBe('0.0초 전')
   expect(ageText(.3)).toBe('0.3초 전'); expect(ageText(61.8)).toBe('1분 1초 전')

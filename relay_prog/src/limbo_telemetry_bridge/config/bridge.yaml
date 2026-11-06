@@ -3,6 +3,9 @@ server_url: http://127.0.0.1:8000
 send_interval_s: 1.0
 request_timeout_s: 1.0
 source_clock: ros_sim
+# 서버 로봇용 경로의 공유 토큰 파일 (Authorization: Bearer). 환경 변수 LIMBO_ROBOT_TOKEN이 있으면 그것을 씀.
+# null이면 토큰을 안 보낸다(서버가 allow_no_robot_token인 로컬 개발). 파일은 git에 올리지 않는다 (예: relay_prog/state/robot_token)
+token_file: null
 # v1 fixes the frequency window at 5 s and retry delays at 1/2/4/8/10 s.
 topics:
   odom:
@@ -35,3 +38,11 @@ control:
   resume_service: /patrol/resume
   command_wait_s: 10                  # commands/next long poll 최대 대기
   service_timeout_s: 3                # 서비스 응답 제한. 넘으면 no_response
+# 순찰 시작·종료 (관제 명령 start·stop). Bridge가 이 컴퓨터에서 patrol_node를 띄우고 끈다.
+# 상대 경로는 Bridge를 실행한 디렉터리 기준 (README대로 저장소 루트에서 실행). 시작할 때 파일이 있는지 확인한다
+# ROS_DOMAIN_ID는 Bridge 프로세스 환경을 그대로 쓴다
+patrol_launch:
+  ros_setup: /opt/ros/jazzy/setup.bash
+  workspace: limbo                     # install/setup.bash, install/limbo_patrol/lib/limbo_patrol/patrol_node
+  waypoint_dir: relay_prog/state/waypoints   # 서버가 보낸 경로를 dashboard_waypoints.yaml로 저장 (git 제외)
+  use_sim_time: true                   # 실물은 false

@@ -8,6 +8,9 @@ import tempfile
 import yaml
 
 
+MAX_WAYPOINTS = 200   # 순찰 시작 명령에 실어 보내므로 크기를 묶는다 (Bridge 명령 응답 64 KiB 안)
+
+
 class WaypointError(ValueError):
     def __init__(self, code, message):
         super().__init__(message)
@@ -30,6 +33,22 @@ class WaypointFile:
         data, revision = self.read()
         return {'revision': revision, 'waypoints': data['waypoints'], 'file': self.path.name,
                 'applies': 'next_patrol_start'}
+
+    def bounds(self):
+        """지도 범위. 순찰 시작 명령에 같이 실어 Bridge도 같은 규칙으로 검사하게 한다."""
+        x0, y0 = self.map['origin'][:2]
+        return {'x_min': x0, 'y_min': y0,
+                'x_max': x0 + self.map['width'] * self.map['resolution'],
+                'y_max': y0 + self.map['height'] * self.map['resolution']}
+
+    def route(self):
+        """순찰 시작 명령에 담을 경로: 명령을 만드는 순간의 목록·revision·지도 범위 (서버 YAML이 원본)."""
+        data, revision = self.read()
+        points = data['waypoints']
+        self._validate(points)
+        keys = ('name', 'type', 'x', 'y', 'yaw', 'wait_sec')
+        return {'revision': revision, 'bounds': self.bounds(),
+                'waypoints': [{k: p[k] for k in keys} for p in points]}
 
     def change(self, request):
         if not isinstance(request, dict) or not isinstance(request.get('revision'), str):
@@ -96,12 +115,14 @@ class WaypointFile:
         return self.document()
 
     def _validate(self, points):
+        # 같은 규칙이 Bridge에도 있다 (relay_prog limbo_telemetry_bridge/launcher.py validate_route). 바꾸면 같이 바꾼다
         if not points or not isinstance(points[-1], dict) or points[-1].get('type') != 'stop':
             raise WaypointError('invalid_route', 'The final waypoint must be a stop')
+        if len(points) > MAX_WAYPOINTS:
+            raise WaypointError('invalid_route', f'At most {MAX_WAYPOINTS} waypoints are allowed')
         seen = set()
-        x0, y0 = self.map['origin'][:2]
-        x1 = x0 + self.map['width'] * self.map['resolution']
-        y1 = y0 + self.map['height'] * self.map['resolution']
+        b = self.bounds()
+        x0, y0, x1, y1 = b['x_min'], b['y_min'], b['x_max'], b['y_max']
         for p in points:
             if not isinstance(p, dict) or not isinstance(p.get('name'), str) or not 1 <= len(p['name'].strip()) <= 32:
                 raise WaypointError('invalid_route', 'Each waypoint needs a name of 1–32 characters')

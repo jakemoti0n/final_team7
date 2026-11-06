@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Independent stdlib-only test receiver (텔레메트리 v1·v2, 관제 명령 API). No ROS or bridge imports."""
+"""Independent stdlib-only test receiver (텔레메트리 v1·v2·v3, 관제 명령 API). No ROS or bridge imports."""
 import argparse
 from collections import deque
+import gzip
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -44,10 +45,10 @@ def validate(payload):
     if not isinstance(payload, dict) or type(payload.get('schema_version')) is not int:
         raise ValueError('unsupported schema_version')
     version = payload['schema_version']
-    if version not in (1, 2):
+    if version not in (1, 2, 3):
         raise ValueError('unsupported schema_version')
     base = 'schema_version robot_id bridge_session_id sequence sent_at source_clock topics motion'
-    fields(payload, base + (' patrol pose' if version == 2 else ''))
+    fields(payload, base + (' patrol pose' if version >= 2 else '') + (' launcher' if version == 3 else ''))
     if not isinstance(payload['robot_id'], str) or not payload['robot_id']:
         raise ValueError('invalid robot_id')
     if not isinstance(payload['bridge_session_id'], str):
@@ -75,9 +76,11 @@ def validate(payload):
         number(topic['age_ms'], 0)
         if topic['receive_hz'] is not None:
             number(topic['receive_hz'], 0)
-    if version == 2:
+    if version >= 2:
         validate_patrol(payload['patrol'])
         validate_pose(payload['pose'])
+    if version == 3:
+        validate_launcher(payload['launcher'])
     motion = payload['motion']
     fields(motion, 'linear_speed_mps angular_velocity_radps last_received_at age_ms')
     if all(v is None for v in motion.values()):
@@ -90,6 +93,29 @@ def validate(payload):
     if (not odom['received_count'] or motion['last_received_at'] != odom['last_received_at']
             or motion['age_ms'] != odom['age_ms']):
         raise ValueError('motion must refer to latest odom')
+
+
+def validate_launcher(launcher):
+    fields(launcher, 'commands state pid exit_code waypoints_revision log other_patrol_running')
+    commands = launcher['commands']
+    if (not isinstance(commands, list) or len(set(commands)) != len(commands)
+            or not set(commands) <= {'pause', 'resume', 'start', 'stop'}):
+        raise ValueError('invalid launcher commands')
+    if launcher['state'] not in ('idle', 'running', 'exited'):
+        raise ValueError('invalid launcher state')
+    if (launcher['state'] == 'idle') != (launcher['pid'] is None):
+        raise ValueError('pid only after a launch')
+    if launcher['pid'] is not None:
+        number(launcher['pid'], 1, True)
+    if launcher['exit_code'] is not None and (launcher['state'] != 'exited' or type(launcher['exit_code']) is not int):
+        raise ValueError('exit_code only after exit')
+    revision = launcher['waypoints_revision']
+    if revision is not None and (not isinstance(revision, str) or len(revision) != 64):
+        raise ValueError('invalid waypoints_revision')
+    if launcher['log'] is not None and (not isinstance(launcher['log'], str) or len(launcher['log']) > 500):
+        raise ValueError('invalid log')
+    if type(launcher['other_patrol_running']) is not bool:
+        raise ValueError('invalid other_patrol_running')
 
 
 def validate_patrol(patrol):
@@ -148,8 +174,10 @@ def validate_result(result, request_id):
 class Receiver(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, address=('127.0.0.1', 8000), robot_id='LIMBO-01', mode='ok', delay=1.5):
+    def __init__(self, address=('127.0.0.1', 8000), robot_id='LIMBO-01', mode='ok', delay=1.5, token=None):
         super().__init__(address, Handler)
+        self.token = token           # 있으면 로봇용 경로에 Authorization: Bearer <token> 요구 (서버와 같게)
+        self.unauthorized = 0
         self.robot_id, self.mode, self.delay = robot_id, mode, delay
         self.lock = threading.Lock()
         self.session, self.sequence, self.latest = None, 0, None
@@ -166,10 +194,11 @@ class Receiver(ThreadingHTTPServer):
         self.claim_mode = 'ok'       # ok | refuse (409) | slow (1.5초 뒤 허락)
         self.claimed = set()
 
-    def enqueue(self, command, ttl_s=5.0):
+    def enqueue(self, command, ttl_s=5.0, route=None):
+        """route: start 명령에 실을 waypoint 경로 (revision·bounds·waypoints)"""
         with self.lock:
             request_id = str(uuid.uuid4())
-            self.pending = (request_id, command, time.monotonic(), ttl_s)
+            self.pending = (request_id, command, time.monotonic(), ttl_s, route)
             self.command_ready.notify_all()
             return request_id
 
@@ -181,11 +210,14 @@ class Receiver(ThreadingHTTPServer):
                 if remaining <= 0:
                     return None
                 self.command_ready.wait(remaining)
-            request_id, command, issued, ttl = self.pending
+            request_id, command, issued, ttl, route = self.pending
             self.pending = None
             self.delivered[request_id] = command
             ttl_ms = max(0.0, (issued + ttl - time.monotonic()) * 1000)
-            return dict(request_id=request_id, command=command, ttl_ms=ttl_ms)
+            reply = dict(request_id=request_id, command=command, ttl_ms=ttl_ms)
+            if command == 'start':
+                reply['route'] = route
+            return reply
 
     def accept(self, payload, size):
         with self.lock:
@@ -214,9 +246,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def reply(self, status, body):
         encoded = json.dumps(body, allow_nan=False).encode()
+        # 앞단 Caddy(encode gzip)처럼 클라이언트가 gzip을 받겠다고 하면 512 B 이상 응답을 압축한다
+        gzipped = len(encoded) >= 512 and 'gzip' in self.headers.get('Accept-Encoding', '')
+        if gzipped:
+            encoded = gzip.compress(encoded)
         try:
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')
+            if gzipped:
+                self.send_header('Content-Encoding', 'gzip')
             self.send_header('Content-Length', str(len(encoded)))
             self.end_headers()
             self.wfile.write(encoded)
@@ -226,8 +264,19 @@ class Handler(BaseHTTPRequestHandler):
     def error(self, status, code, message):
         self.reply(status, {'error': {'code': code, 'message': message}})
 
+    def denied(self):
+        """로봇용 경로 토큰 검사. 틀리면 401을 보내고 True"""
+        if self.server.token is None or self.headers.get('Authorization') == f'Bearer {self.server.token}':
+            return False
+        with self.server.lock:
+            self.server.unauthorized += 1
+        self.error(401, 'unauthorized', 'Missing or invalid robot token')
+        return True
+
     def do_GET(self):
         if self.path.startswith('/api/v1/commands/next'):
+            if self.denied():
+                return
             return self.commands_next()
         if self.path != '/status':
             return self.error(404, 'not_found', 'unknown path')
@@ -299,6 +348,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         self.connection.settimeout(2)
+        if self.path != '/api/v1/commands' and self.path.startswith('/api/v1/') and self.denied():
+            return
         if self.path == '/api/v1/commands' or (self.path.startswith('/api/v1/commands/')
                                               and self.path.endswith(('/result', '/claim'))):
             try:

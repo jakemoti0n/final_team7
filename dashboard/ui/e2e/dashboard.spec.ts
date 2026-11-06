@@ -16,6 +16,24 @@ function telemetryV2(state: 'patrolling' | 'paused' | null = 'patrolling') {
     has_resumable_task: null, reason: null, update_count: 0, last_received_at: null, age_ms: null },
     pose: { frame_id: 'map', x: 1, y: 1, yaw: 0, position_std_m: .1, last_received_at: at, age_ms: 0 } }
 }
+type LauncherState = 'idle' | 'running' | 'exited'
+/** 텔레메트리 v3: v2 + Bridge가 띄운 순찰 노드 상태 */
+function telemetryV3(state: 'patrolling' | 'paused' | 'waiting_localization' | null, launcher: LauncherState, session = randomUUID(), sequence = 1, updateCount = 1) {
+  const base = telemetryV2(state as 'patrolling' | 'paused' | null)
+  if (base.patrol.state) base.patrol.update_count = updateCount
+  return { ...base, schema_version: 3, bridge_session_id: session, sequence,
+    launcher: { commands: ['pause', 'resume', 'start', 'stop'], state: launcher, pid: launcher === 'idle' ? null : 123, exit_code: launcher === 'exited' ? 0 : null,
+      waypoints_revision: launcher === 'idle' ? null : 'c'.repeat(64), log: launcher === 'idle' ? null : '/tmp/limbo-patrol-e2e.log', other_patrol_running: false } }
+}
+/** 가짜 Bridge: 명령을 가져가 claim하고 결과를 보고한다 */
+async function bridgeTakes(request: import('@playwright/test').APIRequestContext, session: string, outcome: 'accepted' | 'rejected') {
+  const next = await request.get(`/api/v1/commands/next?robot_id=LIMBO-01&bridge_session_id=${session}&wait_s=2`)
+  expect(next.status()).toBe(200)
+  const command = await next.json()
+  expect((await request.post(`/api/v1/commands/${command.request_id}/claim`, { data: { robot_id: 'LIMBO-01', bridge_session_id: session } })).ok()).toBe(true)
+  await request.post(`/api/v1/commands/${command.request_id}/result`, { data: { robot_id: 'LIMBO-01', bridge_session_id: session, request_id: command.request_id, outcome, message: outcome, service_latency_ms: 1, patrol_update_count_at_call: 1 } })
+  return command
+}
 test('actual screen sends pause to the server, never shows success without confirmation, and demo never talks to actual APIs', async ({ page, request }) => {
   await request.post('/api/v1/telemetry', { data: telemetryV2() })
   await page.goto('/')
@@ -245,26 +263,18 @@ test('live waypoint names and drag order persist through the API', async ({ page
   expect(doc.waypoints[0]).toMatchObject({ name: '로비', yaw: 30, wait_sec: 3 })
 })
 
-test('live drive start launches patrol and switches to stop after telemetry', async ({ page, request }) => {
-  const initial = telemetryV2(null)
-  const received = await request.post('/api/v1/telemetry', { data: initial })
-  expect(received.ok()).toBe(true)
-  const calls: string[] = []
-  await page.route('**/api/v1/patrol/start', async route => {
-    calls.push(route.request().method())
-    await route.fulfill({ status: 202, json: { status: 'starting', pid: 123, log: '/tmp/test-patrol.log' } })
-  })
-  await page.route('**/api/v1/patrol/launch', route => route.fulfill({ json: { status: 'running', pid: 123 } }))
+test('live drive start sends a start command with the saved route and confirms from telemetry', async ({ page, request }) => {
+  const session = randomUUID()
+  expect((await request.post('/api/v1/telemetry', { data: telemetryV3(null, 'idle', session) })).ok()).toBe(true)
   await page.goto('/')
-  await expect(page.locator('.controls .command')).toHaveCount(1)
   await page.getByRole('button', { name: '주행 시작', exact: true }).click()
   await expect(page.getByRole('button', { name: '주행 시작 중' })).toBeDisabled()
-  expect(calls).toEqual(['POST'])
-  const next = telemetryV2('patrolling')
-  next.bridge_session_id = initial.bridge_session_id
-  next.sequence = 2
-  const updated = await request.post('/api/v1/telemetry', { data: next })
-  expect(updated.ok()).toBe(true)
+  const command = await bridgeTakes(request, session, 'accepted')
+  expect(command.command).toBe('start')
+  expect(command.route.waypoints.at(-1).type).toBe('stop')                 // 서버 YAML 경로가 실림
+  await expect(page.locator('.result')).toContainText('순찰 노드를 실행했습니다')
+  expect((await request.post('/api/v1/telemetry', { data: telemetryV3('patrolling', 'running', session, 2, 2) })).ok()).toBe(true)
+  await expect(page.locator('.result')).toContainText('순찰 시작 확인됨')
   await expect(page.getByRole('button', { name: '주행 정지', exact: true })).toBeEnabled()
 })
 
@@ -297,39 +307,30 @@ test('waypoint controls lock during patrol and unlock after termination in demo'
   await expect(page.getByRole('button', { name: '주행 시작', exact: true })).toBeEnabled()
 })
 
-test('live patrol termination calls the managed stop endpoint', async ({ page, request }) => {
-  await request.post('/api/v1/telemetry', { data: telemetryV2('patrolling') })
-  const calls: string[] = []
-  await page.route('**/api/v1/patrol/launch', route => route.fulfill({ json: { status: 'running', pid: 123 } }))
-  await page.route('**/api/v1/patrol/stop', route => { calls.push(route.request().method()); return route.fulfill({ status: 202, json: { status: 'stopping', pid: 123 } }) })
+test('live patrol termination sends a stop command; only Bridge-started nodes can be stopped', async ({ page, request }) => {
+  const session = randomUUID()
+  await request.post('/api/v1/telemetry', { data: telemetryV3('patrolling', 'running', session) })
   await page.goto('/')
   const stop = page.getByRole('button', { name: '순찰 종료' })
   await expect(stop).toBeEnabled()
   await stop.click()
-  await expect(page.locator('.controls')).toContainText('순찰 노드에 종료 신호를 보냈습니다')
-  expect(calls).toEqual(['POST'])
+  await expect(page.getByRole('button', { name: '순찰 종료 중' })).toBeDisabled()
+  expect((await bridgeTakes(request, session, 'accepted')).command).toBe('stop')
+  await expect(page.locator('.result')).toContainText('종료 신호를 보냈습니다')
+  await request.post('/api/v1/telemetry', { data: telemetryV3('patrolling', 'exited', session, 2) })
+  await expect(page.locator('.result')).toContainText('순찰 종료 확인됨')
+  // 노드가 끝났으면 남은 순찰 상태는 오래된 것 → 다시 시작 가능, 종료는 잠김
+  await expect(page.getByRole('button', { name: '주행 시작', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '순찰 종료' })).toBeDisabled()
 })
 
-test('managed patrol exit returns the drive button to start despite stale Bridge state', async ({ page, request }) => {
+test('an older Bridge without launcher locks start and stop but keeps pause', async ({ page, request }) => {
   await request.post('/api/v1/telemetry', { data: telemetryV2('patrolling') })
-  let launchStatus = 'running'
-  const starts: string[] = []
-  await page.route('**/api/v1/patrol/launch', route => route.fulfill({ json: { status: launchStatus, pid: 123 } }))
-  await page.route('**/api/v1/patrol/stop', route => {
-    launchStatus = 'exited'
-    return route.fulfill({ status: 202, json: { status: 'stopping', pid: 123 } })
-  })
-  await page.route('**/api/v1/patrol/start', route => {
-    starts.push(route.request().method())
-    launchStatus = 'running'
-    return route.fulfill({ status: 202, json: { status: 'starting', pid: 124, log: '/tmp/restarted-patrol.log' } })
-  })
   await page.goto('/')
   await expect(page.getByRole('button', { name: '주행 정지', exact: true })).toBeEnabled()
-  await page.getByRole('button', { name: '순찰 종료' }).click()
-  const start = page.getByRole('button', { name: '주행 시작', exact: true })
-  await expect(start).toBeEnabled()
-  await start.click()
-  expect(starts).toEqual(['POST'])
-  await expect(page.getByRole('button', { name: '주행 시작 중' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '순찰 종료' })).toBeDisabled()
+  await expect(page.locator('.patrol-stop').locator('..')).toHaveAttribute('title', /Bridge를 업데이트/)
+  await request.post('/api/v1/telemetry', { data: telemetryV2(null) })
+  await expect(page.getByRole('button', { name: '주행 시작', exact: true })).toBeDisabled()
+  await expect(page.locator('#control-reason')).toContainText('Bridge를 업데이트')
 })
