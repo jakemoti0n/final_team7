@@ -13,7 +13,7 @@ setup(
         ('share/' + package_name + '/config',
             ['config/person_detector.yaml', 'config/person_detector_oak.yaml',
              'config/person_detector_oak_ros.yaml',
-             'config/oak_camera.yaml', 'config/tof.yaml', 'config/person_wait.yaml']),
+             'config/oak_camera.yaml', 'config/tof.yaml', 'config/person_wait.yaml', 'config/person_wait_real.yaml']),
         # 팀원이 학습한 하반신 모델 (person_detector.yaml 기본 모델)과 그것을 OAK 카메라 안에서 돌리는 blob
         ('share/' + package_name + '/models',
             ['models/leg_512.pt', 'models/leg_640.pt', 'models/leg_640_352_3shave.blob']),

@@ -5,6 +5,7 @@ The mounted profile requires a closed, fixed lid and one owner of the sensor TF.
 """
 
 import math
+from itertools import product
 import json
 from pathlib import Path
 
@@ -26,8 +27,14 @@ def mounted_parameters(config):
                                    or not math.isfinite(v) for v in vector):
             raise ValueError('Mount geometry must contain finite three-vectors')
     translation, rpy, lower, upper = vectors
-    if any(v != 0 for v in rpy):
-        raise ValueError('This body box supports only an axis-aligned fixed mount')
+    # A quarter turn preserves an exact axis-aligned box in sensor coordinates.
+    # Reject arbitrary rotations rather than enclosing the body in an oversized
+    # box which could silently erase nearby real obstacles.
+    quarter_turns = rpy[2] / (math.pi / 2)
+    if rpy[0] != 0 or rpy[1] != 0 or not math.isclose(
+            quarter_turns, round(quarter_turns), rel_tol=0, abs_tol=1e-9):
+        raise ValueError('Body box requires zero roll/pitch and yaw in multiples of 90 degrees')
+    cosine, sine = round(math.cos(rpy[2])), round(math.sin(rpy[2]))
     padding = config['body_padding_m']
     if isinstance(padding, bool) or not isinstance(padding, (int, float)) or not 0 <= padding <= 0.05:
         raise ValueError('Body padding must be between zero and 5cm')
@@ -36,9 +43,14 @@ def mounted_parameters(config):
     lo, hi = config['scan_min_height_sensor_m'], config['scan_max_height_sensor_m']
     if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in [lo, hi]) or lo >= hi:
         raise ValueError('Invalid scan height band')
+    corners = []
+    for corner in product(*[(lo - padding, hi + padding) for lo, hi in zip(lower, upper)]):
+        x, y, z = [value - offset for value, offset in zip(corner, translation)]
+        # Inverse of p_base = R_z(yaw) * p_sensor + translation.
+        corners.append((cosine * x + sine * y, -sine * x + cosine * y, z))
     return {'body_filter_enabled': True,
-            'body_min': [a - t - padding for a, t in zip(lower, translation)],
-            'body_max': [b - t + padding for b, t in zip(upper, translation)]}
+            'body_min': [min(p[i] for p in corners) for i in range(3)],
+            'body_max': [max(p[i] for p in corners) for i in range(3)]}
 
 
 def launch_nodes(context):
@@ -60,7 +72,9 @@ def launch_nodes(context):
             name='limbo_mid360_mount_tf', output='screen',
             parameters=[{'use_sim_time': False}],
             arguments=['--x', str(xyz[0]), '--y', str(xyz[1]), '--z', str(xyz[2]),
-                       '--roll', '0', '--pitch', '0', '--yaw', '0',
+                       '--roll', str(config['sensor_rpy_rad'][0]),
+                       '--pitch', str(config['sensor_rpy_rad'][1]),
+                       '--yaw', str(config['sensor_rpy_rad'][2]),
                        '--frame-id', config['parent_frame'], '--child-frame-id', config['sensor_frame']],
         ))
     return [

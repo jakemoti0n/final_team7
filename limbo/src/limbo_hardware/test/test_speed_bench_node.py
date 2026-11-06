@@ -116,8 +116,8 @@ class SpeedBenchNodeTests(unittest.TestCase):
         values = {'enable_output': True, 'duration_seconds': 5.,
                   'record_dir': str(Path(self.temp.name) / str(len(self.nodes))),
                   'left_wheel_radius': .075, 'right_wheel_radius': .075,
-                  'wheel_separation': .54, 'left_counts_per_revolution': 3688.,
-                  'right_counts_per_revolution': 3607.,
+                  'wheel_separation': .53, 'left_counts_per_revolution': 3674.,
+                  'right_counts_per_revolution': 3687.,
                   'left_target_rad_s': left, 'right_target_rad_s': right}
         values.update(overrides)
 
@@ -136,7 +136,7 @@ class SpeedBenchNodeTests(unittest.TestCase):
     def command(left=0., right=.2666666667):
         msg = Twist()
         msg.linear.x = .075 * (left + right) / 2
-        msg.angular.z = .075 * (right - left) / .54
+        msg.angular.z = .075 * (right - left) / .53
         return msg
 
     def ready_and_start(self, node, left=0., right=.2666666667):
@@ -187,7 +187,7 @@ class SpeedBenchNodeTests(unittest.TestCase):
         invalid=[{'extended_observation':False},{'duration_seconds':5.},{'duration_seconds':9.},
                  {'left':0.},{'right':-.4},{'left_wheel_radius':.076},
                  {'right_wheel_radius':.076},{'wheel_separation':.55},
-                 {'left_counts_per_revolution':3689.}]
+                 {'left_counts_per_revolution':3690.}]
         invalid += [{key:value} for key in ('extended_distance_observation','record_voltage')
                     for value in (0,1,'true',.0)]
         for changes in invalid:
@@ -337,9 +337,9 @@ class SpeedBenchNodeTests(unittest.TestCase):
         fake.next_counts[0]+=5;self.step(node,.05)
         # At t=.11, the .01 boundary interpolates .5 counts between 0 and 3.
         self.assertAlmostEqual(node.last_control['filter_span_s'],.1)
-        self.assertAlmostEqual(node.last_control['measured_left_right_rad_s'][1],7.5*math.tau/3607/.1)
+        self.assertAlmostEqual(node.last_control['measured_left_right_rad_s'][1],7.5*math.tau/3687/.1)
         self.step(node,.05)
-        self.assertAlmostEqual(node.last_control['measured_left_right_rad_s'][1],5.*math.tau/3607/.1)
+        self.assertAlmostEqual(node.last_control['measured_left_right_rad_s'][1],5.*math.tau/3687/.1)
         self.assertAlmostEqual(node.last_control['filter_start_s'],self.now-.1)
         self.assertEqual(node.last_control['velocity_window_s'],.1)
 
@@ -549,7 +549,7 @@ class SpeedBenchNodeTests(unittest.TestCase):
         self.assertEqual((count.right_total, count.left_total), (0, 1))
         self.assertEqual(joint.name, ['right_wheel_joint', 'left_wheel_joint'])
         self.assertEqual(joint.velocity[0], 0.)
-        self.assertAlmostEqual(joint.velocity[1], math.tau/3688/.05)
+        self.assertAlmostEqual(joint.velocity[1], math.tau/3674/.05)
         self.assertEqual(fake.writes[-1][0], 0)
         self.assertGreaterEqual(fake.writes[-1][1], 0)
         self.assertGreater(node.last_control['measured_left_right_rad_s'][0], 0.)

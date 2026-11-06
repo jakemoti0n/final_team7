@@ -44,7 +44,7 @@ class NodeTests(unittest.TestCase):
         if rclpy.ok():
             rclpy.shutdown()
 
-    def test_baseline_then_3607_counts_is_one_right_revolution(self):
+    def test_baseline_then_3687_counts_is_one_right_revolution(self):
         self.node._poll()
         first = self.node.count_pub.publish.call_args.args[0]
         joint = self.node.joint_pub.publish.call_args.args[0]
@@ -53,11 +53,11 @@ class NodeTests(unittest.TestCase):
         self.assertEqual(list(joint.velocity), [])
         self.assertEqual(list(joint.name), ['right_wheel_joint'])
         self.now += 2
-        self.node.reader.raw = (3707, 990)
+        self.node.reader.raw = (3787, 990)
         self.node._poll()
         counts = self.node.count_pub.publish.call_args.args[0]
         joint = self.node.joint_pub.publish.call_args.args[0]
-        self.assertEqual(counts.right_total, 3607)
+        self.assertEqual(counts.right_total, 3687)
         self.assertEqual(counts.left_total, 10)
         self.assertAlmostEqual(joint.position[0], 2 * math.pi)
         self.assertAlmostEqual(joint.velocity[0], math.pi)
@@ -126,7 +126,7 @@ class NodeTests(unittest.TestCase):
         self.node.diag_pub = Mock()
 
     def test_left_calibration_publishes_forward_reverse_and_stop(self):
-        # Deliberately unlike 3607: sharing the right conversion must fail this test.
+        # Deliberately unlike 3687: sharing the right conversion must fail this test.
         self.enable_left_angle(4000.0)
         self.node._poll()
         baseline = self.node.joint_pub.publish.call_args.args[0]
@@ -136,7 +136,7 @@ class NodeTests(unittest.TestCase):
         self.assertEqual(list(baseline.effort), [])
 
         self.now += 2.0
-        self.node.reader.raw = (3707, (1000 - 4000) % 2**32)
+        self.node.reader.raw = (3787, (1000 - 4000) % 2**32)
         self.node._poll()
         counts = self.node.count_pub.publish.call_args.args[0]
         joints = self.node.joint_pub.publish.call_args.args[0]
@@ -149,7 +149,7 @@ class NodeTests(unittest.TestCase):
             self.assertAlmostEqual(velocity, math.pi)
 
         self.now += 0.5
-        self.node.reader.raw = (3707, 1000)
+        self.node.reader.raw = (3787, 1000)
         self.node._poll()
         counts = self.node.count_pub.publish.call_args.args[0]
         joints = self.node.joint_pub.publish.call_args.args[0]
@@ -201,7 +201,7 @@ class NodeTests(unittest.TestCase):
         self.assertEqual(values['left_counts_per_revolution'], '4000.0')
         self.assertEqual(values['left_calibration'], 'provisional')
         self.assertEqual(values['left_angle_enabled'], 'True')
-        self.assertEqual(values['right_counts_per_revolution'], '3607.0')
+        self.assertEqual(values['right_counts_per_revolution'], '3687.0')
         self.assertEqual(values['motor_commands_enabled'], 'False')
 
     def test_invalid_left_cpr_is_rejected_before_reader_creation(self):

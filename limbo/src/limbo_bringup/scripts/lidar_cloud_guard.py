@@ -385,6 +385,11 @@ def main(args=None):
         executor.spin()
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
+    except RuntimeError as error:
+        # Jazzy can finish taking a subscription after its context is closed.
+        # Keep operational conversion failures visible while ROS is active.
+        if rclpy.ok() or not str(error).startswith("Unable to convert call argument "):
+            raise
     finally:
         # Jazzy try_shutdown is idempotent and does not uninstall signal handlers.
         cleanup_ros_resources(executor, node, rclpy.try_shutdown)

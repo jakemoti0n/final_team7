@@ -79,12 +79,12 @@ class SpeedBenchNode(Node):
                 or not any(self.expected)):
             raise ValueError('At least one requested wheel speed within +/-0.4 rad/s required')
         self._targets(Twist())  # Validate the shared geometry and provisional CPR.
-        if (self.s['left_counts_per_revolution'],self.s['right_counts_per_revolution'])!=(3688.,3607.):
+        if (self.s['left_counts_per_revolution'],self.s['right_counts_per_revolution'])!=(3674.,3687.):
             raise ValueError('Review fixed bench guards before changing provisional CPR')
         if self.s['extended_distance_observation']:
             geometry=(self.s['left_wheel_radius'],self.s['right_wheel_radius'],self.s['wheel_separation'])
-            if duration!=10. or self.expected!=(.4,.4) or geometry!=(.075,.075,.54):
-                raise ValueError('Extended distance observation requires 10s, both +0.4 rad/s, and geometry .075/.075/.54')
+            if duration!=10. or self.expected!=(.4,.4) or geometry!=(.075,.075,.53):
+                raise ValueError('Extended distance observation requires 10s, both +0.4 rad/s, and geometry .075/.075/.53')
         # 벤치의 15 % 상한은 벤치가 직접 지킨다 (PIConfig는 물리 최대까지 허용하고, 주행 브리지는 자기 천장을 따로 둔다)
         if type(self.s['max_duty_raw']) is not int or not 1<=self.s['max_duty_raw']<=4915:
             raise ValueError('max_duty_raw must be an integer in 1..4915 for the bench')

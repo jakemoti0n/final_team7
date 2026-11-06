@@ -25,6 +25,8 @@ class PIConfig:
     max_dt: float = 0.15
     max_target_rad_s: float = 0.4
     feedforward_gain: float = 0.0
+    # Optional forward (rad/s, duty fraction) anchors; reverse keeps the signed gain.
+    forward_curve: tuple = ()
 
     def __post_init__(self):
         for name in ('kp', 'ki', 'target_slew_rad_s2', 'output_slew_per_s',
@@ -34,6 +36,14 @@ class PIConfig:
             invalid_sign = value < 0 if name in ('kp', 'ki', 'feedforward_gain') else value <= 0
             if invalid_sign:
                 raise ValueError(f'{name} has an invalid sign')
+        if self.forward_curve:
+            if len(self.forward_curve) != 4:
+                raise ValueError('forward_curve requires two speed/duty pairs')
+            slow, slow_duty, fast, fast_duty = self.forward_curve
+            for value in self.forward_curve:
+                _finite('forward_curve', value)
+            if not (0 < slow < fast and 0 < slow_duty <= fast_duty <= 1):
+                raise ValueError('forward_curve needs increasing speeds and ordered positive duties')
         if self.kp == 0 and self.ki == 0:
             raise ValueError('At least one PI gain must be positive')
         if self.feedforward_gain > .375:
@@ -86,11 +96,14 @@ class WheelSpeedPI:
         self.output = 0.0
         self.direction = 0
 
-    def step(self, target_rad_s, measured_rad_s, dt):
+    def step(self, target_rad_s, measured_rad_s, dt, *, forward_rise_scale=1.0):
         c = self.config
         for name, value in (('target_rad_s', target_rad_s),
                             ('measured_rad_s', measured_rad_s), ('dt', dt)):
             _finite(name, value)
+        _finite('forward_rise_scale', forward_rise_scale)
+        if not 0.0 <= forward_rise_scale <= 1.0:
+            raise ValueError('forward_rise_scale must be in [0, 1]')
         if not c.min_dt <= dt <= c.max_dt:
             raise ValueError('dt outside the configured interval')
         if abs(target_rad_s) > c.max_target_rad_s:
@@ -109,13 +122,22 @@ class WheelSpeedPI:
             target_rad_s - self.ramped_rad_s, -ramp_delta, ramp_delta)
         error = ramped - measured_rad_s
         feedforward = c.feedforward_gain * ramped
+        if ramped > 0 and c.forward_curve:
+            slow, slow_duty, fast, fast_duty = c.forward_curve
+            if ramped <= slow:
+                feedforward = slow_duty * ramped / slow
+            else:
+                fraction = min(1.0, (ramped - slow) / (fast - slow))
+                feedforward = slow_duty + fraction * (fast_duty - slow_duty)
+            feedforward = min(feedforward, c.max_duty_raw / 32767.0)
         base = feedforward + c.kp * error
         proposed_integral = self.integral + c.ki * error * dt
         cap = c.max_duty_raw / 32767.0
         duty_lower, duty_upper = (0.0, cap) if direction > 0 else (-cap, 0.0)
         slew_delta = c.output_slew_per_s * dt
         lower = max(duty_lower, self.output - slew_delta)
-        upper = min(duty_upper, self.output + slew_delta)
+        rise = slew_delta * forward_rise_scale if direction > 0 else slew_delta
+        upper = min(duty_upper, self.output + rise)
         proposed_raw = base + proposed_integral
         if not all(math.isfinite(v) for v in (ramped, error, feedforward, base, proposed_integral, proposed_raw)):
             raise ValueError('PI calculation overflow')

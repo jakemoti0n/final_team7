@@ -54,6 +54,56 @@ def limit_twist(linear, angular, max_linear, max_angular):
     return linear / scale, angular / scale
 
 
+class StraightStart:
+    """Use signed wheel travel to limit left duty rise during departure only."""
+
+    def __init__(self):
+        self.phase = 'ready'
+        self.lead_m = 0.0
+
+    def update(self, targets, speeds, positions):
+        stopped = max(map(abs, speeds)) < 0.01
+        if targets == (0.0, 0.0):
+            self.phase = 'ready' if stopped else 'done'
+            self.lead_m = 0.0
+            return 1.0
+        if self.phase == 'done':
+            return 1.0
+
+        left, right = targets  # Forward wheel targets in m/s.
+        near_straight = min(targets) > 0.0 and abs(left - right) <= 0.35 * max(targets)
+        if not near_straight:
+            # A steering request before either wheel rolls may settle to straight.
+            before_roll = self.phase == 'ready' or (
+                self.phase == 'tracking'
+                and max(abs(p - origin) for p, origin in zip(positions, self.origin)) < 0.001
+            )
+            self.phase = 'ready' if before_roll and stopped else 'done'
+            return 1.0
+        if self.phase == 'ready':
+            if not stopped:  # Command changed while coasting.
+                self.phase = 'done'
+                return 1.0
+            self.origin = self.previous = positions
+            self.lead_m = 0.0
+            self.phase = 'tracking'
+
+        dl = positions[0] - self.previous[0]
+        dr = positions[1] - self.previous[1]
+        self.previous = positions
+        # Subtract the difference the commanded arc itself would produce.
+        self.lead_m += dl - dr - (dl + dr) * (left - right) / (left + right)
+        both_rolling = min(positions[i] - self.origin[i] for i in (0, 1)) >= 0.005
+        if both_rolling and self.lead_m <= 0.001:
+            self.phase = 'done'
+        elif self.lead_m >= 0.001:
+            self.phase = 'limiting'
+        # Stop restraining the left wheel if it falls behind before catch-up.
+        elif self.phase == 'limiting' and self.lead_m <= 0.0:
+            self.phase = 'tracking'
+        return 0.10 if self.phase == 'limiting' else 1.0
+
+
 class DriveNode(Node):
     def __init__(self, *, parameter_overrides=None, transport_factory=DriveTransport, monotonic=time.monotonic):
         super().__init__('roboclaw_drive', parameter_overrides=parameter_overrides)
@@ -64,8 +114,10 @@ class DriveNode(Node):
             'left_counts_per_revolution': 0.0, 'right_counts_per_revolution': 0.0,
             'kp': 0.02, 'ki': 0.10, 'feedforward_gain': 0.25,
             'left_feedforward_gain': -1.0, 'right_feedforward_gain': -1.0,
-            'max_duty_raw': 4915, 'target_slew_rad_s2': 2.0, 'output_slew_per_s': 0.15,
-            'velocity_window_s': 0.10, 'control_period_s': 0.05,
+            'use_right_forward_curve': False,
+            'right_forward_feedforward_curve': [0., 0., 0., 0.],  # Two (wheel m/s, duty fraction) pairs.
+            'max_duty_raw': DUTY_CEILING, 'target_slew_rad_s2': 2.0, 'output_slew_per_s': 0.15,
+            'velocity_window_s': 0.10, 'control_period_s': 0.05, 'balance_straight_start': False,
             'max_linear_m_s': 0.25, 'max_angular_rad_s': 0.8,
             'min_battery_volts': 10.0, 'battery_recover_volts': 0.3, 'battery_period_s': 0.5,
             'stall_seconds': 1.0, 'record_dir': '',
@@ -95,7 +147,20 @@ class DriveNode(Node):
         configs = []
         for gain in (s['left_feedforward_gain'], s['right_feedforward_gain']):
             configs.append(common if gain == -1 else replace(common, feedforward_gain=gain))
+        curve = s['right_forward_feedforward_curve']
+        if s['use_right_forward_curve']:
+            if len(curve) != 4:
+                raise ValueError('right_forward_feedforward_curve needs two speed/duty pairs')
+            slow, low_duty, fast, high_duty = curve
+            radius = s['right_wheel_radius']
+            configs[1] = replace(configs[1], forward_curve=(slow / radius, low_duty, fast / radius, high_duty))
         self.controllers = [WheelSpeedPI(c) for c in configs]  # [왼쪽, 오른쪽]
+        self.straight_start = StraightStart() if s['balance_straight_start'] else None
+        self.wheel_radii = (s['left_wheel_radius'], s['right_wheel_radius'])
+        self.metres_per_count = (
+            math.tau * self.wheel_radii[0] / s['left_counts_per_revolution'],
+            math.tau * self.wheel_radii[1] / s['right_counts_per_revolution'],
+        )
         self.estimator = CountWindowEstimator(s['left_counts_per_revolution'],
                                               s['right_counts_per_revolution'], s['velocity_window_s'])
         self.tracker = CounterTracker(signs=(1, -1))  # M1=오른쪽 전진 +, M2=왼쪽 전진 −(원시) → 둘 다 전진 +
@@ -257,11 +322,18 @@ class DriveNode(Node):
                 self._check_battery(now)
             targets, reasons = self._targets_now(now)
             measured = (estimate.left_rad_s, estimate.right_rad_s)
+            left_rise = 1.0
+            if self.straight_start is not None:
+                left_rise = self.straight_start.update(
+                    tuple(v * r for v, r in zip(targets, self.wheel_radii)),
+                    tuple(v * r for v, r in zip(measured, self.wheel_radii)),
+                    (count.left_total * self.metres_per_count[0], count.right_total * self.metres_per_count[1]),
+                )
             outputs = []
             for index, (pi, target, actual) in enumerate(zip(self.controllers, targets, measured)):
                 if target and pi.direction and (target > 0) != (pi.direction > 0):
                     pi.reset()  # 방향 전환은 0을 거쳐서 (PI 규약). 출력은 변화율 제한을 따라 다시 오른다
-                outputs.append(pi.step(target, actual, dt))
+                outputs.append(pi.step(target, actual, dt, forward_rise_scale=left_rise if index == 0 else 1.0))
                 self._watch_stall(index, outputs[-1], actual, now)
             if any(self.stalled) and not reasons:
                 # 이번 틱에 막 잠김으로 판정됐다: 출력은 이미 보냈으면 안 되므로 0으로
@@ -276,7 +348,8 @@ class DriveNode(Node):
                 'target_left_right_rad_s': list(targets), 'measured_left_right_rad_s': list(measured),
                 'duty_m1_m2': list(duties), 'left_total': count.left_total, 'right_total': count.right_total,
                 'battery_volts': self.battery_volts, 'status': row['status_hex'],
-                'pi_left_right': [asdict(o) for o in outputs]}
+                'straight_start_phase': self.straight_start.phase if self.straight_start else 'off',
+                'left_rise_scale': left_rise, 'pi_left_right': [asdict(o) for o in outputs]}
             self._record('control', self.last_control)
         except Exception as error:
             text = type(error).__name__ + ': ' + str(error)
@@ -336,7 +409,8 @@ class DriveNode(Node):
                   'person_wait': self.person_wait, 'person_wait_reason': self.person_wait_reason,
                   'errors': ' | '.join(self.errors)}
         if self.last_control:
-            for key in ('command', 'target_left_right_rad_s', 'measured_left_right_rad_s', 'duty_m1_m2'):
+            for key in ('command', 'target_left_right_rad_s', 'measured_left_right_rad_s', 'duty_m1_m2',
+                        'straight_start_phase', 'left_rise_scale'):
                 values[key] = self.last_control[key]
         status.values = [KeyValue(key=k, value=str(v)) for k, v in values.items()]
         msg = DiagnosticArray()

@@ -9,9 +9,9 @@ wheel_speed_bench:
     extended_observation: false
     left_wheel_radius: 0.075
     right_wheel_radius: 0.075
-    wheel_separation: 0.54
-    left_counts_per_revolution: 3688.0
-    right_counts_per_revolution: 3607.0
+    wheel_separation: 0.53
+    left_counts_per_revolution: 3674.0
+    right_counts_per_revolution: 3687.0
     left_target_rad_s: 0.4
     right_target_rad_s: 0.4
     kp: 0.10

@@ -98,6 +98,16 @@ class DriveNodeTests(unittest.TestCase):
         self.node._tick()  # opening → ready
         return self.node, self.transport
 
+    def test_curve_calibrates_only_right_wheel_in_forward_units(self):
+        node, _ = self.make(use_right_forward_curve=True, right_forward_feedforward_curve=[.07, .22, .13, .30])
+        left, right = (controller.config for controller in node.controllers)
+        self.assertEqual(left.forward_curve, ())
+        self.assertEqual(right.forward_curve, (.07/.075, .22, .13/.075, .30))
+
+    def test_saved_curve_requires_explicit_opt_in(self):
+        node, _ = self.make(right_forward_feedforward_curve=[.07, .22, .13, .30])
+        self.assertEqual(node.controllers[1].config.forward_curve, ())
+
     def command(self, linear, angular=0.0):
         msg = Twist()
         msg.linear.x, msg.angular.z = linear, angular
@@ -107,6 +117,52 @@ class DriveNodeTests(unittest.TestCase):
         self.now += seconds
         self.transport.spin_wheels(left, right)
         self.node._tick()
+
+    def test_straight_start_limits_left_rise_then_restores_pi(self):
+        node, fake = self.make(balance_straight_start=True)
+        self.command(0.13)
+        self.step()
+        self.step()
+        before = fake.writes[-1]
+        self.step(left=16)
+        right, left = fake.writes[-1]
+        self.assertEqual(node.last_control['straight_start_phase'], 'limiting')
+        self.assertLessEqual(left - before[1], 26)
+        self.assertGreater(right - before[0], 200)
+        self.step(left=40, right=57)
+        self.assertEqual(node.last_control['straight_start_phase'], 'done')
+        self.assertEqual(node.last_control['left_rise_scale'], 1.0)
+        self.step(left=48)
+        self.assertEqual(node.last_control['left_rise_scale'], 1.0)
+        self.command(0.0)
+        self.step()
+        self.assertEqual(fake.writes[-1], (0, 0))
+
+    def test_steering_jitter_before_motion_does_not_disarm_straight_start(self):
+        node, _ = self.make(balance_straight_start=True)
+        for angular in (0.0, 0.20, 0.0):
+            self.command(0.08, angular)
+            self.step()
+        self.step(left=24)
+        self.assertEqual(node.last_control['left_rise_scale'], 0.10)
+
+    def test_start_limiter_yields_to_a_turn_and_to_timeout(self):
+        node, fake = self.make(balance_straight_start=True)
+        self.command(0.13)
+        self.step()
+        self.step(left=24)
+        self.assertEqual(node.last_control['left_rise_scale'], 0.10)
+        self.command(0.0, 0.3)
+        self.step()
+        self.assertEqual(node.last_control['left_rise_scale'], 1.0)
+        self.assertLessEqual(fake.writes[-1][1], 0)
+        for _ in range(12):
+            self.step()
+        self.assertEqual(fake.writes[-1], (0, 0))
+        self.assertEqual(node.straight_start.phase, 'ready')
+        self.command(-0.1)
+        self.step()
+        self.assertEqual(node.last_control['left_rise_scale'], 1.0)
 
     def test_open_sets_board_timeout_and_starts_from_zero(self):
         node, fake = self.make()

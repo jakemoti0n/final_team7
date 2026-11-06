@@ -11,12 +11,17 @@ roboclaw_drive:
     feedforward_gain: 0.25
     left_feedforward_gain: 0.2375     # 왼쪽이 같은 출력에서 조금 빨라 FF를 5 % 낮춤 (10-30 좌우 특성 측정)
     right_feedforward_gain: 0.2625
-    # 출력 상한(raw, 32767 = 100 %). 25 %(8191): 11-03 축 수리 뒤 15 %로는 왼쪽이 안 굴러 올린 값으로 19분 주행 확인.
-    # duty는 곧 속도 비율이라 25 % ≈ 0.15 m/s가 한계. 지도 작성 런치는 35 %(11468), 코드 천장은 50 %(roboclaw_drive.DUTY_CEILING, PM 11-03)
-    max_duty_raw: 8191
+    # Attended forward-wheel tests, 2026-11-06. Each pair is [wheel m/s, PWM fraction].
+    use_right_forward_curve: false
+    right_forward_feedforward_curve: [0.07, 0.22, 0.13, 0.30]
+    # 사용자 요청(2026-11-04): 일반 주행·지도 작성·통신 계층의 출력 상한을 30 %로 통일.
+    # 9830 / 32767 ≈ 30 %. PWM 상한이며 목표 속도나 실제 속도의 비율을 뜻하지 않는다.
+    max_duty_raw: 9830
     # 목표 각속도 변화율 2.0 rad/s² = 바퀴 0.15 m/s². 키보드 0.1 m/s에 0.7 s면 도달. 벤치의 0.4는 10 s 시험용이라 너무 느림
     target_slew_rad_s2: 2.0
-    output_slew_per_s: 0.15           # duty 변화율(초당 15 %). 벤치와 같음. 급출발 방지, 상한까지 1 s
+    output_slew_per_s: 0.15           # duty 변화율(초당 15 %). 0에서 30 % 상한까지 최소 2 s
+    # 실물 직진 출발 시험에서만 활성화하고, 반복 검증 뒤 기본값을 결정한다.
+    balance_straight_start: false
     velocity_window_s: 0.10           # 속도 추정 창. 0.1 s: 20 Hz 제어에서 두 표본
     control_period_s: 0.05
     # 속도 상한. 지도 작성·첫 주행은 느리게. 키보드 기본은 0.1 m/s, 0.4 rad/s로 시작하고 여기까지만 올릴 수 있다

@@ -27,6 +27,9 @@ def _actions(context):
             PythonLaunchDescriptionSource(os.path.join(hardware, 'launch', 'teleop_drive.launch.py')),
             launch_arguments={'max_duty_raw': get('max_duty_raw'), 'publish_tf': 'true'}.items()),
         IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(bringup, 'launch', 'start_real_frames.launch.py')),
+            launch_arguments={'camera': 'false'}.items()),
+        IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(bringup, 'launch', 'start_mid360.launch.py')),
             launch_arguments={'profile': 'mounted'}.items()),
         Node(package='slam_toolbox', executable='async_slam_toolbox_node', name='slam_toolbox', output='screen',
@@ -48,8 +51,8 @@ def _actions(context):
 
 def generate_launch_description():
     return LaunchDescription([
-        # 35 %(11468, PM 11-03): 지도 작성은 0.15~0.2 m/s면 충분하고, 25 %는 배터리 11.3 V에서 0.1 m/s에도 상한에 붙었다
-        DeclareLaunchArgument('max_duty_raw', default_value='11468', description='출력 상한 raw (32767=100 %)'),
+        # 일반 주행과 같은 30 % 상한(2026-11-04 사용자 요청). 속도 목표는 별도 설정이다.
+        DeclareLaunchArgument('max_duty_raw', default_value='9830', description='출력 상한 raw (최대 9830, 약 30 %)'),
         DeclareLaunchArgument('bag', default_value='true'),
         DeclareLaunchArgument('label', default_value=''),
         OpaqueFunction(function=_actions),

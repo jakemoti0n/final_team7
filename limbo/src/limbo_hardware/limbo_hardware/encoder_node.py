@@ -30,7 +30,7 @@ class EncoderNode(Node):
             'poll_hz': 20.0,
             'serial_timeout': 0.2,
             'reconnect_seconds': 2.0,
-            'right_counts_per_revolution': 3607.0,
+            'right_counts_per_revolution': 3687.0,
             # Zero leaves the left angle unavailable until explicitly calibrated.
             'left_counts_per_revolution': 0.0,
             'max_delta_counts': 10000,

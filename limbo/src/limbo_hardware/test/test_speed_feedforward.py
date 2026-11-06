@@ -5,6 +5,22 @@ from limbo_hardware.speed_pi import PIConfig,WheelSpeedPI
 
 
 class FeedforwardTests(unittest.TestCase):
+    def test_forward_curve_and_reverse_fallback(self):
+        cfg = PIConfig(kp=.02, ki=.10, feedforward_gain=.25,
+                       forward_curve=(.9, .22, 1.7, .30), max_duty_raw=9830,
+                       max_target_rad_s=3., target_slew_rad_s2=80.)
+        pi = WheelSpeedPI(cfg)
+        for target, expected in [(.45, .11), (.9, .22), (1.3, .26), (1.8, 9830/32767)]:
+            result = pi.step(target, target, .05)
+            self.assertAlmostEqual(result.feedforward_output, expected)
+            self.assertLessEqual(abs(result.duty_raw), 9830)
+        self.assertEqual(pi.step(0., .5, .05).duty_raw, 0)
+        self.assertAlmostEqual(pi.step(-.8, -.8, .05).feedforward_output, -.2)
+        for curve in ((1., .24), (1., .22, .9, .30), (.9, .4, 1.7, .30),
+                      (.9, .22, float('nan'), .3)):
+            with self.subTest(curve=curve), self.assertRaises(ValueError):
+                PIConfig(forward_curve=curve)
+
     def test_gain_is_explicit_bounded_and_defaults_off(self):
         self.assertEqual(PIConfig().feedforward_gain,0.)
         for value in (-.001,.376,True,float('nan'),float('inf'),'0.3375'):

@@ -23,6 +23,7 @@ class LaunchTests(unittest.TestCase):
         self.odom = {'wheel_odometry': {'ros__parameters': {
             'left_wheel_radius': .075, 'right_wheel_radius': .075, 'wheel_separation': .54}}}
         self.context = LaunchContext()
+        self.context.launch_configurations['publish_tf'] = 'false'
         self.context.launch_configurations['encoder_params_file'] = str(self.encoder_file)
         self.context.launch_configurations['odom_params_file'] = str(self.odom_file)
 
@@ -39,9 +40,9 @@ class LaunchTests(unittest.TestCase):
             self.module._nodes(self.context)
         self.assertEqual(node.call_count, 2)
         encoder, odom = [call.kwargs for call in node.call_args_list]
-        self.assertEqual(encoder['parameters'], [str(self.encoder_file)])
+        self.assertEqual(encoder['parameters'], [str(self.encoder_file), {'use_sim_time': False}])
         self.assertEqual(odom['parameters'], [str(self.odom_file), {
-            'left_counts_per_revolution': 4000.0, 'right_counts_per_revolution': 3000.0}])
+            'left_counts_per_revolution': 4000.0, 'right_counts_per_revolution': 3000.0}, {'publish_tf': False, 'use_sim_time': False}])
 
     def test_invalid_geometry_or_cpr_is_rejected_before_any_node_action(self):
         for kind in ('geometry', 'calibration'):

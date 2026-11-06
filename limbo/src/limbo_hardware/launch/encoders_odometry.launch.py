@@ -1,4 +1,4 @@
-"""Read-only encoder input and raw wheel odometry; no TF, EKF or motor nodes."""
+"""Read-only encoder input and wheel odometry; optional TF, no motor nodes."""
 import math
 import os
 
@@ -28,11 +28,14 @@ def _nodes(context):
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
             raise ValueError(f'{name} must be explicitly positive in the encoder parameter file')
         shared_cpr[name] = float(value)
+    publish_tf = LaunchConfiguration('publish_tf').perform(context).lower()
+    if publish_tf not in ('true', 'false'):
+        raise ValueError('publish_tf must be true/false')
     return [
         Node(package='limbo_hardware', executable='roboclaw_encoder',
-             name='roboclaw_encoder', output='screen', parameters=[encoder_file]),
+             name='roboclaw_encoder', output='screen', parameters=[encoder_file, {'use_sim_time': False}]),
         Node(package='limbo_hardware', executable='wheel_odometry',
-             name='wheel_odometry', output='screen', parameters=[odom_file, shared_cpr]),
+             name='wheel_odometry', output='screen', parameters=[odom_file, shared_cpr, {'publish_tf': publish_tf == 'true', 'use_sim_time': False}]),
     ]
 
 
@@ -43,5 +46,6 @@ def generate_launch_description():
             share, 'config', 'encoders_readonly.yaml')),
         DeclareLaunchArgument('odom_params_file', default_value=os.path.join(
             share, 'config', 'wheel_odometry.yaml')),
+        DeclareLaunchArgument('publish_tf', default_value='false'),
         OpaqueFunction(function=_nodes),
     ])

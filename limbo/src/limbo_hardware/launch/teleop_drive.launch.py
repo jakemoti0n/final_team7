@@ -31,7 +31,13 @@ def _nodes(context):
     overrides = dict(geometry, **cpr, use_sim_time=False, record_dir=get('record_dir'))
     if get('max_duty_raw'):
         overrides['max_duty_raw'] = int(get('max_duty_raw'))
-    for key in ('max_linear_m_s', 'max_angular_rad_s'):
+    for key in ('balance_straight_start', 'use_right_forward_curve'):
+        value = get(key).lower()
+        if value:
+            if value not in ('true', 'false'):
+                raise ValueError(f'{key}는 true/false')
+            overrides[key] = value == 'true'
+    for key in ('max_linear_m_s', 'max_angular_rad_s', 'left_feedforward_gain'):
         if get(key):
             overrides[key] = float(get(key))
     publish_tf = get('publish_tf').lower()
@@ -52,7 +58,7 @@ def generate_launch_description():
         'encoder_params_file': os.path.join(share, 'config', 'encoders_readonly.yaml'),
         'odom_params_file': os.path.join(share, 'config', 'wheel_odometry.yaml'),
         'max_duty_raw': '', 'max_linear_m_s': '', 'max_angular_rad_s': '', 'record_dir': '',
-        'publish_tf': 'true',
+        'publish_tf': 'true', 'balance_straight_start': '', 'use_right_forward_curve': '', 'left_feedforward_gain': '',
     }
     return LaunchDescription([*[DeclareLaunchArgument(k, default_value=v) for k, v in defaults.items()],
                               OpaqueFunction(function=_nodes)])

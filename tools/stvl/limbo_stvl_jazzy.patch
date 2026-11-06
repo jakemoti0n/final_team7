@@ -1,0 +1,433 @@
+diff --git a/README.md b/README.md
+index 1f00929..75f99e1 100644
+--- a/README.md
++++ b/README.md
+@@ -144,6 +144,7 @@ rgbd_obstacle_layer:
+     min_z: 0.1                   #default 0, meters
+     max_z: 7.0                   #default 10, meters
+     vertical_fov_angle: 0.7      #default 0.7, radians
++    vertical_fov_offset: 0.0     # default 0, radians. 3D Lidar only. Offset from planar axis. f.e. MID360 has a vFOV of -7deg to 52deg => offset +22.5deg (0.3927 rad)
+     horizontal_fov_angle: 1.04   #default 1.04, radians
+     decay_acceleration: 1.       #default 0, 1/s^2. If laser scanner MUST be 0
+     model_type: 0                #default 0 (depth camera). Use 1 for 3D Lidar
+diff --git a/spatio_temporal_voxel_layer/CMakeLists.txt b/spatio_temporal_voxel_layer/CMakeLists.txt
+index 59467f5..cff5f3d 100644
+--- a/spatio_temporal_voxel_layer/CMakeLists.txt
++++ b/spatio_temporal_voxel_layer/CMakeLists.txt
+@@ -109,8 +109,29 @@ target_link_libraries(${library_name}
+ # Get a linker error when there are undefined symbols
+ target_link_options(${library_name} PRIVATE -Wl,--no-undefined)
+ 
++# rclcpp may retain weak callback-group references after plugin destruction.
++# Their control-block virtual functions belong to this DSO. Keep its code
++# mapped until process exit; normal node/layer destructors still run.
++if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
++  target_link_options(${library_name} PRIVATE -Wl,-z,nodelete)
++endif()
++
++# Also exercise shutdown without GCC's incidental GNU-unique DSO pinning.
++if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
++  target_compile_options(${library_name} PRIVATE -fno-gnu-unique)
++endif()
++
+ ament_target_dependencies(${library_name} ${dependencies})
+ 
++option(STVL_BUILD_GEOMETRY_TESTS "Build Limbo asymmetric lidar regression tests" OFF)
++if(STVL_BUILD_GEOMETRY_TESTS)
++  enable_testing()
++  add_executable(test_limbo_lidar_frustum test/test_limbo_lidar_frustum.cpp)
++  target_link_libraries(test_limbo_lidar_frustum ${library_name})
++  ament_target_dependencies(test_limbo_lidar_frustum ${dependencies})
++  add_test(NAME limbo_lidar_frustum COMMAND test_limbo_lidar_frustum)
++endif()
++
+ if(BUILD_TESTING)
+   find_package(ament_lint_auto REQUIRED)
+   ament_lint_auto_find_test_dependencies()
+diff --git a/spatio_temporal_voxel_layer/include/spatio_temporal_voxel_layer/frustum_models/three_dimensional_lidar_frustum.hpp b/spatio_temporal_voxel_layer/include/spatio_temporal_voxel_layer/frustum_models/three_dimensional_lidar_frustum.hpp
+index 9a77370..fcfabf1 100644
+--- a/spatio_temporal_voxel_layer/include/spatio_temporal_voxel_layer/frustum_models/three_dimensional_lidar_frustum.hpp
++++ b/spatio_temporal_voxel_layer/include/spatio_temporal_voxel_layer/frustum_models/three_dimensional_lidar_frustum.hpp
+@@ -53,7 +53,7 @@ class ThreeDimensionalLidarFrustum : public Frustum
+ {
+ public:
+   ThreeDimensionalLidarFrustum(
+-    const double & vFOV, const double & vFOVPadding,
++    const double & vFOV, const double & vFOVOffset, const double & vFOVPadding,
+     const double & hFOV, const double & min_dist, const double & max_dist);
+   virtual ~ThreeDimensionalLidarFrustum(void);
+ 
+@@ -72,11 +72,10 @@ private:
+   double Dot(const VectorWithPt3D &, const openvdb::Vec3d &) const;
+   double Dot(const VectorWithPt3D &, const Eigen::Vector3d &) const;
+ 
+-  double _vFOV, _vFOVPadding, _hFOV, _min_d, _max_d;
++  double _vFOV, _vFOVOffset, _vFOVPadding, _hFOV, _min_d, _max_d;
+   double _hFOVhalf;
+   double _min_d_squared, _max_d_squared;
+-  double _tan_vFOVhalf;
+-  double _tan_vFOVhalf_squared;
++  double _tan_vFOV_lower, _tan_vFOV_upper;
+   Eigen::Vector3d _position;
+   Eigen::Quaterniond _orientation;
+   Eigen::Quaterniond _orientation_conjugate;
+diff --git a/spatio_temporal_voxel_layer/include/spatio_temporal_voxel_layer/measurement_buffer.hpp b/spatio_temporal_voxel_layer/include/spatio_temporal_voxel_layer/measurement_buffer.hpp
+index c9418aa..c654a12 100644
+--- a/spatio_temporal_voxel_layer/include/spatio_temporal_voxel_layer/measurement_buffer.hpp
++++ b/spatio_temporal_voxel_layer/include/spatio_temporal_voxel_layer/measurement_buffer.hpp
+@@ -99,6 +99,7 @@ public:
+     const double & min_d,
+     const double & max_d,
+     const double & vFOV,
++    const double & vFOVOffset,
+     const double & vFOVPadding,
+     const double & hFOV,
+     const double & decay_acceleration,
+@@ -133,6 +134,7 @@ public:
+   void SetMaxObstacleHeight(const double & max_obstacle_height);
+   void SetMinZ(const double & min_z);
+   void SetMaxZ(const double & max_z);
++  void SetVerticalFovOffset(const double & vertical_fov_offset);
+   void SetVerticalFovPadding(const double & vertical_fov_padding);
+   void SetHorizontalFovAngle(const double & horizontal_fov_angle);
+   void SetVerticalFovAngle(const double & vertical_fov_angle);
+@@ -158,7 +160,7 @@ private:
+   std::string _global_frame, _sensor_frame, _source_name, _topic_name;
+   std::list<observation::MeasurementReading> _observation_list;
+   double _min_obstacle_height, _max_obstacle_height, _obstacle_range, _tf_tolerance;
+-  double _min_z, _max_z, _vertical_fov, _vertical_fov_padding, _horizontal_fov;
++  double _min_z, _max_z, _vertical_fov, _vertical_fov_offset, _vertical_fov_padding, _horizontal_fov;
+   double _decay_acceleration, _voxel_size;
+   bool _marking, _clearing;
+   Filters _filter;
+diff --git a/spatio_temporal_voxel_layer/include/spatio_temporal_voxel_layer/measurement_reading.h b/spatio_temporal_voxel_layer/include/spatio_temporal_voxel_layer/measurement_reading.h
+index 60071c2..a51cce4 100644
+--- a/spatio_temporal_voxel_layer/include/spatio_temporal_voxel_layer/measurement_reading.h
++++ b/spatio_temporal_voxel_layer/include/spatio_temporal_voxel_layer/measurement_reading.h
+@@ -69,7 +69,7 @@ struct MeasurementReading
+   /*****************************************************************************/
+   MeasurementReading(
+     geometry_msgs::msg::Point & origin, sensor_msgs::msg::PointCloud2 cloud,
+-    double obstacle_range, double min_z, double max_z, double vFOV,
++    double obstacle_range, double min_z, double max_z, double vFOV, double vFOVOffset,
+     double vFOVPadding, double hFOV, double decay_acceleration, bool marking,
+     bool clearing, ModelType model_type)
+   /*****************************************************************************/
+@@ -79,6 +79,7 @@ struct MeasurementReading
+     _min_z_in_m(min_z),
+     _max_z_in_m(max_z),
+     _vertical_fov_in_rad(vFOV),
++    _vertical_fov_offset_in_rad(vFOVOffset),
+     _vertical_fov_padding_in_m(vFOVPadding),
+     _horizontal_fov_in_rad(hFOV),
+     _marking(marking),
+@@ -106,6 +107,7 @@ struct MeasurementReading
+     _min_z_in_m(obs._min_z_in_m),
+     _max_z_in_m(obs._max_z_in_m),
+     _vertical_fov_in_rad(obs._vertical_fov_in_rad),
++    _vertical_fov_offset_in_rad(obs._vertical_fov_offset_in_rad),
+     _vertical_fov_padding_in_m(obs._vertical_fov_padding_in_m),
+     _horizontal_fov_in_rad(obs._horizontal_fov_in_rad),
+     _marking(obs._marking),
+@@ -119,7 +121,7 @@ struct MeasurementReading
+   geometry_msgs::msg::Quaternion _orientation;
+   std::shared_ptr < sensor_msgs::msg::PointCloud2 > _cloud;
+   double _obstacle_range_in_m, _min_z_in_m, _max_z_in_m;
+-  double _vertical_fov_in_rad, _vertical_fov_padding_in_m, _horizontal_fov_in_rad;
++  double _vertical_fov_in_rad, _vertical_fov_offset_in_rad, _vertical_fov_padding_in_m, _horizontal_fov_in_rad;
+   double _marking, _clearing, _decay_acceleration;
+   ModelType _model_type;
+ };
+diff --git a/spatio_temporal_voxel_layer/src/frustum_models/three_dimensional_lidar_frustum.cpp b/spatio_temporal_voxel_layer/src/frustum_models/three_dimensional_lidar_frustum.cpp
+index e333715..4e5b926 100644
+--- a/spatio_temporal_voxel_layer/src/frustum_models/three_dimensional_lidar_frustum.cpp
++++ b/spatio_temporal_voxel_layer/src/frustum_models/three_dimensional_lidar_frustum.cpp
+@@ -42,15 +42,19 @@ namespace geometry
+ 
+ /*****************************************************************************/
+ ThreeDimensionalLidarFrustum::ThreeDimensionalLidarFrustum(
+-  const double & vFOV, const double & vFOVPadding, const double & hFOV,
+-  const double & min_dist, const double & max_dist)
+-: _vFOV(vFOV), _vFOVPadding(vFOVPadding), _hFOV(hFOV),
+-  _min_d(min_dist), _max_d(max_dist)
++  const double & vFOV, const double & vFOVOffset, const double & vFOVPadding,
++  const double & hFOV, const double & min_dist, const double & max_dist)
++: _vFOV(vFOV), _vFOVOffset(vFOVOffset), _vFOVPadding(vFOVPadding),
++  _hFOV(hFOV), _min_d(min_dist), _max_d(max_dist),
++  _position(Eigen::Vector3d::Zero()), _orientation(Eigen::Quaterniond::Identity()),
++  _orientation_conjugate(Eigen::Quaterniond::Identity()), _valid_frustum(false)
+ /*****************************************************************************/
+ {
+   _hFOVhalf = _hFOV / 2.0;
+-  _tan_vFOVhalf = tan(_vFOV / 2.0);
+-  _tan_vFOVhalf_squared = _tan_vFOVhalf * _tan_vFOVhalf;
++  // Offset shifts ANGULAR bounds. tan(offset) +/- tan(half FOV) is
++  // not equivalent to tan(offset +/- half FOV) for an asymmetric lidar.
++  _tan_vFOV_lower = std::tan(_vFOVOffset - _vFOV / 2.0);
++  _tan_vFOV_upper = std::tan(_vFOVOffset + _vFOV / 2.0);
+   _min_d_squared = _min_d * _min_d;
+   _max_d_squared = _max_d * _max_d;
+   _full_hFOV = false;
+@@ -69,14 +73,29 @@ ThreeDimensionalLidarFrustum::~ThreeDimensionalLidarFrustum(void)
+ void ThreeDimensionalLidarFrustum::TransformModel(void)
+ /*****************************************************************************/
+ {
+-  _orientation_conjugate = _orientation.conjugate();
+-  _valid_frustum = true;
++  // Invalid geometry must not accelerate obstacle clearing.
++  _valid_frustum = std::isfinite(_vFOV) && std::isfinite(_vFOVOffset) &&
++    std::isfinite(_vFOVPadding) && std::isfinite(_hFOV) &&
++    std::isfinite(_min_d) && std::isfinite(_max_d) &&
++    _vFOV > 0.0 && _vFOVPadding >= 0.0 && _hFOV > 0.0 &&
++    _vFOVOffset - _vFOV / 2.0 > -M_PI / 2.0 &&
++    _vFOVOffset + _vFOV / 2.0 < M_PI / 2.0 &&
++    _min_d >= 0.0 && _max_d > _min_d && _position.allFinite() &&
++    _orientation.coeffs().allFinite() && _orientation.norm() > 1e-12;
++  if (_valid_frustum) {
++    _orientation_conjugate = _orientation.normalized().conjugate();
++  }
+ }
+ 
+ /*****************************************************************************/
+ bool ThreeDimensionalLidarFrustum::IsInside(const openvdb::Vec3d & pt)
+ /*****************************************************************************/
+ {
++  if (!_valid_frustum || !std::isfinite(pt[0]) ||
++    !std::isfinite(pt[1]) || !std::isfinite(pt[2]))
++  {
++    return false;
++  }
+   Eigen::Vector3d point_in_global_frame(pt[0], pt[1], pt[2]);
+   Eigen::Vector3d transformed_pt =
+     _orientation_conjugate * (point_in_global_frame - _position);
+@@ -86,30 +105,24 @@ bool ThreeDimensionalLidarFrustum::IsInside(const openvdb::Vec3d & pt)
+     (transformed_pt[1] * transformed_pt[1]);
+ 
+   // Check if inside frustum valid range
+-  if (radial_distance_squared > _max_d_squared ||
++  if (radial_distance_squared <= 0.0 || radial_distance_squared > _max_d_squared ||
+     radial_distance_squared < _min_d_squared)
+   {
+     return false;
+   }
+ 
+-  // // Check if inside frustum valid vFOV
+-  const double v_padded = fabs(transformed_pt[2]) + _vFOVPadding;
+-  if (( v_padded * v_padded / radial_distance_squared) >
+-    _tan_vFOVhalf_squared)
+-  {
++  // Padding is a vertical margin in metres, preserving zero-offset behavior.
++  const double radial_distance = std::sqrt(radial_distance_squared);
++  const double lower_z = radial_distance * _tan_vFOV_lower + _vFOVPadding;
++  const double upper_z = radial_distance * _tan_vFOV_upper - _vFOVPadding;
++  if (transformed_pt[2] < lower_z || transformed_pt[2] > upper_z) {
+     return false;
+   }
+ 
+-  // Check if inside frustum valid hFOV, unless hFOV is full-circle (360 degree)
+-  if (!_full_hFOV) {
+-    double half_pi = M_PI / 2;
+-    if (transformed_pt[0] > 0) {
+-      if (fabs(atan(transformed_pt[1] / transformed_pt[0])) > _hFOVhalf) {
+-        return false;
+-      }
+-    } else if (fabs(atan(transformed_pt[0] / transformed_pt[1])) + half_pi > _hFOVhalf) {
+-      return false;
+-    }
++  if (!_full_hFOV &&
++    std::abs(std::atan2(transformed_pt[1], transformed_pt[0])) > _hFOVhalf)
++  {
++    return false;
+   }
+ 
+   return true;
+diff --git a/spatio_temporal_voxel_layer/src/measurement_buffer.cpp b/spatio_temporal_voxel_layer/src/measurement_buffer.cpp
+index 10c160b..9c5932b 100644
+--- a/spatio_temporal_voxel_layer/src/measurement_buffer.cpp
++++ b/spatio_temporal_voxel_layer/src/measurement_buffer.cpp
+@@ -56,7 +56,7 @@ MeasurementBuffer::MeasurementBuffer(
+   const double & obstacle_range, tf2_ros::Buffer & tf, const std::string & global_frame,
+   const std::string & sensor_frame, const double & tf_tolerance,
+   const double & min_d, const double & max_d, const double & vFOV,
+-  const double & vFOVPadding, const double & hFOV,
++  const double & vFOVOffset, const double & vFOVPadding, const double & hFOV,
+   const double & decay_acceleration, const bool & marking,
+   const bool & clearing, const double & voxel_size, const Filters & filter,
+   const int & voxel_min_points, const bool & enabled,
+@@ -70,7 +70,7 @@ MeasurementBuffer::MeasurementBuffer(
+   _topic_name(topic_name), _min_obstacle_height(min_obstacle_height),
+   _max_obstacle_height(max_obstacle_height), _obstacle_range(obstacle_range),
+   _tf_tolerance(tf_tolerance), _min_z(min_d), _max_z(max_d),
+-  _vertical_fov(vFOV), _vertical_fov_padding(vFOVPadding),
++  _vertical_fov(vFOV), _vertical_fov_offset(vFOVOffset), _vertical_fov_padding(vFOVPadding),
+   _horizontal_fov(hFOV), _decay_acceleration(decay_acceleration),
+   _voxel_size(voxel_size), _marking(marking), _clearing(clearing),
+   _filter(filter), _voxel_min_points(voxel_min_points),
+@@ -124,8 +124,8 @@ void MeasurementBuffer::BufferROSCloud(
+     _observation_list.front()._min_z_in_m = _min_z;
+     _observation_list.front()._max_z_in_m = _max_z;
+     _observation_list.front()._vertical_fov_in_rad = _vertical_fov;
+-    _observation_list.front()._vertical_fov_padding_in_m =
+-      _vertical_fov_padding;
++    _observation_list.front()._vertical_fov_offset_in_rad = _vertical_fov_offset;
++    _observation_list.front()._vertical_fov_padding_in_m = _vertical_fov_padding;
+     _observation_list.front()._horizontal_fov_in_rad = _horizontal_fov;
+     _observation_list.front()._decay_acceleration = _decay_acceleration;
+     _observation_list.front()._clearing = _clearing;
+@@ -317,6 +317,13 @@ void MeasurementBuffer::SetVerticalFovAngle(const double & vertical_fov_angle)
+   _vertical_fov = vertical_fov_angle;
+ }
+ 
++/*****************************************************************************/
++void MeasurementBuffer::SetVerticalFovOffset(const double & vertical_fov_offset)
++/*****************************************************************************/
++{
++  _vertical_fov_offset = vertical_fov_offset;
++}
++
+ /*****************************************************************************/
+ void MeasurementBuffer::SetVerticalFovPadding(const double & vertical_fov_padding)
+ /*****************************************************************************/
+diff --git a/spatio_temporal_voxel_layer/src/spatio_temporal_voxel_grid.cpp b/spatio_temporal_voxel_layer/src/spatio_temporal_voxel_grid.cpp
+index 1102a95..df6acb7 100644
+--- a/spatio_temporal_voxel_layer/src/spatio_temporal_voxel_grid.cpp
++++ b/spatio_temporal_voxel_layer/src/spatio_temporal_voxel_grid.cpp
+@@ -129,7 +129,7 @@ void SpatioTemporalVoxelGrid::ClearFrustums(
+         it->_horizontal_fov_in_rad, it->_min_z_in_m, it->_max_z_in_m);
+     } else if (it->_model_type == THREE_DIMENSIONAL_LIDAR) {
+       frustum = new geometry::ThreeDimensionalLidarFrustum(
+-        it->_vertical_fov_in_rad, it->_vertical_fov_padding_in_m,
++        it->_vertical_fov_in_rad, it->_vertical_fov_offset_in_rad, it->_vertical_fov_padding_in_m,
+         it->_horizontal_fov_in_rad, it->_min_z_in_m, it->_max_z_in_m);
+     } else {
+       // add else if statement for each implemented model
+diff --git a/spatio_temporal_voxel_layer/src/spatio_temporal_voxel_layer.cpp b/spatio_temporal_voxel_layer/src/spatio_temporal_voxel_layer.cpp
+index caa8a95..7e775d6 100644
+--- a/spatio_temporal_voxel_layer/src/spatio_temporal_voxel_layer.cpp
++++ b/spatio_temporal_voxel_layer/src/spatio_temporal_voxel_layer.cpp
+@@ -170,7 +170,7 @@ void SpatioTemporalVoxelLayer::onInitialize(void)
+   while (ss >> source) {
+     // get the parameters for the specific topic
+     double observation_keep_time, expected_update_rate, min_obstacle_height, max_obstacle_height;
+-    double min_z, max_z, vFOV, vFOVPadding;
++    double min_z, max_z, vFOV, vFOVOffset, vFOVPadding;
+     double hFOV, decay_acceleration, obstacle_range;
+     std::string topic, sensor_frame, data_type, filter_str;
+     bool inf_is_valid = false, clearing, marking;
+@@ -195,6 +195,7 @@ void SpatioTemporalVoxelLayer::onInitialize(void)
+     declareParameter(source + "." + "min_z", rclcpp::ParameterValue(0.0));
+     declareParameter(source + "." + "max_z", rclcpp::ParameterValue(10.0));
+     declareParameter(source + "." + "vertical_fov_angle", rclcpp::ParameterValue(0.7));
++    declareParameter(source + "." + "vertical_fov_offset", rclcpp::ParameterValue(0.0));
+     declareParameter(source + "." + "vertical_fov_padding", rclcpp::ParameterValue(0.0));
+     declareParameter(source + "." + "horizontal_fov_angle", rclcpp::ParameterValue(1.04));
+     declareParameter(source + "." + "decay_acceleration", rclcpp::ParameterValue(0.0));
+@@ -226,6 +227,7 @@ void SpatioTemporalVoxelLayer::onInitialize(void)
+     node->get_parameter(name_ + "." + source + "." + "max_z", max_z);
+     // vertical FOV angle in rad
+     node->get_parameter(name_ + "." + source + "." + "vertical_fov_angle", vFOV);
++    node->get_parameter(name_ + "." + source + "." + "vertical_fov_offset", vFOVOffset);
+     // vertical FOV padding in meters (3D lidar frustum only)
+     node->get_parameter(name_ + "." + source + "." + "vertical_fov_padding", vFOVPadding);
+     // horizontal FOV angle in rad
+@@ -268,7 +270,7 @@ void SpatioTemporalVoxelLayer::onInitialize(void)
+           source, topic,
+           observation_keep_time, expected_update_rate, min_obstacle_height,
+           max_obstacle_height, obstacle_range, *tf_, _global_frame, sensor_frame,
+-          transform_tolerance, min_z, max_z, vFOV, vFOVPadding, hFOV,
++          transform_tolerance, min_z, max_z, vFOV, vFOVOffset, vFOVPadding, hFOV,
+           decay_acceleration, marking, clearing, _voxel_size,
+           filter, voxel_min_points, enabled, clear_after_reading, model_type,
+           node->get_clock(), node->get_logger())));
+@@ -888,6 +890,14 @@ SpatioTemporalVoxelLayer::dynamicParametersCallback(std::vector<rclcpp::Paramete
+               buffer->Unlock();
+             }
+           }
++        } else if (name == name_ + "." + source + "." + "vertical_fov_offset") {
++          for (auto & buffer : _observation_buffers) {
++            if (buffer->GetSourceName() == source) {
++              buffer->Lock();
++              buffer->SetVerticalFovOffset(parameter.as_double());
++              buffer->Unlock();
++            }
++          }
+         } else if (name == name_ + "." + source + "." + "vertical_fov_padding") {
+           for (auto & buffer : _observation_buffers) {
+             if (buffer->GetSourceName() == source) {
+diff --git a/spatio_temporal_voxel_layer/test/test_limbo_lidar_frustum.cpp b/spatio_temporal_voxel_layer/test/test_limbo_lidar_frustum.cpp
+new file mode 100644
+index 0000000..576d5a6
+--- /dev/null
++++ b/spatio_temporal_voxel_layer/test/test_limbo_lidar_frustum.cpp
+@@ -0,0 +1,71 @@
++#include <spatio_temporal_voxel_layer/frustum_models/three_dimensional_lidar_frustum.hpp>
++#include <iostream>
++#include <limits>
++#include <stdexcept>
++
++using geometry::ThreeDimensionalLidarFrustum;
++int checks = 0;
++void check(bool value, const char * message)
++{
++  ++checks;
++  if (!value) {throw std::runtime_error(message);}
++}
++double rad(double d) {return d * M_PI / 180.0;}
++openvdb::Vec3d point(double elevation, double azimuth = 0.0, double r = 2.0)
++{
++  return {r * std::cos(rad(azimuth)), r * std::sin(rad(azimuth)), r * std::tan(rad(elevation))};
++}
++int main()
++{
++  ThreeDimensionalLidarFrustum mid(rad(59), rad(22.5), 0.0, 6.29, 0.1, 10.0);
++  mid.TransformModel();
++  for (double a : {-6.9, 0.0, 22.5, 45.0, 51.9}) {
++    check(mid.IsInside(point(a)), "MID360 inside elevation rejected");
++  }
++  for (double a : {-30.0, -8.0, -7.1, 52.1, 60.0}) {
++    check(!mid.IsInside(point(a)), "MID360 outside elevation accepted");
++  }
++  // Covers full azimuth, asymmetric vertical bounds and negative offsets.
++  for (double offset : {-22.5, 0.0, 22.5}) {
++    ThreeDimensionalLidarFrustum f(rad(59), rad(offset), 0.0, 6.29, 0.1, 10.0);
++    f.TransformModel();
++    for (int az = -180; az <= 180; az += 15) {
++      for (int el = -80; el <= 80; ++el) {
++        if (std::abs(el - (offset - 29.5)) < 1e-8 ||
++          std::abs(el - (offset + 29.5)) < 1e-8) {continue;}
++        const bool expected = el > offset - 29.5 && el < offset + 29.5;
++        check(f.IsInside(point(el, az)) == expected, "angular grid mismatch");
++      }
++    }
++  }
++  ThreeDimensionalLidarFrustum padded(rad(59), rad(22.5), .05, 6.29, .1, 10);
++  padded.TransformModel();
++  const double low = 2 * std::tan(rad(-7)), high = 2 * std::tan(rad(52));
++  check(!padded.IsInside({2, 0, low + .049}), "lower padding ignored");
++  check(padded.IsInside({2, 0, low + .051}), "lower padding too large");
++  check(!padded.IsInside({2, 0, high - .049}), "upper padding ignored");
++  check(padded.IsInside({2, 0, high - .051}), "upper padding too large");
++  check(!mid.IsInside(point(20, 0, .05)), "minimum range ignored");
++  check(!mid.IsInside(point(20, 0, 10.1)), "maximum range ignored");
++  check(!mid.IsInside({0, 0, 0}), "zero radius accepted");
++  check(!mid.IsInside({2, 0, std::numeric_limits<double>::quiet_NaN()}), "NaN accepted");
++  ThreeDimensionalLidarFrustum narrow(rad(59), rad(22.5), 0, rad(90), .1, 10);
++  narrow.TransformModel();
++  check(narrow.IsInside(point(20, 44)), "horizontal inside rejected");
++  check(!narrow.IsInside(point(20, 46)), "horizontal outside accepted");
++  check(!narrow.IsInside(point(20, 180)), "rear outside accepted");
++  // Real +90-degree sensor yaw and non-zero height/translation.
++  geometry_msgs::msg::Point pos; pos.x = 1; pos.y = -2; pos.z = .837;
++  geometry_msgs::msg::Quaternion q; q.z = std::sin(M_PI / 4); q.w = std::cos(M_PI / 4);
++  mid.SetPosition(pos); mid.SetOrientation(q); mid.TransformModel();
++  check(mid.IsInside({1, 0, .837 + 2 * std::tan(rad(51))}), "transformed inside rejected");
++  check(!mid.IsInside({1, 0, .837 + 2 * std::tan(rad(-8))}), "transformed outside accepted");
++  for (double offset : {rad(80), std::numeric_limits<double>::infinity(),
++    std::numeric_limits<double>::quiet_NaN()})
++  {
++    ThreeDimensionalLidarFrustum invalid(rad(59), offset, 0, 6.29, .1, 10);
++    invalid.TransformModel();
++    check(!invalid.IsInside(point(0)), "invalid geometry accelerated clearing");
++  }
++  std::cout << "PASS: " << checks << " frustum boundary/transform/invalid-input checks\n";
++}

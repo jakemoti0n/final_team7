@@ -1,13 +1,13 @@
-# 실물 로봇의 센서 장착 치수 (base_footprint 기준, m·deg). 실물 URDF가 생기기 전까지 start_person_wait_real.launch.py가
+# 실물 로봇의 센서 장착 치수 (base_footprint 기준, m·deg). 실물 URDF가 생기기 전까지 start_real_frames.launch.py가
 # 이 값으로 고정 TF를 낸다. 라이다는 start_mid360.launch.py의 MID360s_mount.json이 따로 가진다.
 #
-# ★ 카메라 값은 2026-11-03 임시값(미실측). 정지 거리 시험에서 줄자값과 비교해 고칠 것. x 오차는 그대로 정지 거리 오차가 된다
+# 2026-11-04 사용자 실측: 전방 0.22 m, 높이 0.68 m. 기울기와 범퍼 위치는 임시값이다.
 camera:
   parent_frame: base_footprint
   child_frame: oak_device_frame      # DepthAI ROS v3 드라이버가 내는 카메라 TF 트리의 루트
-  x: 0.20                            # m, 바퀴 축 중심에서 렌즈까지 앞으로 (임시)
+  x: 0.22                            # m, 사용자 측정: 바퀴 축 중앙보다 앞쪽 22 cm
   y: 0.0
-  z: 0.60                            # m, 바닥에서 렌즈 높이 (하드웨어 치수 10-15)
+  z: 0.68                            # m, 사용자 측정: 카메라 높이 68 cm
   pitch_deg: 0.0                     # 아래로 기울인 각도, 양수가 아래 (임시 0)
 bumper:
   x: 0.25                            # m, 바퀴 축 중심에서 차체 앞면까지. 몸체 45 cm이면 0.225 + 범퍼 두께 (임시, 시뮬 tof_joint와 같은 값)

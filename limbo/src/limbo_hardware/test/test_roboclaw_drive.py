@@ -121,6 +121,25 @@ class TransportTests(unittest.TestCase):
         transport.write_duty(4915, -4915)
         self.assertEqual(fake.sent[-1][:6], bytes((128, 34)) + struct.pack('>hh', 4915, -4915))
 
+    def test_thirty_percent_boundary_and_overshoot_never_reaches_serial(self):
+        cap = 9830
+        self.assertEqual(DUTY_CEILING, cap)
+        fake = FakeSerial()
+        transport = DriveTransport(connection=fake, duty_cap=cap)
+        transport.open()
+        transport.write_duty(cap, -cap)
+        self.assertEqual(struct.unpack('>hh', fake.sent[-1][2:6]), (cap, -cap))
+        sent = len(fake.sent)
+        for pair in ((cap + 1, 0), (0, -cap - 1)):
+            with self.subTest(pair=pair), self.assertRaises(DriveError):
+                transport.write_duty(*pair)
+        self.assertEqual(len(fake.sent), sent)
+        for invalid_cap in (cap + 1, 11468, 16383):
+            with self.subTest(cap=invalid_cap), self.assertRaises(DriveError):
+                DriveTransport(connection=fake, duty_cap=invalid_cap)
+        self.assertEqual(len(fake.sent), sent)
+        transport.close()
+
     def test_close_sends_zero_and_closes_port(self):
         transport, fake = make()
         self.assertTrue(transport.close())

@@ -5,11 +5,13 @@ roboclaw_encoder:
     poll_hz: 20.0
     serial_timeout: 0.2
     reconnect_seconds: 2.0
-    # 2026-10-29 user-selected provisional wheel CPR; not a factory specification.
-    right_counts_per_revolution: 3607.0
-    # 2026-10-29: round(mean(3697, 3670, 3696)) = 3688; provisional hand calibration.
-    # The initial over-rotation trial is excluded. Zero disables the left angle.
-    left_counts_per_revolution: 3688.0
+    # 2026-11-05: wheel outer width 0.58 m; provisional hand calibration.
+    # Three continuous revolutions per wheel; separate setup/handling excluded.
+    # Right: round(11062 / 3) = 3687.
+    right_counts_per_revolution: 3687.0
+    # Left: 11022 / 3 = 3674.
+    left_counts_per_revolution: 3674.0
+    # Loaded straight/turn validation pending after the hardware adjustment.
     # Sanity guard only; a small counter reset cannot always be detected.
     max_delta_counts: 10000
     wire_log: ''

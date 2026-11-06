@@ -18,7 +18,7 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
-install(PROGRAMS scripts/lidar_cloud_guard.py
+install(PROGRAMS scripts/lidar_cloud_guard.py scripts/near_depth_filter.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
