@@ -8,6 +8,27 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-07 (57) 보드 설정 도구 `tools/drive/board_setup.py`: 모션스튜디오 없이 Jetson에서 왼쪽 엔코더 방향·QPPS·속도 PID·전압 한도를 넣고 저장·확인. 계단 응답 시험 포함. 테스트 238
+
+**할 일**
+- Jetson: `git pull` 뒤 `limbo_hardware` 빌드. 바퀴를 띄운 채 `source limbo/install/setup.bash; python3 tools/drive/board_setup.py <단계>`를 backup → encoder → qpps → pid → voltage → save → step 순서로, 단계마다 출력(JSON 요약)을 보고 다음으로. 기록은 `~/limbo_bags/board_setup/`
+- step 결과(90 % 도달 시간, 넘침, 정상 오차, 멈춤)를 보고 P·I를 바꿔 `pid` → `step`을 반복. 통과하면 `save`로 저장하고 주행 노드를 `control_mode:=board_speed`로 띄워 (55)의 실물 확인 순서로
+- 되돌리기: `board_setup.py restore --from ~/limbo_bags/board_setup/backup_<시각>.json` 뒤 `save`
+- 충전기를 꽂은 채로는 주행하지 않는다: 보드가 충전기 출력을 읽어 29.2 V가 나온다(11-07 실측, 뽑으면 12.2 V). voltage 단계에서 최대 16 V로 두면 그 상태에서는 보드가 "전압 높음"으로 출력을 막는다
+
+**변경**
+- `tools/drive/board_setup.py`(새): 단계 backup·encoder·qpps·pid·voltage·save·step·restore. 모든 모터 동작은 20 Hz로 명령을 다시 보내며(보드 timeout 0.5 s) 카운트·PWM·전류·상태를 jsonl로 남기고, 끝은 반드시 duty 0. 보드 상태에 정지 비트가 켜지면 바로 멈추고 끝낸다
+- `roboclaw_drive.py`: 읽기 명령 59(전압 한도, 펌웨어 4.4.9의 5바이트)·110(속도 오차 한계) 허용, `write_setting(command, payload)`(ACK 설정 명령. 주행 노드는 쓰지 않음)
+- 테스트 `test_board_setup.py`(새 15개: 패킷 바이트 순서 D·P·I·QPPS, 단계 흐름, 모터 반전 비트 거부, 가짜 보드로 QPPS 측정·계단 지표), `test_roboclaw_drive.py` +2. 전체 238
+
+**원인과 근거**
+- 11-07 PM 지적: 모션스튜디오는 사람이 손으로 같은 값을 넣는 도구일 뿐이라 Jetson에서 시리얼로 쓰면 USB를 옮길 필요가 없다. (55)에서 모션스튜디오를 고른 건 보드 설정 쓰기를 피하려던 것이었고 꼭 그래야 할 이유는 없었다
+- 명령 28·29의 페이로드 순서는 매뉴얼 rev 6.0대로 D, P, I, QPPS (읽기 55·56은 P, I, D, QPPS). 명령 57은 최소·최대(0.1 V)·자동 최대 오프셋 1바이트로, 펌웨어 4.4.9의 59 응답 5바이트와 맞는다
+- 상태 비트 0x01000000·0x02000000은 "Idle Motor 1·2" 경고다(매뉴얼 상태 표). (56)에서 속도 오차 경고로 적은 것은 틀렸음. 속도 오차는 0x0100·0x0200(리셋까지 유지되는 오류)
+- PID 시작값 1.0 / 0.5 / 0.25는 매뉴얼 명령 28의 기본값. 출발점일 뿐이고 step 결과로 바꾼다
+- 11-07 보드 읽기(충전기 뽑은 뒤): 속도 PID·QPPS·위치 PID 전부 0, 엔코더 모드 0/0, 배터리 12.2 V(하룻밤 충전 뒤 쉬는 전압. 용량이 많이 준 배터리)
+- 11-06 팀원 기록 `tools/motors/tracking_trials_20261106.txt`를 다시 읽음: 목표점은 스크립트가 보낸 NavigateToPose (5.65, 0.30)(지도 좌표, 거의 직진 5.65 m), AMCL 초기 위치는 따로 안 잡고 지도 원점 근처에서 출발(매칭 92~97 %). 두 번 다 4.2~4.4 m에서 좌우 이동량 불균형으로 스크립트가 취소, 방향 오차 ±15°, 출발 지연 1.5~2.0 s, 배터리 최저 11.3 V
+
 ## 2026-11-06 (56) 벤치 도구도 엔코더 전진 부호를 보드에서 읽음 + 주행 기록 요약 도구 `tools/drive/drive_report.py`. (55)를 Jetson에 올려 실물 보드에서 읽기·주기 확인
 
 **할 일**

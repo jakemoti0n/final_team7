@@ -142,7 +142,9 @@ def report(rows, geometry, min_target, start_m):
     lines.append('목표 %.2f m/s 이상인데 안 돈 시간: 왼쪽 %.2f s, 오른쪽 %.2f s' % (min_target, *stuck))
 
     with_current = [r for r in driving if r.get('currents_m1_m2_a')]
-    if with_current:
+    if not driving:
+        lines.append('목표가 있던 표본이 없어 전류·보드 출력은 요약하지 않음')
+    elif with_current:
         for name, index in (('오른쪽(M1)', 0), ('왼쪽(M2)', 1)):
             amps = [abs(r['currents_m1_m2_a'][index]) for r in with_current]
             pwm = [abs(r['board_pwm_m1_m2'][index]) / 327.67 for r in with_current]

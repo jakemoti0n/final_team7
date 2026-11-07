@@ -5,8 +5,8 @@
 명령 timeout(명령 14, 런타임 값·NVM 저장 안 함) 하나다. 정지는 언제나 duty 0으로 하고, 호출자가 반드시 close()로 끝낸다.
 
 속도 명령(40)은 보드 안의 속도 제어기에 "초당 몇 카운트"를 맡기는 것이다. 보드에 속도 제어 값(QPPS·PID)이 저장돼 있어야
-쓸 수 있어서, read_velocity_settings()로 읽어 확인한 뒤에만 write_speed()가 열린다. 속도 제어 값 자체는 여기서 쓰지 않는다
-(모션스튜디오 자동 튜닝으로 넣고 보드에 저장).
+쓸 수 있어서, read_velocity_settings()로 읽어 확인한 뒤에만 write_speed()가 열린다. 속도 제어 값 자체는 주행 노드가 쓰지 않는다
+(tools/drive/board_setup.py가 write_setting()으로 넣고 보드에 저장한다).
 """
 import math
 import os
@@ -19,8 +19,10 @@ from .roboclaw_readonly import DEFAULT_PORT, check_device_identity, crc16
 ADDRESS = 128
 FIRMWARE_PREFIX = 'USB Roboclaw 2x15A'
 # 읽기 명령과 응답 길이(CRC 제외). 21 펌웨어 문자열, 15 명령 timeout, 24 주전원 전압, 48 PWM, 49 전류, 78 엔코더, 90 상태,
-# 55·56 M1·M2 속도 제어 값(P, I, D, QPPS 각 4바이트), 91 엔코더 모드(M1, M2)
-READ_LENGTHS = {21: None, 15: 1, 24: 2, 48: 4, 49: 4, 78: 8, 90: 4, 55: 16, 56: 16, 91: 2}
+# 55·56 M1·M2 속도 제어 값(P, I, D, QPPS 각 4바이트), 91 엔코더 모드(M1, M2),
+# 59 주전원 전압 한도(최소 2, 최대 2, 자동 최대 오프셋 1 — 펌웨어 4.4.9 실측, 매뉴얼 rev 6.0의 명령 57과 같은 5바이트),
+# 110 속도 오차 한계(M1, M2 각 4바이트)
+READ_LENGTHS = {21: None, 15: 1, 24: 2, 48: 4, 49: 4, 78: 8, 90: 4, 55: 16, 56: 16, 91: 2, 59: 5, 110: 8}
 PID_SCALE = 65536.0   # 보드의 P·I·D는 16.16 고정소수점 (매뉴얼 기본값 P = 0x00010000 = 1.0)
 DUTY_FULL = 32767
 # 사용자 요청(2026-11-04): 연속 주행 출력은 30 %를 넘지 않는다.
@@ -250,6 +252,14 @@ class DriveTransport:
         if self.speed_caps is None:
             raise DriveError('보드에 속도 제어 값(QPPS)이 없거나 아직 읽지 않음')
         return self._exchange(speed_packet(m1, m2, accel, self.speed_caps), expect_ack=True)
+
+    def write_setting(self, command, payload):
+        """보드 설정 쓰기(ACK 응답 명령). 주행 노드는 쓰지 않고 tools/drive/board_setup.py만 쓴다.
+        어떤 설정을 어떤 순서로 바꾸는지는 그 도구가 정하고 기록한다."""
+        if type(command) is not int or not 0 <= command <= 255 or not isinstance(payload, (bytes, bytearray)):
+            raise DriveError('설정 명령은 0..255 정수와 bytes 페이로드')
+        packet = bytes((ADDRESS, command)) + bytes(payload)
+        return self._exchange(packet + crc16(packet).to_bytes(2, 'big'), expect_ack=True)
 
     def recover(self):
         """교환 하나가 실패한 뒤 다음 교환 전에 부른다. 늦게 도착한 응답 조각이 다음 응답에 섞이지 않게 입력 버퍼를 비운다.

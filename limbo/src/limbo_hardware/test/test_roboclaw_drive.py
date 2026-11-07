@@ -24,6 +24,9 @@ class FakeSerial:
         self.encoder_modes = (0, 0)
         # 속도 제어 값 (P, I, D, QPPS). P·I·D는 16.16 고정소수점. 처음에는 한 번도 설정 안 된 보드처럼 0
         self.velocity = {55: (0, 0, 0, 0), 56: (0, 0, 0, 0)}
+        self.voltage_limits = (59, 311, 20)     # 0.1 V: 최소, 최대, 자동 최대 오프셋 (11-06 실측 기본값)
+        self.speed_error_limits = (0, 0)
+        self.settings = []                      # write_setting으로 받은 (명령, 페이로드)
 
     def reset_input_buffer(self):
         self.rx.clear()
@@ -31,9 +34,20 @@ class FakeSerial:
     def write(self, packet):
         self.sent.append(bytes(packet))
         command = packet[1]
-        if command in (34, 14, 40):
+        if command in (34, 14, 40, 28, 29, 57, 92, 93, 94):
             if command == 14:
                 self.timeout_raw = packet[2]
+            if command in (28, 29, 57, 92, 93, 94):
+                self.settings.append((command, bytes(packet[2:-2])))
+            if command in (28, 29):   # D, P, I, QPPS 순서로 받는다(매뉴얼) → 읽기(55·56)는 P, I, D, QPPS
+                d, p, i, q = struct.unpack('>IIII', packet[2:-2])
+                self.velocity[command + 27] = (p, i, d, q)
+            if command in (92, 93):
+                modes = list(self.encoder_modes)
+                modes[command - 92] = packet[2]
+                self.encoder_modes = tuple(modes)
+            if command == 57:
+                self.voltage_limits = struct.unpack('>HHB', packet[2:-2])
             self.rx += b'\xff'
             return len(packet)
         if command == 21:
@@ -50,6 +64,10 @@ class FakeSerial:
             body = struct.pack('>IIII', *self.velocity[command])
         elif command == 91:
             body = bytes(self.encoder_modes)
+        elif command == 59:
+            body = struct.pack('>HHB', *self.voltage_limits)
+        elif command == 110:
+            body = struct.pack('>II', *self.speed_error_limits)
         elif command == 78:
             body = struct.pack('>II', *self.counts)
         elif command == 90:
@@ -197,6 +215,22 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(fake.sent[-1][:6], bytes((128, 34, 0, 0, 0, 0)))
         self.assertTrue(fake.closed)
         self.assertFalse(transport.close())  # 두 번째는 아무것도 안 함
+
+    def test_write_setting_builds_ack_packet_with_crc(self):
+        transport, fake = make()
+        transport.write_setting(93, b'\x40')
+        self.assertEqual(fake.sent[-1][:3], bytes((128, 93, 0x40)))
+        self.assertEqual(fake.sent[-1][3:], crc16(fake.sent[-1][:3]).to_bytes(2, 'big'))
+        self.assertEqual(transport.read_encoder_modes(), (0, 0x40))
+        with self.assertRaises(DriveError):
+            transport.write_setting(300, b'')
+        with self.assertRaises(DriveError):
+            transport.write_setting(93, 'x')
+
+    def test_voltage_limits_and_speed_error_limits_are_readable(self):
+        transport, fake = make()
+        self.assertEqual(transport.query(59), struct.pack('>HHB', 59, 311, 20))
+        self.assertEqual(struct.unpack('>II', transport.query(110)), (0, 0))
 
     def test_crc_failure_raises(self):
         transport, fake = make()
