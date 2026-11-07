@@ -82,7 +82,7 @@ def _actions(context):
 def generate_launch_description():
     share = get_package_share_directory('limbo_bringup')
     defaults = {'camera': 'true', 'lidar': 'true', 'yolo': 'true', 'person_wait': 'false',
-                'filter_near_depth': 'false',
+                'filter_near_depth': 'true',
                 'encoder_source': 'readonly', 'localization': 'none', 'map': '',
                 'yolo_python': str(Path.home() / 'limbo/venvs/limbo_yolo/bin/python'),
                 'mount_file': os.path.join(share, 'config', 'real_robot_mount.yaml')}

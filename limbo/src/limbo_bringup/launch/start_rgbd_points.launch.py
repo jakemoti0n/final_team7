@@ -11,7 +11,7 @@ def generate_launch_description():
     depth_input = IfElseSubstitution(enabled, if_value='/rgbd_camera/depth_for_points',
                                      else_value='/rgbd_camera/depth_image')
     return LaunchDescription([
-        DeclareLaunchArgument('filter_near_depth', default_value='false', choices=['true', 'false']),
+        DeclareLaunchArgument('filter_near_depth', default_value='true', choices=['true', 'false']),   # 11-07: 끄면 가짜 근거리 점이 1 m 앞 가상 벽이 된다
         Node(package='limbo_bringup', executable='near_depth_filter.py', name='real_near_depth_filter',
              condition=IfCondition(enabled),
              output='screen', parameters=[{'use_sim_time': False}],

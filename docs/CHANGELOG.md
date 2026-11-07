@@ -8,6 +8,26 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-07 (63) 자율주행 출발 전 점검 도구 `tools/drive/nav_preflight.py` + 실물 런치 `filter_near_depth` 기본값 `true`(카메라 가짜 근거리 점 → 가상 벽). TROUBLESHOOTING 2건
+
+**할 일 (11-08 시작 절차)**
+- Jetson: `git pull`(런치·도구만이라 빌드 불필요. `limbo_bringup` 테스트 `test_real_integration.py` 한 번)
+- 순서: `run_teleop.sh record_dir:=~/limbo_bags/nav_1108_1` → `run_real.sh encoder_source:=external localization:=amcl map:=<real_open_space_20261105.yaml> yolo:=false` → 로봇을 지도 원점(ㅁ자 복도 아래 왼쪽 모서리)에 **+x(초록 점)** 를 보게 놓고 `/initialpose` (0, 0.3, 0°) → `run_nav2_real.sh cmd_vel_out:=/cmd_vel` → `python3 tools/drive/nav_preflight.py --goal 5.65 0.30` **전부 통과해야** 목표 (5.65, 0.30) 전송
+- 통과 기준: 목표 도달, "Failed to make progress" 0회, 방향 흔들림 ±5° 안. 되면 (62)의 가속 통일·(60)·(61)까지 실물 확인 완료
+- 안 되면 그 층의 숫자(점검 도구 출력·`navwatch` 3 s 간격 MPPI 출력)를 들고 판단. 추측으로 바꾸지 말 것
+- 센서 입력 확인 전에 Nav2 목표를 보내지 말 것 — 11-07 오후 3시간이 이 순서를 건너뛴 대가
+
+**변경**
+- `tools/drive/nav_preflight.py`(새): 6항목 점검(odom 주기, 위치 추정 스캔 일치율, 카메라 근거리 점, 로컬 비용 지도 정면, `--goal` 쪽 정적 지도, Nav2 노드). 실패가 있으면 종료 코드 1
+- `start_real.launch.py`·`start_rgbd_points.launch.py`: `filter_near_depth` 기본값 `true`
+- `docs/TROUBLESHOOTING.md`: 가짜 근거리 점 가상 벽, AMCL 가짜 수렴
+
+**원인과 근거**
+- 11-07 오후 Nav2 시도 7회의 실패 원인 분해: ① 로봇을 지도 반대 방향으로 놓음(1회) ② MPPI 가속 가정 7배 불일치(수정, (62)) ③ 지도에 없는 −x 쪽 목표(2회, 계획 실패) ④ AMCL 가짜 수렴(2회) ⑤ 카메라 가짜 근거리 점의 가상 벽(모든 회차에 존재, 11-06 팀원 로그의 "첫 0.75 m 비용 92"도 같은 것). 바퀴는 어느 회차에서도 명령을 정확히 따랐음(명령 누적 회전과 odom 1~3° 일치)
+- 필터 켠 뒤 깊이 영상 통계: 유효 81 %, 1 m 안 0 %, 1~3 m 42 %, 3 m 이상 58 %. 끄면 정면 0.5~1.25 m에 점 150개(앞을 비워도 그대로)
+- 팀원 11-06 1차 목표 주행 마지막 1.1 s: Nav2 명령 바퀴 이동 L 0.184 / R 0.078 m(꺾는 명령, 가상 벽 회피로 추정), 실측 L 0.189 / R 0.037(오른쪽 바퀴 정지) → "왼쪽으로 치우침"은 카메라(명령)와 바퀴(실행) 둘 다
+- 필터·런치 기본값은 팀원 커밋 `2485d9c`(jetson 브랜치에만 있음)
+
 ## 2026-11-07 (62) 가속 한계를 한 값으로: 주행 노드 `target_slew_rad_s2` 2.0 → 6.8(전진 0.5 m/s², 회전 1.9 rad/s²), MPPI `ax_max/az_max`·속도 평활기 `max_accel`은 `build_real_configs.py`가 그 값에서 도출. 테스트 240+1
 
 **할 일**
