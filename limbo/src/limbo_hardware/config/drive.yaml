@@ -4,10 +4,11 @@ roboclaw_drive:
   ros__parameters:
     use_sim_time: false
     port: /dev/serial/by-id/usb-Basicmicro_Inc._USB_Roboclaw_2x15A-if00
-    # 제어 방식. host_duty: 아래 PI·피드포워드로 이 노드가 출력(duty)을 정한다(지금까지의 방식).
-    # board_speed: 바퀴별 목표 속도만 보드에 보내고 속도 맞추기는 보드가 한다. 보드에 속도 제어 값이 저장돼 있고(모션스튜디오
-    # 자동 튜닝) 왼쪽 엔코더 방향이 맞춰져 있어야 시작한다. 실물 시험(11-06 설계의 4단계)을 통과하기 전까지 기본은 host_duty
-    control_mode: host_duty
+    # 제어 방식. board_speed(기본, 11-07부터): 바퀴별 목표 속도만 보드에 보내고 속도 맞추기는 보드가 한다. 보드에 속도 제어 값이
+    # 저장돼 있고(tools/drive/board_setup.py) 두 엔코더가 전진 +여야 시작하며, 아니면 시작을 거부하고 이유를 찍는다.
+    # host_duty: 아래 PI·피드포워드로 이 노드가 출력(duty)을 정한다(11-06까지의 방식. 저속에서 바퀴가 서고 출발에 1.5~2 s 걸림).
+    # 11-07 실물: 바퀴 띄운 계단 응답, 바닥 키보드, 자동 직진 6 m 3회(좌우 차 4~7 mm, 방향 ≤1.2°, 출발 0.4 s) 통과 뒤 기본값으로
+    control_mode: board_speed
     # 바퀴별 PI + 피드포워드. (host_duty에서만 쓴다. board_speed는 kp·ki·피드포워드·출력 상한·output_slew를 쓰지 않는다) 10-30~11-03 바닥 시험에서 실제로 움직인 마지막 설정(pi_baseline_02)을 그대로 둔다.
     # 정밀 추종 기준은 아직 못 넘겼으므로 "검증된 최선"이지 최종값이 아니다
     kp: 0.02
