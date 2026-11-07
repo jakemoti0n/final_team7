@@ -80,7 +80,11 @@ def read_all(transport):
     modes = transport.read_encoder_modes()
     velocity = transport.read_velocity_settings()
     volt = transport.query(59)
-    limits = struct.unpack('>II', transport.query(110))
+    try:
+        limits = list(struct.unpack('>II', transport.query(110)))
+    except DriveError:   # 펌웨어 4.4.9는 명령 110에 응답하지 않는다(11-07 실측). 매뉴얼 rev 6.0에만 있는 명령
+        transport.recover()
+        limits = None
     return {'firmware': transport.firmware,
             'encoder_modes': list(modes),
             'forward_signs_m1_m2': list(forward_signs(modes)),
@@ -88,7 +92,7 @@ def read_all(transport):
             'main_voltage_min_v': int.from_bytes(volt[0:2], 'big') / 10.0,
             'main_voltage_max_v': int.from_bytes(volt[2:4], 'big') / 10.0,
             'main_voltage_auto_offset_v': volt[4] / 10.0,
-            'speed_error_limits_m1_m2': list(limits),
+            'speed_error_limits_m1_m2': limits,
             'command_timeout_s': transport.read_timeout_s(),
             'battery_volts': transport.read_battery_volts()}
 
