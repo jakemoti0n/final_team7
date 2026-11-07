@@ -178,6 +178,9 @@ class DriveNode(Node):
         )
         self.estimator = CountWindowEstimator(s['left_counts_per_revolution'],
                                               s['right_counts_per_revolution'], s['velocity_window_s'])
+        self.cpr = (s['left_counts_per_revolution'], s['right_counts_per_revolution'])
+        # 속도 추정 해상도: 창 안에 한 카운트 차이가 내는 rad/s. 이보다 작은 변화는 "빨라짐"이 아니라 양자화
+        self.speed_resolution = tuple(math.tau / c / s['velocity_window_s'] for c in self.cpr)
         self.tracker = None                # 전진 부호를 보드에서 읽은 뒤 _open에서 만든다 (M1=오른쪽, M2=왼쪽)
         self.forward_signs = None
         self.velocity_settings = None      # board_speed에서 보드가 가진 [M1, M2] 속도 제어 값
@@ -469,15 +472,19 @@ class DriveNode(Node):
             self.stall_since[index] = None
 
     def _runs_wrong_way(self, index, speed_qpps, measured_rad_s):
-        """목표와 반대 방향으로 '점점 빨라지는' 틱이 MAX_CONSECUTIVE_ERRORS번 이어지면 참.
+        """목표와 반대 방향으로, 목표 크기보다 빠르게, 점점 더 빨라지는 틱이 MAX_CONSECUTIVE_ERRORS번 이어지면 참.
 
-        방향을 바꾸는 중에도 잠깐 반대로 돌지만 그때는 느려진다. 빨라진다면 보드가 엔코더를 거꾸로 읽어 출력을 계속 올리는 것이다.
+        보드가 엔코더를 거꾸로 읽으면 출력을 계속 올려 바퀴가 목표 크기를 훌쩍 넘겨 빨라진다. 반면 목표가 뒤집히는 순간에는
+        바퀴가 잠깐 반대 방향인 채로 있지만 (a) 느려지거나 (b) 막 구르기 시작해 목표 크기보다 느리다. 11-07 1차 자율주행에서
+        Nav2가 100 ms 사이에 회전 방향을 바꾸는 동안 (b)를 반대 주행으로 오판해 노드가 꺼졌으므로 목표 크기 조건을 둔다.
+        '빨라짐'은 속도 추정 해상도(창 안 한 카운트) 이상 늘어난 것만 센다.
         """
         speed = abs(measured_rad_s)
+        target = abs(speed_qpps) * math.tau / self.cpr[index]
         opposite = speed_qpps != 0 and measured_rad_s != 0.0 and (measured_rad_s > 0) != (speed_qpps > 0)
-        growing = speed > self.wrong_way_speed[index]
+        growing = speed > self.wrong_way_speed[index] + self.speed_resolution[index]
         self.wrong_way_speed[index] = speed
-        self.wrong_way[index] = self.wrong_way[index] + 1 if opposite and growing else 0
+        self.wrong_way[index] = self.wrong_way[index] + 1 if opposite and growing and speed > target else 0
         return self.wrong_way[index] >= MAX_CONSECUTIVE_ERRORS
 
     def _check_battery(self, now):

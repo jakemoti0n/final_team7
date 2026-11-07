@@ -469,7 +469,7 @@ class DriveNodeTests(unittest.TestCase):
 
     def test_board_speed_wheel_speeding_up_the_wrong_way_is_fatal(self):
         node, fake = self.make_speed()
-        for back in (2, 4, 6, 8, 10, 12, 14):   # 전진 목표인데 뒤로 점점 빨라진다
+        for back in (10, 20, 30, 40, 50, 60, 70):   # 전진 목표인데 뒤로, 목표 크기보다 빠르게, 점점 빨라진다
             self.command(0.1)
             self.step(left=-back, right=-back)
             if node.closed:
@@ -489,6 +489,19 @@ class DriveNodeTests(unittest.TestCase):
         self.assertFalse(node.closed)
         self.assertEqual(node.errors, [])
         self.assertLess(fake.speed_writes[-1][0], 0)
+
+    def test_board_speed_nav2_flipping_tiny_turn_while_wheel_breaks_free_is_normal(self):
+        """11-07 1차 자율주행 재현: 회전 목표가 100 ms 사이에 +0.05 → -0.03 rad/s로 뒤집히고, 왼쪽 바퀴는 막 구르기 시작해
+        옛 방향으로 조금씩 빨라진다(틱당 1~2카운트). 목표 크기보다 느리므로 반대 주행이 아니다."""
+        node, fake = self.make_speed()
+        for _ in range(3):
+            self.command(0.0, 0.05)          # 왼쪽 목표 뒤로(-0.014 m/s)
+            self.step(left=-1, right=1)
+        for _ in range(4):
+            self.command(0.0, -0.03)         # 왼쪽 목표 앞으로(+0.008 m/s) — 바퀴는 아직 뒤로 1→2→3→4카운트/틱
+            self.step(left=-(_ + 1), right=_ + 1)
+        self.assertFalse(node.closed)
+        self.assertEqual(node.errors, [])
 
     def test_board_speed_clamps_target_to_what_the_motor_can_do(self):
         def board(fake):
