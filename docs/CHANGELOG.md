@@ -8,6 +8,23 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-07 (62) 가속 한계를 한 값으로: 주행 노드 `target_slew_rad_s2` 2.0 → 6.8(전진 0.5 m/s², 회전 1.9 rad/s²), MPPI `ax_max/az_max`·속도 평활기 `max_accel`은 `build_real_configs.py`가 그 값에서 도출. 테스트 240+1
+
+**할 일**
+- Jetson: `git pull` 뒤 `limbo_bringup` 테스트(`test_real_integration.py`)로 설치본과 소스 일치 확인. 주행 노드·Nav2 다시 띄워 6 m 목표
+- 통과 기준: 목표 (5.65, 0.30) 도달, 방향 흔들림 ±5° 안, "Failed to make progress" 0회
+
+**변경**
+- `drive.yaml` `target_slew_rad_s2: 6.8`(주석에 근거). `tools/drive/build_real_configs.py` `nav2_profile(data, drive, geometry)`: `ax_max = slew × 반지름`, `az_max = 2 × ax_max / 간격`, 평활기 `max_accel/max_decel` 같은 값. `wheel_geometry()`는 `wheel_odometry.yaml`에서. `nav2_real.yaml` 재생성(가속 세 값만 바뀜)
+- `test_real_integration.py`: 생성기 호출에 geometry, 가속 한계 일치 테스트 1개 추가
+
+**원인과 근거**
+- Nav2 자율주행(11-07, 1 m·6 m 목표 5회) 전부 지그재그 뒤 "Failed to make progress": MPPI는 회전 가속 4.0 rad/s²·전진 1.0 m/s²를 가정하는데 주행 노드가 보드에 거는 가속은 0.56 rad/s²·0.15 m/s²(7배 느림). t=1 s 좌회전 0.36 명령 → 바퀴 목표 ±1.3 rad/s인데 실측 −1.06/+0.82로 0.6 s 늦게 도달 → MPPI가 더 밀고 넘친 뒤 반대로 −0.4 → 반복. 명령 누적 회전과 odom 방향은 1~3° 안에서 일치(바퀴는 늦게나마 정확). /odom 속도값도 명령과 일치(0.3 → 0.299, 0.1 → 0.100). YOLO를 꺼 부하를 내려도(load 3.7) 같고, `wz_std`만 0.1로 줄여도 같음 → 샘플 떨림·부하가 아니라 지연
+- 11-06 팀원이 본 ±15° 흔들림도 같은 원인(굼뜬 바퀴가 진폭을 줄였을 뿐)
+- 카메라를 끄면(`camera:=false`) 충돌 감시가 rgbd 입력 없음으로 모든 명령을 0으로 막는다. 부하를 빼려면 `yolo:=false`만
+- 로컬 비용 지도의 막힌 칸 2,500~3,000개는 0.3~1.0 m 높이의 실제 물체(점군 높이 분포로 확인). 유령 아님
+- Nav2 프로세스를 끌 때 `nav2_` 패턴으로 모으면 AMCL·map_server(같은 접두사)까지 죽는다. 런치 PID에 INT
+
 ## 2026-11-07 (61) `control_mode` 기본값 `board_speed`로 + TROUBLESHOOTING 3건(저속 정지·출발 지연 원인, 최대 전압 자동 감지, 보호 장치 오판)
 
 **할 일**

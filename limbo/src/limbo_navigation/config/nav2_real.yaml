@@ -90,9 +90,9 @@ controller_server:
       time_steps: 80
       model_dt: 0.05
       batch_size: 2000
-      ax_max: 1.0
-      ax_min: -1.0
-      az_max: 4.0
+      ax_max: 0.502
+      ax_min: -0.502
+      az_max: 1.894
       vx_std: 0.2
       vx_max: 0.25
       vx_min: 0.0
@@ -494,13 +494,13 @@ velocity_smoother:
     - 0.0
     - -0.8
     max_accel:
-    - 1.0
+    - 0.502
     - 0.0
-    - 4.0
+    - 1.894
     max_decel:
-    - -1.0
+    - -0.502
     - 0.0
-    - -4.0
+    - -1.894
     odom_topic: odom
     odom_duration: 0.1
     deadband_velocity:

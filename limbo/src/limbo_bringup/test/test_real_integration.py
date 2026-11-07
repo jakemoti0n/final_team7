@@ -55,9 +55,23 @@ def test_profile_builder_preserves_the_simulation_input():
     source = config('limbo_navigation/config/nav2_params.yaml')
     snapshot = copy.deepcopy(source)
     drive = config('limbo_hardware/config/drive.yaml')['roboclaw_drive']['ros__parameters']
-    result = builder.nav2_profile(source, drive)
+    result = builder.nav2_profile(source, drive, builder.wheel_geometry(ROOT / 'limbo/src'))
     assert source == snapshot
     assert result == config('limbo_navigation/config/nav2_real.yaml')
+
+
+def test_real_profile_acceleration_limits_follow_the_drive_node():
+    """MPPI·속도 평활기의 가속 한계는 주행 노드의 target_slew_rad_s2에서 도출된 같은 값이어야 한다(11-07 지그재그 원인)."""
+    drive = config('limbo_hardware/config/drive.yaml')['roboclaw_drive']['ros__parameters']
+    odom = config('limbo_hardware/config/wheel_odometry.yaml')['wheel_odometry']['ros__parameters']
+    radius = (odom['left_wheel_radius'] + odom['right_wheel_radius']) / 2
+    linear = round(drive['target_slew_rad_s2'] * radius, 3)
+    angular = round(2 * linear / odom['wheel_separation'], 3)
+    nav = config('limbo_navigation/config/nav2_real.yaml')
+    follow = nav['controller_server']['ros__parameters']['FollowPath']
+    assert (follow['ax_max'], follow['ax_min'], follow['az_max']) == (linear, -linear, angular)
+    smoother = nav['velocity_smoother']['ros__parameters']
+    assert smoother['max_accel'] == [linear, 0.0, angular] and smoother['max_decel'] == [-linear, 0.0, -angular]
 
 
 @pytest.mark.parametrize('enabled', [False, True])
