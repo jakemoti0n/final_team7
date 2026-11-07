@@ -8,6 +8,25 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-07 (53) AWS에서 화면 빌드가 메모리 부족으로 실패하던 문제: rollup을 4.40.2로 고정 (빌드 3분·2.9 GB → 1초·0.3 GB)
+
+**할 일**
+- `dashboard/ui`에서 `corepack pnpm install --frozen-lockfile` (rollup 버전이 바뀜). Docker는 `docker compose up -d --build`만 하면 됨
+
+**변경**
+- `dashboard/ui/package.json`에 `"pnpm": {"overrides": {"rollup": "4.40.2"}}`, `pnpm-lock.yaml` 갱신(rollup과 플랫폼별 바이너리만 바뀜)
+- `docs/AWS_DEPLOY.md`: 1 GB 인스턴스로 충분, 빌드 시간 2~5분, 문제 해결 표에 `JavaScript heap out of memory`
+
+**원인과 근거**
+- AWS 인스턴스에서 `docker compose up -d --build`가 `[ui 7/7] RUN corepack pnpm build`에서 `FATAL ERROR: Ineffective mark-compacts near heap limit … JavaScript heap out of memory`(exit 134)로 멈췄다. Node는 기계의 물리 메모리로 힙 한도를 정하므로 스왑을 만들어도 한도가 커지지 않는다
+- 소스는 1,100줄·모듈 35개인데 이 PC에서도 `vite build`가 3분·최대 2.9 GB였다. React 플러그인을 빼도, 압축(minify)을 꺼도 같았다. CPU 프로파일 결과 시간의 대부분이 rollup 트리 셰이킹(`includeCallArgumentsWhenCalledAtPath`, `trackEntityAtPathAndGetIfTracked` 등)이었다
+- vite 6.3.5는 rollup을 `^4.34.9`로만 요구해서 잠금 파일에 최신 4.64.0이 들어가 있었다. 4.40.2로 고정하자 같은 결과물(`index-B8uD1lsY.js` 해시 동일)이 0.8초·0.3 GB로 나왔다
+
+**확인**(이 PC, 2026-11-07)
+- `corepack pnpm build`(tsc 포함) 3.4초·최대 0.42 GB, UI 단위 시험 30 통과
+- `docker compose build` 10초. `node:24-slim` 컨테이너를 메모리 1 GB로 묶고(`-m 1g --memory-swap 1g`) `pnpm install --frozen-lockfile && pnpm build` 성공
+- 고치기 전 같은 빌드를 힙 512 MB로 묶으면 9초 만에 같은 `heap out of memory`로 재현
+
 ## 2026-11-06 (52) AWS 배포 파일과 가이드: Dockerfile·docker-compose(관제 서버 + Caddy HTTPS·basic auth)·`docs/AWS_DEPLOY.md`, Caddy 뒤에서 start 명령이 깨지던 압축 문제 수정 (인터넷 공개 준비 3단계)
 
 **할 일**

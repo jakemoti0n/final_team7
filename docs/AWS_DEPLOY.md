@@ -32,12 +32,12 @@
 1. AWS 콘솔 → **Lightsail** → **Create instance**
 2. 지역: **Seoul (ap-northeast-2)** (로봇과 가까울수록 응답이 빠르다)
 3. 플랫폼 **Linux/Unix**, 블루프린트 **OS Only → Ubuntu 24.04 LTS**
-4. 요금제: **2 GB 메모리** 추천. 1 GB도 되지만 화면 빌드 중 메모리가 모자라므로 아래 4절의 **스왑을 꼭** 만든다
+4. 요금제: **1 GB 메모리**면 충분하다(화면 빌드가 약 0.5 GB). 여유를 위해 아래 4절의 스왑을 만들어 두기를 권한다
 5. 이름(예: `limbo-dashboard`) → **Create instance**
 
 ### EC2 t3.micro (대안)
 
-AMI **Ubuntu Server 24.04 LTS**, 유형 **t3.micro**(메모리 1 GB → 4절 스왑 필수), 키 페어를 새로 만들어 `.pem`을 받아 둔다. 저장 공간 16 GB 이상.
+AMI **Ubuntu Server 24.04 LTS**, 유형 **t3.micro**(메모리 1 GB, 4절 스왑 권장), 키 페어를 새로 만들어 `.pem`을 받아 둔다. 저장 공간 16 GB 이상.
 
 ## 2. 고정 IP 붙이기
 
@@ -74,7 +74,7 @@ sudo apt update && sudo apt -y upgrade
 sudo timedatectl set-timezone Asia/Seoul
 ```
 
-**메모리 1 GB 인스턴스면 스왑 2 GB** (화면 빌드가 메모리를 많이 쓴다):
+**메모리 1 GB 인스턴스면 스왑 2 GB** (빌드와 서버가 같이 돌 때 여유분. 권장):
 
 ```bash
 sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
@@ -153,7 +153,7 @@ INITIAL_WAYPOINTS=aischool_waypoints.yaml
 
 ```bash
 cd ~/limbo/dashboard
-docker compose up -d --build     # 처음 빌드는 5~15분 (1 GB 인스턴스는 더 걸림)
+docker compose up -d --build     # 처음 빌드는 2~5분 (이미지 내려받기가 대부분)
 docker compose ps                # dashboard, caddy 둘 다 running
 ```
 
@@ -260,6 +260,7 @@ patrol_launch:
 | Bridge `http_401` / `server rejected the robot token` | 로봇 `robot_token` 파일과 서버 `ROBOT_TOKEN`이 다름(앞뒤 공백은 무시됨) |
 | 일시정지는 되는데 주행 시작만 `응답 없음`, Bridge 로그에 `commands=invalid_command` | 로봇의 Bridge가 2026-11-06 (52) 이전 코드다(앞단이 압축한 start 명령을 못 읽음). 로봇에서 `git pull` 후 Bridge 다시 시작 |
 | Bridge `TimeoutError`가 자주 | 텔레메트리 요청 제한이 1초(`request_timeout_s`)다. 로봇 쪽 인터넷이 느리거나 끊김. 같은 지역(서울) 인스턴스인지, 로봇 네트워크 확인 |
+| 빌드가 `JavaScript heap out of memory`(exit code 134)로 실패 | 2026-11-07 (53) 이전 코드다. rollup 4.64가 이 화면 빌드에 메모리 약 3 GB를 썼다. `git pull`로 받은 뒤 다시 `docker compose up -d --build` |
 | 빌드 중 멈추거나 `Killed` | 메모리 부족. 4절 스왑을 만들거나 2 GB 요금제로 |
 | 디스크 부족 | `docker system df`, `docker image prune -f`, `docker builder prune -f` |
 
