@@ -57,7 +57,7 @@ def fake_session(stage, fake, **overrides):
     """Session을 가짜 보드와 임시 기록 폴더로 만든다. 시간은 표본마다 0.05 s씩 흐르게 한다."""
     record = tempfile.mkdtemp()
     defaults = dict(port='x', record=record, check_duty_pct=10.0, check_seconds=0.3, levels=[50, 100],
-                    level_seconds=0.3, p=1.0, i=0.5, d=0.25, qpps=None, min=10.0, max=16.0,
+                    level_seconds=0.3, p=1.0, i=0.5, d=0.25, qpps=None, min=10.0, max=16.0, auto_offset=0.0,
                     speeds=[0.03], step_seconds=1.5, accel_rad_s2=2.0, source=None)
     defaults.update(overrides)
     args = type('Args', (), defaults)()
@@ -86,11 +86,12 @@ class PacketTests(unittest.TestCase):
             board_setup.pid_payload(-1.0, 0.5, 0.25, 5000)
 
     def test_voltage_payload_is_tenths_min_max_offset(self):
-        self.assertEqual(board_setup.voltage_payload(10.0, 16.0), struct.pack('>HHB', 100, 160, 20))
+        self.assertEqual(board_setup.voltage_payload(10.0, 16.0, 2.0), struct.pack('>HHB', 100, 160, 20))
+        self.assertEqual(board_setup.voltage_payload(10.0, 16.0, 0.0), struct.pack('>HHB', 100, 160, 0))
         with self.assertRaises(ValueError):
-            board_setup.voltage_payload(16.0, 10.0)
+            board_setup.voltage_payload(16.0, 10.0, 0.0)
         with self.assertRaises(ValueError):
-            board_setup.voltage_payload(5.0, 16.0)
+            board_setup.voltage_payload(5.0, 16.0, 0.0)
 
     def test_nvm_payload_is_manual_key(self):
         self.assertEqual(board_setup.nvm_payload(), bytes.fromhex('e22eab7a'))
@@ -184,7 +185,7 @@ class StageTests(unittest.TestCase):
         session, record = fake_session('voltage', fake)
         board_setup.stage_voltage(session)
         session.close()
-        self.assertEqual(fake.voltage_limits, (100, 160, 20))
+        self.assertEqual(fake.voltage_limits, (100, 160, 0))
 
     def test_save_stage_sends_nvm_key_and_compares_after_reconnect(self):
         fake = SpinningFakeSerial()

@@ -50,10 +50,15 @@ def pid_payload(p, i, d, qpps):
     return struct.pack('>IIII', round(d * PID_SCALE), round(p * PID_SCALE), round(i * PID_SCALE), qpps)
 
 
-def voltage_payload(min_v, max_v, auto_offset_v=2.0):
-    """명령 57: 최소·최대(0.1 V 단위, 2바이트씩), 자동 최대 오프셋(0.1 V, 1바이트)."""
+def voltage_payload(min_v, max_v, auto_offset_v):
+    """명령 57: 최소·최대(0.1 V 단위, 2바이트씩), 자동 최대 오프셋(0.1 V, 1바이트).
+
+    오프셋이 0이 아니면 보드는 켤 때마다 최대 한도를 "그때 전압 + 오프셋"으로 다시 잡는다(11-07 실측: 2.0이면 11.9 V에서 켜
+    13.9, 충전기 꽂힌 29.1 V에서 켜 31.1). 그러면 낮은 전압에서 켠 뒤 충전하면 "전압 높음"으로 멈춘다(11-03). 0이면 쓴 최대값을 그대로 쓴다."""
     if not 6.0 <= min_v < max_v <= 34.0:
         raise ValueError('전압 한도는 6.0 ≤ 최소 < 최대 ≤ 34.0 V (2x15A 입력 범위)')
+    if not 0.0 <= auto_offset_v <= 25.5:
+        raise ValueError('자동 최대 오프셋은 0..25.5 V')
     return struct.pack('>HHB', round(min_v * 10), round(max_v * 10), round(auto_offset_v * 10))
 
 
@@ -293,10 +298,12 @@ def stage_pid(session):
 
 def stage_voltage(session):
     transport = session.open()
-    transport.write_setting(57, voltage_payload(session.args.min, session.args.max))
+    transport.write_setting(57, voltage_payload(session.args.min, session.args.max, session.args.auto_offset))
     after = read_all(transport)
-    ok = abs(after['main_voltage_min_v'] - session.args.min) < 0.05 and abs(after['main_voltage_max_v'] - session.args.max) < 0.05
-    session.summary({'written': {'min_v': session.args.min, 'max_v': session.args.max},
+    # 최소는 보드가 0.1 V 낮게 되돌려 준다(10.0 → 9.9, 11-07 실측). 0.15 V 안이면 같은 값으로 본다
+    ok = abs(after['main_voltage_min_v'] - session.args.min) < 0.15 and abs(after['main_voltage_max_v'] - session.args.max) < 0.05 \
+        and abs(after['main_voltage_auto_offset_v'] - session.args.auto_offset) < 0.05
+    session.summary({'written': {'min_v': session.args.min, 'max_v': session.args.max, 'auto_offset_v': session.args.auto_offset},
                      'read_back': {k: after[k] for k in ('main_voltage_min_v', 'main_voltage_max_v', 'main_voltage_auto_offset_v')},
                      'battery_volts_now': after['battery_volts'], 'match': ok})
     if not ok:
@@ -408,6 +415,8 @@ def main():
     parser.add_argument('--qpps', type=int, nargs=2, metavar=('M1', 'M2'))
     parser.add_argument('--min', type=float, default=10.0, help='voltage: 최소 V. drive.yaml의 min_battery_volts와 같게')
     parser.add_argument('--max', type=float, default=16.0, help='voltage: 최대 V. 12 V 납축 충전 전압(14.4~14.8)보다 위, 충전기 무부하 29 V보다 아래')
+    parser.add_argument('--auto-offset', type=float, default=0.0,
+                        help='voltage: 자동 최대 오프셋 V. 0이면 켤 때 최대 한도를 다시 잡지 않고 --max를 그대로 쓴다')
     parser.add_argument('--speeds', type=float, nargs='+', default=[0.03, 0.07, 0.13],
                         help='step: m/s. 0.03은 11-06에 바퀴가 서던 목표, 0.13은 Nav2 상한')
     parser.add_argument('--step-seconds', type=float, default=3.0)
