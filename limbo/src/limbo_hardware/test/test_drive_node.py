@@ -469,7 +469,7 @@ class DriveNodeTests(unittest.TestCase):
 
     def test_board_speed_wheel_speeding_up_the_wrong_way_is_fatal(self):
         node, fake = self.make_speed()
-        for back in (10, 20, 30, 40, 50, 60, 70):   # 전진 목표인데 뒤로, 목표 크기보다 빠르게, 점점 빨라진다
+        for back in (10, 20, 30, 40, 50, 60, 70, 80, 90, 100):   # 전진 목표인데 뒤로, 목표 크기보다 빠르게, 점점 빨라진다
             self.command(0.1)
             self.step(left=-back, right=-back)
             if node.closed:
@@ -500,6 +500,18 @@ class DriveNodeTests(unittest.TestCase):
         for _ in range(4):
             self.command(0.0, -0.03)         # 왼쪽 목표 앞으로(+0.008 m/s) — 바퀴는 아직 뒤로 1→2→3→4카운트/틱
             self.step(left=-(_ + 1), right=_ + 1)
+        self.assertFalse(node.closed)
+        self.assertEqual(node.errors, [])
+
+    def test_board_speed_flip_during_spin_is_not_fatal_within_estimator_lag(self):
+        """11-07 2차: 회전 중 목표가 뒤집히면 0.1 s 창의 추정이 2~3틱 더 옛 방향으로 빨라져 보인다. 그 뒤 느려지면 정상."""
+        node, fake = self.make_speed()
+        for _ in range(8):
+            self.command(0.0, 0.8)           # 왼쪽 뒤로 빠르게
+            self.step(left=-30, right=30)
+        for rolling in (-33, -36, -38, -30, -20, -10, 0, 10):   # 목표 뒤집힘(왼쪽 앞으로 작게) 뒤 3틱 더 빨라져 보이다 느려짐
+            self.command(0.0, -0.05)
+            self.step(left=rolling, right=-rolling)
         self.assertFalse(node.closed)
         self.assertEqual(node.errors, [])
 

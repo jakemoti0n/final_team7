@@ -477,7 +477,9 @@ class DriveNode(Node):
         보드가 엔코더를 거꾸로 읽으면 출력을 계속 올려 바퀴가 목표 크기를 훌쩍 넘겨 빨라진다. 반면 목표가 뒤집히는 순간에는
         바퀴가 잠깐 반대 방향인 채로 있지만 (a) 느려지거나 (b) 막 구르기 시작해 목표 크기보다 느리다. 11-07 1차 자율주행에서
         Nav2가 100 ms 사이에 회전 방향을 바꾸는 동안 (b)를 반대 주행으로 오판해 노드가 꺼졌으므로 목표 크기 조건을 둔다.
-        '빨라짐'은 속도 추정 해상도(창 안 한 카운트) 이상 늘어난 것만 센다.
+        '빨라짐'은 속도 추정 해상도(창 안 한 카운트) 이상 늘어난 것만 센다. 또 속도 추정은 velocity_window_s만큼 늦으므로
+        목표가 뒤집힌 뒤 그 창 길이(틱 수)만큼은 옛 방향으로 빨라지는 것처럼 보인다 — 11-07 2차 자율주행에서 복구 회전 중
+        뒤집힌 목표에 3틱 만에 걸려 노드가 꺼졌다. 그래서 지연 틱 수 + MAX_CONSECUTIVE_ERRORS번 이어져야 판정한다.
         """
         speed = abs(measured_rad_s)
         target = abs(speed_qpps) * math.tau / self.cpr[index]
@@ -485,7 +487,8 @@ class DriveNode(Node):
         growing = speed > self.wrong_way_speed[index] + self.speed_resolution[index]
         self.wrong_way_speed[index] = speed
         self.wrong_way[index] = self.wrong_way[index] + 1 if opposite and growing and speed > target else 0
-        return self.wrong_way[index] >= MAX_CONSECUTIVE_ERRORS
+        lag_ticks = math.ceil(self.s['velocity_window_s'] / self.s['control_period_s'])
+        return self.wrong_way[index] >= lag_ticks + MAX_CONSECUTIVE_ERRORS
 
     def _check_battery(self, now):
         self.battery_volts = self.transport.read_battery_volts()

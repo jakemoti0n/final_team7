@@ -8,6 +8,21 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-07 (59) 자동 직진 시험 도구 `tools/drive/straight_run.py` + "반대로 달림" 판정에 속도 추정 지연 틱 반영(복구 회전 중 또 꺼진 것). 테스트 240
+
+**할 일**
+- Jetson: `git pull` 뒤 `limbo_hardware` 빌드. 주행 노드 `control_mode:=board_speed record_dir:=...`로 띄운 뒤 `python3 tools/drive/straight_run.py --distance 6 --speed 0.1`. 끝나면 `drive_report.py <record_dir>`로 좌우 이동량·출발 지연 확인
+- 통과 기준(PM 11-07): 6 m를 똑바로. odom 방향 변화 ±3° 안, 좌우 이동량 차이 11-06(4.4 m에 0.14 m)보다 작게. 바닥 끝점에서 옆으로 샌 거리는 줄자로
+
+**변경**
+- `tools/drive/straight_run.py`(새): /cmd_vel로 10 Hz 직진 명령, /odom 거리로 목표에서 정지. 결과: 거리·시간·평균 속도·방향 변화·옆으로 샌 거리
+- `drive_node.py` `_runs_wrong_way`: 연속 틱 요구를 `ceil(velocity_window_s / control_period_s) + MAX_CONSECUTIVE_ERRORS`(= 2 + 3)로. 테스트 1개 추가
+
+**원인과 근거**
+- 2차 자율주행(17:46~48)도 Nav2 복구 회전만 반복(MPPI 출력 v 최대 0.026 m/s — 충돌 감시·주행 노드 이전 단계에서 이미 0). 그 사이 17:47:00 주행 노드가 또 "왼쪽 바퀴 반대 방향으로 빨라짐(목표 −40 카운트/초, 실측 0.27 rad/s)"으로 종료: 회전 중 목표가 뒤집히면 0.1 s 창 추정이 2~3틱 더 옛 방향으로 빨라져 보이는데 (58)의 3틱 기준이 그 안에 있었다
+- 로컬 비용 지도의 검은 덩어리는 유령이 아니라 0.3~1.0 m 높이의 실제 물체(점군을 base_footprint로 바꿔 세면 0.3 m 아래 점 0개). 2D /scan은 그 높이를 안 보여 달라 보였을 뿐
+- PM 지시(11-07): 직진 6 m를 자동으로 똑바로 가는 것이 제1 과제. Nav2·AMCL·비용 지도는 그 뒤
+
 ## 2026-11-07 (58) 보드 설정 완료(엔코더 방향·QPPS·속도 PID·전압 한도 저장) + `board_speed`의 "반대로 달림" 판정이 Nav2의 작은 회전 명령 뒤집힘을 오판해 노드를 끝내던 것 수정. 테스트 239
 
 **할 일**
