@@ -77,6 +77,8 @@ def nav2_profile(source, drive, geometry):
     controller = data['controller_server']['ros__parameters']['FollowPath']
     controller['vx_max'] = min(controller['vx_max'], linear)
     controller['wz_max'] = min(controller['wz_max'], angular)
+    # RotationShim의 제자리 회전 속도도 같은 상한을 따른다 (MPPI에 넘기기 전 단계라 wz_max가 적용되지 않음).
+    controller['rotate_to_heading_angular_vel'] = min(controller['rotate_to_heading_angular_vel'], angular)
     # Reduce brief inner-wheel reversals during real straight starts.
     controller['wz_std'] = 0.2
     smoother = data['velocity_smoother']['ros__parameters']
@@ -90,6 +92,7 @@ def nav2_profile(source, drive, geometry):
     linear_accel = round(drive['target_slew_rad_s2'] * geometry['wheel_radius'], 3)
     angular_accel = round(2 * linear_accel / geometry['wheel_separation'], 3)
     controller['ax_max'], controller['ax_min'], controller['az_max'] = linear_accel, -linear_accel, angular_accel
+    controller['max_angular_accel'] = angular_accel
     smoother['max_accel'] = [linear_accel, 0., angular_accel]
     smoother['max_decel'] = [-linear_accel, 0., -angular_accel]
     return data

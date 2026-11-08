@@ -70,6 +70,11 @@ def test_real_profile_acceleration_limits_follow_the_drive_node():
     nav = config('limbo_navigation/config/nav2_real.yaml')
     follow = nav['controller_server']['ros__parameters']['FollowPath']
     assert (follow['ax_max'], follow['ax_min'], follow['az_max']) == (linear, -linear, angular)
+    # RotationShim의 제자리 회전도 같은 한계: 속도는 주행 노드 상한, 가속은 도출값
+    assert follow['plugin'] == 'nav2_rotation_shim_controller::RotationShimController'
+    assert follow['primary_controller'] == 'nav2_mppi_controller::MPPIController'
+    assert follow['rotate_to_heading_angular_vel'] == drive['max_angular_rad_s']
+    assert follow['max_angular_accel'] == angular
     smoother = nav['velocity_smoother']['ros__parameters']
     assert smoother['max_accel'] == [linear, 0.0, angular] and smoother['max_decel'] == [-linear, 0.0, -angular]
 

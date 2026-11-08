@@ -8,7 +8,7 @@
   1 바퀴 odom      /odom 주기 ≥ 15 Hz (주행 노드가 살아 있고 TF odom→base가 나온다)
   2 위치 추정      map→base_footprint TF가 있고, 라이다 스캔 점이 정적 지도 벽에 맞는 비율 ≥ 70 % (11-07: 맞을 때 80~90 %, 틀렸을 때 29~41 %)
   3 카메라 입력    base_footprint 기준 정면 2 m·높이 0.3 m 아래에 카메라 점이 없다 (가짜 근거리 점이면 1 m 앞에 가상 벽이 생긴다)
-  4 로컬 비용 지도 로봇 정면 0.3~1.5 m 중심선 최대 비용 < 50 (팀원 11-06 로그의 "첫 0.75 m 비용 92"가 가상 벽이었다)
+  4 로컬 비용 지도 로봇에서 목표 쪽(--goal 없으면 정면) 0.3~1.5 m 중심선 최대 비용 < 50 (팀원 11-06 로그의 "첫 0.75 m 비용 92"가 가상 벽이었다)
   5 정적 지도      --goal을 주면 로봇에서 목표 쪽으로 2 m까지 글로벌 비용 지도 중심선 최대 비용 < 50 (−x 복도는 지도에 없었다)
   6 Nav2           bt_navigator·controller_server 노드가 보인다
 """
@@ -55,8 +55,9 @@ class Preflight(Node):
         while time.monotonic() - start < seconds:
             rclpy.spin_once(self, timeout_sec=0.05)
 
-    def pose(self):
-        tr = self.buf.lookup_transform('map', 'base_footprint', rclpy.time.Time()).transform
+    def pose(self, frame='map'):
+        """로봇 자세를 frame 좌표로. 로컬 비용 지도는 odom 좌표라 지도마다 header.frame_id로 구해야 한다(map 좌표로 읽으면 엉뚱한 칸을 본다, 11-08)."""
+        tr = self.buf.lookup_transform(frame, 'base_footprint', rclpy.time.Time()).transform
         return tr.translation.x, tr.translation.y, yaw_of(tr.rotation)
 
 
@@ -112,8 +113,10 @@ def main():
     node.collect(args.wait)
     results = []   # (이름, 통과, 설명)
 
-    hz = len(node.odom_stamps) / args.wait
-    results.append(('바퀴 odom', hz >= ODOM_HZ_MIN, '/odom %.1f Hz (기준 ≥ %.0f)' % (hz, ODOM_HZ_MIN)))
+    # 구독이 붙기까지 걸린 시간(DDS 탐색, 0~3 s)은 빼고 첫 수신~마지막 수신 구간으로 잰다. 수집 창 전체로 나누면 20 Hz가 11 Hz로 보인다(11-08).
+    stamps = node.odom_stamps
+    hz = (len(stamps) - 1) / (stamps[-1] - stamps[0]) if len(stamps) >= 2 and stamps[-1] > stamps[0] else 0.0
+    results.append(('바퀴 odom', hz >= ODOM_HZ_MIN, '/odom %.1f Hz, %d개 (기준 ≥ %.0f)' % (hz, len(stamps), ODOM_HZ_MIN)))
 
     pose = None
     try:
@@ -136,16 +139,29 @@ def main():
     else:
         results.append(('카메라 입력', False, '/rgbd_camera/points 없음 (충돌 감시가 모든 명령을 막는다)'))
 
-    if pose and 'local' in node.msgs:
-        c = line_max_cost(node.msgs['local'], pose[0], pose[1], pose[2], 0.3, 1.5)
-        results.append(('로컬 비용 지도', c is not None and c < COST_MAX, '로봇 정면 0.3~1.5 m 최대 비용 %s (기준 < %d)' % (c, COST_MAX)))
+    if 'local' in node.msgs:
+        grid = node.msgs['local']
+        try:
+            lx, ly, lyaw = node.pose(grid.header.frame_id)
+            # 목표를 주면 로봇 정면이 아니라 목표 쪽을 본다(목표가 등 뒤면 정면 벽은 상관없다; 회전은 RotationShim이 제자리에서 한다).
+            # 목표 방위는 map 좌표이므로 두 좌표계의 yaw 차만큼 돌려 로컬 지도 좌표로 옮긴다.
+            heading, where = lyaw, '정면'
+            if args.goal and pose:
+                heading = math.atan2(args.goal[1] - pose[1], args.goal[0] - pose[0]) - pose[2] + lyaw
+                where = '목표 쪽'
+            c = line_max_cost(grid, lx, ly, heading, 0.3, 1.5)
+            results.append(('로컬 비용 지도', c is not None and c < COST_MAX, '로봇 %s 0.3~1.5 m 최대 비용 %s (기준 < %d, %s 좌표)' % (where, c, COST_MAX, grid.header.frame_id)))
+        except Exception as error:
+            results.append(('로컬 비용 지도', False, '%s→base_footprint TF 없음: %s' % (grid.header.frame_id, str(error).splitlines()[0])))
     else:
-        results.append(('로컬 비용 지도', False, '/local_costmap/costmap 없음 또는 자세 없음'))
+        results.append(('로컬 비용 지도', False, '/local_costmap/costmap 없음'))
 
     if args.goal:
         if pose and 'global' in node.msgs:
+            grid = node.msgs['global']
+            gx, gy, _ = node.pose(grid.header.frame_id)
             heading = math.atan2(args.goal[1] - pose[1], args.goal[0] - pose[0])
-            c = line_max_cost(node.msgs['global'], pose[0], pose[1], heading, 0.5, 2.0)
+            c = line_max_cost(grid, gx, gy, heading, 0.5, 2.0)
             results.append(('정적 지도', c is not None and c < COST_MAX, '목표 (%.2f, %.2f) 쪽 0.5~2 m 최대 비용 %s (기준 < %d)' % (*args.goal, c, COST_MAX)))
         else:
             results.append(('정적 지도', False, '/global_costmap/costmap 없음 또는 자세 없음'))

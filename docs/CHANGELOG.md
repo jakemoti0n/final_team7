@@ -8,6 +8,40 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-08 (64) 실물 자율주행 첫 성공(6 m 왕복). 제자리 회전 29 s → 6 s: `RotationShimController`(MPPI 앞단) + `PoseProgressChecker`(회전도 진행으로). 점검 도구 3건 수정. 바퀴 파손으로 시험 중단
+
+**할 일**
+- **바퀴 수리 먼저.** 마지막 복귀 주행 중 바퀴가 부러짐(기계 파손). 주행 기록 `~/limbo_bags/nav_1108_1/control.jsonl`의 7개 주행 구간 모두 실측/목표 바퀴 속도 0.99~1.01, 최대 PWM 18,892/32,767 — 엔코더(모터축)는 끝까지 정상이라 허브·축·바퀴 쪽 파손은 기록에 안 잡힌다. 수리 후 바퀴 반지름(60)·좌우 균형(60의 좌우 차 4~7 mm)을 다시 재야 한다
+- **뚜껑(또는 윗판 위 물건) 확인 후 재측정**: 마지막 복귀 주행에서 라이다 `/mid360/points_filtered`가 로봇 중심 0.23~0.7 m, 높이 0.80~1.37 m에 1,330점을 봄 → 로컬 비용 지도에 로봇 발밑 막힌 칸(반경 0.45 m 안 비용 99~100이 켜졌다 꺼졌다) → MPPI가 제자리에서 ±90° 흔들며 "Failed to make progress". 몸체 필터는 45×45 cm·높이 0.79 m까지만 지움(`MID360s_mount.json`, 11-04 팀원 메모 "lid must remain closed"). 뚜껑이 열려 있었는지 확인하고, 닫은 상태에서 `tools/drive/near_obstacles.py`로 0.7 m 안 라이다 점이 0인지 확인. 열림이 원인이면 뚜껑 고정 또는 몸체 필터 높이 조정(설계 결정)
+- 시작 절차는 (63)과 같고 `nav_preflight.py --goal X Y`가 목표 쪽을 본다. 복귀 주행은 `(0.3, 0.3, 180°)`
+- 지도 검증(복도 모서리 너머) 시작은 바퀴 수리 후
+
+**결과 (11-08, 보드 12.2 V, 목표 (5.65, 0.30) ↔ (0.3, 0.3))**
+| 주행 | 결과 | 시간 | 진행 없음 | 방향 흔들림 |
+|---|---|---|---|---|
+| 1 +x 6 m (경로 앞) | 도달 | 27 s | 0 | ±4° |
+| 2 복귀 180° + 5 m (MPPI만) | 도달 | 회전 30 s + 주행 | 3 (전부 회전 중) | ±18° |
+| 3 제자리 180°만 | 도달 | 7 s, 0.57 rad/s | 0 | — |
+| 4 +x 재현 (PoseProgress) | 도달 | 25 s | 0 | ±4° |
+| 5 복귀 (PoseProgress) | 도달 | 회전 29 s + 주행 | 0 | ±18° |
+| 6 +x, 경로 등 뒤 (RotationShim) | 도달 | 회전 6 s + 주행, 29 s | 0 | ±7° |
+| 7 복귀 (RotationShim) | 중단 | 회전 6 s, 주행 15 s 뒤 제자리 흔들림 | 1 | 발밑 막힌 칸(위 할 일) |
+
+**변경**
+- `nav2_params.yaml`(시뮬 원본) → `nav2_real.yaml` 생성: `FollowPath`를 `nav2_rotation_shim_controller::RotationShimController`로, `primary_controller` MPPI(기존 MPPI 설정은 그대로 같은 이름 아래). 경로 방향과 45°(`angular_dist_threshold` 0.785, Nav2 기본) 이상 차이 나면 제자리 회전 후 MPPI에 인계. `rotate_to_heading_angular_vel`은 시뮬 1.8(= wz_max), 실물은 `build_real_configs.py`가 주행 노드 상한 0.8로; `max_angular_accel`은 시뮬 4.0(= az_max), 실물은 drive.yaml 도출값 1.894. 나머지(`forward_sampling_distance` 0.5, `simulate_ahead_time` 1.0)는 Nav2 기본값
+- 진행 감시기 `SimpleProgressChecker` → `PoseProgressChecker`(`required_movement_angle` 0.5 rad 추가, 반지름 0.5 m·10 s는 그대로)
+- `test_real_integration.py`: 생성된 실물 프로필의 RotationShim 플러그인·회전 속도(= `max_angular_rad_s`)·회전 가속(= 도출값) 단언. 젯슨 13 통과
+- `tools/drive/nav_preflight.py`: ① odom 주기를 첫 수신~마지막 수신 구간으로(구독 붙는 시간이 섞여 20 Hz가 10.8 Hz로 나옴) ② 로컬 비용 지도는 자기 좌표계(odom)로 자세를 구해 읽음(map 자세로 읽어 엉뚱한 칸을 봄) ③ `--goal`이 있으면 로컬 비용 검사를 로봇 정면이 아니라 목표 쪽으로(목표가 등 뒤면 정면 벽은 상관없음)
+- `tools/drive/near_obstacles.py`(새): 로봇 2 m 안에 잡힌 것을 센서별(`/scan`·카메라·라이다 점군)과 로컬 비용 지도 막힌 칸으로 base_footprint 기준 나열. 오늘 뚜껑 추정에 쓴 스크래치 스크립트를 도구로 올린 것
+- `docs/TROUBLESHOOTING.md`: 경로가 등 뒤일 때 MPPI 회전 지연 + 가짜 진행 실패 1건, 로봇 윗부분이 라이다에 잡혀 발밑 장애물 1건. 11-07 카메라 항목의 확인란을 11-08 결과로
+
+**원인과 근거**
+- 회전 지연은 MPPI 구조: 경로가 정반대(180°)면 좌·우 회전 비용이 같아 2,000개 샘플의 가중 평균이 0 근처에서 상쇄된다. 실측 명령 0.04~0.10 rad/s(0°→80°, 22 s), 80° 아래부터 0.37 rad/s로 가속, 145°부터 전진. 같은 180°라도 목표 자체가 회전(GoalAngle)이면 0.57 rad/s(주행 3)라 바퀴·평활기 문제는 아님(명령=실측, 지연 없음)
+- 진행 감시기는 이동 거리만 봐서 느린 회전이 10 s를 넘길 때마다 실패→복구가 끼어듦(주행 2의 3회 전부 회전 구간). PoseProgressChecker로 0회(주행 5), 회전 속도는 그대로 느림 → 둘 다 필요
+- RotationShim은 Nav2 표준 패키지(`ros-jazzy-nav2-rotation-shim-controller 1.3.13`, MPPI와 같은 버전, 젯슨에 이미 설치). 가중치 조정(PathAngleCritic 2 → ?) 대신 고른 이유: 근거 없는 숫자 맞추기가 되고 다른 상황의 균형을 깨기 때문
+- 복귀 방향 ±18° 흔들림(주행 2·5)은 AMCL−odom yaw 차가 주행 중 3~11°, 빠른 회전 중 최대 21°까지 벌어진 것과 같이 감(돌아오는 방향 스캔 일치 80~85 %, 갈 때 97 %). 주행 7은 거기에 발밑 막힌 칸이 겹침
+- 이번 "54 cm 오차"는 오차가 아님: 출발선 x 0.07, 복귀 목표 x 0.30, 허용 0.25 → x 0.56 정지. 테이프 54 cm 대 추정 49 cm
+
 ## 2026-11-07 (63) 자율주행 출발 전 점검 도구 `tools/drive/nav_preflight.py` + 실물 런치 `filter_near_depth` 기본값 `true`(카메라 가짜 근거리 점 → 가상 벽). TROUBLESHOOTING 2건
 
 **할 일 (11-08 시작 절차)**
