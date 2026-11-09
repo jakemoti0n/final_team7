@@ -87,8 +87,8 @@ def main():
     parser.add_argument('--speed', type=float, default=0.1, help='키보드 기본값과 같은 0.1 m/s')
     parser.add_argument('--timeout', type=float, default=None, help='기본은 거리/속도의 2배')
     args = parser.parse_args()
-    if not 0 < args.speed <= 0.25 or not 0 < args.distance <= 20:
-        sys.exit('속도는 0..0.25 m/s(주행 노드 상한), 거리는 0..20 m')
+    if not 0 < args.speed <= 0.5 or not 0 < args.distance <= 20:
+        sys.exit('속도는 0..0.5 m/s(주행 노드 상한 drive.yaml max_linear_m_s), 거리는 0..20 m')
     timeout_s = args.timeout or 2 * args.distance / args.speed
     rclpy.init()
     node = StraightRun(args.distance, args.speed, timeout_s)

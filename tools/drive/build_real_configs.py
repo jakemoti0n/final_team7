@@ -46,6 +46,11 @@ def real_time(tree):
     return tree
 
 
+SIM_LIDAR_CLOUD = '/mid360/points_filtered'
+REAL_COSTMAP_CLOUD = '/mid360/points_costmap'
+REAL_CAMERA_MARK_RANGE = 1.0
+
+
 def nav2_profile(source, drive, geometry):
     data = real_time(deepcopy(source))
     navigator = data['bt_navigator']['ros__parameters']
@@ -59,12 +64,27 @@ def nav2_profile(source, drive, geometry):
         # Empty YAML sequences have no ROS parameter type; use Nav2's typed default.
         navigator.pop('plugin_lib_names', None)
     data.pop('loopback_simulator', None)
+    # 실물 비용 지도·충돌 감시는 5 cm 복셀로 솎은 라이다 점군을 본다(start_mid360.launch.py mounted 프로필의 mid360_costmap_voxel).
+    # 시뮬은 robot_self_filter가 내는 /mid360/points_filtered를 그대로 쓴다.
     for key in ('local_costmap', 'global_costmap'):
         layer = data[key][key]['ros__parameters']['stvl_layer']
         layer['observation_sources'] = ' '.join(x for x in layer['observation_sources'].split() if not x.startswith('tof'))
         for name in list(layer):
             if name.startswith('tof'):
                 del layer[name]
+            elif isinstance(layer[name], dict) and layer[name].get('topic') == SIM_LIDAR_CLOUD:
+                layer[name]['topic'] = REAL_COSTMAP_CLOUD
+            elif name == 'rgbd_mark':
+                # 실물 카메라 점은 가까운 낮은 장애물(라이다 사각: 높이 0.84·아래 −7° → 1 m 앞 0.7 m 아래)만 담당한다.
+                # 스테레오가 유리문에 비친 로봇 자신을 1.0~1.22 m 앞 가짜 벽으로 찍어(2026-11-09 bag) MPPI 후보가 전부 충돌했다.
+                # 거울상은 유리 거리의 2배라 팽창 반경(0.45)만 떨어져도 ≥1 m → 표시 거리를 1 m로. 지우기(rgbd_clear)·충돌 감시·YOLO 입력은 그대로.
+                layer[name]['obstacle_range'] = REAL_CAMERA_MARK_RANGE
+    # 실물 로컬 비용 지도에는 정적 지도 층을 넣지 않는다. 손으로 밀며 만든 지도의 벽이 실제와 20~30 cm 어긋난 곳이 있어(원점 뒤 벽:
+    # 라이다 0.95 m, 지도 0.62 m) 폭 1.5 m 복도에서 로봇이 "지도 벽 안"에 놓이고 MPPI 후보가 전부 충돌로 실패했다(2026-11-09 위 복도 185 s).
+    # 로컬 회피는 센서가 지금 보는 것(STVL·사람 층)만 믿고, 지도 벽은 글로벌 계획에서만 쓴다(Nav2 이동창 로컬 비용 지도의 표준 구성).
+    local = data['local_costmap']['local_costmap']['ros__parameters']
+    local['plugins'] = [x for x in local['plugins'] if x != 'static_layer']
+    local.pop('static_layer', None)
     collision = data['collision_monitor']['ros__parameters']
     collision['observation_sources'] = [x for x in collision['observation_sources'] if not x.startswith('tof')]
     for key in list(collision):
@@ -72,6 +92,8 @@ def nav2_profile(source, drive, geometry):
             del collision[key]
         elif isinstance(collision[key], dict) and 'sources_names' in collision[key]:
             collision[key]['sources_names'] = [x for x in collision[key]['sources_names'] if not x.startswith('tof')]
+        elif isinstance(collision[key], dict) and collision[key].get('topic') == SIM_LIDAR_CLOUD:
+            collision[key]['topic'] = REAL_COSTMAP_CLOUD
     # Keep future navigation requests within the existing real bridge limits.
     linear, angular = drive['max_linear_m_s'], drive['max_angular_rad_s']
     controller = data['controller_server']['ros__parameters']['FollowPath']

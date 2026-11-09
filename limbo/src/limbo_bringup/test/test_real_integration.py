@@ -60,6 +60,37 @@ def test_profile_builder_preserves_the_simulation_input():
     assert result == config('limbo_navigation/config/nav2_real.yaml')
 
 
+def test_real_costmaps_use_the_downsampled_lidar_cloud():
+    """실물 비용 지도·충돌 감시는 5 cm 복셀 점군(/mid360/points_costmap)을 본다. 전밀도 점군을 두 비용 지도가 각각 처리하면 Nav2 대기 CPU만 코어 0.9개(11-09)."""
+    nav = config('limbo_navigation/config/nav2_real.yaml')
+    for key in ('local_costmap', 'global_costmap'):
+        layer = nav[key][key]['ros__parameters']['stvl_layer']
+        topics = {v['topic'] for k, v in layer.items() if isinstance(v, dict) and 'topic' in v and k.startswith('mid360')}
+        assert topics == {'/mid360/points_costmap'}
+    collision = nav['collision_monitor']['ros__parameters']
+    topics = {v['topic'] for k, v in collision.items() if isinstance(v, dict) and 'topic' in v and k.startswith('mid360')}
+    assert topics == {'/mid360/points_costmap'}
+    assert all(v['topic'] != '/mid360/points_filtered' for v in collision.values() if isinstance(v, dict) and 'topic' in v)
+
+
+def test_real_camera_marks_only_near_obstacles():
+    """실물 비용 지도의 카메라 표시 거리는 1 m: 유리에 비친 로봇 거울상(1.0~1.22 m)을 장애물로 찍지 않는다(11-09). 지우기는 그대로."""
+    nav = config('limbo_navigation/config/nav2_real.yaml')
+    for key in ('local_costmap', 'global_costmap'):
+        layer = nav[key][key]['ros__parameters']['stvl_layer']
+        assert layer['rgbd_mark']['obstacle_range'] == 1.0
+        assert layer['rgbd_clear']['max_z'] > 1.0
+
+
+def test_real_local_costmap_has_no_static_layer():
+    """실물 로컬 비용 지도는 센서 층만: 지도 벽 오차(20~30 cm)가 좁은 복도에서 MPPI 후보를 전부 충돌로 만들었다(11-09). 글로벌에는 남긴다."""
+    nav = config('limbo_navigation/config/nav2_real.yaml')
+    local = nav['local_costmap']['local_costmap']['ros__parameters']
+    assert 'static_layer' not in local['plugins'] and 'static_layer' not in local
+    assert 'stvl_layer' in local['plugins'] and 'inflation_layer' in local['plugins']
+    assert 'static_layer' in nav['global_costmap']['global_costmap']['ros__parameters']['plugins']
+
+
 def test_real_profile_acceleration_limits_follow_the_drive_node():
     """MPPI·속도 평활기의 가속 한계는 주행 노드의 target_slew_rad_s2에서 도출된 같은 값이어야 한다(11-07 지그재그 원인)."""
     drive = config('limbo_hardware/config/drive.yaml')['roboclaw_drive']['ros__parameters']

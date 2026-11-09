@@ -77,7 +77,17 @@ def launch_nodes(context):
                        '--yaw', str(config['sensor_rpy_rad'][2]),
                        '--frame-id', config['parent_frame'], '--child-frame-id', config['sensor_frame']],
         ))
-    return [
+    costmap_cloud = []
+    if profile == 'mounted':
+        # 비용 지도·충돌 감시용 점군: 몸체 제거 점군(18.6k점·10 Hz, 2026-11-09 실측)을 5 cm 복셀로 솎는다. 비용 지도 해상도가 5 cm라
+        # 결과는 같고 점 수만 준다. 원본 /mid360/points와 /mid360/points_filtered(→/scan, AMCL)는 그대로 두어 나중에 FAST-LIO2 등
+        # 전밀도가 필요한 쪽이 쓴다. 솎기 전에는 비용 지도 2개가 전밀도 점군을 각각 복셀에 넣느라 Nav2 대기 CPU만 코어 0.9개였다.
+        costmap_cloud = [Node(
+            package='pcl_ros', executable='filter_voxel_grid_node', name='mid360_costmap_voxel', output='screen',
+            parameters=[{'use_sim_time': False, 'leaf_size': 0.05}],
+            remappings=[('input', cloud), ('output', '/mid360/points_costmap')],
+        )]
+    return costmap_cloud + [
         Node(
             package='livox_ros_driver2', executable='livox_ros_driver2_node',
             name='limbo_mid360_driver', output='screen',

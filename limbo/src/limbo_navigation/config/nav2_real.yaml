@@ -101,7 +101,7 @@ controller_server:
       ax_min: -0.502
       az_max: 1.894
       vx_std: 0.2
-      vx_max: 0.25
+      vx_max: 0.5
       vx_min: 0.0
       wz_std: 0.2
       wz_max: 0.8
@@ -199,7 +199,6 @@ local_costmap:
       resolution: 0.05
       use_maximum: true
       plugins:
-      - static_layer
       - stvl_layer
       - human_layer
       - inflation_layer
@@ -238,7 +237,7 @@ local_costmap:
         observation_sources: mid360_mark mid360_clear rgbd_mark rgbd_clear
         mid360_mark:
           data_type: PointCloud2
-          topic: /mid360/points_filtered
+          topic: /mid360/points_costmap
           marking: true
           clearing: false
           obstacle_range: 4.5
@@ -253,7 +252,7 @@ local_costmap:
         mid360_clear:
           enabled: true
           data_type: PointCloud2
-          topic: /mid360/points_filtered
+          topic: /mid360/points_costmap
           marking: false
           clearing: true
           min_z: 0.1
@@ -269,7 +268,7 @@ local_costmap:
           topic: /rgbd_camera/points
           marking: true
           clearing: false
-          obstacle_range: 4.5
+          obstacle_range: 1.0
           min_obstacle_height: 0.02
           max_obstacle_height: 1.0
           expected_update_rate: 0.0
@@ -290,13 +289,6 @@ local_costmap:
           vertical_fov_angle: 0.95
           model_type: 0
           decay_acceleration: 5.0
-      static_layer:
-        plugin: nav2_costmap_2d::StaticLayer
-        enabled: true
-        map_topic: /map
-        map_subscribe_transient_local: true
-        subscribe_to_updates: true
-        transform_tolerance: 0.2
       always_send_full_costmap: true
       use_sim_time: false
 global_costmap:
@@ -334,7 +326,7 @@ global_costmap:
         observation_sources: mid360_mark mid360_clear rgbd_mark rgbd_clear
         mid360_mark:
           data_type: PointCloud2
-          topic: /mid360/points_filtered
+          topic: /mid360/points_costmap
           marking: true
           clearing: false
           obstacle_range: 4.5
@@ -349,7 +341,7 @@ global_costmap:
         mid360_clear:
           enabled: true
           data_type: PointCloud2
-          topic: /mid360/points_filtered
+          topic: /mid360/points_costmap
           marking: false
           clearing: true
           min_z: 0.1
@@ -365,7 +357,7 @@ global_costmap:
           topic: /rgbd_camera/points
           marking: true
           clearing: false
-          obstacle_range: 4.5
+          obstacle_range: 1.0
           min_obstacle_height: 0.02
           max_obstacle_height: 1.0
           expected_update_rate: 0.0
@@ -493,7 +485,7 @@ velocity_smoother:
     scale_velocities: false
     feedback: OPEN_LOOP
     max_velocity:
-    - 0.25
+    - 0.5
     - 0.0
     - 0.8
     min_velocity:
@@ -546,7 +538,7 @@ collision_monitor:
     - rgbd_cloud
     mid360_cloud:
       type: pointcloud
-      topic: /mid360/points_filtered
+      topic: /mid360/points_costmap
       min_height: 0.03
       max_height: 1.0
       min_range: 0.05
