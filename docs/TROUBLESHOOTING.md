@@ -272,6 +272,22 @@
 
 ## 실물(Jetson·RoboClaw·센서)
 
+### 오른쪽 위 코너(W2→W3)에서 AMCL이 로봇을 벽 너머로 1~1.5 m 끌어올려 목표 중단(4바퀴 중 3번) — 손으로 밀어 만든 지도의 복도 길이 오차 + 열린 문 — 2026-11-09
+- **증상**: W2(코너) 도착 뒤 W3로 꺾는 순간 스캔 일치율이 46 → 31 → 29 %로 떨어지고 AMCL 위치가 (11.0~11.4, 9.3~9.85), 지도상 위 복도 윗벽 너머로 올라간다. 로봇은 실제로 복도 코너에 서 있음(사용자 확인). `GridBased plugin failed to plan from (11.05, 9.07) … Failed to create plan with tolerance of: 0.500000` → 복구(후진·회전)도 `Collision Ahead` → 40~58 s 뒤 ABORTED. 17:40쯤(루프 8)은 같은 지도로 통과(코너 일치 77~89 %), 18:25 이후 루프 9·10·12 실패, 11만 통과
+- **원인**: 둘이 겹침
+  1. **지도 길이**: 11-05 지도(손으로 밀며 slam_toolbox)의 오른쪽 복도가 바퀴 odom보다 12~14 %(지도 5.00 m 대 odom 5.59~5.68 m, 3바퀴 모두), 위 복도가 약 16 %(6.00 대 7.00 m) 짧다. 바퀴 odom은 줄자와 1~1.5 % 일치. 벽이 진행 방향과 나란한 복도에서 AMCL은 앞뒤 위치를 odom에 기대므로, 실제 코너에 닿을 때 지도상으로는 이미 코너를 약 1 m 지나 벽 너머에 있다. 코너 벽 모양을 보고 0.6~1 m를 되돌려야 하는데 성공할 때(루프 8·11)와 못 할 때(9·10·12)가 갈린다
+  2. **열린 문(악화 요인)**: W2→W3와 W3→W4(유리) 문이 18시 이후 복도 쪽으로 직각으로 열려 있었다(사용자 확인). 루프 8과 10의 같은 자리 스캔을 겹치면 10에서는 위 복도 윗벽 대신 문틀 너머 약 1 m 뒤 교실 벽이 잡힘 → 코너 모양이 지도와 더 달라 되돌림이 실패
+  - AMCL 설정 탓이 아닌 근거: 수동 한 바퀴 bag을 AMCL과 독립으로 재추적(odom 예측 + 스캔-지도 ±0.25 m·±6° 국소 맞춤)해도 기존 지도에서는 같은 코너에서 일치 37~43 %로 떨어지고 위로 끌려간다
+- **해결**: 원점 출발·복귀 수동 한 바퀴 bag(`~/limbo_bags/manual_loop2_1109`)으로 오프라인 SLAM(아래 항목) → 원점 주변(x −1.6~6, y −1.2~3) 벽을 ICP로 기존 지도에 맞춰 같은 좌표로 회전·저장 → `maps/real_open_space_20261109`. 경유점은 로봇이 지나간 복도 중심으로 다시 잡음(오른쪽 복도 +1.1 m, 위 복도 +1.8 m 바깥, 변경 기록 66). 떠 있는 런치에는 `ros2 service call /map_server/load_map nav2_msgs/srv/LoadMap "{map_url: <yaml>}"`로 바로 바꿀 수 있다(AMCL `Received a 680 X 560 map`, 전역 비용 지도 `StaticLayer: Resizing costmap to 680 X 560` 확인)
+- **확인**: 지도 만들 때 안 쓴 bag(루프 11·12)을 새 지도로 재추적 → 일치 평균 95 %·최저 82~86 %·코너 96 %(기존 지도 72 %·21 %·41 %). 새 지도로 자율주행 2바퀴 완주(문 열림 324 s, 문 닫힘 313 s), 코너 일치 86~93 %
+- **남은 것**: 새 지도는 문이 열린 상태로 만들어 W2→W3 문짝이 벽 선으로 들어가 있다 → 문틀·문짝 범위를 "모름"으로 비울 것. 오른쪽 복도는 새 지도도 odom보다 5.5 % 짧게 추적됨(줄자로 확인). **주의**: 일자 복도 구간의 "AMCL 이동량 대 odom" 비교는 AMCL이 odom을 따라가므로 지도 정확도의 근거가 못 된다(아래 복도가 1~2 %로 나온 것은 의미 없음). 코너·문·기둥처럼 앞뒤를 잡는 특징이 있는 구간에서만 길이 오차가 드러난다
+
+### bag으로 오프라인 SLAM을 돌렸는데 지도가 안 만들어짐(`map_saver: Failed to spin map subscription`) — Jazzy slam_toolbox 수명 주기 활성화 + 재생 `/tf_static` QoS — 2026-11-09
+- **증상**: 노트북에서 `ros2 run slam_toolbox sync_slam_toolbox_node --params-file slam_real.yaml -p use_sim_time:=true` + `ros2 bag play <bag> --clock 100`을 끝까지 돌려도 노드 로그는 `Node using stack size …` 한 줄뿐, `/map` 없음. 런치로 바꾼 뒤에는 `New publisher discovered on topic '/tf_static', offering incompatible QoS … DURABILITY_QOS_POLICY`가 찍히고 여전히 지도 없음
+- **원인**: ① Jazzy의 slam_toolbox 노드는 수명 주기 노드라 `ros2 run`으로만 띄우면 비활성 상태로 스캔을 안 받는다. ② `ros2 bag play`는 `/tf_static`을 휘발성(volatile)으로 다시 내보내는데 tf 리스너는 transient_local을 요구해 정적 TF(`base_footprint → mid360_link`)를 못 받음 → 스캔을 로봇 좌표로 못 옮겨 전부 버림. ③ 주행 bag의 `/tf`에는 AMCL의 `map → odom`이 들어 있어 SLAM의 `map`과 충돌한다
+- **해결**: (1) bag에서 `/scan /tf /tf_static /odom`만 새 bag으로 옮기며 `/tf`의 `frame_id == 'map'` 변환을 뺀다(rosbag2_py Reader→Writer). (2) `ros2 launch slam_toolbox online_sync_launch.py slam_params_file:=…/slam_real.yaml use_sim_time:=true autostart:=true`. (3) `ros2 bag play <새 bag> --clock 100 --qos-profile-overrides-path <yaml>`, yaml은 `/tf_static: {depth: 1, durability: transient_local, reliability: reliable, history: keep_last}`. (4) 재생이 끝나면 `ros2 run nav2_map_server map_saver_cli -f <이름> --ros-args -p use_sim_time:=true -p map_subscribe_transient_local:=true`. 젯슨과 섞이지 않게 `ROS_DOMAIN_ID`를 다른 번호로, `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`
+- **확인**: 노드 로그에 `Registering sensor: [Custom Described Lidar]`, 재생 219 s 뒤 `Map saved successfully`, 고리가 닫힌 ㅁ자 지도. 런치가 활성화를 두 번 요청해 `Unable to start transition 3 from current state active`가 한 번 찍히는 것은 무해
+
 ### 주행 중 load 5~7(코어 6), 제어 주기 20 → 11 Hz, 계획기 응답 timeout으로 목표 중단 — 전밀도 라이다 점군을 비용 지도 2개가 각각 처리 — 2026-11-09
 - **증상**: 복도 주행 중 load1 4.5~6.5, `Control loop missed its desired rate … 11.6 Hz`, MPPI `Optimizer fail to compute path` 반복(중간 멈춤·후진), 도착 방향 회전 중 `Timed out while waiting for action server to acknowledge goal request for compute_path_to_pose` → 목표 ABORTED, collision_monitor TF 외삽 실패로 정지. YOLO는 꺼진 상태
 - **원인**: `/mid360/points_filtered`가 18.5k점·10 Hz·5.6 MB/s로 거의 전밀도(몸체 상자만 제거)인데 로컬·글로벌 비용 지도(mark·clear 각각)와 충돌 감시, 스캔 변환 6곳이 각자 DDS로 받아 풀고, 비용 지도 2개가 5 cm 격자에 18.5k점을 매초 10번 넣고 광선으로 지움. 주행 중 controller_server 평균 41 %·최대 59 %
