@@ -73,6 +73,19 @@ def test_real_costmaps_use_the_downsampled_lidar_cloud():
     assert all(v['topic'] != '/mid360/points_filtered' for v in collision.values() if isinstance(v, dict) and 'topic' in v)
 
 
+def test_costmap_lidar_voxel_keeps_every_height():
+    """pcl_ros 복셀 노드 기본값은 z 0~1 m(센서 좌표)만 남긴다. 끄지 않으면 라이다 높이(0.84 m) 아래가 비용 지도·충돌 감시에서 사라진다(11-10)."""
+    launch = load(SRC / 'limbo_bringup/launch/start_mid360.launch.py', 'mid360_test')
+    context = LaunchContext()
+    context.launch_configurations.update(profile='mounted', mount_config_path=str(SRC / 'limbo_bringup/config/MID360s_mount.json'))
+    with patch.object(launch, 'Node', Mock()) as node:
+        launch.launch_nodes(context)
+    nodes = {call.kwargs['name']: call.kwargs for call in node.call_args_list}
+    params = nodes['mid360_costmap_voxel']['parameters'][0]
+    assert params['filter_field_name'] == ''
+    assert dict(nodes['mid360_costmap_voxel']['remappings'])['output'] == '/mid360/points_costmap'
+
+
 def test_real_camera_marks_only_near_obstacles():
     """실물 비용 지도의 카메라 표시 거리는 1 m: 유리에 비친 로봇 거울상(1.0~1.22 m)을 장애물로 찍지 않는다(11-09). 지우기는 그대로."""
     nav = config('limbo_navigation/config/nav2_real.yaml')

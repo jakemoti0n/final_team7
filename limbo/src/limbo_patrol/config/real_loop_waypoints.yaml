@@ -1,0 +1,50 @@
+# 실물 ㅁ자 복도 순찰(지도 real_open_space_20261109). 2026-11-10 설계: 코너 4곳은 pass로 지나가고 MID·HOME 두 곳에서만 선다.
+# 경유점마다 서서 방향을 맞추던 11-09·11-10 시험에서는 한 바퀴 313~362 s 중 60 %가 정지·제자리 회전이었다
+# (목표 2 m 안 감속·회전 중 카메라가 흰 벽·유리를 번갈아 봐 가짜 장애물이 깜빡임, 바닥 테이프 자리 HOME은 11-10 실측).
+# 두 구간(…→MID stop, …→HOME stop)인 이유: 지나가기 주행의 도착 판정은 경로 끝점만 보므로 출발점과 끝점이 같은 구간
+# (HOME→…→HOME)은 출발 즉시 '도착'이 된다(11-10 확인, 9 s 만에 완료). MID는 위 복도 한가운데·진행 방향(180°)이라
+# 벽 앞 가짜 점 없이 감속만 한 번 더 생긴다. pass 점의 yaw는 쓰이지 않는다(RemovePassedGoals 반경 0.7 m 통과).
+# W1은 복도 끝 정수기·배너 옆 (13.1, 0.1)에서 1.1 m 안쪽으로 옮긴 자리(11-10: 108~124 s → 57~83 s).
+waypoints:
+
+  - name: W1
+    type: pass
+    x: 12.0
+    y: 0.1
+    yaw: 0.0
+    wait_sec: 0
+
+  - name: W2
+    type: pass
+    x: 13.4
+    y: 9.6
+    yaw: 0.0
+    wait_sec: 0
+
+  - name: MID
+    type: stop
+    x: 6.5
+    y: 9.5
+    yaw: 180.0
+    wait_sec: 0
+
+  - name: W3
+    type: pass
+    x: 0.4
+    y: 9.8
+    yaw: 0.0
+    wait_sec: 0
+
+  - name: W4
+    type: pass
+    x: 0.6
+    y: 0.2
+    yaw: 0.0
+    wait_sec: 0
+
+  - name: HOME
+    type: stop
+    x: 0.74
+    y: -0.04
+    yaw: 0.0
+    wait_sec: 0

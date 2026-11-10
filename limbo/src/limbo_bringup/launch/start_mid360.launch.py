@@ -82,9 +82,11 @@ def launch_nodes(context):
         # 비용 지도·충돌 감시용 점군: 몸체 제거 점군(18.6k점·10 Hz, 2026-11-09 실측)을 5 cm 복셀로 솎는다. 비용 지도 해상도가 5 cm라
         # 결과는 같고 점 수만 준다. 원본 /mid360/points와 /mid360/points_filtered(→/scan, AMCL)는 그대로 두어 나중에 FAST-LIO2 등
         # 전밀도가 필요한 쪽이 쓴다. 솎기 전에는 비용 지도 2개가 전밀도 점군을 각각 복셀에 넣느라 Nav2 대기 CPU만 코어 0.9개였다.
+        # filter_field_name '': pcl_ros 복셀 노드는 기본으로 z 0~1 m만 남긴다(filter_field_name z, limit 0~1). 센서 좌표 z라
+        # 라이다 높이(0.84 m) 아래가 전부 버려져 비용 지도·충돌 감시가 0.84~1.0 m 띠만 봤다(2026-11-10 bag 실측). 높이 거르기는 비용 지도 쪽이 한다.
         costmap_cloud = [Node(
             package='pcl_ros', executable='filter_voxel_grid_node', name='mid360_costmap_voxel', output='screen',
-            parameters=[{'use_sim_time': False, 'leaf_size': 0.05}],
+            parameters=[{'use_sim_time': False, 'leaf_size': 0.05, 'filter_field_name': ''}],
             remappings=[('input', cloud), ('output', '/mid360/points_costmap')],
         )]
     return costmap_cloud + [

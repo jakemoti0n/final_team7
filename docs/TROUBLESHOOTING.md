@@ -272,6 +272,24 @@
 
 ## 실물(Jetson·RoboClaw·센서)
 
+### 실물 비용 지도·충돌 감시가 라이다 높이 0.84~1.0 m 띠만 봄(0.84 m 아래 물체가 안 찍힘) — pcl_ros 복셀 노드의 기본 z 자르기 — 2026-11-10
+- **증상**: 루프 13·14 bag의 `/mid360/points_costmap`(5 cm 복셀, 변경 기록 65)에서 가장 낮은 점이 거리와 상관없이 높이 0.84 m. 0.5 m 상자·쓰레기통·사람 다리가 라이다 쪽 비용 지도에 전혀 안 들어가고, 라이다 몸체 점(중심 8~38 cm)은 0.84~0.91 m라 통과
+- **원인**: `pcl_ros filter_voxel_grid_node`는 `leaf_size`만 줘도 기본값 `filter_field_name: z`, `filter_limit_min/max 0~1`로 **센서 좌표 z 0~1 m만 남긴다**(노드를 따로 띄워 `ros2 param get`으로 확인). 라이다 원점이 0.837 m라 그 아래가 전부 버려짐. 11-09에 복셀을 넣으면서 이 기본값을 끄지 않았다
+- **해결**: `start_mid360.launch.py`의 `mid360_costmap_voxel`에 `'filter_field_name': ''` 추가(높이 거르기는 비용 지도의 `min/max_obstacle_height`가 맡음). 테스트 `test_costmap_lidar_voxel_keeps_every_height`
+- **확인**: 젯슨에서 한 장 집계 → 높이 0.60~0.84 m 점 0 → 410개. 한 바퀴(순찰 1)에서 새로 들어온 0.84 m 아래 점이 지도상 빈 바닥에 찍힌 비율 0.1~0.8 %(왼쪽·위·아래 복도), 오른쪽 복도 3 %는 정수기·쓰레기통·탁자 다리(실물). 카메라 복셀(`real_rgbd_voxel`)도 같은 기본값이지만 카메라 표시 거리가 1 m라 결과가 같아 그대로 둠
+
+### 지나가기 순찰(`navigate_through_poses`)이 출발 직후 "도착"으로 끝남(9 s, 로봇 안 움직임) — 경로 끝점이 출발점과 같음 — 2026-11-10
+- **증상**: 경유점 W1·W2·W3·W4(pass) → HOME(stop)을 `patrol_node`로 보내면 `bt_navigator: Begin navigating … through 5 poses to (0.74, -0.04)` 0.04 s 뒤 `controller_server: Reached the goal!` → `Goal succeeded` → `Patrol mission completed`. 두 번 반복해도 같음
+- **원인**: Nav2 지나가기 주행의 도착 판정(`general_goal_checker`, xy 0.25 m·yaw 0.25 rad)은 **전역 경로의 끝점**만 본다. 중간 경유점을 지났는지는 보지 않는다(`RemovePassedGoals`는 지난 점을 목록에서 빼는 일만 함). 로봇이 HOME에서 출발하는데 경로 끝도 HOME이라 즉시 도착. 시뮬 경유점 파일(`aischool_loop_waypoints.yaml`)이 A만 stop으로 둔 것도 같은 이유였다
+- **해결**: 한 바퀴를 출발점≠끝점인 두 구간으로 나눔 — W1·W2 pass → **MID stop**(위 복도 한가운데 (6.5, 9.5), 진행 방향 180°라 회전 없이 감속만) / W3·W4 pass → HOME stop. `limbo_patrol/config/real_loop_waypoints.yaml`(변경 기록 67). `patrol_node`는 마지막 경유점이 stop이어야 하므로 HOME은 파일 맨 뒤
+- **확인**: 순찰 1 한 바퀴 264 s 완주(`Begin navigating … through 3 poses to (6.50, 9.50)` → 성공 → `… to (0.74, -0.04)` → 성공)
+
+### 스크립트 안에서 `&`로 띄운 `ros2 bag record`가 Ctrl+C(SIGINT)를 무시해 기록이 안 닫힘(열린 mcap은 읽기 실패) — 2026-11-10
+- **증상**: `bash 스크립트.sh` 안에서 `ros2 bag record … &`로 띄운 기록에 PID로 `kill -INT`를 보내도 계속 돈다(`/proc/<pid>/status`의 `SigIgn`에 SIGINT). 그동안 `rosbag2_py`로 열면 `Could not open … with 'mcap'. Error: read failed`
+- **원인**: 비대화형 셸이 뒤에 띄운 작업은 POSIX 규칙대로 SIGINT·SIGQUIT를 무시(SIG_IGN)한 채 시작되고, 자식은 그 상태를 물려받는다. 같은 기록을 `setsid -f`로 띄우면(루프 15) SIGINT가 먹었다
+- **해결**: 스크립트 안의 기록은 `setsid -f ros2 bag record …`로 띄우고 PID를 `ps`로 찾아 `kill -INT`. 이미 무시 상태로 돈 기록은 PID에 **SIGTERM**(rosbag2가 잡아서 정상 종료, `SigCgt`에 있음) — PM 승인 뒤 1회 사용
+- **확인**: SIGTERM 1 s 뒤 종료, `metadata.yaml` 생성, 290 s 기록이 정상으로 읽힘. 이후 3왕복·2왕복·순찰 기록 11개 모두 SIGINT로 닫힘
+
 ### 오른쪽 위 코너(W2→W3)에서 AMCL이 로봇을 벽 너머로 1~1.5 m 끌어올려 목표 중단(4바퀴 중 3번) — 손으로 밀어 만든 지도의 복도 길이 오차 + 열린 문 — 2026-11-09
 - **증상**: W2(코너) 도착 뒤 W3로 꺾는 순간 스캔 일치율이 46 → 31 → 29 %로 떨어지고 AMCL 위치가 (11.0~11.4, 9.3~9.85), 지도상 위 복도 윗벽 너머로 올라간다. 로봇은 실제로 복도 코너에 서 있음(사용자 확인). `GridBased plugin failed to plan from (11.05, 9.07) … Failed to create plan with tolerance of: 0.500000` → 복구(후진·회전)도 `Collision Ahead` → 40~58 s 뒤 ABORTED. 17:40쯤(루프 8)은 같은 지도로 통과(코너 일치 77~89 %), 18:25 이후 루프 9·10·12 실패, 11만 통과
 - **원인**: 둘이 겹침
