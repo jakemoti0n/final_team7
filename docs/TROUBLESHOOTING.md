@@ -278,6 +278,13 @@
 - **해결**: `start_mid360.launch.py`의 `mid360_costmap_voxel`에 `'filter_field_name': ''` 추가(높이 거르기는 비용 지도의 `min/max_obstacle_height`가 맡음). 테스트 `test_costmap_lidar_voxel_keeps_every_height`
 - **확인**: 젯슨에서 한 장 집계 → 높이 0.60~0.84 m 점 0 → 410개. 한 바퀴(순찰 1)에서 새로 들어온 0.84 m 아래 점이 지도상 빈 바닥에 찍힌 비율 0.1~0.8 %(왼쪽·위·아래 복도), 오른쪽 복도 3 %는 정수기·쓰레기통·탁자 다리(실물). 카메라 복셀(`real_rgbd_voxel`)도 같은 기본값이지만 카메라 표시 거리가 1 m라 결과가 같아 그대로 둠
 
+### 빈 복도·코너에서 로봇이 앞이 비었는데 1~3분 서서 좌우로 돎(W1 코너 87~182 s) — NavFn(A*) 전역 경로 떨림 + MPPI `enforce_path_inversion` — 2026-11-10
+- **증상**: 순찰 4~6에서 W1 코너 통로(13.5, 0.0) 근처에 서서 방향만 10°↔114° 왕복, `Failed to make progress` 10 s마다, 복구 Spin 반복. 그 순간 로봇 발판 비용 0, 앞 1 m 비용 0, 라이다 최근접 점 1.6 m 뒤(장애물 없음), 제어기 출력 `cmd_vel_nav` 자체가 0. 사용자 사진(route1·2)도 빈 공간에서 멈춘 장면
+- **원인**: `/plan`을 뽑으면 로봇 앞 3~7 cm에서 시작하는 **되꺾임이 수백 개**(순찰 5 46 s: 299개, 길이 24.6 m로 부풀어 보임; 순찰 6 150 s: (13.62, 0.21)↔(13.62, 0.23) 2 cm 왕복 374개). NavFn `use_astar: true`가 팽창 띠가 겹쳐 비용이 평평한 자리에서 내리막 따라가기가 흔들린 것. 여기에 MPPI `enforce_path_inversion: true`(10-14 시뮬 되돌이용)가 첫 되꺾임에서 경로를 자르고 `inversion_xy_tolerance 0.2`·`inversion_yaw_tolerance 0.4` 안에 들어올 때까지 정지. 경로 점 yaw는 전부 0이라 로봇이 +36°로 서 있으면 영영 못 채움. 재계획(3 s)에서 깨끗한 경로가 오면 출발 → 바퀴마다 29/110/87/182 s로 들쭉날쭉
+- **확인한 반례**: W1 통과 판정(0.7 m) 실패 가설 — 네 바퀴 모두 W1을 0.07~0.14 m로 지났고 되돌아가는 경로 0개. 탁자 깜빡임 가설 — 탁자를 지도에 넣은 순찰 6이 더 나빠짐(182 s)
+- **해결(진행 중)**: 순찰 7에서 `enforce_path_inversion: false`만 끄자 1구간 100 s(정상)였으나 W3 코너에서 4분 정지해 취소(원인 미확인). 다음은 떨림 자체를 줄이는 `use_astar: false`(원작자 기본값) 또는 Smac 계획기. 판단 지표는 경로 되꺾임 수(`plancusp.py` 방식)
+- **교훈**: 10-15에 시뮬 계산 시간(A* 1~2 ms vs 다익스트라 2~6 ms)만 보고 A*로 바꿨고 경로 품질은 안 쟀다. 실물 설정은 그걸 그대로 가져왔다
+
 ### 지나가기 순찰(`navigate_through_poses`)이 출발 직후 "도착"으로 끝남(9 s, 로봇 안 움직임) — 경로 끝점이 출발점과 같음 — 2026-11-10
 - **증상**: 경유점 W1·W2·W3·W4(pass) → HOME(stop)을 `patrol_node`로 보내면 `bt_navigator: Begin navigating … through 5 poses to (0.74, -0.04)` 0.04 s 뒤 `controller_server: Reached the goal!` → `Goal succeeded` → `Patrol mission completed`. 두 번 반복해도 같음
 - **원인**: Nav2 지나가기 주행의 도착 판정(`general_goal_checker`, xy 0.25 m·yaw 0.25 rad)은 **전역 경로의 끝점**만 본다. 중간 경유점을 지났는지는 보지 않는다(`RemovePassedGoals`는 지난 점을 목록에서 빼는 일만 함). 로봇이 HOME에서 출발하는데 경로 끝도 HOME이라 즉시 도착. 시뮬 경유점 파일(`aischool_loop_waypoints.yaml`)이 A만 stop으로 둔 것도 같은 이유였다
