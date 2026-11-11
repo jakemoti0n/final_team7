@@ -140,3 +140,8 @@ it('live control sends start and stop through the command API', async () => {
   expect(post).toHaveBeenCalledTimes(2)
   expect(fromServer({ ...command('rejected', 'patrol_already_running'), command: 'start' }).detail).toContain('실행하지 못했습니다. 사유: patrol_already_running')
 })
+it('live control for a chosen robot names it in the command', async () => {
+  const post = vi.fn().mockResolvedValue(new Response(JSON.stringify({ request_id: 'r3', command: 'resume', stage: 'queued', issued_at: '2026-10-13T00:00:00.000Z' }), { status: 202 }))
+  await new LiveControl(vi.fn(), post as unknown as typeof fetch, 'LIMBO-02').send(view(), 'resume')
+  expect(JSON.parse(post.mock.calls[0][1].body)).toEqual({ command: 'resume', robot_id: 'LIMBO-02' })
+})

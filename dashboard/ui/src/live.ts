@@ -1,6 +1,8 @@
 import type { Provider, Snapshot, View } from './types'
 
 export const backoff = [1000, 2000, 4000, 8000, 10000]
+/** 서버 주소에 붙일 로봇 선택. 비우면 서버의 기본 로봇 */
+export function robotQuery(robotId: string, first = true) { return robotId ? `${first ? '?' : '&'}robot_id=${encodeURIComponent(robotId)}` : '' }
 export class LiveProvider implements Provider {
   current: View = { snapshot: null, serverProblem: false, receivedMono: performance.now() }
   private listeners = new Set<(v: View) => void>()
@@ -11,11 +13,14 @@ export class LiveProvider implements Provider {
   private stopped = false
   private generation = 0
   private controller?: AbortController
+  /** robotId: 이 화면이 보는 로봇. 다른 로봇의 상태가 오면 버린다 */
+  constructor(private robotId = '') {}
   subscribe = (fn: (view: View) => void) => { this.listeners.add(fn); return () => { this.listeners.delete(fn) } }
   private emit() { this.listeners.forEach(fn => fn(this.current)) }
   private fail() { this.current = { ...this.current, serverProblem: true }; this.emit() }
   private accept(value: Snapshot) {
     if (!value?.server_run_id || !Number.isInteger(value.revision) || !value.settings || !value.topics || !value.motion || !value.bridge) throw new Error('invalid snapshot')
+    if (this.robotId && value.robot_id !== this.robotId) return
     const old = this.current.snapshot
     if (old?.server_run_id === value.server_run_id && value.revision <= old.revision) return
     this.current = { snapshot: value, serverProblem: false, receivedMono: performance.now() }
@@ -25,7 +30,7 @@ export class LiveProvider implements Provider {
   private connect = () => {
     if (this.stopped) return
     const generation = this.generation
-    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/v1/stream`)
+    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/v1/stream${robotQuery(this.robotId)}`)
     this.socket = ws
     ws.onmessage = event => {
       if (this.stopped || generation !== this.generation || this.socket !== ws) return
@@ -40,7 +45,7 @@ export class LiveProvider implements Provider {
   }
   private refresh = async () => {
     if (document.visibilityState !== 'visible' || this.stopped) return
-    this.fail() // Returning to a tab never certifies an old snapshot as current.
+    this.fail() // 탭으로 돌아왔다고 예전 스냅샷을 현재 상태로 인정하지 않는다
     this.controller?.abort()
     const controller = new AbortController()
     this.controller = controller
@@ -48,10 +53,10 @@ export class LiveProvider implements Provider {
     const snapshotAtFetch = this.current.snapshot
     const timeout = setTimeout(() => controller.abort(), 3000)
     try {
-      const response = await fetch('/api/v1/state', { cache: 'no-store', signal: controller.signal })
+      const response = await fetch(`/api/v1/state${robotQuery(this.robotId)}`, { cache: 'no-store', signal: controller.signal })
       if (!response.ok) throw new Error('state fetch failed')
       const value = await response.json()
-      // A WebSocket update arriving during HTTP refresh already supplies newer state.
+      // HTTP로 다시 받는 사이 WebSocket 갱신이 왔다면 그쪽이 이미 더 새로운 상태다
       if (!this.stopped && generation === this.generation && this.controller === controller && this.current.snapshot === snapshotAtFetch) this.accept(value)
     } catch { if (!this.stopped && generation === this.generation && this.controller === controller && this.current.snapshot === snapshotAtFetch) this.fail() }
     finally { clearTimeout(timeout) }

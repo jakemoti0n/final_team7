@@ -1,4 +1,4 @@
-"""Persist the configured patrol route with revision checks and atomic replacement."""
+"""설정된 순찰 경로를 revision 검사와 원자적 교체로 저장한다."""
 import hashlib
 import math
 import os
@@ -19,7 +19,7 @@ class WaypointError(ValueError):
 
 class WaypointFile:
     def __init__(self, path, map_meta):
-        self.path = Path(path).resolve()  # Keep installed/source symlinks intact on replace.
+        self.path = Path(path).resolve()  # 교체해도 설치본·소스의 심볼릭 링크가 끊기지 않게 실제 경로로
         self.map = map_meta
 
     def read(self):

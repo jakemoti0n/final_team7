@@ -1,4 +1,4 @@
-// JSON-lines observer used by the ROS integration harness. No product test hooks.
+// ROS 통합 검증 도구가 쓰는 JSON-lines 관찰기. 제품 코드에 시험용 연결 지점을 두지 않는다
 import { chromium } from '../ui/node_modules/@playwright/test/index.mjs'
 import readline from 'node:readline'
 const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {})

@@ -1,10 +1,10 @@
-import { useEffect, useReducer, useState, type ReactNode } from 'react'
-import { LiveProvider } from './live'
+import { useEffect, useReducer, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { LiveProvider, robotQuery } from './live'
 import { MockProvider, demoMap, scenarios, type BridgeVersion, type Patrol, type Scenario } from './demo'
 import { commandNames, resultLabels, type Command, type Outcome, type RequestResult } from './commands'
 import { LiveControl, driveControl, lockReason, stopReason, waypointLocked } from './control'
 import { fromPixel, headingDeg, isMapInfo, toPixel, uncertaintyPx, type MapInfo, type Waypoint } from './map'
-import { names, topicKeys, type Provider, type Snapshot, type View } from './types'
+import { names, topicKeys, type Provider, type RobotSummary, type Snapshot, type View } from './types'
 
 export function ageText(age: number | null, delta = 0) {
   if (age === null) return '—'
@@ -182,7 +182,7 @@ function PatrolCard({ view }: { view: View }) {
     <p className="muted">{!patrol ? '순찰 상태 수신 대기' : old ? '로봇과 연결이 원활하지 않아 지금 상태는 알 수 없습니다' : lost ? '순찰 프로그램이 꺼져 있거나 상태를 알 수 없습니다' : state === 'failed' && patrol.reason ? `사유: ${patrol.reason}` : shown?.note ? shown.note : `마지막 상태 변경 ${timeText(patrol.last_received_at)}`}</p></Card>
 }
 const FOLLOW_SPAN_M = 10   // 로봇 따라가기: 로봇 중심 가로세로 10 m
-function MapCard({ map, view, delta, onPick }: { map: MapInfo | null; view: View; delta: number; onPick?: (point: [number, number]) => void }) {
+function MapCard({ map, view, delta, onPick, onSelect }: { map: MapInfo | null; view: View; delta: number; onPick?: (point: [number, number]) => void; onSelect?: (robotId: string) => void }) {
   const [follow, setFollow] = useState(false)
   const pose = view.snapshot?.pose
   const patrol = view.serverProblem ? null : view.snapshot?.patrol
@@ -195,6 +195,10 @@ function MapCard({ map, view, delta, onPick }: { map: MapInfo | null; view: View
   const span = FOLLOW_SPAN_M / map.resolution
   const box = follow && has ? [rx - span / 2, ry - span / 2, span, span] : [0, 0, map.width, map.height]
   const unit = Math.max(box[2], box[3]) / 100   // 표시 크기는 보이는 범위 기준 (확대해도 점·글자가 커지지 않게)
+  // 같은 지도를 쓰는 다른 로봇. 서버 문제가 있으면 지금 위치라고 볼 수 없으므로 그리지 않는다
+  const others = view.serverProblem ? [] : (view.snapshot?.robots ?? []).filter(r => r.robot_id !== view.snapshot?.robot_id && r.pose)
+  // 지점 편집 중에는 지도 클릭이 위치 선택이므로 다른 로봇 표시를 누를 수 없게 한다
+  const selectable = !!onSelect && !onPick
   return <Card title="지도" className="map-card">
     <div className={`map-frame ${onPick ? 'editing' : ''}`}><svg viewBox={box.join(' ')} role="img" aria-label="순찰 지도와 로봇 위치" onClick={event => {
       if (!onPick) return
@@ -209,6 +213,15 @@ function MapCard({ map, view, delta, onPick }: { map: MapInfo | null; view: View
       {map.waypoints.map((w, i) => { const [x, y] = points[i]; const tone = i === next ? 'next' : patrol && i < patrol.waypoint_index ? 'passed' : ''
         return <g key={w.name} className={`waypoint ${tone}`}>{w.type === 'stop' ? <rect x={x - unit * 1.1} y={y - unit * 1.1} width={unit * 2.2} height={unit * 2.2} strokeWidth={unit * .35} /> : <circle cx={x} cy={y} r={unit * 1.1} strokeWidth={unit * .35} />}
           {i === next && <circle cx={x} cy={y} r={unit * 2.4} className="next-ring" strokeWidth={unit * .4} />}<text x={x + unit * 2} y={y - unit * 1.6} fontSize={unit * 3.4}>{w.name}</text></g> })}
+      {others.map(r => { const [ox, oy] = toPixel(map, r.pose!.x, r.pose!.y)
+        const go = selectable ? () => onSelect!(r.robot_id) : undefined
+        return <g key={r.robot_id} className={`robot other ${r.pose!.stale ? 'stale' : ''} ${selectable ? 'selectable' : ''}`} transform={`translate(${ox} ${oy})`}
+          role={selectable ? 'button' : undefined} tabIndex={selectable ? 0 : undefined} aria-label={`${r.robot_id}${r.pose!.stale ? ' (마지막 위치)' : ''}${selectable ? ' 로봇 보기' : ''}`}
+          onClick={go ? event => { event.stopPropagation(); go() } : undefined} onKeyDown={go ? event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); go() } } : undefined}>
+          {selectable && <title>{`${r.robot_id} 로봇 보기`}</title>}
+          <circle r={unit * 4.6} className="hit" strokeWidth={unit * .5} />
+          <g transform={`rotate(${headingDeg(r.pose!.yaw)})`}><path d={`M ${unit * 3.8} 0 L ${-unit * 2.3} ${unit * 2.6} L ${-unit * 1.1} 0 L ${-unit * 2.3} ${-unit * 2.6} Z`} className="robot-mark" strokeWidth={unit * .3} /></g>
+          <text x={unit * 3.4} y={unit * 4.6} fontSize={unit * 3}>{r.robot_id}</text></g> })}
       {has && <g className={`robot ${stale ? 'stale' : ''}`} transform={`translate(${rx} ${ry})`}>
         <circle r={Math.max(uncertaintyPx(map, pose!.position_std_m), unit * 2.6)} className="uncertainty" strokeWidth={unit * .25} />
         <g transform={`rotate(${headingDeg(pose!.yaw!)})`}><path d={`M ${unit * 4.4} 0 L ${-unit * 2.7} ${unit * 3} L ${-unit * 1.3} 0 L ${-unit * 2.7} ${-unit * 3} Z`} className="robot-mark" strokeWidth={unit * .3} /></g></g>}
@@ -216,7 +229,7 @@ function MapCard({ map, view, delta, onPick }: { map: MapInfo | null; view: View
     <div className="map-legend"><span role="status">{!has ? '로봇 위치 수신 대기' : stale ? `위치 확인 불가 · 마지막 위치 ${ageText(pose!.age_s, delta)}` : `위치 수신 ${ageText(pose!.age_s, delta)}${pose!.position_std_m != null ? ` · 오차 약 ±${(2 * pose!.position_std_m).toFixed(2)} m` : ''}`}</span>
       <button className="map-toggle" aria-pressed={follow} disabled={!has} onClick={() => setFollow(f => !f)}>{follow ? '전체 지도 보기' : '로봇 따라가기'}</button>
       {onPick && <span className="map-pick-hint">지도에서 지점 위치를 클릭하세요</span>}
-      <span className="legend-keys"><span><i className="key next" />다음 목표</span><span><i className="key stop" />정지 지점</span><span><i className="key pass" />통과 지점</span></span></div>
+      <span className="legend-keys">{others.length > 0 && <span><i className="key other" />다른 로봇{selectable ? ' (누르면 전환)' : ''}</span>}<span><i className="key next" />다음 목표</span><span><i className="key stop" />정지 지점</span><span><i className="key pass" />통과 지점</span></span></div>
   </Card>
 }
 function DemoTools({ demo }: { demo: MockProvider }) {
@@ -264,13 +277,71 @@ function Reception({ state, serverProblem, delta }: { state: Snapshot | null; se
 function AlertRow({ alert }: { alert: Snapshot['alerts'][number] }) {
   return <li className="alert-row"><time dateTime={alert.at}>{timeText(alert.at)}</time><Badge status={alert.severity}>{{ info: '정보', warning: '주의', error: '오류' }[alert.severity]}</Badge><span>{alert.message}</span>{alert.active && <small>지속 중</small>}</li>
 }
+const ROBOT_KEY = 'limbo.robot'
+/** 처음 볼 로봇: 주소의 ?robot= → 이 브라우저에서 마지막으로 고른 로봇 → 비움(서버 기본 로봇) */
+function initialRobot() {
+  const fromUrl = new URLSearchParams(location.search).get('robot')
+  if (fromUrl) return fromUrl
+  try { return localStorage.getItem(ROBOT_KEY) ?? '' } catch { return '' }
+}
+/** 헤더의 로봇 이름. 누르면 서버가 아는 로봇 목록이 열리고 고른 로봇의 상태로 화면을 바꾼다 */
+export function RobotPicker({ current, robots, pending, disabled, onSelect }: { current: string; robots: RobotSummary[]; pending: boolean; disabled: boolean; onSelect: (robotId: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [focus, setFocus] = useState(0)
+  const box = useRef<HTMLDivElement>(null)
+  const list = robots.some(r => r.robot_id === current) ? robots : [{ robot_id: current, status: 'checking' as const }, ...robots]
+  useEffect(() => {
+    if (!open) return
+    const close = (event: MouseEvent) => { if (!box.current?.contains(event.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+  const choose = (robotId: string) => { setOpen(false); if (robotId !== current) onSelect(robotId) }
+  const toggle = () => { setFocus(Math.max(0, list.findIndex(r => r.robot_id === current))); setOpen(o => !o) }
+  const keys = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') { setOpen(false); return }
+    if (!open && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) { event.preventDefault(); toggle(); return }
+    if (!open) return
+    if (event.key === 'ArrowDown') { event.preventDefault(); setFocus(i => Math.min(list.length - 1, i + 1)) }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); setFocus(i => Math.max(0, i - 1)) }
+    else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(list[focus].robot_id) }
+  }
+  return <div className="robot-picker" ref={box} onKeyDown={keys}>
+    <button type="button" className="robot" aria-haspopup="listbox" aria-expanded={open} aria-label={`로봇 선택, 현재 ${current}`} disabled={disabled} title={disabled ? undefined : '다른 로봇 보기'} onClick={toggle}>{current}<span aria-hidden="true" className="caret">▾</span></button>
+    {open && <div className="robot-menu"><ul role="listbox" aria-label="로봇 목록" aria-activedescendant={`robot-option-${focus}`} tabIndex={-1}>
+      {list.map((r, i) => <li key={r.robot_id} id={`robot-option-${i}`} role="option" aria-selected={r.robot_id === current} className={`${i === focus ? 'focused' : ''} ${r.robot_id === current ? 'current' : ''}`} onMouseEnter={() => setFocus(i)} onClick={() => choose(r.robot_id)}>
+        <strong>{r.robot_id}</strong><Badge status={r.status} /></li>)}
+    </ul>{pending && <small className="robot-menu-note">진행 중인 요청은 {current}에서 계속 처리됩니다.</small>}{list.length === 1 && <small className="robot-menu-note">상태를 보낸 로봇이 하나뿐입니다. 다른 로봇은 Bridge가 연결되면 여기에 나타납니다.</small>}</div>}
+  </div>
+}
 export default function App() {
-  const [provider] = useState<Provider>(() => location.pathname === '/demo' ? new MockProvider() : new LiveProvider())
+  const demoMode = location.pathname === '/demo'
+  const [robotId, setRobotId] = useState(() => demoMode ? '' : initialRobot())
+  const choose = (next: string) => {
+    setRobotId(next)
+    const url = new URL(location.href)
+    if (next) url.searchParams.set('robot', next); else url.searchParams.delete('robot')
+    history.replaceState(null, '', url)
+    try { if (next) localStorage.setItem(ROBOT_KEY, next); else localStorage.removeItem(ROBOT_KEY) } catch { /* 저장 못 해도 화면은 동작 */ }
+  }
+  useEffect(() => {
+    // 저장된 로봇을 서버가 모르면(서버 재시작 등) 기본 로봇으로 되돌린다
+    if (demoMode || !robotId) return
+    const controller = new AbortController()
+    fetch('/api/v1/robots', { signal: controller.signal }).then(r => r.ok ? r.json() : null).then(value => {
+      if (Array.isArray(value?.robots) && !value.robots.some((r: RobotSummary) => r.robot_id === robotId)) choose('')
+    }).catch(() => {})
+    return () => controller.abort()
+  }, [demoMode, robotId])
+  return <RobotDashboard key={robotId} robotId={robotId} onSelect={choose} />
+}
+function RobotDashboard({ robotId, onSelect }: { robotId: string; onSelect: (robotId: string) => void }) {
+  const [provider] = useState<Provider>(() => location.pathname === '/demo' ? new MockProvider() : new LiveProvider(robotId))
   const demo = provider instanceof MockProvider ? provider : null
   const [view, setView] = useState<View>(provider.current)
   const [now, setNow] = useState(performance.now())
   const [, redraw] = useReducer((n: number) => n + 1, 0)
-  const [live] = useState(() => demo ? null : new LiveControl(redraw))
+  const [live] = useState(() => demo ? null : new LiveControl(redraw, undefined, robotId))
   const [liveMap, setLiveMap] = useState<MapInfo | null>(null)
   const [waypointDocument, setWaypointDocument] = useState<WaypointDocument | null>(null)
   const [waypointProblem, setWaypointProblem] = useState<string | null>(null)
@@ -282,13 +353,13 @@ export default function App() {
   useEffect(() => {
     if (demo || liveMap || !mapAvailable) return
     const controller = new AbortController()
-    fetch('/api/v1/map', { signal: controller.signal }).then(r => r.ok ? r.json() : null).then(value => { if (isMapInfo(value)) setLiveMap(value) }).catch(() => {})
+    fetch(`/api/v1/map${robotQuery(robotId)}`, { signal: controller.signal }).then(r => r.ok ? r.json() : null).then(value => { if (isMapInfo(value)) setLiveMap(value) }).catch(() => {})
     return () => controller.abort()
-  }, [demo, liveMap, mapAvailable])
+  }, [demo, liveMap, mapAvailable, robotId])
   useEffect(() => {
     if (demo || !liveMap) return
     const controller = new AbortController()
-    fetch('/api/v1/waypoints', { signal: controller.signal }).then(r => { if (!r.ok) throw new Error(r.status === 404 ? 'Waypoint API를 사용할 수 없습니다. Dashboard 서버를 다시 시작하고 설정을 확인하세요.' : 'Waypoint 목록을 읽지 못했습니다.'); return r.json() }).then(value => {
+    fetch(`/api/v1/waypoints${robotQuery(robotId)}`, { signal: controller.signal }).then(r => { if (!r.ok) throw new Error(r.status === 404 ? 'Waypoint API를 사용할 수 없습니다. Dashboard 서버를 다시 시작하고 설정을 확인하세요.' : 'Waypoint 목록을 읽지 못했습니다.'); return r.json() }).then(value => {
       if (value && Array.isArray(value.waypoints) && typeof value.revision === 'string') {
         setWaypointDocument(value)
         setWaypointProblem(null)
@@ -296,16 +367,16 @@ export default function App() {
       }
     }).catch(err => { if (!controller.signal.aborted) setWaypointProblem(err instanceof Error ? err.message : 'Waypoint 목록을 읽지 못했습니다.') })
     return () => controller.abort()
-  }, [demo, !!liveMap])
+  }, [demo, !!liveMap, robotId])
   const changeWaypoint = async (change: WaypointChange) => {
     if (!waypointDocument) throw new Error('Waypoint 설정을 불러오지 못했습니다.')
     let response: Response
     try {
-      response = await fetch('/api/v1/waypoints', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: waypointDocument.revision, ...change }) })
+      response = await fetch(`/api/v1/waypoints${robotQuery(robotId)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: waypointDocument.revision, ...change }) })
     } catch { throw new Error('서버에 연결할 수 없습니다.') }
     if (!response.ok) {
       if (response.status === 409) {
-        const latest = await fetch('/api/v1/waypoints').then(r => r.ok ? r.json() : null).catch(() => null)
+        const latest = await fetch(`/api/v1/waypoints${robotQuery(robotId)}`).then(r => r.ok ? r.json() : null).catch(() => null)
         if (latest) { setWaypointDocument(latest); setLiveMap(current => current ? { ...current, waypoints: latest.waypoints } : current) }
       }
       const body = await response.json().catch(() => null)
@@ -323,10 +394,13 @@ export default function App() {
   const current = view.serverProblem ? null : state?.motion.current
   const value = current ?? state?.motion.last_valid
   const retained = !!value && !current
+  const robotName = state?.robot_id ?? (robotId || 'LIMBO-01')
+  const robots = state?.robots ?? [{ robot_id: robotName, status: connection === 'unknown' ? 'checking' : connection } as RobotSummary]
+  const requestPending = !demo && live!.current(view)?.result === 'pending'
   const banner = view.serverProblem ? '서버 상태를 갱신할 수 없습니다. 현재 로봇 연결 상태를 확인할 수 없습니다.' : connection === 'disconnected' ? '로봇과 연결이 끊겼습니다. 아래 정보는 마지막으로 받은 상태입니다.' : connection === 'delayed' ? '로봇 상태가 늦게 오고 있습니다. 지금 상태는 확인할 수 없습니다.' : connection === 'checking' ? '로봇 연결을 확인하고 있습니다. 아직 받은 정보가 없습니다.' : null
   return <>
     {demo && <div className="demo-banner">데모 데이터 · 실제 로봇을 제어하지 않습니다</div>}
-    <header><div className="container header-inner"><div className="brand"><h1>LIMBO 관제</h1><span className="robot">{state?.robot_id ?? 'LIMBO-01'}</span>{demo && <span className="mode-tag">데모 데이터</span>}</div><div className="connection"><span role="status" className="overall"><Badge status={summary.label} tone={summary.tone}>{summary.label}</Badge>{summary.detail && <span>{summary.detail}</span>}</span><span className="last-received">로봇 {labels[connection]} · {state?.bridge.last_received_at ? `마지막 수신 ${timeText(state.bridge.last_received_at)} · ${ageText(state.bridge.age_s, delta)}` : '수신 기록 없음'}</span></div></div></header>
+    <header><div className="container header-inner"><div className="brand"><h1>LIMBO 관제</h1><RobotPicker current={robotName} robots={robots} pending={requestPending} disabled={!!demo} onSelect={onSelect} />{demo && <span className="mode-tag">데모 데이터</span>}</div><div className="connection"><span role="status" className="overall"><Badge status={summary.label} tone={summary.tone}>{summary.label}</Badge>{summary.detail && <span>{summary.detail}</span>}</span><span className="last-received">로봇 {labels[connection]} · {state?.bridge.last_received_at ? `마지막 수신 ${timeText(state.bridge.last_received_at)} · ${ageText(state.bridge.age_s, delta)}` : '수신 기록 없음'}</span></div></div></header>
     {banner && <div className={`banner ${connection}`} role={connection === 'checking' ? 'status' : 'alert'}><div className="container">{banner}</div></div>}
     {demo && <DemoTools demo={demo} />}
     <main className="container"><div className="page-meta"><span>{demo ? '가상 로봇 상태 및 제어 흐름 검증' : '로봇 상태 모니터링 · 순찰 제어'}</span><a href={demo ? '/' : '/demo'}>{demo ? '실제 수신 화면으로 →' : '가상 제어 데모 보기 →'}</a></div>
@@ -334,10 +408,10 @@ export default function App() {
         <Card title="이동"><div className="movement" role="status"><Badge status={motionStatus} />{!view.serverProblem && state?.motion.rotating && <span>회전 중</span>}
           <div className={`speed ${retained ? 'muted' : ''}`}><strong>{value ? value.linear_speed_mps.toFixed(2) : '—'}</strong><span>m/s</span>{retained && <Badge status="unknown">마지막 수신 값</Badge>}</div></div>
           <p className="muted">{value ? `주행 정보 ${timeText(value.last_received_at)} 기준 추정값` : '유효한 주행 정보 수신 대기'} · 멈춰 있다고 일시정지가 확인된 것은 아닙니다</p></Card></div>
-      <div className="body-grid"><MapCard map={map} view={view} delta={delta} onPick={waypointMode ? setPicked : undefined} /><Controls demo={demo} live={live} view={view} delta={delta} map={map} waypointDocument={waypointDocument} waypointProblem={waypointProblem} changeWaypoint={changeWaypoint} waypointMode={waypointMode} picked={picked} setWaypointMode={setWaypointMode} setPicked={setPicked} /></div>
+      <div className="body-grid"><MapCard map={map} view={view} delta={delta} onPick={waypointMode ? setPicked : undefined} onSelect={demo ? undefined : onSelect} /><Controls demo={demo} live={live} view={view} delta={delta} map={map} waypointDocument={waypointDocument} waypointProblem={waypointProblem} changeWaypoint={changeWaypoint} waypointMode={waypointMode} picked={picked} setWaypointMode={setWaypointMode} setPicked={setPicked} /></div>
       <Card title="최근 알림" className="alerts">{state?.alerts.length ? <ul>{state.alerts.map(alert => <AlertRow key={alert.id} alert={alert} />)}</ul> : <p className="empty">최근 알림이 없습니다</p>}</Card>
       <Reception state={state} serverProblem={view.serverProblem} delta={delta} />
-      <footer>{demo ? '데모의 상태 확인은 가상 이벤트에 기반합니다.' : 'LIMBO-01 · 수신 정보 기반 관제'}<span>표시 시각 Asia/Seoul</span></footer>
+      <footer>{demo ? '데모의 상태 확인은 가상 이벤트에 기반합니다.' : `${robotName} · 수신 정보 기반 관제`}<span>표시 시각 Asia/Seoul</span></footer>
     </main>
   </>
 }

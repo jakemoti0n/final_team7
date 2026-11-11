@@ -103,10 +103,10 @@ v2 필드는 전부 그대로, `schema_version: 3`과 `launcher`만 추가한다
 ### 2.1 화면 → 서버: 명령 요청 `POST /api/v1/commands`
 
 ```json
-{"command": "pause"}
+{"command": "pause", "robot_id": "LIMBO-02"}
 ```
 
-`command`는 `pause` · `resume` · `start` · `stop`.
+`command`는 `pause` · `resume` · `start` · `stop`. `robot_id`는 생략하면 기본 로봇(서버 설정 `robot_id`), 서버가 모르는 로봇이면 404 `unknown_robot` (2026-11-11 여러 로봇).
 
 | 응답 | 경우 |
 |---|---|
@@ -129,8 +129,8 @@ v2 필드는 전부 그대로, `schema_version: 3`과 `launcher`만 추가한다
 | 응답 | 경우 |
 |---|---|
 | 200 `{"request_id": "...", "command": "pause", "ttl_ms": 4870}` | 보낼 명령이 있음. 서버는 이때 `stage`를 `delivered`로 바꿈. `start`만 `route`가 더 붙는다 (§2.5) |
-| 204 | `wait_s` 동안 명령이 없음 → Bridge는 바로 다시 요청 |
-| 409 `robot_id_mismatch` / `retired_session` | v1과 같은 의미 |
+| 204 | `wait_s` 동안 명령이 없음 → Bridge는 바로 다시 요청. 아직 텔레메트리를 보내지 않은 로봇도 `wait_s`만큼 기다린 뒤 204 |
+| 409 `retired_session` | v1과 같은 의미. (`robot_id_mismatch`는 2026-11-11 여러 로봇 지원으로 없어짐) |
 
 - **`ttl_ms`**: 이 명령이 아직 유효한 남은 시간 (발급 후 5초 기준). 시각이 아니라 남은 시간으로 주는 이유는 로봇·서버 시계를 비교하지 않기 위해서. Bridge는 받은 순간부터 자기 단조 시계로 재고, 지나면 서비스를 부르지 않고 `expired`로 보고한다
 - 같은 명령은 한 번만 내준다. Bridge가 받고 응답이 유실돼도 다시 내주지 않는다 (재전송 금지)
@@ -268,6 +268,8 @@ queued → delivered → accepted → confirmed        (성공)
 ```
 
 - `command`는 마지막 명령 하나만 (다음 명령 전까지 유지, PRD 그대로). 알림 목록에도 결과를 한 번 남김
+- 여러 로봇(2026-11-11): 스냅샷은 로봇 하나의 것(`?robot_id=`, 생략하면 기본 로봇). `"robots": [{"robot_id", "status", "last_received_at"}]`가 더 붙어 화면이 로봇 목록을 그린다. 상태·명령·알림·세션은 로봇마다 따로다
+  - 같은 지도 파일을 쓰는 다른 로봇 항목에는 `"pose": {"x", "y", "yaw", "age_s", "stale"}`(위치를 받은 적 없거나 지도가 다르면 `null`, 자기 자신에는 없음). `stale` 기준은 스냅샷 `pose`와 같다. `GET /api/v1/robots`에는 넣지 않는다
 
 ---
 
@@ -276,6 +278,7 @@ queued → delivered → accepted → confirmed        (성공)
 - 서버 설정 `map_yaml`(예: `limbo/src/limbo_navigation/maps/aischool_2f_map.yaml`)을 시작할 때 읽어 pgm을 PNG로 바꿔 둔다
 - `GET /api/v1/map` → `{"resolution": 0.05, "origin": [-12.842, -7.834, 0.0], "width": 492, "height": 471, "image": "/api/v1/map.png", "waypoints": [...]}`
 - `waypoints`(이름·좌표·종류)는 서버 설정 `waypoints_yaml`에서 읽는다 (순찰 노드와 같은 파일)
+- 여러 로봇(2026-11-11): `?robot_id=`로 로봇을 고른다. 설정 `robots.<id>.map_yaml`·`waypoints_yaml`이 있으면 그 파일, 없으면 공통값. `image`는 `/api/v1/map.png?robot_id=<id>`. `GET`·`PUT /api/v1/waypoints`도 같은 쿼리
 - 나중에 약도로 바꾸면 `image`와 좌표 변환값만 바뀐다
 
 ---

@@ -1,4 +1,4 @@
-"""Local verification helpers. Subprocesses and files belong to dashboard only."""
+"""로컬 검증 도우미. 띄우는 프로세스와 파일은 dashboard 안에서만 쓴다."""
 from contextlib import contextmanager
 import json
 from pathlib import Path

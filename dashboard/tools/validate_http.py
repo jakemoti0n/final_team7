@@ -1,4 +1,4 @@
-"""ROS-free CLI sender -> real FastAPI HTTP/timer verification."""
+"""ROS 없이 CLI 송신기 → 실제 FastAPI의 HTTP·타이머 동작 검증."""
 import json
 import subprocess
 import sys

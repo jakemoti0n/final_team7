@@ -114,7 +114,7 @@ def test_next_delivers_once_to_current_session(rig):
     robot.send()
     params = dict(robot_id='LIMBO-01', bridge_session_id=SESSION, wait_s=0)
     assert client.get('/api/v1/commands/next', params=params).status_code == 204
-    assert client.get('/api/v1/commands/next', params=params | {'robot_id': 'X'}).status_code == 409
+    assert client.get('/api/v1/commands/next', params=params | {'robot_id': 'X'}).status_code == 204   # 모르는 로봇: 줄 명령 없음
     assert client.get('/api/v1/commands/next', params=params | {'bridge_session_id': 'x'}).status_code == 422
     client.post('/api/v1/commands', json={'command': 'pause'})
     other = str(uuid.uuid4())

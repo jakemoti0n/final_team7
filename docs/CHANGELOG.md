@@ -8,6 +8,31 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-11 (73) 관제 서버 하나로 여러 로봇: 처음 보는 `robot_id`는 자동 등록, 로봇마다 상태·명령·알림·지도·waypoint 따로, 헤더의 로봇 이름을 눌러 볼 로봇 선택
+
+**할 일**
+- 두 번째 로봇은 relay_prog `bridge.yaml`의 `robot_id`만 다르게(예: `LIMBO-02`). 토큰·서버 주소는 그대로. Bridge 코드 변경 없음
+- 로봇마다 다른 경로를 쓰려면 Dashboard 설정에 `"robots": {"LIMBO-02": {"waypoints_yaml": "..."}}` (`dashboard/README.md` 「여러 로봇」). 적지 않으면 공통 `waypoints_yaml`을 같이 쓴다
+- `robot_id`는 이제 1~64자 영문·숫자·`.`·`_`·`-`만 받는다(그 밖은 텔레메트리 422). 지금 쓰는 `LIMBO-01`은 해당 없음
+- 화면 다시 빌드: `dashboard/ui`에서 `corepack pnpm build`
+
+**변경**
+- 서버 `app.py`: 로봇별 묶음(`Store`·WebSocket 구독자·명령 신호·지도·waypoint 파일). telemetry는 `robot_id`로 찾고 없으면 등록(`max_robots` 기본 16, 넘으면 429 `too_many_robots`). commands/next·claim·result도 `robot_id`로 찾는다(이전의 409 `robot_id_mismatch` 없앰. 모르는 로봇의 commands/next는 `wait_s` 뒤 204). 화면용 `state`·`stream`·`map`·`map.png`·`waypoints`에 `?robot_id=`, `POST /api/v1/commands` 본문에 `robot_id`(모두 생략하면 기본 로봇). 새 `GET /api/v1/robots`. 스냅샷에 `robots`(각 로봇 연결 상태)
+- 같은 지도·waypoint 파일은 한 번만 읽고 공유. waypoint 편집 잠금은 **그 파일을 쓰는 모든 로봇** 기준
+- `models.py`: `Settings.robots`(로봇별 `map_yaml`·`waypoints_yaml`)·`max_robots`, `robot_id` 형식 검사. `state.py`: `Store`가 자기 `robot_id`를 가짐
+- 지도에 같은 지도 파일을 쓰는 다른 로봇도 회색 화살표와 이름으로 표시, 누르면(또는 Tab·Enter) 그 로봇으로 전환. 서버는 스냅샷 `robots` 항목에 `pose`를 넣는다(`Store.pose_view`: 위치만 계산, 알림·revision은 그대로). 지도가 다른 로봇은 좌표가 맞지 않아 넣지 않음
+- 화면: 헤더의 로봇 이름이 버튼(`LIMBO-01 ▾`) → 로봇 목록과 연결 배지, 키보드(↑↓·Enter·Esc) 지원. 고르면 화면 전체를 그 로봇으로 새로 만든다(이전 로봇 상태가 섞이지 않게). 주소 `?robot=`와 브라우저 저장으로 새로 고쳐도 유지, 서버가 모르는 로봇이면 기본 로봇으로. 데모는 로봇 하나
+- 문서: `dashboard/README.md` 「여러 로봇」·API 표, `docs/CONTROL_API_DRAFT.md` §2.1·§2.2·§3.4·§4
+
+**원인과 근거**
+- 이전 서버는 설정의 `robot_id` 하나만 받고 다른 로봇은 모두 409로 거절했다. Bridge는 이미 모든 요청에 `robot_id`를 싣고 있어서 서버·화면만 바꿨다
+- 등록 방식은 설정 목록 대신 자동 등록을 골랐다(로봇 추가 때 서버 설정을 안 바꿔도 됨). 대신 `bridge.yaml` 오타로 유령 로봇이 생길 수 있어 상한과 글자 제한을 뒀다
+
+**확인**(이 PC, 2026-11-11)
+- 서버 pytest 113 통과(새 `tests/test_robots.py` 11건: 같은 지도 로봇 위치·오래됨·다른 지도 제외, 로봇별 상태·세션, 자동 등록·상한, 명령이 고른 로봇에만 감, 다른 로봇 이름의 claim 거절, 로봇별 start 경로, 로봇별 지도·waypoint, 같은 파일 공유 시 편집 잠금, 로봇별 stream)
+- UI 단위 시험 32 통과, `pnpm build` 성공
+- Playwright 27 통과(`CHROME_PATH=/usr/bin/google-chrome`): 다른 로봇 표시를 눌러 전환하는 시험 추가. 새 시험은 두 로봇 텔레메트리 → 헤더 목록 열기 → 다른 로봇 선택 시 순찰 카드·주소·footer가 바뀜, 새로 고침 유지, Esc 닫힘, 모르는 로봇 주소는 기본 로봇으로
+
 ## 2026-11-07 (72) AWS에서 화면 빌드가 메모리 부족으로 실패하던 문제: rollup을 4.40.2로 고정 (빌드 3분·2.9 GB → 1초·0.3 GB)
 
 **할 일**

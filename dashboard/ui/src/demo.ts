@@ -46,7 +46,7 @@ export class MockProvider implements Provider {
     if (scenario === 'delayed' || scenario === 'disconnected') this.alerts.push(this.alert(scenarios[scenario], scenario === 'delayed' ? 'warning' : 'error', true))
     this.update()
   }
-  // This preserves the current request to exercise connection loss mid-flight.
+  // 처리 중 연결 끊김을 시험하려고 진행 중인 요청을 그대로 둔다
   disconnect() { this.scenario = 'disconnected'; this.scenarioAt = new Date().toISOString(); this.machine.disconnect(); this.update() }
   setPatrol(value: Patrol) {
     this.patrol = value

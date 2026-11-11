@@ -27,6 +27,7 @@ export function fromServer(c: ServerCommand): RequestResult {
 const postErrors: Record<string, string> = {
   command_in_progress: '처리 중인 다른 요청이 있습니다.',
   bridge_not_connected: '로봇과 연결되어 있지 않아 요청을 보내지 않았습니다.',
+  unknown_robot: '서버가 이 로봇의 상태를 받은 적이 없습니다. 로봇을 다시 선택해 주세요.',
   bridge_unsupported: '로봇의 Bridge가 주행 시작·순찰 종료를 지원하지 않습니다. relay_prog를 업데이트해 주세요.',
   patrol_already_running: '이미 순찰 노드가 실행 중입니다.',
   patrol_not_running: '로봇의 Bridge가 띄운 순찰 노드가 실행 중이지 않습니다.',
@@ -80,7 +81,8 @@ export function commandReason(view: View, command: Command, lock: string) {
 /** 보낸 직후 서버 스냅샷이 아직 안 바뀐 동안만 화면 자체 결과(전송 중·전송 실패)를 보여 준다 */
 export class LiveControl {
   private local: { result: RequestResult; base: string | null } | null = null
-  constructor(private changed: () => void, private post: typeof fetch = (...a) => fetch(...a)) {}
+  /** robotId: 명령을 보낼 로봇. 비우면 서버의 기본 로봇 */
+  constructor(private changed: () => void, private post: typeof fetch = (...a) => fetch(...a), private robotId = '') {}
   current(view: View): RequestResult | null {
     const server = view.snapshot?.command ?? null
     if (this.local && (server?.request_id ?? null) === this.local.base) return this.local.result
@@ -94,7 +96,7 @@ export class LiveControl {
     this.changed()
     let result: RequestResult
     try {
-      const response = await this.post('/api/v1/commands', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ command }), signal: AbortSignal.timeout(5000) })
+      const response = await this.post('/api/v1/commands', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(this.robotId ? { command, robot_id: this.robotId } : { command }), signal: AbortSignal.timeout(5000) })
       const body = await response.json().catch(() => null)
       if (response.status === 202 && body?.request_id) result = fromServer({ message: '', updated_at: body.issued_at, ...body })
       else result = sendFailed(command, postErrors[body?.error?.code] ?? `서버가 요청을 받지 않았습니다 (${response.status}).`)

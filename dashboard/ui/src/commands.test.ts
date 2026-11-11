@@ -73,7 +73,7 @@ it('mock isolation, patrol gating independent of speed, and reset', () => {
   first.setPatrol('paused'); first.request('pause'); expect(first.machine.current).toBeNull() // 이미 일시정지면 잠김
   first.setPatrol('patrolling'); first.request('pause'); vi.advanceTimersByTime(1600)
   expect(first.current.snapshot?.motion.current?.linear_speed_mps).toBe(.25)
-  expect(first.machine.current?.result).toBe('success') // explicit event; speed did not change
+  expect(first.machine.current?.result).toBe('success') // 명시적 이벤트로 판정. 속도는 바뀌지 않음
   expect(first.current.snapshot?.alerts).toHaveLength(1)
   expect(second.current.snapshot?.alerts).toHaveLength(0)
   first.reset('normal'); vi.advanceTimersByTime(10000)

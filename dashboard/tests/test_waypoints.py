@@ -1,4 +1,4 @@
-"""Live route updates use a temporary file, never the tracked patrol route."""
+"""경로 변경 시험은 임시 파일로만 한다. git이 추적하는 순찰 경로는 건드리지 않는다."""
 import yaml
 from fastapi.testclient import TestClient
 
@@ -81,7 +81,7 @@ def test_rename_and_reorder_persist_without_changing_other_fields(tmp_path):
                              'name': 'A', 'new_name': '첫 지점'})
         assert renamed.status_code == 200, renamed.text
         assert renamed.json()['waypoints'][0]['yaw'] == 90
-        # Add another stop so moving the former final stop is allowed.
+        # 정지 지점을 하나 더 넣어야 기존 마지막 정지 지점을 옮길 수 있다
         added = client.put('/api/v1/waypoints', json={'revision': renamed.json()['revision'],
                            'action': 'add', 'waypoint': {'name': 'C', 'type': 'stop', 'x': 7, 'y': 7}})
         reordered = client.put('/api/v1/waypoints', json={'revision': added.json()['revision'],

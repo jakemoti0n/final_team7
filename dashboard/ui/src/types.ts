@@ -13,6 +13,10 @@ export interface Launcher { commands: CommandName[]; state: 'idle' | 'running' |
 export type ServerStage = 'queued' | 'delivered' | 'accepted' | 'confirmed' | 'rejected' | 'service_unavailable' | 'no_response' | 'expired' | 'unconfirmed' | 'connection_lost'
 export interface ServerCommand { request_id: string; command: CommandName; stage: ServerStage; message: string; issued_at: string; updated_at: string; age_s?: number }
 export interface Alert { id: string; key: string; at: string; severity: 'info' | 'warning' | 'error'; message: string; kind: string; active: boolean }
+/** 서버에 등록된 로봇 하나 (헤더의 로봇 선택 목록) */
+/** 같은 지도를 쓰는 다른 로봇의 위치 (지도가 다르면 서버가 null로 보냄) */
+export interface OtherPose { x: number; y: number; yaw: number; age_s: number | null; stale: boolean }
+export interface RobotSummary { robot_id: string; status: Connection; last_received_at?: string | null; pose?: OtherPose | null }
 export interface Snapshot {
   server_run_id: string; revision: number; server_utc: string; robot_id: string
   bridge: { status: Connection; last_received_at: string | null; age_s: number | null; session_id: string | null; sequence: number }
@@ -23,6 +27,8 @@ export interface Snapshot {
   patrol?: PatrolInfo | null; pose?: PoseInfo | null; command?: ServerCommand | null; map_available?: boolean
   // v3: 순찰 노드 실행 상태와, 서버가 판단한 "순찰 노드가 돌고 있음"(시작 거절·waypoint 편집 잠금 기준)
   launcher?: Launcher | null; patrol_running?: boolean
+  // 여러 로봇: 서버가 아는 로봇 전체와 각 연결 상태 (이 snapshot은 robot_id 하나의 것)
+  robots?: RobotSummary[]
   settings: { robot_id: string; bridge_delay_s: number; bridge_disconnect_s: number; browser_delay_s: number; topic_delay_s: Record<TopicKey, number>; linear_threshold_mps: number; angular_threshold_radps: number; alert_limit: number }
 }
 export interface View { snapshot: Snapshot | null; serverProblem: boolean; receivedMono: number }

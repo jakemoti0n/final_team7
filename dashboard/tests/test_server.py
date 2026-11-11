@@ -126,8 +126,8 @@ def test_http_errors(rig):
         result = client.post('/api/v1/telemetry', content=body, headers={'Content-Type': content_type})
         assert result.status_code == code
         assert result.json()['error']['code'] == name
-    p = empty(); p['robot_id'] = 'other'
-    assert client.post('/api/v1/telemetry', json=p).status_code == 409
+    p = empty(); p['robot_id'] = 'bad id/'
+    assert client.post('/api/v1/telemetry', json=p).status_code == 422   # 로봇 이름 글자 제한
     assert store.payload is None
 
 
@@ -165,7 +165,7 @@ def test_alert_lifecycle_and_session_reset(rig):
     count = len(store.alerts)
     clock.now = 13
     store.snapshot()
-    assert len(store.alerts) == count  # severity update, no new incident
+    assert len(store.alerts) == count  # 중요도만 바뀜, 새 사건 아님
     assert store.active['bridge']['severity'] == 'error'
     p = sample(p['bridge_session_id'], 3)
     client.post('/api/v1/telemetry', json=p)
@@ -196,10 +196,10 @@ def test_websocket_initial_tick_latest_and_disconnect_cleanup(rig):
         tick = ws.receive_json()
         assert tick['bridge']['status'] == 'disconnected'
         assert tick['revision'] > initial['revision']
-        assert all(q.maxsize == 1 for q in client.app.state.subscribers)
+        assert all(q.maxsize == 1 for q in client.app.state.robots['LIMBO-01'].subscribers)
         client.post('/api/v1/telemetry', json=sample())
         assert ws.receive_json()['bridge']['status'] == 'connected'
-    assert not client.app.state.subscribers
+    assert not client.app.state.robots['LIMBO-01'].subscribers
 
 
 def test_heartbeat_cannot_refresh_stopped_topics(rig):

@@ -9,7 +9,7 @@ class Socket {
   onmessage?: (e: { data: string }) => void
   onerror?: () => void
   onclose?: () => void
-  constructor() { Socket.instances.push(this) }
+  constructor(public url = '') { Socket.instances.push(this) }
   close() { this.readyState = 3; this.onclose?.() }
   send(value: unknown) { this.onmessage?.({ data: JSON.stringify(value) }) }
 }
@@ -77,5 +77,18 @@ it('late HTTP responses from before a server restart cannot overwrite fresh stre
   await pending
   expect(live.current.snapshot?.server_run_id).toBe('restarted')
   expect(live.current.serverProblem).toBe(false)
+  live.dispose()
+})
+it('a chosen robot uses its own stream and HTTP state and ignores other robots', async () => {
+  const live = new LiveProvider('LIMBO-02'); live.start(); const state = snapshot()
+  expect(Socket.instances[0].url).toBe('ws://localhost:8000/api/v1/stream?robot_id=LIMBO-02')
+  Socket.instances[0].send(state)   // LIMBO-01 상태: 버림
+  expect(live.current.snapshot).toBeNull()
+  Socket.instances[0].send({ ...state, robot_id: 'LIMBO-02' })
+  expect(live.current.snapshot?.robot_id).toBe('LIMBO-02')
+  const fetch = vi.fn(async () => ({ ok: true, json: async () => ({ ...state, robot_id: 'LIMBO-02', revision: state.revision + 1 }) }))
+  vi.stubGlobal('fetch', fetch)
+  await visible()
+  expect((fetch.mock.calls[0] as unknown[])[0]).toBe('/api/v1/state?robot_id=LIMBO-02')
   live.dispose()
 })

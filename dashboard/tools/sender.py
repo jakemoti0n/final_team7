@@ -1,4 +1,4 @@
-"""Development-only synthetic telemetry. Never run against a live robot server."""
+"""개발용 가짜 텔레메트리. 실제 로봇이 연결된 서버에는 절대 보내지 않는다."""
 import argparse
 from copy import deepcopy
 from datetime import datetime, timezone

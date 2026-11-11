@@ -1,4 +1,4 @@
-"""Single-process state; all mutations run on the application's event loop."""
+"""단일 프로세스 상태. 로봇마다 Store 하나이고, 모든 변경은 앱의 이벤트 루프에서만 일어난다."""
 from collections import deque
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -32,8 +32,9 @@ def utc_now():
 
 
 class Store:
-    def __init__(self, settings: Settings, monotonic=time.monotonic, utc=utc_now):
+    def __init__(self, settings: Settings, monotonic=time.monotonic, utc=utc_now, robot_id=None):
         self.settings, self.monotonic, self.utc = settings, monotonic, utc
+        self.robot_id = robot_id or settings.robot_id
         self.run_id = str(uuid.uuid4())
         self.started = monotonic()
         self.session_started = self.started
@@ -233,7 +234,7 @@ class Store:
                 self.retired.append(self.session)
             for key in list(self.active):
                 if key.startswith("topic:"):
-                    self.close(key)  # Session replacement is not reception recovery.
+                    self.close(key)  # 세션이 바뀐 것은 수신 복구가 아니다
             self.last_motion = self.last_motion_mono = None
             self.session_started = self.monotonic()
         self.session, self.sequence = session, sequence
@@ -288,6 +289,16 @@ class Store:
             previous["active"] = False
             if recovery:
                 self.add(key, "info", recovery, "recovery")
+
+    def pose_view(self):
+        """다른 로봇 화면의 지도에 그릴 위치만. snapshot과 같은 기준으로 오래됨을 판정하되 알림·revision은 건드리지 않는다"""
+        connection, elapsed = self.connection()
+        pose = (self.payload or {}).get("pose")
+        if not pose or pose["x"] is None or pose["y"] is None or pose["yaw"] is None:
+            return None
+        age = pose["age_ms"] / 1000 + elapsed if pose["age_ms"] is not None else None
+        stale = connection in ("delayed", "disconnected") or age is None or age >= self.settings.topic_delay_s.odom
+        return dict(x=pose["x"], y=pose["y"], yaw=pose["yaw"], age_s=age, stale=stale)
 
     def snapshot(self):
         now = self.monotonic()
@@ -346,7 +357,7 @@ class Store:
             pose["stale"] = uncertain or pose["age_s"] is None or pose["age_s"] >= cfg.topic_delay_s.odom
         self.revision += 1
         return dict(server_run_id=self.run_id, revision=self.revision, server_utc=self.utc(),
-                    robot_id=cfg.robot_id, bridge=dict(status=connection, last_received_at=self.received_at,
+                    robot_id=self.robot_id, bridge=dict(status=connection, last_received_at=self.received_at,
                     age_s=elapsed if self.received_mono is not None else None,
                     session_id=self.session, sequence=self.sequence), topics=topics,
                     motion=dict(status=movement, rotating=rotating, current=motion if fresh else None,

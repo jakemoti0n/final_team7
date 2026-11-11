@@ -24,6 +24,8 @@ UTC = Annotated[str, AfterValidator(utc_string)]
 Nonnegative = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 Finite = Annotated[float, Field(allow_inf_nan=False)]
 Count = Annotated[int, Field(ge=0)]
+# 로봇 이름. URL 쿼리·화면 표시에 그대로 쓰므로 글자를 좁힌다 (relay_prog bridge.yaml의 robot_id)
+RobotId = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")]
 
 
 class StrictModel(BaseModel):
@@ -150,7 +152,7 @@ class Launcher(StrictModel):
 
 class Telemetry(StrictModel):
     schema_version: Annotated[int, Field(ge=1, le=3)]
-    robot_id: Annotated[str, Field(min_length=1)]
+    robot_id: RobotId
     bridge_session_id: Annotated[str, AfterValidator(uuid_string)]
     sequence: Annotated[int, Field(gt=0)]
     sent_at: UTC
@@ -188,17 +190,18 @@ CommandName = Literal["pause", "resume", "start", "stop"]
 class CommandRequest(StrictModel):
     """화면 → 서버 POST /api/v1/commands"""
     command: CommandName
+    robot_id: RobotId | None = None   # 없으면 기본 로봇 (Settings.robot_id)
 
 
 class CommandClaim(StrictModel):
     """Bridge → 서버 POST /api/v1/commands/{request_id}/claim: 서비스를 부르기 직전 "아직 유효한가" """
-    robot_id: Annotated[str, Field(min_length=1)]
+    robot_id: RobotId
     bridge_session_id: Annotated[str, AfterValidator(uuid_string)]
 
 
 class CommandResult(StrictModel):
     """Bridge → 서버 POST /api/v1/commands/{request_id}/result"""
-    robot_id: Annotated[str, Field(min_length=1)]
+    robot_id: RobotId
     bridge_session_id: Annotated[str, AfterValidator(uuid_string)]
     request_id: Annotated[str, AfterValidator(uuid_string)]
     outcome: Literal["accepted", "rejected", "no_response", "service_unavailable", "expired"]
@@ -221,8 +224,17 @@ class Thresholds(StrictModel):
     camera_raw: Annotated[float, Field(gt=0)] = 3.0
 
 
+class RobotOverride(StrictModel):
+    """로봇별 지도·waypoint 파일. 생략한 항목은 Settings의 공통값"""
+    map_yaml: str | None = None
+    waypoints_yaml: str | None = None
+
+
 class Settings(StrictModel):
-    robot_id: str = "LIMBO-01"
+    robot_id: RobotId = "LIMBO-01"   # 기본 로봇: 항상 목록에 있고 화면이 처음 여는 로봇
+    # 미리 등록할 로봇과 그 로봇의 지도·waypoint 파일. 여기 없는 로봇도 텔레메트리를 보내면 자동 등록된다
+    robots: dict[RobotId, RobotOverride] = Field(default_factory=dict)
+    max_robots: Annotated[int, Field(gt=0, le=256)] = 16   # 자동 등록 상한 (bridge.yaml 오타로 끝없이 늘지 않게)
     bridge_delay_s: Annotated[float, Field(gt=0)] = 3.0
     bridge_disconnect_s: Annotated[float, Field(gt=0)] = 10.0
     topic_delay_s: Thresholds = Field(default_factory=Thresholds)

@@ -1,7 +1,7 @@
-"""Real ROS2 publisher -> unchanged Bridge -> FastAPI -> browser integration.
+"""실제 ROS2 발행 → 수정하지 않은 Bridge → FastAPI → 브라우저까지 통합 검증.
 
-Run using the existing Bridge Python after sourcing Jazzy. An isolated domain is
-required explicitly; this tool never publishes control commands.
+Jazzy를 source한 뒤 기존 Bridge의 Python으로 실행한다. 다른 로봇과 섞이지 않게
+격리된 도메인을 반드시 지정해야 하며, 이 도구는 제어 명령을 발행하지 않는다.
 """
 import argparse
 import json

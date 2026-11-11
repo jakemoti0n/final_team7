@@ -334,3 +334,49 @@ test('an older Bridge without launcher locks start and stop but keeps pause', as
   await expect(page.getByRole('button', { name: '주행 시작', exact: true })).toBeDisabled()
   await expect(page.locator('#control-reason')).toContainText('Bridge를 업데이트')
 })
+
+test('robot name in the header opens the robot list and switches the whole screen to the chosen robot', async ({ page, request }) => {
+  const other = 'LIMBO-E2E-2'
+  expect((await request.post('/api/v1/telemetry', { data: telemetryV2('patrolling') })).ok()).toBe(true)
+  expect((await request.post('/api/v1/telemetry', { data: { ...telemetryV2('paused'), robot_id: other } })).ok()).toBe(true)
+  await page.goto('/')
+  const picker = page.getByRole('button', { name: /로봇 선택/ })
+  await expect(picker).toHaveText(/LIMBO-01/)
+  await expect(page.locator('.patrol-state')).toContainText('순찰 중')
+  await picker.click()
+  const list = page.getByRole('listbox', { name: '로봇 목록' })
+  await expect(list.getByRole('option')).toHaveCount(await (await request.get('/api/v1/robots')).json().then(b => b.robots.length))
+  await expect(list.getByRole('option', { name: /LIMBO-01/ })).toHaveAttribute('aria-selected', 'true')
+  await list.getByRole('option', { name: new RegExp(other) }).click()
+  await expect(list).toHaveCount(0)
+  await expect(picker).toHaveText(new RegExp(other))
+  await expect(page).toHaveURL(new RegExp(`\\?robot=${other}`))
+  await expect(page.locator('.patrol-state')).toContainText('일시정지')
+  await expect(page.locator('footer')).toContainText(other)
+  // 새로 고쳐도 고른 로봇 유지, Esc로 목록 닫힘
+  await page.reload()
+  await expect(picker).toHaveText(new RegExp(other))
+  await picker.click()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+  // 서버가 모르는 로봇이 주소에 있으면 기본 로봇으로 돌아간다
+  await page.goto('/?robot=NOT-THERE')
+  await expect(picker).toHaveText(/LIMBO-01/)
+})
+
+test('other robots on the same map are drawn and clicking one switches to it', async ({ page, request }) => {
+  const other = 'LIMBO-E2E-3'
+  expect((await request.post('/api/v1/telemetry', { data: telemetryV2('patrolling') })).ok()).toBe(true)
+  const second = telemetryV2('paused')
+  expect((await request.post('/api/v1/telemetry', { data: { ...second, robot_id: other, pose: { ...second.pose, x: 2, y: 1.5, yaw: 1 } } })).ok()).toBe(true)
+  await page.goto('/')
+  const marker = page.locator('.map-card .robot.other', { has: page.locator('text', { hasText: other }) })
+  await expect(marker).toHaveCount(1)
+  await expect(page.locator('.map-legend')).toContainText('다른 로봇 (누르면 전환)')
+  await expect(page.locator('.map-card .robot:not(.other)')).toHaveCount(1)   // 선택한 로봇은 따로 그림
+  await marker.locator('.hit').click()   // 화살표 둘레 누름 영역
+  await expect(page.getByRole('button', { name: /로봇 선택/ })).toHaveText(new RegExp(other))
+  await expect(page.locator('.patrol-state')).toContainText('일시정지')
+  // 이제 LIMBO-01이 다른 로봇으로 보인다
+  await expect(page.locator('.map-card .robot.other', { has: page.locator('text', { hasText: 'LIMBO-01' }) })).toHaveCount(1)
+})
