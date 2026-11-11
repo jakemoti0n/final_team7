@@ -267,10 +267,10 @@ patrol_launch:
 | 로그인 창에서 비밀번호가 안 맞음 | 해시를 작은따옴표로 감쌌나. `docker compose exec caddy printenv BASIC_AUTH_HASH`가 `$2a$`로 시작하는 전체 문자열인가 |
 | 화면이 502 | dashboard 컨테이너가 죽음. `docker compose logs dashboard` (토큰 16자 미만, `MAP_YAML` 오타 등은 이유를 출력함) |
 | Bridge `http_401` / `server rejected the robot token` | 로봇 `robot_token` 파일과 서버 `ROBOT_TOKEN`이 다름(앞뒤 공백은 무시됨) |
-| 일시정지는 되는데 주행 시작만 `응답 없음`, Bridge 로그에 `commands=invalid_command` | 로봇의 Bridge가 2026-11-06 (70) 이전 코드다(앞단이 압축한 start 명령을 못 읽음). 로봇에서 `git pull` 후 Bridge 다시 시작 |
+| 일시정지는 되는데 주행 시작만 `응답 없음`, Bridge 로그에 `commands=invalid_command` | 로봇의 Bridge가 2026-11-06 (71) 이전 코드다(앞단이 압축한 start 명령을 못 읽음). 로봇에서 `git pull` 후 Bridge 다시 시작 |
 | Bridge는 연결됐는데 지도에 로봇 위치가 안 뜸("로봇 위치 수신 대기") | 시뮬레이션인데 `source_clock: ros_system`이면 위치가 버려진다(12절 표). 실물이면 AMCL이 위치를 잡았는지(RViz 초기 위치, `ros2 topic echo /amcl_pose --once`) |
 | Bridge `TimeoutError`가 자주 | 텔레메트리 요청 제한이 1초(`request_timeout_s`)다. 로봇 쪽 인터넷이 느리거나 끊김. 같은 지역(서울) 인스턴스인지, 로봇 네트워크 확인 |
-| 빌드가 `JavaScript heap out of memory`(exit code 134)로 실패 | 2026-11-07 (71) 이전 코드다. rollup 4.64가 이 화면 빌드에 메모리 약 3 GB를 썼다. `git pull`로 받은 뒤 다시 `docker compose up -d --build` |
+| 빌드가 `JavaScript heap out of memory`(exit code 134)로 실패 | 2026-11-07 (72) 이전 코드다. rollup 4.64가 이 화면 빌드에 메모리 약 3 GB를 썼다. `git pull`로 받은 뒤 다시 `docker compose up -d --build` |
 | 빌드 중 멈추거나 `Killed` | 메모리 부족. 4절 스왑을 만들거나 2 GB 요금제로 |
 | 디스크 부족 | `docker system df`, `docker image prune -f`, `docker builder prune -f` |
 

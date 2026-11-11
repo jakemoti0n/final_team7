@@ -272,6 +272,12 @@
 
 ## 실물(Jetson·RoboClaw·센서)
 
+### 새로 부팅한 젯슨에서 실물 Nav2가 활성화되지 않음(`Managed nodes are active` 안 찍힘) — AMCL 초기 위치 전에 Nav2를 띄움 — 2026-11-11
+- **증상**: `run_nav2_real.sh`를 띄우고 35 s 뒤 `Managed nodes are active` 0건. nav2.log: `Activating planner_server` 60 s 뒤 `[global_costmap]: Failed to activate global_costmap because transform from base_link to map did not become available` → `lifecycle_manager_navigation: Failed to change state for node: planner_server` → `Failed to bring up all requested nodes. Aborting bringup`. 그 사이 real.log에는 `[amcl]: AMCL cannot publish a pose or update the transform. Please set the initial pose...`가 2 s마다
+- **원인**: 실물 AMCL(`amcl_real.yaml`)은 `set_initial_pose: false`라 `/initialpose`를 받기 전엔 `map→odom`을 내지 않는다. Nav2 비용 지도는 활성화 때 `base_link→map` TF를 60 s 기다리고(`initial_transform_timeout`), 못 받으면 활성화 실패 → 생명주기 관리자가 기동을 중단하고 스스로 다시 올리지 않는다. 11-10 절차 문서는 런치 3개를 다 띄운 뒤 위치 탐색·초기 위치를 보내는 순서였는데, 11-10에는 Nav2를 다시 띄울 때마다 AMCL이 이미 그날의 자세를 갖고 있어 드러나지 않았다
+- **해결**: 순서를 센서+AMCL → **위치 탐색·`/initialpose`** → Nav2로 바꿈(`docs/REAL_PATROL_RUN.md` 2절 ③, `/tmp/setpose.sh`). 이미 중단된 Nav2는 런치 PID에 SIGINT로 내리고(노드 전부 `finished cleanly`) 초기 위치 뒤 다시 띄운다
+- **확인**: 초기 위치 (0.840, −0.015) 0° 발행 → real.log `[amcl]: Setting pose` → Nav2 재기동 35 s 뒤 `Managed nodes are active` 1건, `use_astar`·`enforce_path_inversion`·충돌 감시 소스가 설정대로 읽힘
+
 ### 실물 비용 지도·충돌 감시가 라이다 높이 0.84~1.0 m 띠만 봄(0.84 m 아래 물체가 안 찍힘) — pcl_ros 복셀 노드의 기본 z 자르기 — 2026-11-10
 - **증상**: 루프 13·14 bag의 `/mid360/points_costmap`(5 cm 복셀, 변경 기록 65)에서 가장 낮은 점이 거리와 상관없이 높이 0.84 m. 0.5 m 상자·쓰레기통·사람 다리가 라이다 쪽 비용 지도에 전혀 안 들어가고, 라이다 몸체 점(중심 8~38 cm)은 0.84~0.91 m라 통과
 - **원인**: `pcl_ros filter_voxel_grid_node`는 `leaf_size`만 줘도 기본값 `filter_field_name: z`, `filter_limit_min/max 0~1`로 **센서 좌표 z 0~1 m만 남긴다**(노드를 따로 띄워 `ros2 param get`으로 확인). 라이다 원점이 0.837 m라 그 아래가 전부 버려짐. 11-09에 복셀을 넣으면서 이 기본값을 끄지 않았다

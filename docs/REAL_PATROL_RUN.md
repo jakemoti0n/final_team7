@@ -40,7 +40,29 @@ grep -E "Init lds lidar|Driver ready|ERROR" ~/limbo_bags/logs/real.log | cut -c1
 → `Init lds lidar success!`와 `[oak]: Driver ready!`가 보여야 한다. `Init lds lidar fail!`이면 라이다 랜선·전원(포트 `enP8p1s0` carrier)을 본다.
 
 ```bash
-# ③ 측정용 Nav2 설정 만들기(저장소의 nav2_real.yaml에서: 카메라 소스 제거, 팽창 0.35)
+# ③ 위치 탐색 → 초기 위치. Nav2보다 먼저 한다(11-11): AMCL은 set_initial_pose: false라 /initialpose를 받기 전엔 map→odom을 안 내고,
+#    Nav2 계획기는 활성화 때 그 TF를 60 s 기다리다 실패해 기동 전체가 중단된다(TROUBLESHOOTING 11-11). 1~2분 걸린다.
+cat > /tmp/setpose.sh <<'EOF'
+#!/bin/bash
+# 사용: bash /tmp/setpose.sh   (창 옮길 때 CX=<x> CY=<y> R=0.3)
+cd ~/limbo && export ROS_DOMAIN_ID=97 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+source /opt/ros/jazzy/setup.bash && source limbo/install/setup.bash
+sed "s/(%.1f, %.1f)/(%.3f, %.3f)/" tools/drive/pose_search.py > /tmp/pose_search3.py
+OUT=$(python3 /tmp/pose_search3.py ${CX:-0.74} ${CY:--0.04} --radius ${R:-0.2} --step 0.025 --deg-step 1 --top 1 2>&1 | tail -1); echo "위치 탐색: $OUT"
+FIT=$(echo "$OUT" | grep -o '[0-9]* %' | grep -o '[0-9]*'); X=$(echo "$OUT" | sed 's/.*(\([-0-9.]*\), \([-0-9.]*\)).*/\1/'); Y=$(echo "$OUT" | sed 's/.*(\([-0-9.]*\), \([-0-9.]*\)).*/\2/'); D=$(echo "$OUT" | grep -o '[-+][0-9]*°' | tr -d '°+')
+if [ -z "$FIT" ] || [ "$FIT" -lt 85 ]; then echo "초기 위치 안 보냄: 일치율 $FIT % (기준 85). 2 m 안을 비우고 다시"; exit 1; fi
+QZ=$(python3 -c "import math;print(math.sin(math.radians($D)/2))"); QW=$(python3 -c "import math;print(math.cos(math.radians($D)/2))")
+ros2 topic pub --once -w 1 /initialpose geometry_msgs/msg/PoseWithCovarianceStamped "{header: {frame_id: map}, pose: {pose: {position: {x: $X, y: $Y}, orientation: {z: $QZ, w: $QW}}, covariance: [0.01,0,0,0,0,0, 0,0.01,0,0,0,0, 0,0,0,0,0,0, 0,0,0,0,0,0, 0,0,0,0,0,0, 0,0,0,0,0,0.01]}}" >/dev/null
+echo "초기 위치 보냄: ($X, $Y) ${D}°"
+EOF
+bash /tmp/setpose.sh
+grep "Setting pose" ~/limbo_bags/logs/real.log | tail -1 | cut -c1-120
+```
+
+→ `위치 탐색: 일치 9x %`, `초기 위치 보냄: (…)`, 그리고 real.log에 `[amcl]: Setting pose … 0.8xx -0.0xx`가 찍혀야 한다. 85 % 미만이면 2 m 안을 비우고 다시(기준을 낮추지 않는다).
+
+```bash
+# ④ 측정용 Nav2 설정 만들기(저장소의 nav2_real.yaml에서: 카메라 소스 제거, 팽창 0.35)
 #    되꺾임 처리(enforce_path_inversion)는 끄지 않는다: 순찰 7(11-10)에서 끄니 W3 머리핀 경로를 그대로 따라가 224 s 회전.
 python3 - <<'EOF'
 import yaml
@@ -54,7 +76,7 @@ open('/tmp/nav2_real_measure.yaml','w').write(yaml.safe_dump(d,sort_keys=False,a
 print('ok')
 EOF
 
-# ④ Nav2
+# ⑤ Nav2
 setsid -f bash tools/drive/run_nav2_real.sh cmd_vel_out:=/cmd_vel params_file:=/tmp/nav2_real_measure.yaml \
   > ~/limbo_bags/logs/nav2.log 2>&1 < /dev/null
 sleep 30
@@ -62,7 +84,10 @@ grep -c "Managed nodes are active" ~/limbo_bags/logs/nav2.log
 ros2 param get /collision_monitor observation_sources
 ```
 
-→ `1`과 `['mid360_cloud']`가 나와야 한다. 0이면 30초 더 기다렸다 다시 센다.
+→ `1`과 `['mid360_cloud']`가 나와야 한다. 0이면 30초 더 기다렸다 다시 센다. 그래도 0이고 nav2.log에 `Failed to activate global_costmap because transform from base_link to map`·`Aborting bringup`이 있으면 ③을 건너뛴 것이다: Nav2 런치 PID에 SIGINT → ③ → ⑤를 다시 한다(아래 "막히면").
+`The inflation radius (0.35) is smaller than the circumscribed radius (0.386)` ERROR는 측정용 팽창 0.35 때문에 늘 찍히는 것으로, MPPI가 발판 기준 충돌 비용을 보수적으로 계산한다는 뜻이다(순찰 6~8 모두 이 상태로 주행).
+
+③과 3절의 `patrol_run.sh`가 위치 탐색을 두 번 하는 셈인데, `patrol_run.sh`는 "확인 → 출발"을 한 번에 묶는 안전장치라 그대로 둔다.
 
 ## 3. 출발 (위치 확인 → 초기 위치 → 점검 → 기록 → 순찰, 한 번에)
 
@@ -129,5 +154,6 @@ sudo shutdown -h now
 
 - **위치 탐색이 80 % 안팎에서 안 올라감**: 로봇 2 m 안에 사람·물건이 있거나, 로봇이 테이프 자리에서 벗어나 탐색 창(±20 cm) 가장자리에 걸린 것. `CX CY R=0.3`으로 창을 옮긴다.
 - **순찰 노드가 9 s 만에 "completed"**: 경유점 파일의 마지막 stop이 출발점과 같을 때 생긴다(TROUBLESHOOTING 11-10). `real_loop_waypoints.yaml`은 MID·HOME 두 stop 구조를 유지한다.
+- **Nav2가 `active: 0`이고 nav2.log에 `Failed to activate global_costmap because transform from base_link to map did not become available` → `Failed to bring up all requested nodes. Aborting bringup`**: AMCL에 초기 위치를 안 줘서(`set_initial_pose: false`) `map→odom`이 없는 채로 Nav2를 띄운 것(11-11, 새로 부팅한 날). Nav2 런치 PID에 SIGINT(`ps -eo pid,args | grep "[r]os2 launch .*start_nav2_real"`) → 2절 ③ → ⑤. 생명주기 관리자는 한 번 중단하면 스스로 다시 올리지 않는다.
 - **젯슨 ssh가 끊김**: 로봇이 W1 코너(복도 끝)에 있을 때 와이파이가 약하다. 돌아올 때까지 기다리면 된다. 순찰은 젯슨 안에서 계속 돈다.
 - **`fastrtps_port … open_and_lock_file failed`가 찍힘**: `timeout`으로 끊은 `ros2 topic …` 명령이 남긴 공유 메모리 찌꺼기. 주행 중 CLI 확인을 줄이고, 5절처럼 ROS가 다 내려간 뒤 `/dev/shm/fastrtps_*`를 지운다.

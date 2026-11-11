@@ -8,7 +8,7 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
-## 2026-11-07 (71) AWS에서 화면 빌드가 메모리 부족으로 실패하던 문제: rollup을 4.40.2로 고정 (빌드 3분·2.9 GB → 1초·0.3 GB)
+## 2026-11-07 (72) AWS에서 화면 빌드가 메모리 부족으로 실패하던 문제: rollup을 4.40.2로 고정 (빌드 3분·2.9 GB → 1초·0.3 GB)
 
 **할 일**
 - `dashboard/ui`에서 `corepack pnpm install --frozen-lockfile` (rollup 버전이 바뀜). Docker는 `docker compose up -d --build`만 하면 됨
@@ -27,7 +27,7 @@
 - `docker compose build` 10초. `node:24-slim` 컨테이너를 메모리 1 GB로 묶고(`-m 1g --memory-swap 1g`) `pnpm install --frozen-lockfile && pnpm build` 성공
 - 고치기 전 같은 빌드를 힙 512 MB로 묶으면 9초 만에 같은 `heap out of memory`로 재현
 
-## 2026-11-06 (70) AWS 배포 파일과 가이드: Dockerfile·docker-compose(관제 서버 + Caddy HTTPS·basic auth)·`docs/AWS_DEPLOY.md`, Caddy 뒤에서 start 명령이 깨지던 압축 문제 수정 (인터넷 공개 준비 3단계)
+## 2026-11-06 (71) AWS 배포 파일과 가이드: Dockerfile·docker-compose(관제 서버 + Caddy HTTPS·basic auth)·`docs/AWS_DEPLOY.md`, Caddy 뒤에서 start 명령이 깨지던 압축 문제 수정 (인터넷 공개 준비 3단계)
 
 **할 일**
 - 없음 (로컬 실행 방법은 그대로). 배포할 때 `docs/AWS_DEPLOY.md`
@@ -59,7 +59,7 @@
 - `test_start_command_reaches_launcher_with_route`가 고치기 전 코드에서 실패·고친 뒤 통과, relay pytest 93 통과
 - 빌드 경고 `Ignored build scripts: esbuild`(pnpm 10)는 무해: `@esbuild/linux-x64` 바이너리가 따로 설치돼 vite 빌드가 됨
 
-## 2026-11-06 (69) 로봇용 경로에 공유 토큰 인증 (`Authorization: Bearer`): 인터넷 공개 준비 2단계
+## 2026-11-06 (70) 로봇용 경로에 공유 토큰 인증 (`Authorization: Bearer`): 인터넷 공개 준비 2단계
 
 **할 일**
 - 로컬 개발은 할 일 없음 (기본 `config.json`의 `allow_no_robot_token: true`, `bridge.yaml`의 `token_file: null`)
@@ -79,7 +79,7 @@
 - `dashboard` pytest 102, `relay_prog` pytest 93 통과
 - 실제 서버(`ROBOT_TOKEN`, `allow_no_robot_token: false`) + 실제 Bridge: 토큰 없이 서버 시작 → 거부. curl 토큰 없음/틀림 → 401, `/api/v1/state` → 200. 맞는 토큰 Bridge → 연결됨, start·stop confirmed. 틀린 토큰 Bridge → `http_401` + 토큰 확인 경고
 
-## 2026-11-06 (68) 주행 시작·순찰 종료를 Bridge 경유 명령으로: 서버는 명령만 쌓고 로봇 컴퓨터의 Bridge가 `patrol_node`를 띄우고 끈다. waypoint 목록은 시작 명령에 실어 보낸다 (AWS 배포 준비 1단계)
+## 2026-11-06 (69) 주행 시작·순찰 종료를 Bridge 경유 명령으로: 서버는 명령만 쌓고 로봇 컴퓨터의 Bridge가 `patrol_node`를 띄우고 끈다. waypoint 목록은 시작 명령에 실어 보낸다 (AWS 배포 준비 1단계)
 
 **할 일**
 - pull 뒤 `relay_prog`를 다시 빌드(새 파일 `launcher.py`). Bridge는 **저장소 루트에서** 실행(`patrol_launch`의 상대 경로 기준)
@@ -104,6 +104,22 @@
 - 실제 서버 + 실제 Bridge + 실제 `patrol_node`(Gazebo·Nav2 없이, ROS_DOMAIN_ID 93): waypoint 이동 → 주행 시작 confirmed(`waiting_localization`) → 로봇 쪽 YAML에 이동한 좌표, `patrol_node` 인자 `waypoints:=<절대 경로>` → 실행 중 편집 409 `patrol_active`·재시작 409 → 순찰 종료 confirmed(exit 0) → 다른 터미널에서 띄운 노드가 있으면 시작 409·종료 409 → Bridge Ctrl+C 때 띄운 노드도 종료
 - 하지 못함: 시뮬레이션에서 주행 중 일시정지·재개. 이 경로(서비스 호출)는 바꾸지 않았고 e2e로만 확인
 - 남은 것: 순찰 종료 때 순찰 노드가 `failed` · `stopped by operator`를 내서 「순찰 실패」 알림이 하나 생긴다(전에도 같음)
+
+## 2026-11-11 (68) 다익스트라 시험(순찰 8) 실패 분석 → 원인은 계획기가 아니라 **지도 잡티(복도 한가운데 5칸)와 지역 비용 지도의 정적 층 부재**, 지도 `real_open_space_20261111`(고립 잡티 224개 제거), 실물 절차 순서 수정(초기 위치 → Nav2), 노트북 감시 화면 4개
+
+**했음**
+- **순찰 8**(다익스트라 `use_astar: false`, 되꺾임 처리 켬, 팽창 0.35, 카메라 제외, 지도 1110): **실패(900 s 타임아웃)**. 1구간 →MID 236 s(W1 코너 174 s: 정지 64·회전 86 s, 누적 2078°), 2구간은 MID→W3→왼쪽 복도 (0.49, 2.31)까지 39 s에 내려온 뒤 **W4까지 2.1 m를 전역 계획기가 85 s 동안 "경로 없음"(재시도 3회) → Goal failed**. 되꺾임 지표(1구간 경로 67장 중 로봇 1 m 안 되꺾임 45장, 67 %)는 A*의 88 %보다 조금 낮지만 W1은 더 오래 섰고, 다익스트라에서만 나는 NavFn 오류 `Failed to create a plan from potential when a legal potential was found` 4회. **다익스트라는 해답이 아님 → A*로 복귀**
+- **왼쪽 복도 실패 원인 = 지도 잡티**: 지도 1110의 복도 한가운데 5칸 점유 (0.45~0.70, 2.15~2.25)(11-09 SLAM 잡음)가 전역 비용 지도에서 팽창 안쪽(99)까지 지름 0.5 m 덩어리가 되고, NavFn은 99 칸도 못 지난다. 로봇이 그 위에 올라선 순간 모든 목표에 경로 없음(지금 자리에서 `compute_path_to_pose` 시험 → HOME·1 m 남쪽 모두 ABORTED 208, 로봇 칸 값 100). 지역 비용 지도에는 정적 층이 없어 그 자리가 빈칸이라 MPPI가 거기로 몰고 들어갔다. 카메라 영상도 빈 바닥. 지도 전체에 ≤8칸 고립 잡티 441개, 순찰 경로 위에는 왼쪽 복도 2개·오른쪽 복도 (13.65, 5.35)·HOME 옆 (0.0, −0.2)
+- **W1 틈 실측(전역 비용 지도 줄 단위)**: 정수기·쓰레기통 A(지도 x 12.10~13.30)와 탁자 B(13.80~14.30) 사이 지나갈 수 있는 폭이 **y 0.18~0.53에서 0.30~0.35 m(6~7칸)**, y 0.6부터 넓어져 y 1.0에서 1.0 m. 이 좁은 띠에서 NavFn이 떤다. A·B 모양은 라이다 관측 그대로라 더 좁게 그릴 근거 없음(쓰레기통은 148 s 카메라에 실물 확인; 지역 비용 지도에 안 보인 건 로봇에 너무 가까워 걸러진 것)
+- `limbo_navigation/maps/real_open_space_20261111.{pgm,yaml}`(새): 1110에서 **≤8칸이고 큰 구조물에서 0.5 m 넘게 떨어진 고립 점유 덩어리 224개(397칸)** 를 주변 다수값(자유/미지)으로 메움. 벽·A·B는 그대로. 순찰 구역 안 40개 중 36개는 섬 내부 미지 영역, 복도 위 4개는 위 목록. 규칙·스크립트는 스크래치패드 `mapclean.py`(지도 만들기 표준 절차에 넣을 후보)
+- `docs/REAL_PATROL_RUN.md`: 새로 부팅하면 Nav2가 안 올라오던 순서 오류 수정 — ② 센서+AMCL → **③ 위치 탐색·`/initialpose`(`/tmp/setpose.sh`)** → ④ 설정 → ⑤ Nav2. 설정 생성에서 `enforce_path_inversion=False` 제거. 막히면 항목 추가. TROUBLESHOOTING 11-11 1건(AMCL `set_initial_pose: false` + 비용 지도 TF 60 s 대기 → 생명주기 관리자 기동 중단)
+- 노트북 감시 화면 4개(PM 요청, 스크래치패드 `watch_rviz.sh`·`watch_cam.sh`·`watch_nav2.sh`·`watch_patrol.sh`·`real_watch.rviz`): 노트북에서 `ROS_STATIC_PEERS=192.168.20.210`만 주면 젯슨 런치(LOCALHOST 탐색)를 안 바꿔도 토픽 37개가 보임. RViz = 정적 지도 + 전역/지역 비용 지도(costmap 색) + 발판 + /plan + /local_plan + /scan + AMCL + 카메라 패널. 저장소 반영 여부는 PM 결정 대기
+- 측정용 Nav2 설정(젯슨 `/tmp/nav2_real_measure.yaml`, `/tmp/mkmeasure.py`): 카메라 제외 + 팽창 0.35 + **지역 비용 지도에 `static_layer` 추가** + A*(저장소 기본) + 되꺾임 처리 켬
+
+**할 일**
+- 순찰 9(지도 1111 + 위 측정 설정) 한 바퀴 → W1·왼쪽 복도 시간, 되꺾임 지표 비교. 지역 정적 층·지도 1111의 저장소 기본값 채택은 PM 결정
+- W1 0.30 m 띠: NavFn 대안(Smac 2D + 다듬기) 별도 실험, 또는 실물 통로(0.85 m) 쪽 결정
+- 변경 기록 67 할 일 나머지(카메라 역할 분리·절벽 감지·HOME 도착 회전·지도 만들기 표준 절차·문 구역·배터리·ToF)
 
 ## 2026-11-10 (67) 라이다 비용 지도 점군이 높이 0.84~1.0 m 띠만 보던 버그(pcl_ros 복셀 기본 z 자르기) 수정, 센서 장착 실측(라이다 높이 0.857), 원점 바닥 테이프 자리 (0.74, −0.04) +x, 카메라 가짜 점 원인 확정(흰 벽·유리 앞 스테레오 짝 오류 → 세로 9칸 규칙으로 W3 벽 가짜 칸 0), 지나가기 순찰 `real_loop_waypoints.yaml`(MID·HOME 2곳만 정지), 지도 `real_open_space_20261110`(W1 코너 정수기·쓰레기통·탁자 추가) → 한 바퀴 362 → 264(카메라 켬) → **170 s(카메라를 비용 지도에서 뺀 측정, 주행 157 s)**, 이후 바퀴마다 W1 코너 87~182 s 정지의 원인 = **NavFn(A*) 전역 경로 떨림(되꺾임 수백 개) + MPPI `enforce_path_inversion`**. 실행 절차 `docs/REAL_PATROL_RUN.md`. TROUBLESHOOTING 4건
 
