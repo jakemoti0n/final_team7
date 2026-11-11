@@ -1,0 +1,29 @@
+{
+  "status": "Yaw +90deg checked against front-person raw points on 2026-11-04; position remains user-measured estimate; lid must remain closed",
+  "parent_frame": "base_footprint",
+  "sensor_frame": "mid360_link",
+  "sensor_translation_m": [
+    0.0,
+    0.0,
+    0.837
+  ],
+  "sensor_rpy_rad": [
+    0.0,
+    0.0,
+    1.5707963267948966
+  ],
+  "body_min_base_m": [
+    -0.225,
+    -0.225,
+    0.0
+  ],
+  "body_max_base_m": [
+    0.225,
+    0.225,
+    0.79
+  ],
+  "body_padding_m": 0.01,
+  "scan_min_height_sensor_m": -0.15,
+  "scan_max_height_sensor_m": 0.2,
+  "basis": "User: connector-opposite sensor +X faces robot left. Front-person A/B capture: new returns near sensor [0.183,-1.348,-0.005]m, consistent with yaw +90deg. Body 45x45cm; direct mounting on 79cm top plus 47mm optical origin. Roll/pitch zero, position not precision calibrated."
+}

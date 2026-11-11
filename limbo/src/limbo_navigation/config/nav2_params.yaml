@@ -76,9 +76,12 @@ controller_server:
     use_realtime_priority: false
 
     # Progress checker parameters
+    # PoseProgressChecker: 10 s 안에 0.5 m 이동 "또는" 0.5 rad 회전이면 진행 중. SimpleProgressChecker는 이동만 세서
+    # 제자리 180° 회전(경로가 등 뒤에 있을 때 MPPI는 0.1 rad/s로 돈다)이 10 s를 넘기면 가짜 "Failed to make progress"로 복구에 들어갔다(실물 2026-11-08).
     progress_checker:
-      plugin: "nav2_controller::SimpleProgressChecker"
+      plugin: "nav2_controller::PoseProgressChecker"
       required_movement_radius: 0.5
+      required_movement_angle: 0.5
       movement_time_allowance: 10.0
     # Goal checker parameters
     #precise_goal_checker:
@@ -92,7 +95,16 @@ controller_server:
       xy_goal_tolerance: 0.25
       yaw_goal_tolerance: 0.25
     FollowPath:
-      plugin: "nav2_mppi_controller::MPPIController"
+      # RotationShimController: 경로 방향과 로봇 방향 차가 angular_dist_threshold보다 크면 먼저 제자리에서 경로 쪽으로 돌고,
+      # 그 안으로 들어오면 모든 명령을 primary_controller(MPPI)에 넘긴다. MPPI만으로는 경로가 등 뒤(180°)에 있을 때 좌우 회전 비용이
+      # 같아 샘플 평균이 상쇄돼 0.05~0.1 rad/s로 22 s를 끌었다(실물 2026-11-08). 아래 MPPI 설정은 그대로 이 이름 아래에서 읽힌다.
+      plugin: "nav2_rotation_shim_controller::RotationShimController"
+      primary_controller: "nav2_mppi_controller::MPPIController"
+      angular_dist_threshold: 0.785        # 45° (Nav2 기본값)
+      forward_sampling_distance: 0.5       # 경로 0.5 m 앞 점으로 방향을 잰다 (기본값)
+      rotate_to_heading_angular_vel: 1.8   # = wz_max. 실물은 build_real_configs가 주행 노드 상한으로 낮춘다
+      max_angular_accel: 4.0               # = az_max. 실물은 drive.yaml에서 도출한 값으로 바뀐다
+      simulate_ahead_time: 1.0             # 회전 중 1 s 앞 충돌 검사 (기본값)
       time_steps: 80
       model_dt: 0.05
       batch_size: 2000

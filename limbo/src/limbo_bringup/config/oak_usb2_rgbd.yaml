@@ -1,0 +1,67 @@
+/**:
+  ros__parameters:
+    use_sim_time: false
+    driver:
+      i_usb_speed: HIGH
+      i_pipeline_auto_calibration_mode: "OFF"
+      i_enable_ir: false
+      i_restart_on_diagnostics_error: false
+      i_rs_compat: false
+    pipeline_gen:
+      i_pipeline_type: RGBD
+      i_nn_type: none
+      i_enable_imu: false
+      i_enable_diagnostics: false
+      i_enable_rgbd: false
+      i_enable_vio: false
+      i_enable_slam: false
+    rgb:
+      i_board_socket_id: 0
+      i_width: 640
+      i_height: 400
+      i_fps: 10.0
+      i_resize_mode: CROP
+      i_undistorted: true
+      i_publish_full_resolution: false
+      i_publish_topic: true
+      i_enable_lazy_publisher: false
+      i_synced: false
+      i_low_bandwidth: false
+      i_publish_compressed: false
+      i_enable_nn: false
+      i_enable_feature_tracker: false
+    left:
+      i_fps: 10.0
+      i_publish_topic: false
+      i_enable_nn: false
+      i_enable_feature_tracker: false
+    right:
+      i_fps: 10.0
+      i_publish_topic: false
+      i_enable_nn: false
+      i_enable_feature_tracker: false
+    stereo:
+      i_width: 640
+      i_height: 400
+      i_fps: 10.0
+      i_left_socket_id: 1
+      i_right_socket_id: 2
+      i_board_socket_id: 0
+      i_aligned: true
+      i_publish_topic: true
+      i_enable_lazy_publisher: false
+      i_synced: false
+      i_output_disparity: false
+      i_low_bandwidth: false
+      i_publish_compressed: false
+      i_depth_preset: FAST_ACCURACY
+      i_enable_decimation_filter: true
+      i_decimation_filter_decimation_mode: PIXEL_SKIPPING
+      i_decimation_filter_decimation_factor: 1
+      i_use_neural_depth: false
+      i_enable_left_spatial_nn: false
+      i_enable_right_spatial_nn: false
+      i_enable_left_rgbd: false
+      i_enable_right_rgbd: false
+      i_left_rect_publish_topic: false
+      i_right_rect_publish_topic: false

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Fast DDS 2.14.x: transport-only profile for the OAK ROS camera processes.
+     RGB payload is 640 * 400 * 3 = 768000 bytes, above the default 512 KiB
+     SHM segment. Keep UDP discovery/network transport and increase only SHM.
+     No publisher/subscriber QoS, history, or publication-mode overrides.
+     Load through FASTRTPS_DEFAULT_PROFILES_FILE before participant creation. -->
+<dds xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <profiles>
+    <transport_descriptors>
+      <transport_descriptor>
+        <transport_id>limbo_camera_shm_16m</transport_id>
+        <type>SHM</type>
+        <segment_size>16777216</segment_size>
+      </transport_descriptor>
+      <transport_descriptor>
+        <transport_id>limbo_camera_udp</transport_id>
+        <type>UDPv4</type>
+      </transport_descriptor>
+    </transport_descriptors>
+    <participant profile_name="limbo_camera_participant" is_default_profile="true">
+      <rtps>
+        <userTransports>
+          <transport_id>limbo_camera_shm_16m</transport_id>
+          <transport_id>limbo_camera_udp</transport_id>
+        </userTransports>
+        <useBuiltinTransports>false</useBuiltinTransports>
+      </rtps>
+    </participant>
+  </profiles>
+</dds>

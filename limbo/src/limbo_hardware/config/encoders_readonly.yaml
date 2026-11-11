@@ -1,0 +1,17 @@
+roboclaw_encoder:
+  ros__parameters:
+    use_sim_time: false
+    port: /dev/serial/by-id/usb-Basicmicro_Inc._USB_Roboclaw_2x15A-if00
+    poll_hz: 20.0
+    serial_timeout: 0.2
+    reconnect_seconds: 2.0
+    # 2026-11-05: wheel outer width 0.58 m; provisional hand calibration.
+    # Three continuous revolutions per wheel; separate setup/handling excluded.
+    # Right: round(11062 / 3) = 3687.
+    right_counts_per_revolution: 3687.0
+    # Left: 11022 / 3 = 3674.
+    left_counts_per_revolution: 3674.0
+    # Loaded straight/turn validation pending after the hardware adjustment.
+    # Sanity guard only; a small counter reset cannot always be detected.
+    max_delta_counts: 10000
+    wire_log: ''

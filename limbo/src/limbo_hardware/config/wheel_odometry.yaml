@@ -1,0 +1,32 @@
+wheel_odometry:
+  ros__parameters:
+    use_sim_time: false
+    input_topic: /wheel/encoder_counts
+    output_topic: /odom
+    odom_frame: odom
+    base_frame: base_footprint
+    # User's 2026-11-05 hardware adjustment; provisional measured geometry.
+    # Diameter 0.15 m each; wheels moved inward 0.005 m on each side. Outer width 0.58 m.
+    # Center-plane separation = 0.58 - 0.05/2 - 0.05/2 = 0.53 m.
+    # 유효 반지름 0.0738: 11-07 보드 속도 제어 6 m 직진 2회에서 바퀴 odom 6.048 m 대 줄자 5.95 m(±5 cm). 좌우 차이는 4 mm라 같은 값.
+    # 바퀴 치수 7.5 cm는 타이어가 하중에 눌려 실제 구름 반지름이 1.6 % 작다
+    left_wheel_radius: 0.0738
+    right_wheel_radius: 0.0738
+    wheel_separation: 0.53
+    # CPR is supplied by the launch from encoders_readonly.yaml, not duplicated here.
+    max_input_age_seconds: 0.5
+    max_sample_interval_seconds: 0.5
+    max_future_stamp_seconds: 0.05
+    # Provisional, conservative uncertainty budget. These are not measured variances.
+    # Planar x/y variance grows by 0.01 m^2 per metre of mean absolute wheel travel;
+    # yaw variance grows by 0.02 rad^2 per metre. A skipped interval adds a fixed budget.
+    initial_position_variance: 0.0025
+    initial_yaw_variance: 0.01
+    position_variance_per_meter: 0.01
+    yaw_variance_per_meter: 0.02
+    gap_position_variance: 0.25
+    gap_yaw_variance: 0.25
+    linear_velocity_variance: 0.01
+    lateral_velocity_variance: 0.01
+    angular_velocity_variance: 0.04
+    unobserved_variance: 1000000.0

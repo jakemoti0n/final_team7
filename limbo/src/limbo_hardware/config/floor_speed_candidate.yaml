@@ -1,0 +1,21 @@
+# Reproduction candidate only; strict speed-tracking criteria are NOT satisfied.
+# Output stays disabled unless explicitly overridden for an attended finite trial.
+wheel_speed_bench:
+  ros__parameters:
+    use_sim_time: false
+    enable_output: false
+    record_dir: ''
+    duration_seconds: 5.0
+    extended_observation: false
+    left_wheel_radius: 0.075
+    right_wheel_radius: 0.075
+    wheel_separation: 0.53
+    left_counts_per_revolution: 3674.0
+    right_counts_per_revolution: 3687.0
+    left_target_rad_s: 0.4
+    right_target_rad_s: 0.4
+    kp: 0.10
+    ki: 0.20
+    max_duty_raw: 4915
+    velocity_window_s: 0.10
+    feedforward_gain: 0.25

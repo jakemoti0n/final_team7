@@ -1,0 +1,469 @@
+Limbo tracking diagnostics, 2026-11-06 (Asia/Seoul)
+Captured Jetson console output from ten right-wheel PWM/PI tests and two waypoint 1 runs.
+These are per-run diagnostics and selected samples printed during the original tests.
+The temporary per-cycle JSONL for these runs was not retained. L/R = robot left/right.
+Earlier data in drive_telemetry_20261103.tar.gz is a separate recording, at that day's configuration.
+
+===== right PWM plateau 1 =====
+active 8/8
+live limits,FF L/R, CPR L/R and spacing (0.13, 0.8, 9830) [0.1375, 0.2625, 3674.0, 3687.0, 0.53]
+start pose,match (0.08907758438749969, 0.5859640596035466, -0.0070106805082112205) (336, 0.9464285714285714)
+MPPI live vx,az,wz limits [0.13, 1.0, 0.8]
+swept corridor center/footprint max cost 0 196
+STOP heading/lateral guard
+raw0 (1948217, 4293036925) end t, wheel travel m [8.2029 0.8038 0.7459] low starts at 3.65
+data n,period median/max,VBAT min, max abs board PWM LR 164 [0.05  0.056] 11.4 [23.83 30.  ]
+return read time offset max s, median/p95 abs readback minus prior write % LR 0.008 [[0. 0.]
+ [0. 0.]]
+means: label|sec|targetLR|encDistance/timeLR|cmdPWM LR|boardPWM LR|rampedR|rightFF,P,I pct|R rate-limited%,sat%
+terminal windows t, requested duty, measured R speed [(1.8000542789995961, 0.25, 0.08240042357938844), (3.0642899470003613, 0.24479182209665687, 0.11737355470795657), (4.330620052000086, 0.235, 0.09286059813403888)]
+baseline 0.95 [0.13, 0.13] [0.1453, 0.1545] [23.8321, 29.9997] [23.8322, 29.9997] 0.13 [45.5, -0.7254, 0.0] [0.0, 100.0]
+plateau 0.65 [0.13, 0.0714] [0.1292, 0.0841] [23.8321, 25.0008] [23.8321, 25.0008] 0.0714 [25.0, -0.3818, 0.0] [0.0, 0.0]
+plateau 0.65 [0.13, 0.0699] [0.135, 0.1237] [23.8319, 24.4789] [23.8319, 24.4789] 0.0699 [24.4792, -1.4108, 0.0] [0.0, 0.0]
+plateau 0.65 [0.13, 0.0671] [0.133, 0.0936] [23.8319, 23.4993] [23.8319, 23.4993] 0.0671 [23.5, -0.7936, 0.0] [0.0, 0.0]
+low and restore 250ms bins t,mean targetR,actualR,count-derived R speed,cmdPWM_R,boardPWM_R,integral pct
+[-0.5, 0.13, 0.1446, 0.1407, 29.9997, 29.9997, 0.0]
+[-0.25, 0.13, 0.1315, 0.1303, 29.9997, 29.9997, 0.0]
+[0.0, 0.1229, 0.1319, 0.1339, 29.9997, 29.9997, 0.0]
+[0.25, 0.0799, 0.1438, 0.1451, 29.7488, 29.9435, 0.0]
+[0.5, 0.0714, 0.1245, 0.1183, 26.7513, 27.5137, 0.0]
+[0.75, 0.0714, 0.1052, 0.1054, 25.0008, 25.0435, 0.0]
+[1.0, 0.0714, 0.0985, 0.0935, 25.0008, 25.0008, 0.0]
+[1.25, 0.0714, 0.0821, 0.0814, 25.0008, 25.0008, 0.0]
+[1.5, 0.0714, 0.0853, 0.0844, 25.0008, 25.0008, 0.0]
+[1.75, 0.0708, 0.0846, 0.0871, 24.792, 24.8964, 0.0]
+[2.0, 0.0699, 0.0941, 0.0967, 24.4789, 24.4789, 0.0]
+[2.25, 0.0699, 0.1132, 0.117, 24.4789, 24.4789, 0.0]
+[2.5, 0.0699, 0.1257, 0.1258, 24.4789, 24.4789, 0.0]
+[2.75, 0.0699, 0.1224, 0.1226, 24.4789, 24.4789, 0.0]
+[3.0, 0.0688, 0.1245, 0.125, 24.1328, 24.3287, 0.0]
+[3.25, 0.0671, 0.1199, 0.1188, 23.4993, 23.4993, 0.0]
+[3.5, 0.0671, 0.1183, 0.1143, 23.4993, 23.4993, 0.0]
+[3.75, 0.0671, 0.1033, 0.1, 23.4993, 23.4993, 0.0]
+[4.0, 0.0671, 0.0847, 0.0815, 23.4993, 23.4993, 0.0]
+[4.25, 0.0671, 0.074, 0.0767, 23.4993, 23.4993, 0.0]
+non-forward requests while moving 0 control reasons {(), ('command_timeout',)}
+
+===== right PWM plateau 2 =====
+active 8/8
+live limits,FF L/R, CPR L/R and spacing (0.13, 0.8, 9830) [0.1375, 0.2625, 3674.0, 3687.0, 0.53]
+start pose,match (0.11212979976059814, 0.7039621457673639, -0.010411111707408707) (338, 0.9674556213017751)
+MPPI live vx,az,wz limits [0.13, 1.0, 0.8]
+swept corridor center/footprint max cost 0 196
+STOP single-wheel lag
+raw0 (1948364, 4293036909) end t, wheel travel m [2.4907 0.0141 0.0588] low starts at None
+data n,period median/max,VBAT min, max abs board PWM LR 50 [0.05  0.054] 11.4 [20.99 30.  ]
+return read time offset max s, median/p95 abs readback minus prior write % LR 0.0028 [[0. 0.]
+ [0. 0.]]
+means: label|sec|targetLR|encDistance/timeLR|cmdPWM LR|boardPWM LR|rampedR|rightFF,P,I pct|R rate-limited%,sat%
+startup only 2.448 [0.12, 0.12] [0.0058, 0.024] [10.3004, 16.5006] [9.8657, 15.9006] 0.101 [35.3378, 2.1098, 0.0] [78.0, 72.0]
+non-forward requests while moving 0 control reasons {(), ('command_timeout',)}
+
+===== right PWM plateau 3 =====
+active 8/8
+live limits,FF L/R, CPR L/R and spacing (0.13, 0.8, 9830) [0.1375, 0.2625, 3674.0, 3687.0, 0.53]
+start pose,match (0.0011773997928510584, 0.7252167262136204, -0.03396203197236753) (343, 0.9766763848396501)
+MPPI live vx,az,wz limits [0.13, 1.0, 0.8]
+swept corridor center/footprint max cost 119 253
+STOP single-wheel lag
+raw0 (1948254, 4293037038) end t, wheel travel m [2.1247 0.011  0.0596] low starts at None
+data n,period median/max,VBAT min, max abs board PWM LR 42 [0.05  0.051] 11.4 [17.76 29.24]
+return read time offset max s, median/p95 abs readback minus prior write % LR 0.0049 [[0. 0.]
+ [0. 0.]]
+means: label|sec|targetLR|encDistance/timeLR|cmdPWM LR|boardPWM LR|rampedR|rightFF,P,I pct|R rate-limited%,sat%
+startup only 2.05 [0.1212, 0.1212] [0.0054, 0.029] [8.3486, 14.6399] [7.9079, 13.9257] 0.0985 [34.4642, 1.9165, 0.0] [95.2381, 69.0476]
+non-forward requests while moving 0 control reasons {('command_timeout',), ()}
+
+===== right PWM plateau 4 =====
+active 8/8
+live limits,FF L/R, CPR L/R and spacing (0.13, 0.8, 9830) [0.16, 0.2625, 3674.0, 3687.0, 0.53]
+start pose,match (0.02902229948530387, 0.6842081396272983, -0.006767048218262068) (331, 0.9577039274924471)
+MPPI live vx,az,wz limits [0.13, 1.0, 0.8]
+swept corridor center/footprint max cost 92 253
+STOP single-wheel lag
+raw0 (1948212, 4293036946) end t, wheel travel m [2.203  0.0167 0.0676] low starts at None
+data n,period median/max,VBAT min, max abs board PWM LR 44 [0.05  0.056] 11.4 [19.92 30.  ]
+return read time offset max s, median/p95 abs readback minus prior write % LR 0.0013 [[0. 0.]
+ [0. 0.]]
+means: label|sec|targetLR|encDistance/timeLR|cmdPWM LR|boardPWM LR|rampedR|rightFF,P,I pct|R rate-limited%,sat%
+startup only 2.152 [0.1186, 0.1186] [0.0077, 0.0314] [9.202, 14.6704] [8.7316, 13.9886] 0.097 [33.9657, 1.8141, -0.0124] [88.6364, 70.4545]
+non-forward requests while moving 0 control reasons {('command_timeout',), ()}
+
+===== right PWM plateau 5 =====
+active 8/8
+live limits,FF L/R, CPR L/R and spacing (0.13, 0.8, 9830) [0.16, 0.2625, 3674.0, 3687.0, 0.53]
+start pose,match (0.037996532672097016, 0.6336033372393359, -0.0003871675097513991) (342, 0.9590643274853801)
+MPPI live vx,az,wz limits [0.13, 1.0, 0.8]
+swept corridor center/footprint max cost 92 253
+STOP heading/lateral guard
+raw0 (1948223, 4293037024) end t, wheel travel m [6.9084 0.7119 0.7022] low starts at 3.152
+data n,period median/max,VBAT min, max abs board PWM LR 138 [0.05  0.056] 11.4 [28.3 30. ]
+return read time offset max s, median/p95 abs readback minus prior write % LR 0.0042 [[0. 0.]
+ [0. 0.]]
+means: label|sec|targetLR|encDistance/timeLR|cmdPWM LR|boardPWM LR|rampedR|rightFF,P,I pct|R rate-limited%,sat%
+terminal windows t, requested duty, measured R speed [(1.9516268389998004, 0.235, 0.11199550220530109), (3.2281694499997684, 0.22249999999999998, 0.11210739616302556)]
+baseline 0.948 [0.13, 0.13] [0.1608, 0.1759] [25.3481, 29.9997] [25.5696, 29.9997] 0.13 [45.5, -1.1434, -2.5146] [0.0, 100.0]
+plateau 0.65 [0.13, 0.0671] [0.1206, 0.1125] [22.6988, 23.4993] [22.6284, 23.4993] 0.0671 [23.5, -1.2511, 0.0] [0.0, 0.0]
+plateau 0.7 [0.13, 0.0636] [0.1287, 0.1142] [23.3994, 22.248] [23.3908, 22.248] 0.0636 [22.25, -1.333, 0.0] [0.0, 0.0]
+low and restore 250ms bins t,mean targetR,actualR,count-derived R speed,cmdPWM_R,boardPWM_R,integral pct
+[-0.5, 0.13, 0.1824, 0.1826, 29.9997, 29.9997, -3.0731]
+[-0.25, 0.13, 0.187, 0.1863, 29.9997, 29.9997, -4.965]
+[0.0, 0.1244, 0.1818, 0.1815, 29.9997, 29.9997, -6.7866]
+[0.25, 0.0807, 0.171, 0.1685, 29.7085, 29.9265, 0.0]
+[0.5, 0.0671, 0.1647, 0.1631, 26.6665, 27.4148, 0.0]
+[0.75, 0.0671, 0.1577, 0.158, 23.7056, 24.0394, 0.0]
+[1.0, 0.0671, 0.1475, 0.1432, 23.4993, 23.4993, 0.0]
+[1.25, 0.0671, 0.1193, 0.1139, 23.4993, 23.4993, 0.0]
+[1.5, 0.0671, 0.1061, 0.1073, 23.4993, 23.4993, 0.0]
+[1.75, 0.0671, 0.1191, 0.1257, 23.4993, 23.4993, 0.0]
+[2.0, 0.0643, 0.1202, 0.118, 22.5935, 22.8437, 0.0]
+[2.25, 0.0636, 0.1088, 0.1095, 22.248, 22.248, 0.0]
+[2.5, 0.0636, 0.1125, 0.113, 22.248, 22.248, 0.0]
+[2.75, 0.0636, 0.1157, 0.1161, 22.248, 22.248, 0.0]
+[3.0, 0.0636, 0.1126, 0.1131, 22.248, 22.248, 0.0]
+[3.25, 0.063, 0.1158, 0.1178, 22.0496, 22.0997, 0.0]
+[3.5, 0.0629, 0.1147, 0.1119, 22.0002, 21.9996, 0.0]
+non-forward requests while moving 0 control reasons {('command_timeout',), ()}
+
+===== right PWM plateau 6 =====
+active 8/8
+live limits,FF L/R, CPR L/R and spacing (0.13, 0.8, 9830) [0.16, 0.2625, 3674.0, 3687.0, 0.53]
+start pose,match (0.19482675326244328, 0.672463161473888, 0.0027696211099341116) (336, 0.9464285714285714)
+MPPI live vx,az,wz limits [0.13, 1.0, 0.8]
+swept corridor center/footprint max cost 0 196
+STOP calibration window complete
+raw0 (1948393, 4293036982) end t, wheel travel m [9.4617 0.9016 0.7302] low starts at 3.069
+data n,period median/max,VBAT min, max abs board PWM LR 189 [0.05  0.057] 11.4 [27.88 30.  ]
+return read time offset max s, median/p95 abs readback minus prior write % LR 0.0062 [[0. 0.]
+ [0. 0.]]
+means: label|sec|targetLR|encDistance/timeLR|cmdPWM LR|boardPWM LR|rampedR|rightFF,P,I pct|R rate-limited%,sat%
+terminal windows t, requested duty, measured R speed [(2.143338734000281, 0.215, 0.046359192450600946), (3.4326971730006335, 0.2249291391707476, 0.09130819798273788), (4.714214363000792, 0.2159796960179977, 0.1082614969914425), (5.990596142999493, 0.2034796960179977, 0.028131983515258526)]
+baseline 0.95 [0.13, 0.13] [0.1586, 0.1768] [25.4976, 29.9994] [25.7086, 29.9615] 0.13 [45.5, -1.1763, -2.7868] [5.0, 100.0]
+plateau 0.651 [0.112, 0.0701] [0.0901, 0.0452] [20.1743, 21.5003] [20.0058, 21.5003] 0.0701 [21.5, 0.5941, 0.0] [0.0, 0.0]
+plateau 0.651 [0.112, 0.0733] [0.1106, 0.0933] [21.8497, 22.4921] [21.8683, 22.4921] 0.0733 [22.4929, -0.476, 0.0] [0.0, 0.0]
+plateau 0.7 [0.112, 0.0704] [0.1059, 0.1017] [21.5715, 21.5979] [21.4985, 21.5979] 0.0704 [21.598, -0.87, 0.0] [0.0, 0.0]
+plateau 0.65 [0.112, 0.0664] [0.1001, 0.0279] [24.2077, 20.3497] [24.1456, 20.3495] 0.0664 [20.348, 0.9952, 0.0] [0.0, 0.0]
+low and restore 250ms bins t,mean targetR,actualR,count-derived R speed,cmdPWM_R,boardPWM_R,integral pct
+[-0.5, 0.13, 0.188, 0.1888, 29.9997, 29.9997, -3.6495]
+[-0.25, 0.13, 0.1739, 0.1668, 29.9997, 29.9997, -5.3749]
+[0.0, 0.1211, 0.1621, 0.1643, 29.9997, 29.9997, -6.5333]
+[0.25, 0.0808, 0.1647, 0.1629, 29.1299, 29.5682, 0.0]
+[0.5, 0.0701, 0.1416, 0.1405, 25.5318, 26.2862, 0.0]
+[0.75, 0.0701, 0.1131, 0.1061, 22.1345, 22.6417, 0.0]
+[1.0, 0.0701, 0.0928, 0.0935, 21.5003, 21.5003, 0.0]
+[1.25, 0.0701, 0.0759, 0.0703, 21.5003, 21.5003, 0.0]
+[1.5, 0.0701, 0.0516, 0.0485, 21.5003, 21.5003, 0.0]
+[1.75, 0.0701, 0.0424, 0.0396, 21.5003, 21.5003, 0.0]
+[2.0, 0.0701, 0.0433, 0.0461, 21.5003, 21.5003, 0.0]
+[2.25, 0.0733, 0.0576, 0.0614, 22.4439, 22.2456, 0.0]
+[2.5, 0.0733, 0.0735, 0.0728, 22.4921, 22.4921, 0.0]
+[2.75, 0.0733, 0.0812, 0.0856, 22.4921, 22.4921, 0.0]
+[3.0, 0.0733, 0.0966, 0.0959, 22.4921, 22.4921, 0.0]
+[3.25, 0.0733, 0.0972, 0.0968, 22.4921, 22.4921, 0.0]
+[3.5, 0.0704, 0.1044, 0.1059, 21.6254, 21.8043, 0.0]
+[3.75, 0.0704, 0.1077, 0.1116, 21.5979, 21.5979, 0.0]
+[4.0, 0.0704, 0.1057, 0.1053, 21.5979, 21.5979, 0.0]
+[4.25, 0.0704, 0.1059, 0.1045, 21.5979, 21.5979, 0.0]
+[4.5, 0.0704, 0.0976, 0.0972, 21.5979, 21.5979, 0.0]
+[4.75, 0.0672, 0.0785, 0.0729, 20.6897, 20.94, 0.0]
+[5.0, 0.0664, 0.0465, 0.0456, 20.3485, 20.3485, 0.0]
+[5.25, 0.0664, 0.0337, 0.0261, 20.3491, 20.3485, 0.0]
+[5.5, 0.0664, 0.0299, 0.0334, 20.3497, 20.3497, 0.0]
+[5.75, 0.0664, 0.0282, 0.0252, 20.3497, 20.3497, 0.0]
+[6.0, 0.0696, 0.0399, 0.0434, 21.2482, 20.9986, 0.0]
+[6.25, 0.0704, 0.0349, 0.0368, 21.5979, 21.5979, 0.0]
+non-forward requests while moving 0 control reasons {(), ('command_timeout',)}
+
+===== right wheel deceleration: baseline =====
+active 8/8
+live limits,FF L/R, CPR L/R and spacing (0.13, 0.8, 9830) [0.16, 0.2625, 3674.0, 3687.0, 0.53]
+start pose,match (0.03878028454969475, 0.6244577824825549, -0.00869420636143838) (342, 0.9707602339181286)
+MPPI live vx,az,wz limits [0.13, 1.0, 0.8]
+swept corridor center/footprint max cost 92 253
+STOP decrease and restore complete
+raw0 (1948465, 4293036951) end t, wheel travel m [8.5889 0.9062 0.7818] low starts at 3.186
+data n,period median/max,VBAT min, max abs board PWM LR 172 [0.05  0.054] 11.4 [28.36 30.  ]
+return read time offset max s, median/p95 abs readback minus prior write % LR 0.0058 [[0. 0.]
+ [0. 0.]]
+means: label|sec|targetLR|encDistance/timeLR|cmdPWM LR|boardPWM LR|rampedR|rightFF,P,I pct|R rate-limited%,sat%
+baseline 0.954 [0.13, 0.13] [0.1601, 0.1774] [25.1767, 29.9997] [25.3897, 29.9997] 0.13 [45.5, -1.2367, -3.2167] [0.0, 100.0]
+down ramp 0.252 [0.13, 0.1168] [0.1333, 0.1531] [23.5186, 29.8695] [23.4733, 29.9997] 0.1224 [42.8513, -0.9197, -6.8544] [16.6667, 83.3333]
+low early 0.95 [0.13, 0.072] [0.1432, 0.1038] [22.2172, 21.7808] [22.3086, 22.3496] 0.0737 [25.8096, -0.9426, -7.2415] [80.0, 0.0]
+low late 1.35 [0.13, 0.07] [0.1192, 0.0498] [23.4584, 20.0793] [23.3855, 19.9639] 0.07 [24.5, 0.5351, -4.9557] [0.0, 0.0]
+up ramp 0.25 [0.13, 0.0808] [0.1282, 0.0818] [24.0562, 21.6631] [24.0557, 21.308] 0.078 [27.3134, -0.0776, -3.5158] [50.0, 0.0]
+restore early 0.95 [0.13, 0.1289] [0.1292, 0.1388] [24.1699, 28.6334] [24.1687, 28.2936] 0.1264 [44.252, -0.2019, -4.1686] [45.0, 100.0]
+restore late 1.351 [0.13, 0.13] [0.1142, 0.1295] [25.7891, 29.9997] [25.6669, 29.9997] 0.13 [45.5, -0.0338, -7.0005] [0.0, 100.0]
+low and restore 250ms bins t,mean targetR,actualR,count-derived R speed,cmdPWM_R,boardPWM_R,integral pct
+[-0.5, 0.13, 0.1884, 0.1859, 29.9997, 29.9997, -4.2275]
+[-0.25, 0.13, 0.1659, 0.1595, 29.9997, 29.9997, -5.7671]
+[0.0, 0.1212, 0.1577, 0.1572, 29.9997, 29.9997, -6.7762]
+[0.25, 0.083, 0.1516, 0.1518, 27.7407, 28.4909, -7.2455]
+[0.5, 0.07, 0.134, 0.1278, 23.9937, 24.7438, -7.2455]
+[0.75, 0.07, 0.0991, 0.0916, 20.2423, 20.9955, -7.2455]
+[1.0, 0.07, 0.0715, 0.0672, 17.4218, 17.6269, -7.2605]
+[1.25, 0.07, 0.0526, 0.0498, 18.0609, 17.8729, -6.9024]
+[1.5, 0.07, 0.0452, 0.0461, 19.0527, 18.927, -6.1083]
+[1.75, 0.07, 0.0442, 0.0464, 19.931, 19.7632, -5.2582]
+[2.0, 0.07, 0.0465, 0.0447, 20.6421, 20.4736, -4.486]
+[2.25, 0.07, 0.0498, 0.0508, 21.2976, 21.1792, -3.7397]
+[2.5, 0.07, 0.0679, 0.0741, 21.1969, 21.3379, -3.3573]
+[2.75, 0.083, 0.0813, 0.0829, 21.8268, 21.355, -3.5372]
+[3.0, 0.1257, 0.0887, 0.0946, 25.4634, 24.7139, -3.562]
+[3.25, 0.13, 0.1245, 0.1338, 29.0707, 28.461, -3.5936]
+[3.5, 0.13, 0.1574, 0.1604, 29.9997, 29.9997, -4.1957]
+[3.75, 0.13, 0.1654, 0.1631, 29.9997, 29.9997, -5.3231]
+[4.0, 0.13, 0.1594, 0.1579, 29.9997, 29.9997, -6.4099]
+[4.25, 0.13, 0.1408, 0.1339, 29.9997, 29.9997, -7.0682]
+[4.5, 0.13, 0.1186, 0.1164, 29.9997, 29.9997, -7.1387]
+[4.75, 0.13, 0.1129, 0.1154, 29.9997, 29.9997, -7.1387]
+[5.0, 0.13, 0.1259, 0.1278, 29.9997, 29.9997, -7.1478]
+[5.25, 0.13, 0.129, 0.1313, 29.9997, 29.9997, -7.1658]
+metric low_first 5 avg/MAE/min/max/within15mm_s [0.1047 0.0388 0.0596 0.1493 0.4   ] speeds [0.149, 0.132, 0.102, 0.081, 0.06]
+metric low_total 12 avg/MAE/min/max/within15mm_s [0.0731 0.0277 0.0428 0.1493 0.25  ] speeds [0.149, 0.132, 0.102, 0.081, 0.06, 0.048, 0.046, 0.043, 0.048, 0.047, 0.051, 0.071]
+metric restored 11 avg/MAE/min/max/within15mm_s [0.1338 0.0204 0.0901 0.164  0.4545] speeds [0.09, 0.12, 0.152, 0.164, 0.164, 0.159, 0.144, 0.123, 0.113, 0.117, 0.127]
+non-forward requests while moving 0 control reasons {('command_timeout',), ()}
+
+===== right wheel deceleration: forward curve =====
+active 8/8
+installed right forward curve and 30% cap [0.07, 0.22, 0.13, 0.3] 9830
+live limits,FF L/R, CPR L/R and spacing (0.13, 0.8, 9830) [0.16, 0.2625, 3674.0, 3687.0, 0.53]
+start pose,match (0.12043665961831432, 0.6181600631149888, -0.022631104509854755) (336, 0.9523809523809523)
+MPPI live vx,az,wz limits [0.13, 1.0, 0.8]
+swept corridor center/footprint max cost 0 196
+STOP decrease and restore complete
+raw0 (1948371, 4293037073) end t, wheel travel m [8.403  0.8926 0.7339] low starts at 2.983
+data n,period median/max,VBAT min, max abs board PWM LR 168 [0.05  0.055] 11.3 [28.21 30.  ]
+return read time offset max s, median/p95 abs readback minus prior write % LR 0.0045 [[0. 0.]
+ [0. 0.]]
+means: label|sec|targetLR|encDistance/timeLR|cmdPWM LR|boardPWM LR|rampedR|rightFF,P,I pct|R rate-limited%,sat%
+baseline 0.95 [0.13, 0.13] [0.1541, 0.155] [26.1875, 26.7901] [26.3898, 26.8778] 0.13 [29.9997, -0.6835, -2.526] [0.0, 0.0]
+down ramp 0.249 [0.13, 0.1106] [0.1518, 0.1221] [23.7266, 25.5262] [23.8634, 26.0201] 0.1174 [28.3214, -0.0804, -3.4548] [66.6667, 0.0]
+low early 0.95 [0.13, 0.0703] [0.14, 0.0727] [22.7523, 19.6022] [22.7978, 19.8018] 0.0723 [22.3008, -0.1104, -3.3386] [35.0, 0.0]
+low late 1.35 [0.13, 0.07] [0.1228, 0.0613] [23.4317, 21.0736] [23.3851, 21.0315] 0.07 [22.0, 0.2407, -1.1673] [0.0, 0.0]
+up ramp 0.25 [0.13, 0.0869] [0.1241, 0.0726] [24.0471, 22.4988] [23.9718, 21.9484] 0.0833 [23.7762, 0.3273, -0.9275] [66.6667, 0.0]
+restore early 0.95 [0.13, 0.1298] [0.1305, 0.1375] [24.0732, 27.6185] [24.0803, 27.4902] 0.1279 [29.7228, -0.1487, -1.404] [30.0, 0.0]
+restore late 1.35 [0.13, 0.13] [0.1171, 0.1171] [25.4008, 27.7496] [25.311, 27.64] 0.13 [29.9997, 0.2911, -2.5412] [0.0, 0.0]
+low and restore 250ms bins t,mean targetR,actualR,count-derived R speed,cmdPWM_R,boardPWM_R,integral pct
+[-0.5, 0.13, 0.1587, 0.1534, 25.8296, 25.898, -3.4048]
+[-0.25, 0.13, 0.126, 0.1198, 26.3881, 26.1959, -3.717]
+[0.0, 0.1157, 0.1202, 0.1184, 25.8724, 26.3295, -3.4578]
+[0.25, 0.0744, 0.1153, 0.1105, 22.2919, 23.0274, -3.4398]
+[0.5, 0.07, 0.0902, 0.0869, 18.797, 19.3518, -3.4929]
+[0.75, 0.07, 0.0649, 0.0633, 18.6108, 18.4991, -3.5245]
+[1.0, 0.07, 0.0488, 0.0452, 19.5074, 19.2553, -3.0585]
+[1.25, 0.07, 0.0491, 0.046, 20.1794, 20.0073, -2.3778]
+[1.5, 0.07, 0.0477, 0.0462, 20.9571, 20.7855, -1.6393]
+[1.75, 0.07, 0.0558, 0.0549, 21.3605, 21.3294, -1.0178]
+[2.0, 0.07, 0.0606, 0.0671, 21.6926, 21.7457, -0.5571]
+[2.25, 0.07, 0.0802, 0.0792, 20.9882, 21.0846, -0.7384]
+[2.5, 0.07, 0.0728, 0.0713, 21.0047, 20.9882, -0.9219]
+[2.75, 0.0903, 0.0712, 0.0734, 22.7888, 22.1418, -0.9241]
+[3.0, 0.1291, 0.0961, 0.1029, 26.556, 25.8052, -0.9241]
+[3.25, 0.13, 0.131, 0.1383, 28.9248, 28.8021, -0.9381]
+[3.5, 0.13, 0.1537, 0.1565, 27.9049, 28.1491, -1.4631]
+[3.75, 0.13, 0.1533, 0.1515, 27.0882, 27.2042, -2.2906]
+[4.0, 0.13, 0.1489, 0.1486, 26.5145, 26.6231, -2.9817]
+[4.25, 0.13, 0.1401, 0.1354, 26.2648, 26.2392, -3.4648]
+[4.5, 0.13, 0.116, 0.1118, 27.0363, 26.813, -3.3379]
+[4.75, 0.13, 0.0986, 0.0952, 28.3419, 28.052, -2.4942]
+[5.0, 0.13, 0.1022, 0.1041, 29.2727, 29.161, -1.4676]
+[5.25, 0.13, 0.1017, 0.1074, 29.9458, 29.8257, -0.8072]
+metric low_first 5 avg/MAE/min/max/within15mm_s [0.074  0.0192 0.0506 0.1096 0.4   ] speeds [0.11, 0.088, 0.065, 0.056, 0.051]
+metric low_total 12 avg/MAE/min/max/within15mm_s [0.0666 0.0156 0.0456 0.1096 0.5   ] speeds [0.11, 0.088, 0.065, 0.056, 0.051, 0.046, 0.049, 0.056, 0.053, 0.074, 0.079, 0.073]
+metric restored 11 avg/MAE/min/max/within15mm_s [0.1275 0.0202 0.0956 0.156  0.2727] speeds [0.096, 0.128, 0.147, 0.156, 0.152, 0.149, 0.144, 0.125, 0.106, 0.096, 0.104]
+non-forward requests while moving 0 control reasons {('command_timeout',), ()}
+
+===== right wheel deceleration: early stop =====
+active 8/8
+installed right forward curve and 30% cap [0.07, 0.22, 0.13, 0.3] 9830
+live limits,FF L/R, CPR L/R and spacing (0.13, 0.8, 9830) [0.16, 0.2625, 3674.0, 3687.0, 0.53]
+start pose,match (0.0354864092674926, 0.638207915403028, 0.037090866222343345) (339, 0.9321533923303835)
+MPPI live vx,az,wz limits [0.13, 1.0, 0.8]
+swept corridor center/footprint max cost 92 253
+STOP single-wheel lag
+raw0 (1948487, 4293036966) end t, wheel travel m [1.951  0.0617 0.0116] low starts at None
+data n,period median/max,VBAT min, max abs board PWM LR 39 [0.05  0.054] 11.4 [27. 27.]
+return read time offset max s, median/p95 abs readback minus prior write % LR 0.0038 [[0. 0.]
+ [0. 0.]]
+means: label|sec|targetLR|encDistance/timeLR|cmdPWM LR|boardPWM LR|rampedR|rightFF,P,I pct|R rate-limited%,sat%
+startup only 1.9 [0.1205, 0.1205] [0.0325, 0.0061] [13.5277, 13.5277] [12.8161, 12.8161] 0.0961 [23.4715, 2.4252, 0.0] [94.8718, 58.9744]
+non-forward requests while moving 0 control reasons {(), ('command_timeout',)}
+
+===== right wheel deceleration: forward curve repeat =====
+active 8/8
+installed right forward curve and 30% cap [0.07, 0.22, 0.13, 0.3] 9830
+live limits,FF L/R, CPR L/R and spacing (0.13, 0.8, 9830) [0.16, 0.2625, 3674.0, 3687.0, 0.53]
+start pose,match (0.05566018393967815, 0.6991479969264808, -0.029700584933943754) (336, 0.9136904761904762)
+MPPI live vx,az,wz limits [0.13, 1.0, 0.8]
+swept corridor center/footprint max cost 0 253
+STOP decrease and restore complete
+raw0 (1948331, 4293037102) end t, wheel travel m [8.4822 0.9154 0.7141] low starts at 3.052
+data n,period median/max,VBAT min, max abs board PWM LR 170 [0.05  0.055] 11.3 [27.75 29.8 ]
+return read time offset max s, median/p95 abs readback minus prior write % LR 0.007 [[0. 0.]
+ [0. 0.]]
+means: label|sec|targetLR|encDistance/timeLR|cmdPWM LR|boardPWM LR|rampedR|rightFF,P,I pct|R rate-limited%,sat%
+baseline 0.95 [0.13, 0.13] [0.1649, 0.165] [24.3403, 26.717] [24.5827, 26.87] 0.13 [29.9997, -0.889, -2.3581] [5.0, 0.0]
+down ramp 0.25 [0.13, 0.1195] [0.1349, 0.1268] [22.7109, 24.9697] [22.6854, 25.2953] 0.1225 [28.9992, -0.1272, -4.3873] [50.0, 0.0]
+low early 0.951 [0.13, 0.072] [0.1354, 0.0819] [22.205, 18.4127] [22.2341, 18.719] 0.0738 [22.5006, -0.3153, -4.5225] [40.0, 0.0]
+low late 1.351 [0.13, 0.07] [0.1259, 0.0671] [22.797, 17.5923] [22.7763, 17.5683] 0.07 [22.0, 0.0735, -4.481] [0.0, 0.0]
+up ramp 0.25 [0.13, 0.079] [0.1252, 0.068] [23.1981, 18.8228] [23.1381, 18.5359] 0.0753 [22.7069, 0.2421, -4.0174] [33.3333, 0.0]
+restore early 0.95 [0.13, 0.1289] [0.1232, 0.1151] [23.7991, 25.0082] [23.7613, 24.7092] 0.124 [29.2001, 0.3286, -3.8519] [45.0, 0.0]
+restore late 1.35 [0.13, 0.13] [0.1173, 0.1123] [25.4534, 27.092] [25.3602, 26.9508] 0.13 [29.9997, 0.4235, -3.3312] [0.0, 0.0]
+low and restore 250ms bins t,mean targetR,actualR,count-derived R speed,cmdPWM_R,boardPWM_R,integral pct
+[-0.5, 0.13, 0.1756, 0.174, 25.5708, 25.8174, -3.2106]
+[-0.25, 0.13, 0.1496, 0.1425, 25.1918, 25.1387, -4.2867]
+[0.0, 0.1245, 0.1278, 0.1279, 25.2644, 25.5049, -4.3904]
+[0.25, 0.0828, 0.1184, 0.1139, 22.0014, 22.7503, -4.3721]
+[0.5, 0.07, 0.088, 0.0865, 18.3374, 18.9819, -4.385]
+[0.75, 0.07, 0.0762, 0.0719, 17.2277, 17.2222, -4.6072]
+[1.0, 0.07, 0.0709, 0.0712, 17.3095, 17.3168, -4.6664]
+[1.25, 0.07, 0.0705, 0.0725, 17.318, 17.3394, -4.6682]
+[1.5, 0.07, 0.0662, 0.0632, 17.4474, 17.3339, -4.6529]
+[1.75, 0.07, 0.0635, 0.0664, 17.7728, 17.7844, -4.3995]
+[2.0, 0.07, 0.0742, 0.0756, 17.4682, 17.5237, -4.4209]
+[2.25, 0.07, 0.0676, 0.0639, 17.5799, 17.5036, -4.4837]
+[2.5, 0.07, 0.0608, 0.0599, 18.0212, 17.9601, -4.2236]
+[2.75, 0.0808, 0.0669, 0.069, 18.9709, 18.6346, -3.9993]
+[3.0, 0.1256, 0.0806, 0.0823, 22.0209, 21.2683, -3.95]
+[3.25, 0.13, 0.1021, 0.1097, 25.6508, 25.0386, -3.9285]
+[3.5, 0.13, 0.125, 0.1301, 26.4498, 26.5242, -3.6841]
+[3.75, 0.13, 0.1391, 0.1381, 25.9114, 26.0054, -3.8451]
+[4.0, 0.13, 0.1394, 0.1371, 25.5617, 25.5873, -4.1872]
+[4.25, 0.13, 0.1268, 0.123, 25.8211, 25.7521, -4.2637]
+[4.5, 0.13, 0.12, 0.1184, 26.2508, 26.119, -4.0148]
+[4.75, 0.13, 0.1012, 0.1016, 27.5051, 27.2463, -3.2616]
+[5.0, 0.13, 0.0951, 0.092, 28.7265, 28.4579, -2.2045]
+[5.25, 0.13, 0.0965, 0.1029, 29.7838, 29.6274, -1.1103]
+metric low_first 5 avg/MAE/min/max/within15mm_s [0.0826 0.0127 0.0698 0.1082 0.6   ] speeds [0.108, 0.086, 0.077, 0.071, 0.07]
+metric low_total 12 avg/MAE/min/max/within15mm_s [0.0735 0.0083 0.0604 0.1082 0.8333] speeds [0.108, 0.086, 0.077, 0.071, 0.07, 0.071, 0.065, 0.062, 0.072, 0.074, 0.064, 0.06]
+metric restored 12 avg/MAE/min/max/within15mm_s [0.1137 0.0202 0.082  0.1403 0.5   ] speeds [0.082, 0.1, 0.12, 0.135, 0.14, 0.139, 0.127, 0.124, 0.106, 0.102, 0.094, 0.097]
+non-forward requests while moving 0 control reasons {(), ('command_timeout',)}
+
+===== waypoint 1 =====
+active 8/8
+MPPI angular std/velocity limits [0.2, 0.13, 0.8, 1.0]
+live limits,FF L/R, CPR L/R and spacing (0.13, 0.8, 9830) [0.16, 0.2625, 3674.0, 3687.0, 0.53]
+enabled R curve [0.07, 0.22, 0.13, 0.3]
+pose, fit (0.012069261373279334, 0.575962886230987, -0.0009370786410052356) (343, 0.9475218658892128)
+path points,length,initial bearing deg,first .75m centerline max cost 225 5.650270646107501 2.3266227865559803 92
+pose, fit (0.012069261373279334, 0.575962886230987, -0.0009370786410052356) (335, 0.9552238805970149)
+path points,length,initial bearing deg,first .75m centerline max cost 225 5.650270646107501 2.3266227865559803 92
+pose, fit (0.012069261373279334, 0.575962886230987, -0.0009370786410052356) (346, 0.9393063583815029)
+path points,length,initial bearing deg,first .75m centerline max cost 225 5.650270646107501 2.3266227865559803 0
+accepted NavigateToPose (5.65,.30)
+cancel count 1
+reason: unequal forward wheel travel (0.2038, 0.0459) last map pose (4.371509859693828, 0.40358157451319865, -0.1134097836721109)
+map start/last/remaining m (0.012069261373279334, 0.575962886230987, -0.0009370786410052356) (4.406320769272462, 0.39437390899189, -0.26472311748691996) 1.247
+last elapsed,L,R net metres [38.39859939800226, 4.627222233433807, 4.491276071893626] unsigned [4.62722223 4.49127607]
+diag t,v,w,goal L/R m/s,actual L/R m/s, duty L/R %, voltage (samples) 154
+[ 0.04  0.    0.    0.    0.    0.    0.    0.    0.   11.4 ]
+[ 3.25000e+00  1.30000e-01 -1.71000e-02  1.34500e-01  1.25500e-01
+  1.79900e-01  1.53500e-01  2.76254e+01  2.70394e+01  1.13000e+01]
+[ 6.72    0.1282  0.1013  0.1013  0.1551  0.0762  0.1271 16.1809 27.7169
+ 11.3   ]
+[10.22    0.13    0.1489  0.0905  0.1695  0.1039  0.1545 19.1443 28.0679
+ 11.3   ]
+[ 1.37300e+01  1.29400e-01 -2.40000e-03  1.30000e-01  1.28700e-01
+  1.46100e-01  1.59700e-01  2.08014e+01  2.56935e+01  1.13000e+01]
+[17.2     0.13    0.0922  0.1056  0.1544  0.1076  0.1825 17.7892 26.9509
+ 11.3   ]
+[20.72    0.1264 -0.0689  0.1446  0.1081  0.1374  0.11   23.9051 26.2032
+ 11.3   ]
+[24.2     0.13    0.0726  0.1108  0.1492  0.1155  0.133  18.9428 29.9997
+ 11.3   ]
+[27.74    0.13   -0.0369  0.1398  0.1202  0.141   0.1405 24.4972 28.6905
+ 11.3   ]
+[ 3.12100e+01  1.23900e-01 -1.10000e-03  1.24200e-01  1.23600e-01
+  1.41000e-01  1.18800e-01  2.10822e+01  2.99997e+01  1.13000e+01]
+[34.72    0.1293 -0.1237  0.162   0.0965  0.1675  0.0925 29.9997 26.6884
+ 11.3   ]
+[ 3.81900e+01  1.11600e-01 -2.83000e-01  1.86600e-01  3.66000e-02
+  1.84600e-01  0.00000e+00  2.99997e+01  2.11921e+01  1.13000e+01]
+min voltage 11.3 peak v abs 0.13 duty L/R peak % [29.99969481 29.99969481]
+both forward n,median target/measured LR,median duty LR,mean duty LR,pct at cap LR 145 [0.123 0.125 0.119 0.121] [21.74 27.55] [22.56 27.12] [11.7 13.1]
+path deviation peak/last metres 0.126 0.01
+relative heading error min/max/last degrees [-15.55  14.77   6.35]
+5mm forward crossing (seconds L,R) [1.582, 1.988]
+final cmd count,max v,median v 766 0.1342 0.1288
+L targets min/max; forward-command samples with wheel negative; nonzero sign transitions [0.0387 0.1966] 0 0
+R targets min/max; forward-command samples with wheel negative; nonzero sign transitions [0.0264 0.1824] 0 0
+last Nav2 distance_remaining/recoveries 1.265710473060608 0
+native start phases [(0.03, 'off')]
+raw first 2.05 s N,Lneg,Rneg,minLR,medianV,peakAbsW 41 0 0 0.0278 0.0399 0.0686 0.0956
+raw entire run N,Lneg,Rneg,minLR,medianV,peakAbsW 768 0 0 0.0278 0.0261 0.1289 0.3214
+smoothed first 2.05 s N,Lneg,Rneg,minLR,medianV,peakAbsW 40 0 0 0.0387 0.0502 0.066 0.0898
+smoothed entire run N,Lneg,Rneg,minLR,medianV,peakAbsW 767 0 0 0.0387 0.0263 0.1288 0.3151
+final first 2.05 s N,Lneg,Rneg,minLR,medianV,peakAbsW 38 0 0 0.0387 0.0502 0.0641 0.089
+final entire run N,Lneg,Rneg,minLR,medianV,peakAbsW 766 0 0 0.0387 0.0264 0.1288 0.3151
+at startup window [0.03 2.03] commanded wheel integral m LR [0.129  0.1326] encoder m LR [0.03   0.0063] duty peak % LR [23.31 26.91]
+last 1.1 s window [37.331 38.379] commanded wheel integral m LR [0.184  0.0776] encoder m LR [0.1885 0.0368] duty peak % LR [30.   25.85]
+measured board PWM peak % LR [30. 30.]
+raw counts at start (1948484, 4293036936)
+
+===== waypoint 1 after rear caster clearance =====
+Running as unit: limbo-wp-caster-41427902-trial.service; invocation ID: 29021ed6df1f417795dfa8129f15addf
+active 8/8
+MPPI angular std/velocity limits [0.2, 0.13, 0.8, 1.0]
+live limits,FF L/R, CPR L/R and spacing (0.13, 0.8, 9830) [0.16, 0.2625, 3674.0, 3687.0, 0.53]
+enabled R curve [0.07, 0.22, 0.13, 0.3]
+pose, fit (0.042434089590560026, 0.21407504861925652, -0.018009104207760147) (347, 0.9193083573487032)
+path points,length,initial bearing deg,first .75m centerline max cost 225 5.642117698989019 -0.5369459473842925 92
+pose, fit (0.04243408959056002, 0.21407504861925652, -0.018009104207760147) (350, 0.9171428571428571)
+path points,length,initial bearing deg,first .75m centerline max cost 225 5.642117698989019 -0.5369459473842925 92
+pose, fit (0.04243408959056002, 0.21407504861925655, -0.018009104207760147) (340, 0.9323529411764706)
+path points,length,initial bearing deg,first .75m centerline max cost 225 5.642117698989019 -0.5369459473842957 92
+accepted NavigateToPose (5.65,.30)
+cancel count 1
+reason: unequal forward wheel travel (0.0427, 0.1793) last map pose (4.182751994085857, 0.15990355865342953, 0.287380191435654)
+map start/last/remaining m (0.04243408959056002, 0.21407504861925655, -0.018009104207760147) (4.190145813781751, 0.16217820183984402, 0.30931228758312906) 1.466
+last elapsed,L,R net metres [35.10647999499997, 4.192410076561077, 4.400658122691219] unsigned [4.19241008 4.40065812]
+diag t,v,w,goal L/R m/s,actual L/R m/s, duty L/R %, voltage (samples) 141
+[ 0.05  0.    0.    0.    0.    0.    0.    0.    0.   11.3 ]
+[ 2.97    0.13   -0.0495  0.1431  0.1169  0.1662  0.1315 29.6579 26.3436
+ 11.3   ]
+[6.24000e+00 1.21700e-01 8.80000e-03 1.19400e-01 1.24100e-01 1.24100e-01
+ 1.28800e-01 2.39387e+01 2.56691e+01 1.13000e+01]
+[9.49000e+00 1.29900e-01 2.17000e-02 1.24100e-01 1.35600e-01 1.44900e-01
+ 1.39200e-01 2.41401e+01 2.38136e+01 1.13000e+01]
+[12.46    0.1264 -0.032   0.1349  0.1179  0.1465  0.1206 24.5796 21.3385
+ 11.3   ]
+[15.73    0.1281  0.0425  0.1168  0.1393  0.1144  0.1319 20.3528 25.0069
+ 11.3   ]
+[18.99    0.1185  0.0358  0.109   0.128   0.1015  0.129  20.6519 25.9041
+ 11.3   ]
+[ 2.22400e+01  1.30000e-01 -2.24000e-02  1.35900e-01  1.24100e-01
+  1.42700e-01  1.17800e-01  2.31300e+01  2.25379e+01  1.13000e+01]
+[25.23    0.1227 -0.0468  0.1351  0.1103  0.1519  0.1253 23.5206 21.128
+ 11.3   ]
+[28.51    0.1293 -0.1268  0.1629  0.0957  0.1635  0.1112 26.7281 19.1717
+ 11.3   ]
+[31.73    0.1222  0.0516  0.1085  0.1359  0.0911  0.1274 16.7425 24.0242
+ 11.3   ]
+[3.50100e+01 1.19100e-01 1.55200e-01 7.80000e-02 1.60200e-01 3.45000e-02
+ 1.31000e-01 1.43254e+01 2.85867e+01 1.13000e+01]
+min voltage 11.3 peak v abs 0.13 duty L/R peak % [29.74028748 29.71892453]
+both forward n,median target/measured LR,median duty LR,mean duty LR,pct at cap LR 132 [0.125 0.129 0.128 0.131] [22.56 23.65] [22.22 23.65] [0. 0.]
+path deviation peak/last metres 0.082 0.04
+relative heading error min/max/last degrees [-16.51   9.72 -16.51]
+5mm forward crossing (seconds L,R) [1.56, 1.457]
+final cmd count,max v,median v 700 0.1339 0.1294
+L targets min/max; forward-command samples with wheel negative; nonzero sign transitions [0.0346 0.1798] 0 0
+R targets min/max; forward-command samples with wheel negative; nonzero sign transitions [0.0379 0.1887] 0 0
+last Nav2 distance_remaining/recoveries 1.496749997138977 0
+native start phases [(0.0, 'off')]
+raw first 2.05 s N,Lneg,Rneg,minLR,medianV,peakAbsW 41 0 0 0.0346 0.0462 0.0682 0.0865
+raw entire run N,Lneg,Rneg,minLR,medianV,peakAbsW 702 0 0 0.0346 0.0379 0.1294 0.218
+smoothed first 2.05 s N,Lneg,Rneg,minLR,medianV,peakAbsW 40 0 0 0.0346 0.0462 0.0679 0.0865
+smoothed entire run N,Lneg,Rneg,minLR,medianV,peakAbsW 701 0 0 0.0346 0.0379 0.1294 0.218
+final first 2.05 s N,Lneg,Rneg,minLR,medianV,peakAbsW 39 0 0 0.0346 0.0462 0.0676 0.0865
+final entire run N,Lneg,Rneg,minLR,medianV,peakAbsW 700 0 0 0.0346 0.0379 0.1294 0.218
+at startup window [0.004 2.003] commanded wheel integral m LR [0.1264 0.1478] encoder m LR [0.0335 0.0567] duty peak % LR [23.83 28.5 ]
+last 1.1 s window [34.053 35.103] commanded wheel integral m LR [0.0712 0.1701] encoder m LR [0.0369 0.1619] duty peak % LR [16.54 28.59]
+measured board PWM peak % LR [30. 30.]
+raw counts at start (1948886, 4293036376)
+Finished with result: success
+Main processes terminated with: code=exited/status=0
+Service runtime: 56.899s
+CPU time consumed: 41.160s
+Memory peak: 259.1M
+Memory swap peak: 0B

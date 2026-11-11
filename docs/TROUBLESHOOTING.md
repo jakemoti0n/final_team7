@@ -9,6 +9,7 @@
 - [주행·위치 추정](#주행위치-추정)
 - [시뮬레이션](#시뮬레이션)
 - [인지(person_detector)](#인지person_detector)
+- [실물(Jetson·RoboClaw·센서)](#실물jetsonroboclaw센서)
 - [빌드·git](#빌드git)
 - [개발 환경(노트북)](#개발-환경노트북)
 - [리팩터링 이전 (README에 있던 내용)](#리팩터링-이전-readme에-있던-내용)
@@ -268,6 +269,143 @@
   2. `geometry.too_narrow_for_person`: person 박스의 실제 폭(픽셀 폭+2 × 거리 ÷ 초점 거리)이 0.15 m 미만이면 버림(판 가장자리 세로 띠 17 px·1.5 m = 0.11 m를 person 0.69로 보고 추적까지 됐음). leg 박스는 제외
 - **확인**: 시뮬 녹화 같은 프레임에 적용 — 노드가 사람으로 봤던 검은 판 박스 평면 1.00·무늬 0.0 → 버림, 사람 장면 person 박스 151개(큰 것) 평면 중앙값 0.09·최대 0.84, 무늬 최소 3.0·중앙값 39 → 전부 유지, 469개 중 잘못 버린 것 0. 폭 하한에 걸리는 사람 박스는 4.6~4.9 m의 7 px짜리뿐이라 ±2 px 여유로 살림. 회귀: 손님 4/4×3(복구 0), 상자 4/4×2(최소 0.29~0.32 m), 순찰 3/3(180~186 s). 단위 시험 8개
 - **진단**: 버린 박스는 `/person_detector/boxes` JSON의 `surface`에 [x1,y1,x2,y2,평면 비율,무늬]로 남고, 주석 영상에 회색 `surface plane:.. tex:..`로 그려짐. 실물에서 사람을 잘못 버리면 이 값으로 `person_detector.yaml`의 `surface.*`를 조정
+
+## 실물(Jetson·RoboClaw·센서)
+
+### 실물 비용 지도·충돌 감시가 라이다 높이 0.84~1.0 m 띠만 봄(0.84 m 아래 물체가 안 찍힘) — pcl_ros 복셀 노드의 기본 z 자르기 — 2026-11-10
+- **증상**: 루프 13·14 bag의 `/mid360/points_costmap`(5 cm 복셀, 변경 기록 65)에서 가장 낮은 점이 거리와 상관없이 높이 0.84 m. 0.5 m 상자·쓰레기통·사람 다리가 라이다 쪽 비용 지도에 전혀 안 들어가고, 라이다 몸체 점(중심 8~38 cm)은 0.84~0.91 m라 통과
+- **원인**: `pcl_ros filter_voxel_grid_node`는 `leaf_size`만 줘도 기본값 `filter_field_name: z`, `filter_limit_min/max 0~1`로 **센서 좌표 z 0~1 m만 남긴다**(노드를 따로 띄워 `ros2 param get`으로 확인). 라이다 원점이 0.837 m라 그 아래가 전부 버려짐. 11-09에 복셀을 넣으면서 이 기본값을 끄지 않았다
+- **해결**: `start_mid360.launch.py`의 `mid360_costmap_voxel`에 `'filter_field_name': ''` 추가(높이 거르기는 비용 지도의 `min/max_obstacle_height`가 맡음). 테스트 `test_costmap_lidar_voxel_keeps_every_height`
+- **확인**: 젯슨에서 한 장 집계 → 높이 0.60~0.84 m 점 0 → 410개. 한 바퀴(순찰 1)에서 새로 들어온 0.84 m 아래 점이 지도상 빈 바닥에 찍힌 비율 0.1~0.8 %(왼쪽·위·아래 복도), 오른쪽 복도 3 %는 정수기·쓰레기통·탁자 다리(실물). 카메라 복셀(`real_rgbd_voxel`)도 같은 기본값이지만 카메라 표시 거리가 1 m라 결과가 같아 그대로 둠
+
+### 빈 복도·코너에서 로봇이 앞이 비었는데 1~3분 서서 좌우로 돎(W1 코너 87~182 s) — NavFn(A*) 전역 경로 떨림 + MPPI `enforce_path_inversion` — 2026-11-10
+- **증상**: 순찰 4~6에서 W1 코너 통로(13.5, 0.0) 근처에 서서 방향만 10°↔114° 왕복, `Failed to make progress` 10 s마다, 복구 Spin 반복. 그 순간 로봇 발판 비용 0, 앞 1 m 비용 0, 라이다 최근접 점 1.6 m 뒤(장애물 없음), 제어기 출력 `cmd_vel_nav` 자체가 0. 사용자 사진(route1·2)도 빈 공간에서 멈춘 장면
+- **원인**: `/plan`을 뽑으면 로봇 앞 3~7 cm에서 시작하는 **되꺾임이 수백 개**(순찰 5 46 s: 299개, 길이 24.6 m로 부풀어 보임; 순찰 6 150 s: (13.62, 0.21)↔(13.62, 0.23) 2 cm 왕복 374개). NavFn `use_astar: true`가 팽창 띠가 겹쳐 비용이 평평한 자리에서 내리막 따라가기가 흔들린 것. 여기에 MPPI `enforce_path_inversion: true`(10-14 시뮬 되돌이용)가 첫 되꺾임에서 경로를 자르고 `inversion_xy_tolerance 0.2`·`inversion_yaw_tolerance 0.4` 안에 들어올 때까지 정지. 경로 점 yaw는 전부 0이라 로봇이 +36°로 서 있으면 영영 못 채움. 재계획(3 s)에서 깨끗한 경로가 오면 출발 → 바퀴마다 29/110/87/182 s로 들쭉날쭉
+- **확인한 반례**: W1 통과 판정(0.7 m) 실패 가설 — 네 바퀴 모두 W1을 0.07~0.14 m로 지났고 되돌아가는 경로 0개. 탁자 깜빡임 가설 — 탁자를 지도에 넣은 순찰 6이 더 나빠짐(182 s)
+- **해결(진행 중)**: 순찰 7에서 `enforce_path_inversion: false`만 끄자 W1 코너 11 s(정지 0)로 풀림 → 원인 확정. 그러나 W3 코너에서 224 s 제자리 회전(3766°): 로봇이 W3(0.4, 9.8)를 1.2 m 남기고 먼저 꺾어 통과 반경 0.7 m 밖 → 경로가 W3까지 갔다 되돌아오는 진짜 머리핀(되꺾임 1개, 1.1~1.3 m 앞)이고, 처리를 끄니 MPPI가 머리핀을 따라가려다 돎. **되꺾임 처리는 머리핀용으로 필요**하므로 다시 켜고, 떨림은 계획기에서 줄인다(`use_astar: false` 또는 Smac), 머리핀은 통과 반경·W3 위치로 없앤다. 판단 지표는 경로 되꺾임 수(`plancusp.py` 방식)
+- **교훈**: 10-15에 시뮬 계산 시간(A* 1~2 ms vs 다익스트라 2~6 ms)만 보고 A*로 바꿨고 경로 품질은 안 쟀다. 실물 설정은 그걸 그대로 가져왔다
+
+### 지나가기 순찰(`navigate_through_poses`)이 출발 직후 "도착"으로 끝남(9 s, 로봇 안 움직임) — 경로 끝점이 출발점과 같음 — 2026-11-10
+- **증상**: 경유점 W1·W2·W3·W4(pass) → HOME(stop)을 `patrol_node`로 보내면 `bt_navigator: Begin navigating … through 5 poses to (0.74, -0.04)` 0.04 s 뒤 `controller_server: Reached the goal!` → `Goal succeeded` → `Patrol mission completed`. 두 번 반복해도 같음
+- **원인**: Nav2 지나가기 주행의 도착 판정(`general_goal_checker`, xy 0.25 m·yaw 0.25 rad)은 **전역 경로의 끝점**만 본다. 중간 경유점을 지났는지는 보지 않는다(`RemovePassedGoals`는 지난 점을 목록에서 빼는 일만 함). 로봇이 HOME에서 출발하는데 경로 끝도 HOME이라 즉시 도착. 시뮬 경유점 파일(`aischool_loop_waypoints.yaml`)이 A만 stop으로 둔 것도 같은 이유였다
+- **해결**: 한 바퀴를 출발점≠끝점인 두 구간으로 나눔 — W1·W2 pass → **MID stop**(위 복도 한가운데 (6.5, 9.5), 진행 방향 180°라 회전 없이 감속만) / W3·W4 pass → HOME stop. `limbo_patrol/config/real_loop_waypoints.yaml`(변경 기록 67). `patrol_node`는 마지막 경유점이 stop이어야 하므로 HOME은 파일 맨 뒤
+- **확인**: 순찰 1 한 바퀴 264 s 완주(`Begin navigating … through 3 poses to (6.50, 9.50)` → 성공 → `… to (0.74, -0.04)` → 성공)
+
+### 스크립트 안에서 `&`로 띄운 `ros2 bag record`가 Ctrl+C(SIGINT)를 무시해 기록이 안 닫힘(열린 mcap은 읽기 실패) — 2026-11-10
+- **증상**: `bash 스크립트.sh` 안에서 `ros2 bag record … &`로 띄운 기록에 PID로 `kill -INT`를 보내도 계속 돈다(`/proc/<pid>/status`의 `SigIgn`에 SIGINT). 그동안 `rosbag2_py`로 열면 `Could not open … with 'mcap'. Error: read failed`
+- **원인**: 비대화형 셸이 뒤에 띄운 작업은 POSIX 규칙대로 SIGINT·SIGQUIT를 무시(SIG_IGN)한 채 시작되고, 자식은 그 상태를 물려받는다. 같은 기록을 `setsid -f`로 띄우면(루프 15) SIGINT가 먹었다
+- **해결**: 스크립트 안의 기록은 `setsid -f ros2 bag record …`로 띄우고 PID를 `ps`로 찾아 `kill -INT`. 이미 무시 상태로 돈 기록은 PID에 **SIGTERM**(rosbag2가 잡아서 정상 종료, `SigCgt`에 있음) — PM 승인 뒤 1회 사용
+- **확인**: SIGTERM 1 s 뒤 종료, `metadata.yaml` 생성, 290 s 기록이 정상으로 읽힘. 이후 3왕복·2왕복·순찰 기록 11개 모두 SIGINT로 닫힘
+
+### 오른쪽 위 코너(W2→W3)에서 AMCL이 로봇을 벽 너머로 1~1.5 m 끌어올려 목표 중단(4바퀴 중 3번) — 손으로 밀어 만든 지도의 복도 길이 오차 + 열린 문 — 2026-11-09
+- **증상**: W2(코너) 도착 뒤 W3로 꺾는 순간 스캔 일치율이 46 → 31 → 29 %로 떨어지고 AMCL 위치가 (11.0~11.4, 9.3~9.85), 지도상 위 복도 윗벽 너머로 올라간다. 로봇은 실제로 복도 코너에 서 있음(사용자 확인). `GridBased plugin failed to plan from (11.05, 9.07) … Failed to create plan with tolerance of: 0.500000` → 복구(후진·회전)도 `Collision Ahead` → 40~58 s 뒤 ABORTED. 17:40쯤(루프 8)은 같은 지도로 통과(코너 일치 77~89 %), 18:25 이후 루프 9·10·12 실패, 11만 통과
+- **원인**: 둘이 겹침
+  1. **지도 길이**: 11-05 지도(손으로 밀며 slam_toolbox)의 오른쪽 복도가 바퀴 odom보다 12~14 %(지도 5.00 m 대 odom 5.59~5.68 m, 3바퀴 모두), 위 복도가 약 16 %(6.00 대 7.00 m) 짧다. 바퀴 odom은 줄자와 1~1.5 % 일치. 벽이 진행 방향과 나란한 복도에서 AMCL은 앞뒤 위치를 odom에 기대므로, 실제 코너에 닿을 때 지도상으로는 이미 코너를 약 1 m 지나 벽 너머에 있다. 코너 벽 모양을 보고 0.6~1 m를 되돌려야 하는데 성공할 때(루프 8·11)와 못 할 때(9·10·12)가 갈린다
+  2. **열린 문(악화 요인)**: W2→W3와 W3→W4(유리) 문이 18시 이후 복도 쪽으로 직각으로 열려 있었다(사용자 확인). 루프 8과 10의 같은 자리 스캔을 겹치면 10에서는 위 복도 윗벽 대신 문틀 너머 약 1 m 뒤 교실 벽이 잡힘 → 코너 모양이 지도와 더 달라 되돌림이 실패
+  - AMCL 설정 탓이 아닌 근거: 수동 한 바퀴 bag을 AMCL과 독립으로 재추적(odom 예측 + 스캔-지도 ±0.25 m·±6° 국소 맞춤)해도 기존 지도에서는 같은 코너에서 일치 37~43 %로 떨어지고 위로 끌려간다
+- **해결**: 원점 출발·복귀 수동 한 바퀴 bag(`~/limbo_bags/manual_loop2_1109`)으로 오프라인 SLAM(아래 항목) → 원점 주변(x −1.6~6, y −1.2~3) 벽을 ICP로 기존 지도에 맞춰 같은 좌표로 회전·저장 → `maps/real_open_space_20261109`. 경유점은 로봇이 지나간 복도 중심으로 다시 잡음(오른쪽 복도 +1.1 m, 위 복도 +1.8 m 바깥, 변경 기록 66). 떠 있는 런치에는 `ros2 service call /map_server/load_map nav2_msgs/srv/LoadMap "{map_url: <yaml>}"`로 바로 바꿀 수 있다(AMCL `Received a 680 X 560 map`, 전역 비용 지도 `StaticLayer: Resizing costmap to 680 X 560` 확인)
+- **확인**: 지도 만들 때 안 쓴 bag(루프 11·12)을 새 지도로 재추적 → 일치 평균 95 %·최저 82~86 %·코너 96 %(기존 지도 72 %·21 %·41 %). 새 지도로 자율주행 2바퀴 완주(문 열림 324 s, 문 닫힘 313 s), 코너 일치 86~93 %
+- **남은 것**: 새 지도는 문이 열린 상태로 만들어 W2→W3 문짝이 벽 선으로 들어가 있다 → 문틀·문짝 범위를 "모름"으로 비울 것. 오른쪽 복도는 새 지도도 odom보다 5.5 % 짧게 추적됨(줄자로 확인). **주의**: 일자 복도 구간의 "AMCL 이동량 대 odom" 비교는 AMCL이 odom을 따라가므로 지도 정확도의 근거가 못 된다(아래 복도가 1~2 %로 나온 것은 의미 없음). 코너·문·기둥처럼 앞뒤를 잡는 특징이 있는 구간에서만 길이 오차가 드러난다
+
+### bag으로 오프라인 SLAM을 돌렸는데 지도가 안 만들어짐(`map_saver: Failed to spin map subscription`) — Jazzy slam_toolbox 수명 주기 활성화 + 재생 `/tf_static` QoS — 2026-11-09
+- **증상**: 노트북에서 `ros2 run slam_toolbox sync_slam_toolbox_node --params-file slam_real.yaml -p use_sim_time:=true` + `ros2 bag play <bag> --clock 100`을 끝까지 돌려도 노드 로그는 `Node using stack size …` 한 줄뿐, `/map` 없음. 런치로 바꾼 뒤에는 `New publisher discovered on topic '/tf_static', offering incompatible QoS … DURABILITY_QOS_POLICY`가 찍히고 여전히 지도 없음
+- **원인**: ① Jazzy의 slam_toolbox 노드는 수명 주기 노드라 `ros2 run`으로만 띄우면 비활성 상태로 스캔을 안 받는다. ② `ros2 bag play`는 `/tf_static`을 휘발성(volatile)으로 다시 내보내는데 tf 리스너는 transient_local을 요구해 정적 TF(`base_footprint → mid360_link`)를 못 받음 → 스캔을 로봇 좌표로 못 옮겨 전부 버림. ③ 주행 bag의 `/tf`에는 AMCL의 `map → odom`이 들어 있어 SLAM의 `map`과 충돌한다
+- **해결**: (1) bag에서 `/scan /tf /tf_static /odom`만 새 bag으로 옮기며 `/tf`의 `frame_id == 'map'` 변환을 뺀다(rosbag2_py Reader→Writer). (2) `ros2 launch slam_toolbox online_sync_launch.py slam_params_file:=…/slam_real.yaml use_sim_time:=true autostart:=true`. (3) `ros2 bag play <새 bag> --clock 100 --qos-profile-overrides-path <yaml>`, yaml은 `/tf_static: {depth: 1, durability: transient_local, reliability: reliable, history: keep_last}`. (4) 재생이 끝나면 `ros2 run nav2_map_server map_saver_cli -f <이름> --ros-args -p use_sim_time:=true -p map_subscribe_transient_local:=true`. 젯슨과 섞이지 않게 `ROS_DOMAIN_ID`를 다른 번호로, `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`
+- **확인**: 노드 로그에 `Registering sensor: [Custom Described Lidar]`, 재생 219 s 뒤 `Map saved successfully`, 고리가 닫힌 ㅁ자 지도. 런치가 활성화를 두 번 요청해 `Unable to start transition 3 from current state active`가 한 번 찍히는 것은 무해
+
+### 주행 중 load 5~7(코어 6), 제어 주기 20 → 11 Hz, 계획기 응답 timeout으로 목표 중단 — 전밀도 라이다 점군을 비용 지도 2개가 각각 처리 — 2026-11-09
+- **증상**: 복도 주행 중 load1 4.5~6.5, `Control loop missed its desired rate … 11.6 Hz`, MPPI `Optimizer fail to compute path` 반복(중간 멈춤·후진), 도착 방향 회전 중 `Timed out while waiting for action server to acknowledge goal request for compute_path_to_pose` → 목표 ABORTED, collision_monitor TF 외삽 실패로 정지. YOLO는 꺼진 상태
+- **원인**: `/mid360/points_filtered`가 18.5k점·10 Hz·5.6 MB/s로 거의 전밀도(몸체 상자만 제거)인데 로컬·글로벌 비용 지도(mark·clear 각각)와 충돌 감시, 스캔 변환 6곳이 각자 DDS로 받아 풀고, 비용 지도 2개가 5 cm 격자에 18.5k점을 매초 10번 넣고 광선으로 지움. 주행 중 controller_server 평균 41 %·최대 59 %
+- **해결**: `start_mid360.launch.py`(mounted)에 `pcl_ros filter_voxel_grid_node`(leaf 0.05) → `/mid360/points_costmap`(1,014점·270 KB/s). `build_real_configs.py`가 실물 프로필의 비용 지도·충돌 감시 소스를 그 토픽으로. 원본·`/scan`·AMCL은 그대로
+- **확인**: 같은 조건 주행에서 load1 최대 6.5 → 3.9, 최적화 실패 0, 한 바퀴 구간 시간 단축. **안 줄어든 것**: 정지 상태 Nav2 노드 합계 90 → 85 %(lifecycle_manager 16 %, bt_navigator 10 % 등 할 일 없이) — 점군과 무관한 노드 자체 소모, 별도 조사. 컴포지션(`composition:=true`)은 정지 80 %로 10 %만 절감
+- **주의**: 컴포지션 컨테이너에는 params 파일을 따로 줘야 한다. 안 주면 `local_costmap`이 설정 없이 기본 레이어(static·obstacle·inflation)로 떠 STVL이 빠지고, MPPI 비용 심판이 "Inconsistent configuration in collision checking" 뒤 세그폴트(exit −11)로 컨테이너가 죽는다
+
+### 유리문 앞에서 카메라가 정면 1.0~1.22 m에 0.5 s짜리 가짜 벽을 찍음 — 스테레오가 유리에 비친 로봇 자신을 봄 (미해결 포함) — 2026-11-09
+- **증상**: 한 바퀴마다 같은 자리(오른쪽 복도 y≈5.5~6.5, 왼쪽 복도 y≈4, W1 진입)에서 MPPI `Optimizer fail to compute path`가 1초에 6~7회 뭉치고 로봇이 좌우 60°씩 비틀거나 후진. 사용자 확인: 그 자리에 **유리문**이 있음
+- **원인(확인된 부분)**: bag(`~/limbo_bags/glass_1109`)에서 비튼 순간을 꺼내면 카메라 점군에 정면 0.95~1.22 m·폭 0.6~0.9 m·높이 0.3~1.05 m 덩어리가 139~250점 나타났다 0.5 s 만에 0이 되고, 같은 순간 라이다 점군에는 그 자리에 아무것도 없다. 거리(유리 거리 0.5~0.6 m의 2배)·폭·높이가 로봇 몸통과 맞아 유리에 비친 로봇 거울상으로 판단. 팀원 `near_depth_filter.py`는 깊이 ≤1.0 m만 지우고 "큰 면은 통과"시키므로 1.0~1.22 m 덩어리는 그대로 비용 지도(STVL `rgbd_mark`, 표시 거리 4.5 m)에 들어가 팽창 0.45까지 더해 좁은 복도를 막는다
+- **한 것**: 실물 프로필 `rgbd_mark.obstacle_range` 4.5 → 1.0 m(카메라 역할 = 라이다 사각의 가까운 낮은 장애물). 적용 후 W1→W2 1회: W2 49 s로 빨라졌지만 최적화 실패 9/11회 그대로 → **카메라만이 원인이 아니거나 0.95~1.0 m 경계가 남음**
+- **확인(남은 일)**: 모든 주행에 bag을 켜고(`ros2 bag record /mid360/points_costmap /rgbd_camera/points /tf /tf_static /amcl_pose /local_costmap/costmap /plan /cmd_vel_nav /scan`) 실패 한 건마다 그 시각의 비용 지도·점군·경로를 그려 센서/경로 교체 중 어느 쪽인지 특정. 근본 처리 후보: OAK 장치 내 스테레오 신뢰도·LR 체크, 시간 일관성(두세 프레임 연속) 필터, 지도에 유리 구간 표시. 딥러닝 문제가 아니라 센서 물리·기하 문제다
+
+### 좁은 복도(폭 1.5 m)에서 멈칫·후진 반복, `Optimizer fail to compute path` 뭉치 — 로컬 비용 지도의 정적 지도 층이 어긋난 벽을 들여옴 — 2026-11-09
+- **증상**: 위 복도 11.6 m에 95 → 136 → 185 s. 멈춘 구간에 `Optimizer fail to compute path` 6~13회, 제어 주기 7.6 Hz까지, TF 외삽 오류·충돌 감시 정지 1회. 아래 복도(폭 3 m)에서는 같은 설정으로 문제 없음
+- **원인**: 멈춘 구간에서 controller_server CPU가 13~30 %(순항 55~60 %)로 **낮았다** → 계산이 밀린 게 아니라 MPPI 후보가 전부 충돌로 판정돼 즉시 실패. 로컬 비용 지도 플러그인에 `static_layer`가 있어 지도 벽이 로컬 회피에 들어오는데, 손으로 밀며 만든 지도는 벽이 실제보다 20~30 cm 안쪽인 곳이 있다(원점 뒤 벽: 라이다 0.95 m, 비용 지도 0.62 m). 폭 1.5 m 복도에서 로봇 반폭 0.3 + 팽창 0.45 = 0.75를 빼면 여유가 0이라 지도 벽이 20 cm만 틀어져도 로봇이 "벽 안"
+- **해결**: `build_real_configs.py`가 실물 로컬 비용 지도에서 `static_layer`를 뺀다(센서 STVL·사람 층·팽창만). 지도 벽은 글로벌 계획에만. 이동창 로컬 비용 지도에 정적 층을 안 두는 것이 Nav2 표준 구성이기도 하다
+- **확인**: 한 바퀴 4차(0.4 m/s)에서 구간 시간·최적화 실패 횟수 비교(변경 기록 65). 재지도로 지도 오차 자체도 줄일 것
+
+### 목표 주행 뒤 줄자 거리가 로봇 odom과 2 m 차이 — 복도에서는 AMCL 일치율이 앞뒤 위치를 보증하지 않는다 — 2026-11-09
+- **증상**: 6 m 목표 주행 뒤 줄자 7.39 m, odom·AMCL 5.3 m(스캔 일치 99 %). 바로 뒤 같은 속도(0.25 m/s) 6 m 직진 시험은 줄자와 1.5 % 일치, 0.1 m/s 2 m도 1.1 %
+- **원인(판단)**: 로봇 거리 측정은 정상(바퀴 카운트 L 5.35/R 5.39 m, 속도 상한 0.25 m/s × 움직인 25 s ≤ 6.2 m라 7.39 m는 물리적으로 불가). 기준점(출발선 또는 6 m 표시)이 달랐다고 보고 종결. 단, 이 과정에서 드러난 사실: 벽이 진행 방향과 나란한 복도에서 AMCL 스캔 일치율은 **옆 위치·방향만** 구속하고 **앞뒤 위치는 odom을 따라간다**. 일치율 99 %가 x 위치의 정답을 뜻하지 않는다
+- **해결**: 거리 검증은 `straight_run.py`(odom) + 줄자로 같은 속도에서 직접. 위치 추정의 앞뒤 오차는 복도 끝·문·기둥 같은 x 방향 특징이 보일 때만 잡힌다 — 재지도 때 그런 특징이 지도에 남도록 할 것
+- **확인**: 같은 날 두 번째 바퀴 끝에 AMCL이 180° 뒤집힌 가설(일치 66 %)에 눌러앉은 것도 같은 성질(앞뒤 대칭 복도). `tools/drive/pose_search.py X Y`(위치 ±0.6 m·방향 5° 간격 전수 비교)로 실제 자세를 찾아 다시 초기화
+
+### 목표가 등 뒤에 있으면 제자리 회전에 30 s, 10 s마다 "Failed to make progress" — MPPI 좌우 대칭 + 이동만 세는 진행 감시기 — 2026-11-08
+- **증상**: 6 m 직진 뒤 복귀 목표(180° 반대)를 주면 로봇이 0.05~0.1 rad/s로 찔끔찔끔 돌고, 10 s마다 "Failed to make progress"→복구 동작(비용 지도 지우기·회전·후진)이 끼어들어 180° 도는 데 29~30 s. 제자리 회전 목표만 주면(위치 같고 방향만 180°) 7 s에 0.57 rad/s로 멀쩡히 돎
+- **원인**: 둘이 겹침. ① MPPI는 샘플 2,000개의 비용 가중 평균으로 명령을 내는데 경로가 정반대면 좌·우 회전 비용이 거의 같아 평균이 0 근처에서 상쇄된다(1 s 단위 기록: 0°→80° 22 s 동안 명령 0.04~0.10, 80° 아래부터 0.37로 가속, 145°부터 전진). 바퀴·평활기는 명령=실측으로 따라옴. ② 진행 감시기 `SimpleProgressChecker`는 10 s에 0.5 m **이동**만 보고 회전은 진행으로 안 쳐서 느린 회전이 매번 실패 처리
+- **해결**: `nav2_params.yaml` → `FollowPath`를 `RotationShimController`(Nav2 표준, MPPI와 같은 패키지 버전 1.3.13)로 감싸고 `primary_controller`에 MPPI. 45° 이상 어긋나면 제자리에서 주행 노드 상한 0.8 rad/s로 돌고 MPPI에 넘김. 진행 감시기는 `PoseProgressChecker`(이동 0.5 m 또는 회전 0.5 rad). 값은 `build_real_configs.py`가 drive.yaml 한계에서 채움. MPPI 심판 가중치(PathAngleCritic 2)는 안 건드림 — 근거 없는 숫자 맞추기가 되기 때문
+- **확인**: 11-08 주행 6: 180° 회전 6 s(명령·실측 0.8 rad/s), 45° 남았을 때 MPPI 인계, 5 m 주행 ±7°, 진행 없음 0회, 29 s 도달. `tools/drive/nav_preflight.py --goal X Y`가 목표 쪽 비용을 보므로 등 뒤 목표도 점검 가능
+
+### 주행 중 발밑에 장애물이 켜졌다 꺼졌다 하며 제자리에서 ±90° 흔듦 — 라이다가 로봇 윗부분(뚜껑 추정)을 봄 — 2026-11-08
+- **증상**: 복귀 주행 15 s 뒤 전진 0.03 m/s로 떨어지고 좌우 ±90° 흔들며 "Failed to make progress". 로컬 비용 지도 로봇 반경 0.45 m 안 최대 비용이 1 s마다 0↔99~100으로 깜빡임(이전 주행에서도 간헐적으로 켜졌다 꺼짐)
+- **원인**: `/mid360/points_filtered`에 로봇 중심 0.23~0.7 m, 높이 0.80~1.37 m 점 1,330개(가장 가까운 점 (−0.20, +0.11, 0.84)). 몸체 필터(`MID360s_mount.json`)는 45×45 cm·높이 0.79 m(+1 cm)까지만 지우고, 비용 지도는 라이다 점을 높이 1.0 m까지 장애물로 찍으므로 0.80~1.0 m 점이 로봇 발밑 막힌 칸이 된다. 윗판(0.79 m)보다 위에 있는 것 = 11-04 팀원 메모 "lid must remain closed"의 뚜껑으로 추정(열림·주행 진동으로 들썩이면 깜빡임이 설명됨). 사람은 아니었음(확인)
+- **해결(예정)**: 바퀴 수리 후 뚜껑 닫힘을 확인하고 0.7 m 안 라이다 점이 0인지 본 뒤 결정 — 뚜껑 고정 또는 몸체 필터 높이 상향(설계 결정, PM)
+- **확인**: `python3 tools/drive/near_obstacles.py` — `/scan`·카메라·`/mid360/points_filtered`의 2 m 안 점과 로컬 비용 지도 막힌 칸을 base_footprint 기준으로 나열해 어느 센서인지 가른다. 뚜껑 닫고 0.7 m 안 라이다 점 0이어야 함. 점검 도구에 "로봇 반경 0.5 m 안 라이다 점 0개" 항목 추가 검토
+
+### Nav2 목표를 주면 좌우로 머리를 흔들다 "Failed to make progress" — 카메라 가짜 근거리 점이 1 m 앞 가상 벽 — 2026-11-07
+- **증상**: 바퀴·odom·위치 추정이 다 맞는데(스캔 일치 90 %) 목표를 주면 MPPI가 전진 0.03 m/s에 회전 ±0.4 rad/s로 좌우 40°씩 흔들고 10 s 안에 0.5 m를 못 가 중단. 11-06 팀원 로그에도 "첫 0.75 m 경로 중심선 최대 비용 92"
+- **원인**: 로컬 비용 지도에 로봇 정면 1 m, 복도 폭 전체의 비용 99 띠. 점군을 base_footprint로 바꿔 보니 카메라(OAK) 점 150개가 정면 0.5~1.25 m·높이 0.3~1.0 m에 뭉쳐 있고 앞을 비워도 그대로 — 스테레오 깊이의 가짜 근거리 점(짝 오인). 팀원이 그걸 지우는 `near_depth_filter.py`를 만들었지만 런치 기본값 `filter_near_depth=false`로 꺼 둔 채였다
+- **해결**: `start_real.launch.py`·`start_rgbd_points.launch.py` 기본값 `true`. 켜면 깊이 영상 1 m 안 0 %, 점군 비어 있음(비용 지도는 카메라 점을 1 m 안쪽만 쓰므로 정상)
+- **확인**: `tools/drive/nav_preflight.py`가 "정면 2 m·높이 0.3 m 아래 카메라 점 0개"와 "목표 쪽 0.3~1.5 m 최대 비용 < 50"을 검사한다. 11-08 필터 켠 상태로 6 m 목표 주행 4회 도달(±4~7°, 진행 없음 0회)로 확인
+
+### AMCL이 초기 위치와 다른 자리에 눌러앉음 (ㅁ자 복도·유리벽) — 2026-11-07
+- **증상**: `/initialpose` (0, 0.3, 0°)를 줘도 AMCL이 (−0.9, −0.35, 22°) 등으로 수렴. 로봇을 1 m 옮겨도 같은 곳. 그 상태로 Nav2를 띄우면 경로가 벽을 지나 계획 실패·복구 회전만 반복
+- **원인**: 지도가 ㅁ자 복도라 비슷한 단면이 많고 유리벽으로 새어 나간 빗살이 많아, 스캔이 그럴듯하게 맞는 자리가 여럿. 로봇이 지도 −x 방향을 보고 있었는데 0°로 초기화한 경우(두 번) AMCL이 가까운 가짜 해에 수렴
+- **해결**: 초기화 뒤 반드시 스캔 일치율을 본다. 맞으면 80~90 %, 틀리면 29~41 %. 틀리면 로봇 방향·자리를 다시 보고 초기화. 지도 원점에서 +x(초록)를 보게 놓는 것이 11-06 팀원 시험과 같은 조건
+- **확인**: `nav_preflight.py` 2번 항목(기준 70 %). 원점에서 지도 −x 쪽은 0.3 m 앞이 벽으로 그려져 있어 목표를 그쪽에 주면 계획 자체가 안 된다
+
+
+### 자율주행에서 한쪽 바퀴가 서고 출발에 1.5~2 s 걸리며 방향이 ±15° 틀어짐 — 2026-11-07
+- **증상**: 11-06 Nav2 목표점 주행 2회 모두 4.2~4.4 m에서 좌우 이동량 불균형으로 중단. 출발 지연 1.5~2.0 s, 0.25 m/s 명령에 실측 0.16 m/s, 0.03~0.07 m/s 목표에서 오른쪽 바퀴가 수 초씩 섬. 키보드(0.1 m/s 고정)로는 잘 감. "오도메트리가 틀어진다"고 보고됐지만 odom 방향은 AMCL과 0.4~3.8° 안에서 일치했음
+- **원인**: 젯슨 쪽 PI(50 ms 주기 + 시리얼 지연 100~150 ms)는 지연 때문에 약하게(kp 0.02, ki 0.10) 둘 수밖에 없고 출력 변화율을 15 %/s로 묶어 두어, 구르기 시작에 20 % 이상이 필요한 이 로봇에서 저속·출발을 못 따라감. 같은 출력에서 오른쪽이 왼쪽의 65 %밖에 안 도는 것(50 %: 0.24 vs 0.39 m/s, 바퀴 띄우고 실측)을 호스트 PI가 못 메움. 보드의 속도 제어기(0.3 ms 주기)는 값이 전부 0(공장 상태)이라 꺼져 있었음
+- **해결**: `tools/drive/board_setup.py`로 보드에 왼쪽 엔코더 방향 반전(모드 0x40), QPPS(100 % 출력 속도 M1 6264·M2 6351), 속도 PID 1.0/0.5/0.25, 전압 한도 저장. 주행 노드 `control_mode: board_speed`(기본)로 바퀴 목표 속도만 보냄. 변경 기록 55·57~60
+- **확인**: 바닥 자동 직진 6 m 3회(`tools/drive/straight_run.py`): 좌우 차 4~7 mm, 방향 0.5~1.2°, 출발 0.35~0.45 s, 실측 0.100 m/s, 보드 출력 평균 18~20 %로 바퀴마다 알아서 다름. 기록 `~/limbo_bags/straight_1107_1`·`_2`
+
+### 충전 직후·충전기 꽂은 채 보드가 "전압 높음"으로 안 움직임, 보드 최대 전압 한도가 켤 때마다 다름 — 2026-11-07
+- **증상**: 11-03 아침 충전 뒤 출력을 줘도 모터가 안 돌고 상태 비트 Main Battery High. 11-06 읽은 최대 한도 31.1 V, 11-07 재시작 뒤 13.9 V로 제멋대로. 충전기를 꽂은 채 읽으면 주전원 29.2 V
+- **원인**: 보드의 "최대 전압 자동 감지"(명령 57의 오프셋 바이트 ≠ 0)가 켜져 있어 켤 때마다 최대 = 그때 전압 + 2 V(11.9 → 13.9, 충전기 29.1 → 31.1). 낮은 전압에서 켠 뒤 충전하면 한도를 넘어 보드가 출력을 막음. 충전기 출력은 무부하 29 V라 꽂은 채로는 보드가 그 값을 읽음
+- **해결**: `board_setup.py voltage --min 10 --max 16 --auto-offset 0` 뒤 `save`. 오프셋 0이 자동 감지 끔(재시작 뒤 16.0 유지 확인). 최소는 10.0을 쓰면 9.9로 읽힘(보드 특성)
+- **확인**: 충전기 꽂으면 29 V > 16 V라 출력이 막히고(의도), 뽑으면 12 V대로 돌아와 주행. 주행 전 충전기부터 뽑을 것
+
+### board_speed 주행 노드가 Nav2 복구 회전 중 "바퀴가 반대 방향으로 빨라짐"으로 스스로 꺼짐 — 2026-11-07
+- **증상**: 자율주행 도중 주행 노드가 `구동 중단: 왼쪽 바퀴가 목표와 반대 방향으로 빨라짐(목표 −40 카운트/초, 실측 0.27 rad/s)`로 종료(두 번). 그 뒤 odom TF가 끊겨 AMCL이 스캔을 버리고 Nav2가 멈춤
+- **원인**: 엔코더 방향 설정이 실제와 다를 때 보드가 출력을 계속 올리는 것을 막는 보호 장치가, 목표가 뒤집히는 순간(Nav2가 100 ms 안에 회전 방향을 바꿈)을 오판. 속도 추정이 0.1 s 창이라 목표가 바뀐 뒤 2~3틱은 옛 방향으로 빨라지는 것처럼 보이는데 판정이 3틱이었음
+- **해결**: 반대 방향 + 빨라짐에 "목표 크기보다 빠름" 조건, 해상도(창 안 한 카운트) 이상 늘어난 것만 빨라짐으로, 연속 틱 요구를 추정 지연 틱(2) + 3으로. 변경 기록 58·59
+- **확인**: 직진 6 m 3회·키보드 회전에서 오판 없음. 노드가 꺼졌는지는 `ros2 topic hz /odom`(19 Hz 나와야)과 런치 로그 `process has died`로 바로 알 수 있음
+
+
+### Jetson에서 YOLO가 `torch.cuda.is_available(): False`, GPU를 못 봄 — 2026-11-03
+- **증상**: 어제까지 GPU로 돌던 검출기가 `cuda False`로 CPU로 떨어짐. `nvpmodel -q`가 `Error opening /sys/devices/platform/17000000.gpu/devfreq_dev/min_freq`.
+  커널 로그(`journalctl -b 0 -k`)에 `nvgpu ... ACR bootstrap failed`, `RISCV ucode patch wpr info failed`, `libnvrm_gpu.so: NvRmGpuLibOpen failed, error=4`
+- **원인**: 그 부팅에서 GPU 펌웨어 부트스트랩이 실패한 것. 이전 부팅들엔 같은 메시지가 없고 패키지 변경도 없었다. 로봇 전원을 만진 직후 올라온 부팅이었다
+- **해결**: `sudo reboot` 한 번. 재부팅 뒤 오류 0건, `cuda True (Orin)`
+- **확인**: 전원을 건드린 뒤 YOLO를 띄우기 전에 `journalctl -b 0 -k | grep -c "ACR bootstrap failed"`가 0인지 본다. 0이 아니면 바로 재부팅
+
+### 실물 slam_toolbox가 `/scan`을 구독하지 않고 `/map`·`map→odom`이 안 나옴 — 2026-11-03
+- **증상**: `ros2 run slam_toolbox async_slam_toolbox_node`로 띄우면 노드는 뜨는데 `ros2 topic info -v /scan`의 구독자에 slam_toolbox가 없고 지도가 안 생김
+- **원인**: Jazzy의 slam_toolbox는 lifecycle 노드라 configure·activate 전에는 아무것도 안 한다. 시뮬 런치는 `nav2_lifecycle_manager`가 자동으로 해 줬다
+- **해결**: 지도 작성 런치(`start_mapping.launch.py`)에 lifecycle_manager(autostart, bond_timeout 0) 추가. 손으로는 `ros2 lifecycle set /slam_toolbox configure` → `activate`
+- **확인**: `ros2 lifecycle get /slam_toolbox`가 `active`, `/map`이 나오고 `tf2_echo map base_footprint`에 Translation이 찍힘
+
+### RoboClaw가 PWM은 15 %로 나가는데 전류 0, 바퀴가 안 돎 (충전 직후) — 2026-11-03
+- **증상**: 배터리를 충전해 12.1 V가 됐는데 벤치 주행이 무동작. 보드 상태값에 `0x00040000`(Main Battery High Warning)
+- **원인**: 보드의 최대 전압이 자동 모드("켤 때 전압 + 2 V")라, 배터리가 9.8 V일 때 켜면 상한 11.8 V가 되고 충전 뒤 12.1 V는 그 위. 매뉴얼: 이 경고 동안 "모터를 제동으로 멈춤"
+- **해결(권고, 미적용)**: Motion Studio General Settings에서 자동 감지 끄고 Max Main Battery 16 V(납축 충전 전압 14.7 V 위), Min 10 V. 소프트웨어 쪽은 `roboclaw_drive`가 이 비트를 보면 출력을 0으로 두고 진단에 이유를 적는다
+- **확인**: `probe_settings`(명령 59)의 max가 배터리 전압보다 위이고, 상태값에 0x40000이 없음
+
+### 전원 재투입 뒤 RoboClaw 명령 timeout이 0으로 돌아감 — 2026-11-03
+- **증상**: 어제 0.5 s로 넣어 둔 명령 timeout(명령 15)이 오늘 0으로 읽힘. 벤치 도구는 이 값이 5가 아니면 시작을 거부
+- **원인**: 명령 14로 넣은 값은 런타임 값이라 전원을 끄면 사라진다(NVM 저장 명령 94는 일부러 안 씀)
+- **해결**: `roboclaw_drive`가 시작할 때 0이면 0.5 s를 다시 넣는다(`ensure_timeout`). 벤치 도구를 쓸 때는 `configure_timeout.py`를 먼저
+- **확인**: 노드 시작 로그 `opened {... "command_timeout_s": 0.5 ...}`
 
 ## 빌드·git
 

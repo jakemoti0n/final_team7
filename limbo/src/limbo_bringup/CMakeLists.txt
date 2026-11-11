@@ -14,7 +14,12 @@ find_package(ament_cmake REQUIRED)
 install(
   DIRECTORY
     launch
+    config
   DESTINATION share/${PROJECT_NAME}
+)
+
+install(PROGRAMS scripts/lidar_cloud_guard.py scripts/near_depth_filter.py
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)

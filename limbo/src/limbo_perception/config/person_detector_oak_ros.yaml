@@ -1,0 +1,26 @@
+# Apply AFTER person_detector.yaml when using start_oak_camera.launch.py.
+# The v3 camera pipeline publishes no /oak/detections; YOLO runs on the Jetson.
+# Camera-only operation: robot mounting/odom TF remains a separate bringup stage.
+person_detector:
+  ros__parameters:
+    use_sim_time: false
+    detector:
+      source: yolo
+    rgb_topic: /rgbd_camera/image
+    depth_topic: /rgbd_camera/depth_image
+    camera_info_topic: /rgbd_camera/camera_info
+    camera_frame: oak_rgb_camera_optical_frame
+    yolo:
+      device: "0"
+    # Keep one pending synchronized RGB/depth pair while serial inference runs.
+    # Replaced pairs are counted; acquisition stamps and active inference stay intact.
+    processing:
+      latest_only: true
+      # Suppress cold-start/pathologically late results before their first publish.
+      # This does not certify end-to-end delivery latency or driving safety.
+      max_result_age_sec: 0.5
+    # Query real TF without waiting for absent robot transforms during camera-only use.
+    tf_timeout: 0.0
+    sync:
+      queue_size: 5
+      slop: 0.03

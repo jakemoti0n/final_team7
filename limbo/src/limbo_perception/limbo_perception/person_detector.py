@@ -12,7 +12,10 @@ ROS 입출력(구독, 발행, TF, 파라미터)과 YOLO 호출만 여기서 하�
 
 from dataclasses import dataclass
 import json
+import math
 import os
+import signal
+import threading
 from typing import Optional
 
 from ament_index_python.packages import get_package_share_directory
@@ -21,6 +24,7 @@ from cv_bridge import CvBridge
 from geometry_msgs.msg import PointStamped
 from limbo_interfaces.msg import PersonPredictionArray
 from limbo_perception import geometry, intent, motion, tracking, visualization
+from limbo_perception.latest_frame_worker import LatestFrameWorker
 from limbo_perception.messages import prediction_array
 import message_filters
 import numpy as np
@@ -29,6 +33,7 @@ from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
+from rclpy.signals import SignalHandlerOptions
 from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import Bool, String
 import tf2_geometry_msgs  # noqa: F401  PointStamped용 tf2 변환 등록
@@ -80,6 +85,10 @@ class PersonDetector(Node):
     def __init__(self):
         super().__init__('person_detector')
         self._declare_parameters()
+        self._frame_worker = None
+        self._output_frames = 0
+        self._stale_result_dropped = 0
+        self._invalid_timestamp_dropped = 0
 
         self.bridge = CvBridge()
         self.tf_buffer = Buffer()
@@ -133,7 +142,8 @@ class PersonDetector(Node):
                 qos_profile=qos_profile_sensor_data))
         self.rgb_depth_sync = message_filters.ApproximateTimeSynchronizer(
             synced, queue_size=self.sync_queue_size, slop=self.sync_slop)
-        self.rgb_depth_sync.registerCallback(self.image_callback)
+        self.rgb_depth_sync.registerCallback(
+            self._submit_frame if self.processing_latest_only else self.image_callback)
 
         self.create_subscription(
             CameraInfo, self.camera_info_topic, self.camera_info_callback,
@@ -141,6 +151,11 @@ class PersonDetector(Node):
 
         self.get_logger().info(
             f'Person detector with RGB-D depth started (source {self.detector_source})')
+        # Start only after model, filters, subscriptions and publishers are ready.
+        # Exactly one worker owns the model/tracker state; ATS only hands off tuples.
+        if self.processing_latest_only:
+            self._frame_worker = LatestFrameWorker(self.image_callback)
+            self.get_logger().info('Latest-frame processing enabled: one replaceable pending pair')
 
     def _declare_parameters(self):
         # 코드 기본값은 yaml 없이도 노드가 뜨게 하는 보험이다. 튜닝은 yaml에서 한다.
@@ -164,6 +179,8 @@ class PersonDetector(Node):
         self.yolo_classes = list(p('yolo.classes', [0]).value)
         # 추론 입력 크기(px). 모델을 학습한 크기에 맞춘다 (yolo11n 640, 하반신 모델 512)
         self.yolo_imgsz = p('yolo.imgsz', 640).value
+        # 빈 값은 Ultralytics 자동 선택, 실물 프로필의 '0'은 GPU 0을 명시한다.
+        self.yolo_device = p('yolo.device', '').value
         # 하반신 모델의 leg 클래스 번호와, 같은 사람의 person·leg 박스를 하나로 합치는 기준
         self.leg_class = p('merge.leg_class', 1).value
         self.leg_inside_ratio = p('merge.leg_inside_ratio', 0.7).value
@@ -175,6 +192,11 @@ class PersonDetector(Node):
         self.yolo_confidence = p('yolo.confidence', 0.3).value
         self.sync_queue_size = p('sync.queue_size', 5).value
         self.sync_slop = p('sync.slop', 0.03).value
+        # Opt-in for the real camera profile; other existing launch paths stay inline.
+        self.processing_latest_only = p('processing.latest_only', False).value
+        self.max_result_age_sec = p('processing.max_result_age_sec', 0.0).value
+        if not math.isfinite(self.max_result_age_sec) or self.max_result_age_sec < 0:
+            raise ValueError('processing.max_result_age_sec must be finite and nonnegative')
         self.tf_timeout = Duration(seconds=p('tf_timeout', 0.1).value)
         # 화면 좌우 끝에 조금만 걸친 사람 박스는 depth가 뒤쪽 배경을 재므로 거리 계산에서 뺀다
         self.edge_margin_px = p('edge_margin_px', 2).value
@@ -292,6 +314,29 @@ class PersonDetector(Node):
     def camera_info_callback(self, msg):
         self.intrinsics = geometry.CameraIntrinsics.from_k(msg.k)
 
+    def _submit_frame(self, msg, depth_msg, detections_msg=None):
+        self._frame_worker.submit(msg, depth_msg, detections_msg)
+
+    def processing_statistics(self):
+        output_counts = {
+            'output_frames': self._output_frames,
+            'stale_result_dropped': self._stale_result_dropped,
+            'invalid_timestamp_dropped': self._invalid_timestamp_dropped,
+        }
+        if self._frame_worker is None:
+            return {'enabled': False, **output_counts}
+        return {'enabled': True, **self._frame_worker.statistics(), **output_counts}
+
+    def _stop_processing(self):
+        if self._frame_worker is not None:
+            self._frame_worker.shutdown()
+            self.get_logger().info(
+                'Latest-frame processing statistics: ' + json.dumps(self.processing_statistics()))
+
+    def raise_processing_error(self):
+        if self._frame_worker is not None:
+            self._frame_worker.raise_if_failed()
+
     def image_callback(self, msg, depth_msg, detections_msg=None):
         if self.intrinsics is None:
             return
@@ -334,6 +379,23 @@ class PersonDetector(Node):
                     result.motion_state, result.approach_intent,
                     result.approach_duration))
 
+        # Gate the entire result before its first publication. This is an age
+        # check at the publication decision, not a bound on subscriber delivery.
+        # Tracking has consumed a real frame and is kept even when output is stale.
+        if self.max_result_age_sec > 0:
+            stamp_ns = msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec
+            now_ns = self.get_clock().now().nanoseconds
+            invalid_time = stamp_ns <= 0 or now_ns < stamp_ns
+            stale = not invalid_time and (now_ns - stamp_ns) / 1e9 > self.max_result_age_sec
+            if invalid_time or stale:
+                if invalid_time:
+                    self._invalid_timestamp_dropped += 1
+                else:
+                    self._stale_result_dropped += 1
+                self.track_manager.cleanup(current_time)
+                self.depth_jump_filter.cleanup(current_time)
+                return
+
         self.boxes_pub.publish(String(data=json.dumps(diagnostics)))
         self._publish_predictions(
             [r.prediction for r in results if r.prediction is not None],
@@ -348,6 +410,7 @@ class PersonDetector(Node):
         output_msg = self.bridge.cv2_to_imgmsg(annotated_frame, encoding='bgr8')
         output_msg.header = msg.header
         self.image_pub.publish(output_msg)
+        self._output_frames += 1
 
     def _detect(self, frame, stamp, detections_msg=None):
         """검출 + BoT-SORT 결과 중 track ID가 붙은 사람 box만, 한 사람에 하나씩. 진단 토픽용 dict도 같이 돌려준다."""
@@ -381,6 +444,7 @@ class PersonDetector(Node):
             source=frame,
             classes=self.yolo_classes,
             imgsz=self.yolo_imgsz,
+            device=self.yolo_device or None,
             conf=self.yolo_confidence,
             persist=True,  # BoT-SORT가 이전 frame의 tracking 상태를 이어 쓰게 한다
             tracker=self.yolo_tracker,
@@ -569,21 +633,65 @@ def detection_rows(msg):
 
 
 def main(args=None):
-    rclpy.init(args=args)
-    node = PersonDetector()
-    executor = MultiThreadedExecutor(num_threads=EXECUTOR_THREADS)
-    executor.add_node(node)
+    # Keep the ROS context alive while a worker finishes inference/publishing.
+    # rclpy's default SIGINT shutdown can invalidate publishers mid-frame.
+    rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
+    stopping = threading.Event()
+    previous_handlers = {}
+    node = None
+    executor = None
+
+    def request_stop(_signum, _frame):
+        stopping.set()
 
     try:
-        executor.spin()
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            previous_handlers[signum] = signal.signal(signum, request_stop)
+        node = PersonDetector()
+        executor = MultiThreadedExecutor(num_threads=EXECUTOR_THREADS)
+        executor.add_node(node)
+        while rclpy.ok() and not stopping.is_set():
+            executor.spin_once(timeout_sec=0.1)
+            node.raise_processing_error()
     except KeyboardInterrupt:
         pass
     finally:
-        executor.shutdown()
-        node.destroy_node()
-
-    if rclpy.ok():
-        rclpy.shutdown()
+        try:
+            try:
+                try:
+                    # Finish active inference while publishers and ROS context are alive.
+                    # Pending pairs are discarded; already queued ATS callbacks reject submissions.
+                    if node is not None:
+                        node._stop_processing()
+                finally:
+                    if executor is not None:
+                        # Installed Jazzy destroys executor guards before joining its pool.
+                        # After spin_once has returned, drain workers while guards are alive.
+                        # This private pool access is scoped to that rclpy shutdown ordering.
+                        executor._executor.shutdown(wait=True)
+                        executor.shutdown(wait_for_threads=True)
+                        # No next spin remains to surface exceptions from the last tasks.
+                        worker_errors = []
+                        for future in executor._futures:
+                            if future.done():
+                                error = future.exception()
+                                if error is not None:
+                                    worker_errors.append(error)
+                        if worker_errors:
+                            raise ExceptionGroup('Executor workers failed during shutdown', worker_errors)
+                if node is not None:
+                    # Also surface failures in the final callback after the last spin.
+                    node.raise_processing_error()
+            finally:
+                try:
+                    if node is not None:
+                        node.destroy_node()
+                finally:
+                    if rclpy.ok():
+                        rclpy.shutdown()
+        finally:
+            for signum, handler in previous_handlers.items():
+                signal.signal(signum, handler)
 
 
 if __name__ == '__main__':

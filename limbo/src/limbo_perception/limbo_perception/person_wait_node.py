@@ -97,8 +97,12 @@ class PersonWaitNode(Node):
         self.create_subscription(
             PersonPredictionArray, p('predictions_topic', '/person_detector/predictions').value,
             self.on_predictions, 10)
-        self.create_subscription(
-            Bool, p('tof_topic', '/tof/obstacle_ahead').value, self.on_tof, 10)
+        self.tof_enabled = p('tof_enabled', True).value
+        tof_topic = p('tof_topic', '/tof/obstacle_ahead').value
+        if not isinstance(self.tof_enabled, bool):
+            raise ValueError('tof_enabled must be boolean')
+        if self.tof_enabled:
+            self.create_subscription(Bool, tof_topic, self.on_tof, 10)
         self.create_subscription(
             Odometry, p('odom_topic', '/odometry/filtered').value, self.on_odom, 10)
         self.create_subscription(Bool, '/pull_over/available', self.on_pull_over_available, 10)
@@ -234,6 +238,12 @@ def main(args=None):
         rclpy.spin(node)
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
+    except RuntimeError as exc:
+        # A queued TF/timer callback can cross SIGINT's context shutdown and
+        # fail while converting an already-invalid rclpy object. Keep genuine
+        # runtime errors visible; only tolerate this specific shutdown race.
+        if rclpy.ok() or 'Unable to convert call argument' not in str(exc):
+            raise
     finally:
         node.destroy_node()
         rclpy.try_shutdown()
