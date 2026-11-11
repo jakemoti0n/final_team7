@@ -217,10 +217,19 @@ chmod 600 relay_prog/state/robot_token
 ```yaml
 server_url: https://13-125-10-20.sslip.io    # 경로·끝 슬래시 없이
 token_file: relay_prog/state/robot_token
-source_clock: ros_system                      # 실물 로봇
+source_clock: ros_system                      # 실물 로봇. 시뮬레이션이면 ros_sim
 patrol_launch:
-  use_sim_time: false                         # 실물 로봇 (시뮬레이션이면 true)
+  use_sim_time: false                         # 실물 로봇. 시뮬레이션이면 true
 ```
+
+**시계 두 값은 로봇 종류에 맞춘다.** 서버(AWS)와는 상관없다.
+
+| 로봇 | `source_clock` | `patrol_launch.use_sim_time` |
+|---|---|---|
+| Gazebo 시뮬레이션 (PC에서 시험) | `ros_sim` | `true` |
+| 실물 로봇 | `ros_system` | `false` |
+
+틀리면 Bridge는 연결되지만 **지도에 로봇 위치가 안 뜬다**(화면 "로봇 위치 수신 대기"). Bridge는 위치(TF)가 1초 안 것일 때만 보내는데, 시뮬레이션 시각을 실제 시계로 재면 아주 오래된 것으로 보이기 때문이다. 주행 시작한 순찰 노드도 Nav2와 시계가 달라 제대로 돌지 않는다.
 
 그 뒤 Bridge를 다시 시작한다(`relay_prog/README.md` 「실행과 종료」). 로봇은 서버의 443으로 **나가는** 연결만 쓴다. 로봇 쪽 공유기·방화벽에 포트를 열 필요가 없다.
 
@@ -259,6 +268,7 @@ patrol_launch:
 | 화면이 502 | dashboard 컨테이너가 죽음. `docker compose logs dashboard` (토큰 16자 미만, `MAP_YAML` 오타 등은 이유를 출력함) |
 | Bridge `http_401` / `server rejected the robot token` | 로봇 `robot_token` 파일과 서버 `ROBOT_TOKEN`이 다름(앞뒤 공백은 무시됨) |
 | 일시정지는 되는데 주행 시작만 `응답 없음`, Bridge 로그에 `commands=invalid_command` | 로봇의 Bridge가 2026-11-06 (52) 이전 코드다(앞단이 압축한 start 명령을 못 읽음). 로봇에서 `git pull` 후 Bridge 다시 시작 |
+| Bridge는 연결됐는데 지도에 로봇 위치가 안 뜸("로봇 위치 수신 대기") | 시뮬레이션인데 `source_clock: ros_system`이면 위치가 버려진다(12절 표). 실물이면 AMCL이 위치를 잡았는지(RViz 초기 위치, `ros2 topic echo /amcl_pose --once`) |
 | Bridge `TimeoutError`가 자주 | 텔레메트리 요청 제한이 1초(`request_timeout_s`)다. 로봇 쪽 인터넷이 느리거나 끊김. 같은 지역(서울) 인스턴스인지, 로봇 네트워크 확인 |
 | 빌드가 `JavaScript heap out of memory`(exit code 134)로 실패 | 2026-11-07 (53) 이전 코드다. rollup 4.64가 이 화면 빌드에 메모리 약 3 GB를 썼다. `git pull`로 받은 뒤 다시 `docker compose up -d --build` |
 | 빌드 중 멈추거나 `Killed` | 메모리 부족. 4절 스왑을 만들거나 2 GB 요금제로 |

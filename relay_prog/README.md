@@ -110,16 +110,14 @@ cd relay_prog  # 저장소 루트 기준
 /usr/bin/python3 tools/receiver.py --host 127.0.0.1 --port 8000
 ```
 
-둘째 터미널: 기존 LIMBO와 같은 ROS 환경을 준비하고 Bridge를 실행한다. 기본 `server_url`인 `http://127.0.0.1:8000`으로 위 Mock 서버에 연결한다.
+둘째 터미널: 기존 LIMBO와 같은 ROS 환경을 준비하고 Bridge를 실행한다. 기본 `server_url`인 `http://127.0.0.1:8000`으로 위 Mock 서버에 연결한다. **Bridge는 저장소 루트에서 실행한다.** `bridge.yaml`의 상대 경로(`patrol_launch.workspace: limbo`, `waypoint_dir`, `token_file`)를 실행한 디렉터리 기준으로 찾기 때문이다. `relay_prog/` 안에서 실행하면 `patrol_launch.workspace has no install/setup.bash: .../relay_prog/limbo`로 끝난다.
 
 ```bash
+# 저장소 루트에서
 source /opt/ros/jazzy/setup.bash
-
-source limbo/install/setup.bash  # 저장소 루트 기준
-cd relay_prog  # 저장소 루트 기준
-
-source install/setup.bash
-ros2 run limbo_telemetry_bridge bridge --config src/limbo_telemetry_bridge/config/bridge.yaml
+source limbo/install/setup.bash
+source relay_prog/install/setup.bash
+ros2 run limbo_telemetry_bridge bridge --config relay_prog/src/limbo_telemetry_bridge/config/bridge.yaml
 ```
 
 ROS 메시지가 없어도 기본 주기인 1초마다 null/0 스냅샷을 전송한다. `curl http://127.0.0.1:8000/status`로 Mock 서버가 받은 최신 계약 JSON과 명령 결과(`results`)를 확인할 수 있다. `/status`는 이 Mock 서버의 검증용 기능이다.
@@ -136,6 +134,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/commands -H 'Content-Type: application
 |---|---|
 | `ModuleNotFoundError: No module named 'limbo_interfaces'` | `limbo/install/setup.bash`를 source하지 않았다. 위 순서(Jazzy → `limbo/` → `relay_prog/`)로 새 터미널에서 다시 source한다. `limbo/install/limbo_interfaces/`가 없으면 `limbo/`부터 빌드한다 |
 | `ModuleNotFoundError: No module named 'aiohttp'` | 시스템 Python으로 빌드했다. `venvs/bridge/bin/python -m colcon build ...`로 다시 빌드한다 |
+| `ValueError: patrol_launch.workspace has no install/setup.bash: .../relay_prog/limbo` | `relay_prog/` 안에서 실행했다. 저장소 루트로 이동해 위 명령으로 실행한다(`token_file`도 같은 이유로 못 찾는다). 어디서든 실행하려면 설정의 경로를 절대 경로로 바꾼다 |
 
 ### 실제 Server Program에 연결
 

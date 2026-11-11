@@ -100,8 +100,8 @@ ros2 run limbo_patrol patrol_node --ros-args -p use_sim_time:=true
 
 ```bash
 cd ~/limbo/dashboard && .venv/bin/python -m uvicorn server.app:app --host 127.0.0.1 --port 8000 --workers 1   # ① 서버 + 화면
-cd ~/limbo/relay_prog && source /opt/ros/jazzy/setup.bash && source install/setup.bash && \
-  ros2 run limbo_telemetry_bridge bridge --config src/limbo_telemetry_bridge/config/bridge.yaml           # ② Bridge (로봇 → 서버)
+cd ~/limbo && source /opt/ros/jazzy/setup.bash && source limbo/install/setup.bash && source relay_prog/install/setup.bash && \
+  ros2 run limbo_telemetry_bridge bridge --config relay_prog/src/limbo_telemetry_bridge/config/bridge.yaml   # ② Bridge (로봇 → 서버), 저장소 루트에서 실행
 ```
 명령어 통합 완료 ros2 launch limbo_dashboard start_dashboard.launch.py 를 통해 실행 가능
 
