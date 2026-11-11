@@ -8,6 +8,19 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-11 (74) 운영 지도 `real_open_space_20261111.pgm`을 서버 판(W1 코너 장애물 A·B 제거)으로, 서버는 받기 전용(운영 값은 `.env`에만)
+
+**할 일**
+- 서버: 직접 고친 파일을 되돌린 뒤 받는다. `git restore dashboard/README.md dashboard/config.json dashboard/deploy dashboard/docker-compose.yml dashboard/.env.example limbo/src/limbo_navigation/maps/real_open_space_20261111.pgm` → `git pull` → `docker compose up -d --build`. `.env`의 `MAP_YAML`·`INITIAL_WAYPOINTS`는 그대로 둔다
+- Jetson: 받으면 AMCL·Nav2 지도도 A·B가 없는 판이 된다. 실제로 A·B가 치워졌는지 확인
+
+**변경**
+- `limbo/src/limbo_navigation/maps/real_open_space_20261111.pgm`: x 12.1~13.3 m, y −0.1~1.35 m(그림 픽셀 x 442~465, y 333~361) 장애물 247칸을 빈 공간으로. `.yaml`은 그대로
+- `dashboard/README.md` 「서버 운영 시: 실물 지도·경로 적용」: 저장소 기본값은 시뮬레이션용으로 두고 운영 값은 서버 `.env`에만, 서버는 파일을 고치지 않음
+
+**원인과 근거**
+- 서버에서 지도·설정 5개·README를 직접 고쳐 둔 탓에 `git pull`이 막혔다. 설정 5개의 변경은 `.env`가 이미 같은 값을 주고 있어 동작에 영향이 없었고, 실제로 차이를 만드는 것은 지도 pgm뿐이었다
+
 ## 2026-11-11 (73) 관제 서버 하나로 여러 로봇: 처음 보는 `robot_id`는 자동 등록, 로봇마다 상태·명령·알림·지도·waypoint 따로, 헤더의 로봇 이름을 눌러 볼 로봇 선택
 
 **할 일**

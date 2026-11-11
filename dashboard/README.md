@@ -369,3 +369,17 @@ PYTHONDONTWRITEBYTECODE=1 CHROME_PATH=/opt/google/chrome/chrome \
 Node.js가 PATH에 없으면 `--node /absolute/path/to/node`를 추가한다. 도구는 임시 서버 포트, 임시 Bridge 설정, 별도 ROS 도메인 및 `dashboard/artifacts/` 로그를 사용하고 종료 시 자식 프로세스를 정리한다. 헤더 0·역행, 0 속도·회전·무효 odom·재수신을 확인하고 발행 직후부터 브라우저 표시 확인까지 2초 미만인지 측정한다. 실제 Gazebo 주행이나 실물 로봇 검증을 대신하지 않는다. 이 도구는 v1 시절에 만든 것으로 센서 수신·속도 표시만 확인하며, 순찰 상태·위치·일시정지/재개는 검증하지 않는다. 제어 기능의 시뮬레이션 시험 절차와 결과는 [관제 화면 설계 A](../docs/CONTROL_SCREEN.md#a-일시정지순찰-재개)에 있다.
 
 검증 결과 및 미검증 항목은 [검증 보고서](docs/VALIDATION.md)에 구분해 기록한다. 이 보고서는 v1 기준이며, 관제 기능 추가 뒤의 시험 기록은 [CHANGELOG](../docs/CHANGELOG.md)와 [관제 화면 설계](../docs/CONTROL_SCREEN.md)에 있다.
+
+## 서버 운영 시: 실물 지도·경로 적용 (2026-11-11)
+
+이 절은 **AWS 서버(Docker)로 실물 로봇을 운영할 때만** 해당한다. 저장소의 기본값(`config.json`, `deploy/config.json`, `docker-compose.yml`, `deploy/entrypoint.sh`)은 로컬 개발·시험용 시뮬레이션 지도·경로(`human_test_map.yaml` + `test_waypoints.yaml`)로 두고, 운영 값은 **서버의 `.env`에만** 넣는다. 서버는 저장소를 받기만 하고 파일을 직접 고치지 않는다(고치면 다음 `git pull`이 막힌다).
+
+- 운영 지도는 `real_open_space_20261111.yaml`/`.pgm`(W1 코너 장애물 A·B를 지운 판), 경로는 `real_loop_waypoints.yaml`의 W1 → W2 → MID → W3 → W4 → HOME이다
+- 서버 `dashboard/.env`:
+  ```bash
+  MAP_YAML=limbo/src/limbo_navigation/maps/real_open_space_20261111.yaml
+  INITIAL_WAYPOINTS=real_loop_waypoints.yaml
+  ```
+- `INITIAL_WAYPOINTS`는 볼륨이 비었을 때(처음)만 복사된다. 이미 쓰던 볼륨의 경로를 바꾸려면 기존 `/data/waypoints.yaml`을 따로 백업한 뒤 교체한다
+- 로봇의 AMCL·Nav2도 같은 지도 YAML을 써야 화면의 로봇 위치가 맞는다
+- 받은 뒤 반영: `git pull` → `cd dashboard && docker compose up -d --build` (지도와 기본 waypoint는 이미지에 들어가므로 다시 빌드)
