@@ -43,7 +43,7 @@
 **변경**
 - `limbo_bringup/launch/start_mid360.launch.py`: `mid360_costmap_voxel`에 `filter_field_name: ''`(TROUBLESHOOTING 11-10). 테스트 `test_costmap_lidar_voxel_keeps_every_height`(수정본 통과, 원본 실패 확인)
 - `limbo_navigation/maps/real_open_space_20261110.{pgm,yaml}`(새): 1109 지도 + W1 코너 섬 쪽(Class Room 4 문 옆) 정수기·쓰레기통 257칸(0.64 m², x 12.1~13.3·y −0.1~1.7) + 유리벽 쪽 높은 탁자 101칸(0.25 m², x 13.8~14.3·y −0.6~0.7; 상판이 라이다 높이 상한에 걸려 깜빡이던 것). 두 덩어리 사이 통로 폭 0.85 m(y≈0.4). 오늘 기록 7개 모두에서 라이다(높이 0.1~1.0 m)가 73~98 % 관측한 자리만 넣음. **기본값은 아직 11-05**, 젯슨에는 `load_map`으로 올려 씀
-- `docs/REAL_PATROL_RUN.md`(새, PM 요청): 젯슨에서 런치 3개 → 측정용 Nav2 설정 생성 → 위치 확인·초기 위치·점검·기록·순찰을 한 번에 도는 절차와 끝내기·막히면
+- `docs/REAL_PATROL_RUN.md`(새, PM 요청): 젯슨에서 런치 3개 → 측정용 Nav2 설정 생성 → 위치 확인·초기 위치·점검·기록·순찰을 한 번에 도는 절차와 끝내기·막히면. 11-11: 설정 생성 스니펫에서 `enforce_path_inversion=False` 줄을 뺌(순찰 7 결론대로 되꺾임 처리는 켠 채 둠)
 - `limbo_patrol/config/real_loop_waypoints.yaml`(새): 실물 지나가기 순찰. HOME (0.74, −0.04, 0°) = 바닥 테이프 자리(정밀 탐색 5회, x 0.72~0.745), W1 (11.0, 0.3)(코너 앞 자유 공간; (12.0, 0.1)은 위 물건의 팽창 띠 안), W2 (13.4, 9.6), MID (6.5, 9.5, 180°) stop, W3 (0.4, 9.8), W4 (0.6, 0.2). 실행: `ros2 run limbo_patrol patrol_node --ros-args -p use_sim_time:=false -p waypoints:=real_loop_waypoints.yaml -p loop:=false`(젯슨은 install이 build로 링크돼 있어 새 파일은 링크 1회 필요)
 - 젯슨에만(커밋 안 함): `/tmp/nav2_real_nocam.yaml`(카메라 소스 제거) → `_inf35.yaml`(+팽창 0.35) → `_inf35_noinv.yaml`(+되꺾임 멈춤 끔). 재부팅하면 사라짐, 만드는 법은 `docs/REAL_PATROL_RUN.md` 2절. `real_robot_mount.yaml`·`MID360s_mount.json`은 팀원 파일이라 손대지 않음
 
