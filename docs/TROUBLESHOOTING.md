@@ -10,6 +10,7 @@
 - [시뮬레이션](#시뮬레이션)
 - [인지(person_detector)](#인지person_detector)
 - [실물(Jetson·RoboClaw·센서)](#실물jetsonroboclaw센서)
+- [관제 서버(dashboard)](#관제-서버dashboard)
 - [빌드·git](#빌드git)
 - [개발 환경(노트북)](#개발-환경노트북)
 - [리팩터링 이전 (README에 있던 내용)](#리팩터링-이전-readme에-있던-내용)
@@ -412,6 +413,27 @@
 - **원인**: 명령 14로 넣은 값은 런타임 값이라 전원을 끄면 사라진다(NVM 저장 명령 94는 일부러 안 씀)
 - **해결**: `roboclaw_drive`가 시작할 때 0이면 0.5 s를 다시 넣는다(`ensure_timeout`). 벤치 도구를 쓸 때는 `configure_timeout.py`를 먼저
 - **확인**: 노드 시작 로그 `opened {... "command_timeout_s": 0.5 ...}`
+
+## 관제 서버(dashboard)
+
+### iPhone에서 관제 화면을 열면 로그인 창이 계속 뜸(로그인해도 몇 초마다 다시 뜸) — Safari는 WebSocket에 basic auth를 싣지 않음 — 2026-11-12
+- **증상**: PC 브라우저에서는 한 번 로그인하면 되는데, iPhone(Safari·iOS Chrome)에서는 로그인해도 몇 초 간격으로 로그인 창이 다시 뜸. 화면 상태도 갱신되지 않음
+- **원인**: 앞단 Caddy가 화면·브라우저 API 전체에 basic auth를 건다. 실시간 상태는 WebSocket(`/api/v1/stream`)으로 받는데, WebKit(Safari, iOS의 모든 브라우저)은 WebSocket 연결에 basic auth 자격 증명을 싣지 않는다. 그래서 이 연결만 Caddy에서 `401`(`Www-Authenticate: Basic`)을 받고, 화면이 1·2·4·8·10초 간격으로 재연결할 때마다 로그인 창이 다시 떴다. PC Chrome·Firefox는 자격 증명을 실어 보내서 드러나지 않았다
+- **해결**: WebSocket을 일회용 입장표로 인증 (`be489a4`, 변경 기록 75)
+  - 서버: `POST /api/v1/stream-ticket`이 30초 유효·한 번만 쓰는 입장표를 준다. 이 경로는 basic auth 뒤에 있어 로그인한 사람만 받을 수 있다. `WS /api/v1/stream?ticket=`은 입장표가 맞을 때만 받는다
+  - Caddy: `/api/v1/stream`만 basic auth 없이 서버로 넘긴다
+  - 화면(`ui/src/live.ts`): 연결·재연결마다 입장표를 먼저 받고 WebSocket을 연다
+- **함께 겪은 함정 — 서버에서 `git pull` 뒤 `up -d --build`만 했더니 그대로**: `Caddyfile`은 bind mount라 파일이 바뀌어도 Caddy 컨테이너가 다시 만들어지지 않아 예전 설정으로 계속 돌았다. `docker compose up -d --build --force-recreate`로 해결. 업데이트 안내(`docs/AWS_DEPLOY.md` 10절, `dashboard/README.md`)도 이 명령으로 바꿈 (`96ae57c`)
+- **확인**:
+  - 시험: 서버 114개(입장표 없음·틀림·재사용 거절 포함), UI 단위 34개, e2e 27개 통과
+  - 배포 확인(로그인 없이): 아래 명령이 Caddy의 `401`이면 예전 설정, 서버의 `403`이면 새 설정. 2026-11-12 서버에서 `--force-recreate` 전 `401`, 뒤 `403`. `/`·`/api/v1/state`·`POST /api/v1/stream-ticket`은 그대로 `401`(로그인 필요)
+    ```bash
+    curl -si --http1.1 -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+      -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+      https://<DOMAIN>/api/v1/stream | head -1
+    ```
+    `--http1.1`을 빼면 HTTP/2로 붙어 업그레이드 헤더가 빠지므로 항상 basic auth `401`이 나온다
+  - iPhone 실기 확인(2026-11-12, `--force-recreate` 뒤): 로그인 한 번 뒤 로그인 창이 다시 뜨지 않고 정상 접속됨
 
 ## 빌드·git
 
