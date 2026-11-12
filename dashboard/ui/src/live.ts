@@ -27,10 +27,19 @@ export class LiveProvider implements Provider {
     this.attempt = 0
     this.emit()
   }
-  private connect = () => {
+  private connect = async () => {
     if (this.stopped) return
     const generation = this.generation
-    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/v1/stream${robotQuery(this.robotId)}`)
+    // 일회용 입장표를 먼저 받는다. Safari(iPhone)는 WebSocket에 basic auth를 싣지 않아
+    // 입장표 없이 열면 401 → 로그인 창이 반복된다. 받지 못하면 그대로 열어 보고, 실패하면 재시도한다
+    let ticket = ''
+    try {
+      const response = await fetch('/api/v1/stream-ticket', { method: 'POST', cache: 'no-store' })
+      if (response.ok) ticket = String((await response.json())?.ticket ?? '')
+    } catch { /* 아래 WebSocket이 실패하면 onclose가 재시도한다 */ }
+    if (this.stopped || generation !== this.generation) return
+    const query = robotQuery(this.robotId) + (ticket ? `${this.robotId ? '&' : '?'}ticket=${encodeURIComponent(ticket)}` : '')
+    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/v1/stream${query}`)
     this.socket = ws
     ws.onmessage = event => {
       if (this.stopped || generation !== this.generation || this.socket !== ws) return
@@ -40,7 +49,7 @@ export class LiveProvider implements Provider {
     ws.onclose = () => {
       if (this.stopped || generation !== this.generation || this.socket !== ws) return
       this.fail()
-      this.retry = setTimeout(this.connect, backoff[Math.min(this.attempt++, backoff.length - 1)])
+      this.retry = setTimeout(() => { void this.connect() }, backoff[Math.min(this.attempt++, backoff.length - 1)])
     }
   }
   private refresh = async () => {
@@ -63,7 +72,7 @@ export class LiveProvider implements Provider {
   }
   start = () => {
     this.stopped = false
-    this.connect()
+    void this.connect()
     this.watch = setInterval(() => {
       const threshold = (this.current.snapshot?.settings.browser_delay_s ?? 3) * 1000
       if (performance.now() - this.current.receivedMono >= threshold) {

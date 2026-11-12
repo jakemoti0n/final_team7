@@ -159,7 +159,7 @@ for (const command of ['pause', 'resume'] as Command[]) {
 test('silent stream becomes a browser problem and tab return fetches a fresh snapshot', async ({ page, request }) => {
   await request.post('/api/v1/telemetry', { data: telemetry() })
   const state = await (await request.get('/api/v1/state')).json()
-  await page.routeWebSocket('**/api/v1/stream', ws => { ws.send(JSON.stringify(state)) })
+  await page.routeWebSocket(/\/api\/v1\/stream(\?|$)/, ws => { ws.send(JSON.stringify(state)) })
   await page.goto('/')
   await expect(page.locator('.connection')).toContainText('연결됨')
   await expect(page.getByRole('alert')).toContainText('서버 상태를 갱신할 수 없습니다', { timeout: 5000 })

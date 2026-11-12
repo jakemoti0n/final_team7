@@ -190,7 +190,7 @@ def test_alert_capacity_is_independent_of_active_keys(rig):
 
 def test_websocket_initial_tick_latest_and_disconnect_cleanup(rig):
     clock, store, client = rig
-    with client.websocket_connect('/api/v1/stream') as ws:
+    with client.websocket_connect(f'/api/v1/stream?ticket={client.post("/api/v1/stream-ticket").json()["ticket"]}') as ws:
         initial = ws.receive_json()
         clock.now = 10
         tick = ws.receive_json()
@@ -248,3 +248,20 @@ def test_custom_thresholds_and_restart_clear_state():
     assert restarted['server_run_id'] != state['server_run_id']
     assert restarted['alerts'] == []
     assert restarted['motion']['last_valid'] is None
+
+
+def test_websocket_requires_one_time_ticket(rig):
+    from starlette.websockets import WebSocketDisconnect
+    _, _, client = rig
+    for url in ['/api/v1/stream', '/api/v1/stream?ticket=wrong']:
+        with pytest.raises(WebSocketDisconnect):
+            with client.websocket_connect(url) as ws:
+                ws.receive_json()
+    got = client.post('/api/v1/stream-ticket')
+    assert got.headers['cache-control'] == 'no-store'
+    ticket = got.json()['ticket']
+    with client.websocket_connect(f'/api/v1/stream?ticket={ticket}') as ws:
+        assert ws.receive_json()['robot_id'] == 'LIMBO-01'
+    with pytest.raises(WebSocketDisconnect):   # 한 번 쓴 입장표는 다시 못 쓴다
+        with client.websocket_connect(f'/api/v1/stream?ticket={ticket}') as ws:
+            ws.receive_json()

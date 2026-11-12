@@ -8,6 +8,20 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-12 (75) 휴대폰(iPhone)에서 관제 화면 로그인 창이 계속 뜨던 문제: 실시간 상태 WebSocket을 일회용 입장표로 인증
+
+**할 일**
+- 서버: `git pull` → `dashboard/`에서 `docker compose up -d --build` (Caddyfile이 바뀌었으므로 Caddy도 다시 띄운다). `.env`는 그대로
+
+**변경**
+- `dashboard/server/app.py`: `POST /api/v1/stream-ticket`이 30초 유효·한 번만 쓰는 입장표를 준다. `WS /api/v1/stream`은 `?ticket=`이 맞을 때만 받는다(없거나 틀리거나 재사용이면 거절)
+- `dashboard/Caddyfile`: `/api/v1/stream`만 basic auth 없이 넘긴다. 입장표 경로는 basic auth 뒤에 있으므로 로그인한 사람만 연결할 수 있는 것은 같다
+- `dashboard/ui/src/live.ts`: 연결·재연결마다 입장표를 먼저 받고 WebSocket을 연다. 서버가 재시작돼도 다음 재연결에서 이어진다
+- 시험: 서버(입장표 없음·틀림·재사용 거절), UI 단위 시험, e2e WebSocket 경로 패턴. `dashboard/README.md` API 표
+
+**원인과 근거**
+- Safari·iOS Chrome(WebKit)은 WebSocket 연결에 basic auth 자격 증명을 싣지 않는다. 그래서 `/api/v1/stream`이 Caddy에서 401을 받고, 화면이 1·2·4·8·10초 간격으로 재연결할 때마다 로그인 창이 다시 떴다. PC 브라우저는 자격 증명을 실어 보내서 문제가 없었다
+
 ## 2026-11-11 (74) 운영 지도 `real_open_space_20261111.pgm`을 서버 판(W1 코너 장애물 A·B 제거)으로, 서버는 받기 전용(운영 값은 `.env`에만)
 
 **할 일**

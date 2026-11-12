@@ -242,7 +242,8 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 | `POST /api/v1/telemetry` | 텔레메트리 v1, v2(`patrol`·`pose` 추가) 또는 v3(`launcher` 추가), 최대 UTF-8 8192바이트 |
 | `GET /api/v1/robots` | `{"default": "LIMBO-01", "robots": [{"robot_id", "status", "last_received_at"}]}`. 헤더 로봇 목록용 |
 | `GET /api/v1/state` | `?robot_id=`(생략하면 기본 로봇, 모르면 404 `unknown_robot`). 전체 현재 판정, 마지막 값, 순찰·위치, 마지막 명령, 설정, 알림 |
-| `WS /api/v1/stream` | `?robot_id=`(모르면 4404로 닫음). 연결 즉시, 새 유효 수신·명령 변화 시, 1초 타이머마다 전체 상태 |
+| `POST /api/v1/stream-ticket` | WebSocket 일회용 입장표 `{"ticket"}` (30초 유효). basic auth 뒤에 있음 |
+| `WS /api/v1/stream` | `?ticket=`(필수, 없거나 틀리면 거절) `&robot_id=`(모르면 4404로 닫음). 연결 즉시, 새 유효 수신·명령 변화 시, 1초 타이머마다 전체 상태. Safari(iPhone)는 WebSocket에 basic auth를 싣지 않으므로 Caddy는 이 경로만 basic auth 없이 넘기고 입장표로 검사한다 |
 | `POST /api/v1/commands` | 화면 → 서버. `{"command":"pause"\|"resume"\|"start"\|"stop", "robot_id"?: "LIMBO-02"}`(생략하면 기본 로봇, 모르면 404 `unknown_robot`). 202와 요청 정보, 처리 중이면 409 `command_in_progress`, 로봇 연결이 `connected`가 아니면 409 `bridge_not_connected`. start·stop은 추가로 409 `bridge_unsupported`(이전 Bridge)·`patrol_already_running`·`patrol_not_running`·`invalid_route`, 503 `waypoints_unavailable` |
 | `GET /api/v1/commands/next` | Bridge → 서버. `robot_id`, `bridge_session_id`, `wait_s`(최대 10초 long poll). 명령이 있으면 `request_id`·`command`·`ttl_ms`(start는 `route`도: `revision`·`bounds`·`waypoints`), 없으면 204(아직 텔레메트리를 보내지 않은 로봇도 204). 현재 세션에 한 번만 내준다 |
 | `POST /api/v1/commands/{request_id}/claim` | Bridge가 서비스를 부르기 직전 아직 유효한지 확인. 허락되면 응답 제한을 이 시각부터 다시 센다. 끝난 명령이거나 다른 로봇의 명령이면 409 `command_closed`·`unknown_robot` |

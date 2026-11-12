@@ -162,7 +162,7 @@ def test_waypoint_lock_follows_robots_sharing_the_file(rig):
 
 def test_stream_per_robot(rig):
     _, client, _ = rig
-    with client.websocket_connect('/api/v1/stream?robot_id=LIMBO-02') as ws:
+    with client.websocket_connect(f'/api/v1/stream?robot_id=LIMBO-02&ticket={client.post("/api/v1/stream-ticket").json()["ticket"]}') as ws:
         assert ws.receive_json()['robot_id'] == 'LIMBO-02'
         post(client, telemetry('LIMBO-02', str(uuid.uuid4())))
         assert ws.receive_json()['bridge']['status'] == 'connected'

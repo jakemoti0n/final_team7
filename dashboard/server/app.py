@@ -4,6 +4,8 @@ import hmac
 import json
 import logging
 import os
+import secrets
+import time
 
 import yaml
 from pathlib import Path
@@ -41,6 +43,8 @@ async def read_json(request):
 
 
 MIN_TOKEN_LENGTH = 16
+STREAM_TICKET_TTL_S = 30      # 화면이 받은 WebSocket 입장표의 유효 시간
+STREAM_TICKET_LIMIT = 1000    # 쓰지 않고 쌓인 입장표 상한
 
 
 def load_robot_token(settings, environ=os.environ):
@@ -406,8 +410,27 @@ def create_app(settings=None, store=None, robot_token=None):
             return unknown_robot()
         return view(robot)
 
+    # WebSocket 입장표. Safari(iPhone·iPad)는 WebSocket 연결에 basic auth를 싣지 않아
+    # Caddy가 401을 주고 로그인 창이 반복된다. 그래서 stream은 basic auth에서 빼고,
+    # basic auth 뒤에 있는 이 경로에서 받은 일회용 입장표로만 들어오게 한다.
+    stream_tickets = {}   # 입장표 → 만료 시각(monotonic)
+
+    @app.post("/api/v1/stream-ticket")
+    async def stream_ticket():
+        now = time.monotonic()
+        for old_ticket in [t for t, until in stream_tickets.items() if until <= now]:
+            del stream_tickets[old_ticket]
+        if len(stream_tickets) >= STREAM_TICKET_LIMIT:
+            return error(429, "too_many_tickets", "Too many unused stream tickets")
+        ticket = secrets.token_urlsafe(24)
+        stream_tickets[ticket] = now + STREAM_TICKET_TTL_S
+        return JSONResponse({"ticket": ticket}, headers={"Cache-Control": "no-store"})
+
     @app.websocket("/api/v1/stream")
-    async def stream(websocket: WebSocket, robot_id: str = ""):
+    async def stream(websocket: WebSocket, robot_id: str = "", ticket: str = ""):
+        if stream_tickets.pop(ticket, 0) <= time.monotonic():
+            await websocket.close(code=4401, reason="invalid_ticket")   # accept 전이면 403으로 거절된다
+            return
         robot = find(robot_id)
         await websocket.accept()
         if robot is None:
