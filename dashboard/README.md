@@ -383,4 +383,4 @@ Node.js가 PATH에 없으면 `--node /absolute/path/to/node`를 추가한다. �
   ```
 - `INITIAL_WAYPOINTS`는 볼륨이 비었을 때(처음)만 복사된다. 이미 쓰던 볼륨의 경로를 바꾸려면 기존 `/data/waypoints.yaml`을 따로 백업한 뒤 교체한다
 - 로봇의 AMCL·Nav2도 같은 지도 YAML을 써야 화면의 로봇 위치가 맞는다
-- 받은 뒤 반영: `git pull` → `cd dashboard && docker compose up -d --build` (지도와 기본 waypoint는 이미지에 들어가므로 다시 빌드)
+- 받은 뒤 반영: `git pull` → `cd dashboard && docker compose up -d --build --force-recreate` (지도와 기본 waypoint는 이미지에 들어가므로 다시 빌드, Caddyfile은 bind mount라 Caddy를 다시 만들어야 반영됨)

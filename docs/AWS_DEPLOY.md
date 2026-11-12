@@ -175,9 +175,11 @@ docker compose up -d               # 다시 켬
 
 ```bash
 cd ~/limbo && git pull
-cd dashboard && docker compose up -d --build
+cd dashboard && docker compose up -d --build --force-recreate
 docker image prune -f              # 예전 이미지 정리 (디스크 절약)
 ```
+
+`--force-recreate`를 빼면 안 된다. `Caddyfile`은 파일을 컨테이너에 연결(bind mount)해서 쓰므로, `git pull`로 바뀌어도 `up -d --build`만으로는 Caddy 컨테이너가 다시 만들어지지 않고 **예전 설정으로 계속 돈다**. 인증서는 `caddy_data` 볼륨에 있으므로 다시 만들어도 재발급되지 않는다.
 
 화면에서 편집한 waypoint는 볼륨(`dashboard_waypoints`)에 있어서 업데이트해도 남는다.
 
