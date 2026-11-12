@@ -1,4 +1,5 @@
 import type { Provider, Snapshot, View } from './types'
+import { api } from './auth'
 
 export const backoff = [1000, 2000, 4000, 8000, 10000]
 /** 서버 주소에 붙일 로봇 선택. 비우면 서버의 기본 로봇 */
@@ -30,11 +31,11 @@ export class LiveProvider implements Provider {
   private connect = async () => {
     if (this.stopped) return
     const generation = this.generation
-    // 일회용 입장표를 먼저 받는다. Safari(iPhone)는 WebSocket에 basic auth를 싣지 않아
-    // 입장표 없이 열면 401 → 로그인 창이 반복된다. 받지 못하면 그대로 열어 보고, 실패하면 재시도한다
+    // 일회용 입장표를 먼저 받는다 (로그인 세션이 있어야 발급). 받지 못하면 그대로 열어 보고, 실패하면 재시도한다.
+    // 로그인이 끝났으면(401) api()가 알려 화면이 로그인으로 돌아간다. 서버가 세션 종료로 연결을 닫을 때(4401)도 같은 길
     let ticket = ''
     try {
-      const response = await fetch('/api/v1/stream-ticket', { method: 'POST', cache: 'no-store' })
+      const response = await api('/api/v1/stream-ticket', { method: 'POST', cache: 'no-store' })
       if (response.ok) ticket = String((await response.json())?.ticket ?? '')
     } catch { /* 아래 WebSocket이 실패하면 onclose가 재시도한다 */ }
     if (this.stopped || generation !== this.generation) return
@@ -62,7 +63,7 @@ export class LiveProvider implements Provider {
     const snapshotAtFetch = this.current.snapshot
     const timeout = setTimeout(() => controller.abort(), 3000)
     try {
-      const response = await fetch(`/api/v1/state${robotQuery(this.robotId)}`, { cache: 'no-store', signal: controller.signal })
+      const response = await api(`/api/v1/state${robotQuery(this.robotId)}`, { cache: 'no-store', signal: controller.signal })
       if (!response.ok) throw new Error('state fetch failed')
       const value = await response.json()
       // HTTP로 다시 받는 사이 WebSocket 갱신이 왔다면 그쪽이 이미 더 새로운 상태다

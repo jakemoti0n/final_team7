@@ -1,4 +1,4 @@
-"""로봇용 경로의 공유 토큰 인증 (Authorization: Bearer). 브라우저용 경로는 앞단 Caddy basic auth가 맡는다."""
+"""로봇용 경로의 공유 토큰 인증 (Authorization: Bearer). 브라우저용 경로의 로그인은 test_users.py."""
 import uuid
 
 import pytest
@@ -73,7 +73,7 @@ def test_token_sources_and_startup_errors(tmp_path):
 
 def test_config_file_path_enforces_token(tmp_path, monkeypatch):
     config = tmp_path / 'config.json'
-    config.write_text('{}')
+    config.write_text('{"allow_no_login": true}')   # 화면 로그인은 test_users.py에서 따로 본다
     monkeypatch.setenv('DASHBOARD_CONFIG', str(config))
     monkeypatch.delenv('ROBOT_TOKEN', raising=False)
     with pytest.raises(RuntimeError, match='Set ROBOT_TOKEN'):

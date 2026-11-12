@@ -8,6 +8,30 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-12 (76) 관제 화면 로그인을 사람별 계정으로: 서버 안 사용자 DB(SQLite), 로그인 화면·회원 관리, Caddy basic auth 제거
+
+**할 일**
+- 서버: `git pull` → `dashboard/.env`에서 `BASIC_AUTH_USER`·`BASIC_AUTH_HASH` 줄을 지우고 `ADMIN_USERNAME=admin`, `ADMIN_PASSWORD='임시비밀번호'`(5자 이상)를 넣는다 → `dashboard/`에서 `docker compose up -d --build --force-recreate`. **첫 관리자 값 없이 올리면 dashboard가 시작하지 않는다**(`RuntimeError: No dashboard users yet`). 순서는 `docs/AWS_DEPLOY.md` 10절 「basic auth를 쓰던 서버를 처음 올릴 때」
+- 첫 로그인 → 비밀번호 변경 → `.env`의 `ADMIN_PASSWORD` 줄 삭제 → 다른 사람 계정은 화면 「회원 관리」에서
+- 적용 확인: 로그인 없이 `curl -s -o /dev/null -w "%{http_code}\n" https://<DOMAIN>/`이 `200`(로그인 화면), `/api/v1/state`가 `401`. `401`이 `/`에서 나오면 Caddy가 예전 설정(→ `--force-recreate`)
+- 지도를 바꿀 때 `docker volume rm dashboard_waypoints`를 쓰지 않는다. 같은 볼륨에 계정 DB(`/data/users.db`)가 있어 **계정이 모두 지워진다**. waypoint 파일만 지운다(AWS_DEPLOY 11절)
+- 로컬 개발(`dashboard/config.json`)은 `allow_no_login: true`라 지금처럼 로그인 없이 열린다. 할 일 없음
+
+**변경**
+- `dashboard/server/users.py` 새로: 사용자 DB(표준 `sqlite3`, 의존성 추가 없음, WAL). 비밀번호는 표준 `hashlib.scrypt` 해시, 세션은 쿠키에 원본 토큰·DB에는 sha256만. 계정은 모두 관리자 한 등급(권한 칸 없음). 규칙: 아이디 영문·숫자·`_.-` 3~32자(대소문자 무시), 비밀번호 5자 이상, 자기 계정 삭제·사용 중지 금지, 사용 중인 마지막 계정 보호, 사용 중지·삭제·비밀번호 초기화하면 그 계정 세션 모두 끊기, 본인이 비밀번호를 바꾸면 다른 기기 세션 끊기. 계정이 0개면 `ADMIN_USERNAME`·`ADMIN_PASSWORD`로 첫 관리자(임시 비밀번호). CLI `python -m server.users list|add|passwd`(비밀번호 분실 복구)
+- `dashboard/server/app.py`: `POST /api/v1/auth/login`·`logout`, `GET /api/v1/auth/me`, `PUT /api/v1/auth/password`, `GET·POST /api/v1/users`, `PATCH·DELETE /api/v1/users/{id}`. 화면용 경로(state·robots·map·map.png·waypoints·commands·stream-ticket)는 로그인 세션이 있어야 한다(없으면 401 `login_required`, 임시 비밀번호면 403 `password_change_required`). 로봇용 4경로는 그대로 토큰만. 다른 사이트에서 온 변경 요청(`Origin` 불일치)은 403 `cross_site_request`. 로그인 실패는 같은 IP·아이디로 5분에 10번까지(넘으면 429). 쿠키 `limbo_session`: HttpOnly, SameSite=Strict, https(Caddy 뒤)면 Secure, 마지막 활동 후 12시간·로그인 후 7일. 입장표에 세션을 묶어, 실시간 연결 중에도 세션이 끝나면 30초 안에 4401로 닫는다. 누가 했는지 `audit:` 로그(로그인·실패·회원 관리·명령·waypoint), 명령 스냅샷에 `issued_by`
+- `dashboard/server/models.py` 설정: `users_db`, `allow_no_login`(users_db가 없을 때 로그인 없이 열기, 로컬 개발용), `session_idle_s`, `session_max_s`. `deploy/config.json`은 `users_db: /data/users.db`, `config.json`(로컬)은 `allow_no_login: true`
+- 화면: 로그인 화면(`Login.tsx`), 첫 로그인 비밀번호 변경(`ChangePassword.tsx`), 회원 관리 창(`Users.tsx`: 계정 추가·비밀번호 초기화·사용 중지/다시 사용·삭제), 헤더 오른쪽 계정 메뉴(아이디·회원 관리·비밀번호 변경·로그아웃). 서버 API는 `auth.ts`의 `api()`로 불러, 401·403이면 로그인 상태를 다시 확인해 로그인 화면으로 돌아간다. 데모(`/demo`)는 로그인 없이 그대로
+- `dashboard/Caddyfile`: basic auth와 `/api/v1/stream` 예외 handle을 지우고 HTTPS·압축만. `docker-compose.yml`: caddy의 `BASIC_AUTH_*` 빼고 dashboard에 `ADMIN_USERNAME`·`ADMIN_PASSWORD`(없어도 됨). `.env.example`, `deploy/local_https_bridge.sh` 안내 문구
+- 시험: 서버 `tests/test_users.py`(32개: 해시·규칙·세션 만료·끊기·CLI·API 401·쿠키 속성·임시 비밀번호·다른 사이트 요청·시도 제한·회원 관리·`issued_by`·WebSocket 세션 종료), UI `auth.test.ts`, e2e `login.spec.ts`(로그인을 켠 서버 8018에서 첫 관리자 → 비밀번호 변경 → 회원 추가 → 새 회원 첫 로그인)
+- 문서: `dashboard/README.md` 「화면 로그인·회원 관리」 절과 API 표, `docs/AWS_DEPLOY.md`(0·7·8·10·11·13·14·15·16절), `docs/TROUBLESHOOTING.md`(75 항목에 메모), `docs/CONTROL_API_DRAFT.md`(인증 항목)
+
+**원인과 근거**
+- basic auth는 아이디 하나를 모두가 나눠 써서 누가 명령을 냈는지 알 수 없고, 한 사람만 막을 수 없었다. Safari가 WebSocket에 basic auth를 싣지 않는 문제(75)도 입장표로 우회해야 했다. 서버가 직접 로그인하면 이 둘이 함께 풀린다
+- 서버가 프로세스 하나(`--workers 1`)이고 `/data` 볼륨이 이미 있어, 별도 DB 서버 없이 SQLite 파일 하나로 충분하다
+- 비밀번호 5자 이상은 사용자 요청. 짧은 비밀번호를 대입으로 맞히는 것은 시도 제한으로 늦춘다(IP를 여러 개 쓰는 공격까지 막지는 못하므로 쉬운 비밀번호는 피한다)
+- Docker로 확인(별도 프로젝트 이름, 2026-11-12): Caddy HTTPS 뒤에서 로그인·쿠키 Secure·임시 비밀번호 403·비밀번호 변경·다른 사이트 요청 403·로봇 토큰 경로, 컨테이너를 다시 만든 뒤에도 계정이 남음, 브라우저 실시간 WebSocket 연결
+
 ## 2026-11-12 (75) 휴대폰(iPhone)에서 관제 화면 로그인 창이 계속 뜨던 문제: 실시간 상태 WebSocket을 일회용 입장표로 인증
 
 **할 일**

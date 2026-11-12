@@ -1,30 +1,17 @@
-# 앞단 Caddy: HTTPS 자동 발급(Let's Encrypt), 화면·브라우저 API는 basic auth.
-# 로봇용 4경로는 basic auth에서 빼고 서버가 공유 토큰(Authorization: Bearer)으로만 검사한다.
+# 앞단 Caddy: HTTPS 자동 발급(Let's Encrypt)만 맡는다. 로그인은 관제 서버가 한다.
+#   화면·브라우저 API: 서버의 로그인 세션(쿠키)으로 검사 (계정은 서버 볼륨의 /data/users.db)
+#   로봇용 4경로: 서버가 공유 토큰(Authorization: Bearer)으로만 검사
 # 값은 docker-compose.yml이 .env에서 넘긴다. DOMAIN=localhost이면 Caddy 내부 인증서(로컬 시험용)
 {$DOMAIN} {
+	# 로봇 경로는 압축하지 않는다. Bridge가 압축 없이 크기를 세며 읽는다
 	@robot path_regexp robot ^/api/v1/(telemetry|commands/next|commands/[^/]+/(claim|result))$
 	handle @robot {
 		reverse_proxy dashboard:8000
 	}
 
-	# 화면 실시간 상태(WebSocket). Safari는 WebSocket에 basic auth를 싣지 않으므로
-	# 여기서는 basic auth를 걸지 않고, 서버가 일회용 입장표(?ticket=)로 검사한다.
-	# 입장표는 basic auth 뒤의 POST /api/v1/stream-ticket에서만 받을 수 있다
-	handle /api/v1/stream {
-		reverse_proxy dashboard:8000
-	}
-
-	# 상태 확인용(서버 생존만 알려 줌, 정보 없음)
-	handle /healthz {
-		reverse_proxy dashboard:8000
-	}
-
-	# 압축은 브라우저 쪽만. 로봇 경로는 Bridge가 압축 없이 크기를 세며 읽는다
+	# 나머지(화면·브라우저 API·WebSocket·/healthz)는 압축만 하고 서버로 넘긴다
 	handle {
 		encode zstd gzip
-		basic_auth {
-			{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
-		}
 		reverse_proxy dashboard:8000
 	}
 }

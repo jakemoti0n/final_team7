@@ -260,6 +260,12 @@ class Settings(StrictModel):
     robot_token_file: str | None = None
     # 토큰 없이 로봇용 경로를 열어 둔다. 127.0.0.1에서만 쓰는 로컬 개발용. 인터넷에 열 때는 false
     allow_no_robot_token: bool = False
+    # 화면 로그인용 사용자 DB(SQLite) 파일 (저장소 루트 기준 상대경로 또는 절대경로, git에 올리지 않음).
+    # 운영은 /data/users.db (볼륨). 비우면 로그인 없이 연다: allow_no_login일 때만 (127.0.0.1 로컬 개발용)
+    users_db: str | None = None
+    allow_no_login: bool = False
+    session_idle_s: Annotated[float, Field(gt=0)] = 12 * 3600     # 마지막 활동 후 이 시간이 지나면 다시 로그인
+    session_max_s: Annotated[float, Field(gt=0)] = 7 * 24 * 3600  # 로그인 후 이 시간이 지나면 다시 로그인
 
     @model_validator(mode="after")
     def ordered(self):

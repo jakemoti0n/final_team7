@@ -1,10 +1,14 @@
-import { useEffect, useReducer, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { LiveProvider, robotQuery } from './live'
 import { MockProvider, demoMap, scenarios, type BridgeVersion, type Patrol, type Scenario } from './demo'
 import { commandNames, resultLabels, type Command, type Outcome, type RequestResult } from './commands'
 import { LiveControl, driveControl, lockReason, stopReason, waypointLocked } from './control'
 import { fromPixel, headingDeg, isMapInfo, toPixel, uncertaintyPx, type MapInfo, type Waypoint } from './map'
 import { names, topicKeys, type Provider, type RobotSummary, type Snapshot, type View } from './types'
+import { api, logout, me, onAuthLost, type Account, type AuthState } from './auth'
+import Login from './Login'
+import ChangePassword from './ChangePassword'
+import Users from './Users'
 
 export function ageText(age: number | null, delta = 0) {
   if (age === null) return '—'
@@ -314,7 +318,50 @@ export function RobotPicker({ current, robots, pending, disabled, onSelect }: { 
     </ul>{pending && <small className="robot-menu-note">진행 중인 요청은 {current}에서 계속 처리됩니다.</small>}{list.length === 1 && <small className="robot-menu-note">상태를 보낸 로봇이 하나뿐입니다. 다른 로봇은 Bridge가 연결되면 여기에 나타납니다.</small>}</div>}
   </div>
 }
+/** 로그인 확인 후 관제 화면. 데모(/demo)는 서버를 쓰지 않으므로 로그인 없이 바로 연다 */
 export default function App() {
+  if (location.pathname === '/demo') return <RobotApp account={null} onAuth={() => {}} />
+  return <AuthGate />
+}
+type Gate = AuthState | 'checking' | 'unreachable'
+function AuthGate() {
+  const [auth, setAuth] = useState<Gate>('checking')
+  const [notice, setNotice] = useState('')
+  const check = useCallback(() => {
+    me().then(next => setAuth(prev => {
+      // 로그인해 있던 화면이 로그인 화면으로 돌아가면 이유를 알려 준다
+      if (typeof prev === 'object' && prev.user && !next.user) setNotice('로그인이 끝났습니다(로그아웃·만료·계정 변경). 다시 로그인해 주세요.')
+      return next
+    })).catch(() => setAuth(prev => typeof prev === 'object' ? prev : 'unreachable'))
+  }, [])
+  useEffect(() => { check(); return onAuthLost(check) }, [check])
+  useEffect(() => {
+    if (auth !== 'unreachable') return
+    const timer = setTimeout(check, 5000)   // 서버가 다시 뜨면 저절로 이어진다
+    return () => clearTimeout(timer)
+  }, [auth, check])
+  const signOut = () => { void logout().then(() => { setNotice('로그아웃했습니다.'); setAuth({ loginRequired: true, user: null }) }) }
+  if (auth === 'checking') return <main className="auth-page"><p className="muted" role="status">로그인 상태를 확인하고 있습니다…</p></main>
+  if (auth === 'unreachable') return <main className="auth-page"><div className="card auth-card" role="alert"><h1>LIMBO 관제</h1><p>관제 서버에 연결할 수 없습니다. 5초마다 다시 시도합니다.</p><button type="button" onClick={check}>지금 다시 시도</button></div></main>
+  if (auth.loginRequired && !auth.user) return <Login notice={notice} onDone={next => { setNotice(''); setAuth(next) }} />
+  if (auth.user?.must_change_password) return <ChangePassword forced username={auth.user.username} onDone={setAuth} onCancel={signOut} />
+  return <RobotApp account={auth.user} onAuth={next => next === null ? signOut() : setAuth(next)} />
+}
+/** 헤더 오른쪽 계정 메뉴: 이름 · 회원 관리 · 비밀번호 변경 · 로그아웃 */
+function AccountBar({ account, onAuth }: { account: Account; onAuth: (next: AuthState | null) => void }) {
+  const [panel, setPanel] = useState<'users' | 'password' | null>(null)
+  const close = useCallback(() => setPanel(null), [])
+  return <div className="account">
+    <span className="account-name" title={account.display_name || undefined}>{account.username}</span>
+    <button type="button" onClick={() => setPanel('users')}>회원 관리</button>
+    <button type="button" onClick={() => setPanel('password')}>비밀번호 변경</button>
+    <button type="button" onClick={() => onAuth(null)}>로그아웃</button>
+    {panel === 'users' && <Users me={account} onClose={close} />}
+    {panel === 'password' && <ChangePassword forced={false} username={account.username} onDone={next => { setPanel(null); onAuth(next) }} onCancel={close} />}
+  </div>
+}
+/** account: 로그인한 계정 (로그인 없이 연 서버·데모면 null). onAuth(null)은 로그아웃 */
+function RobotApp({ account, onAuth }: { account: Account | null; onAuth: (next: AuthState | null) => void }) {
   const demoMode = location.pathname === '/demo'
   const [robotId, setRobotId] = useState(() => demoMode ? '' : initialRobot())
   const choose = (next: string) => {
@@ -328,14 +375,14 @@ export default function App() {
     // 저장된 로봇을 서버가 모르면(서버 재시작 등) 기본 로봇으로 되돌린다
     if (demoMode || !robotId) return
     const controller = new AbortController()
-    fetch('/api/v1/robots', { signal: controller.signal }).then(r => r.ok ? r.json() : null).then(value => {
+    api('/api/v1/robots', { signal: controller.signal }).then(r => r.ok ? r.json() : null).then(value => {
       if (Array.isArray(value?.robots) && !value.robots.some((r: RobotSummary) => r.robot_id === robotId)) choose('')
     }).catch(() => {})
     return () => controller.abort()
   }, [demoMode, robotId])
-  return <RobotDashboard key={robotId} robotId={robotId} onSelect={choose} />
+  return <RobotDashboard key={robotId} robotId={robotId} onSelect={choose} account={account} onAuth={onAuth} />
 }
-function RobotDashboard({ robotId, onSelect }: { robotId: string; onSelect: (robotId: string) => void }) {
+function RobotDashboard({ robotId, onSelect, account, onAuth }: { robotId: string; onSelect: (robotId: string) => void; account: Account | null; onAuth: (next: AuthState | null) => void }) {
   const [provider] = useState<Provider>(() => location.pathname === '/demo' ? new MockProvider() : new LiveProvider(robotId))
   const demo = provider instanceof MockProvider ? provider : null
   const [view, setView] = useState<View>(provider.current)
@@ -353,13 +400,13 @@ function RobotDashboard({ robotId, onSelect }: { robotId: string; onSelect: (rob
   useEffect(() => {
     if (demo || liveMap || !mapAvailable) return
     const controller = new AbortController()
-    fetch(`/api/v1/map${robotQuery(robotId)}`, { signal: controller.signal }).then(r => r.ok ? r.json() : null).then(value => { if (isMapInfo(value)) setLiveMap(value) }).catch(() => {})
+    api(`/api/v1/map${robotQuery(robotId)}`, { signal: controller.signal }).then(r => r.ok ? r.json() : null).then(value => { if (isMapInfo(value)) setLiveMap(value) }).catch(() => {})
     return () => controller.abort()
   }, [demo, liveMap, mapAvailable, robotId])
   useEffect(() => {
     if (demo || !liveMap) return
     const controller = new AbortController()
-    fetch(`/api/v1/waypoints${robotQuery(robotId)}`, { signal: controller.signal }).then(r => { if (!r.ok) throw new Error(r.status === 404 ? 'Waypoint API를 사용할 수 없습니다. Dashboard 서버를 다시 시작하고 설정을 확인하세요.' : 'Waypoint 목록을 읽지 못했습니다.'); return r.json() }).then(value => {
+    api(`/api/v1/waypoints${robotQuery(robotId)}`, { signal: controller.signal }).then(r => { if (!r.ok) throw new Error(r.status === 404 ? 'Waypoint API를 사용할 수 없습니다. Dashboard 서버를 다시 시작하고 설정을 확인하세요.' : 'Waypoint 목록을 읽지 못했습니다.'); return r.json() }).then(value => {
       if (value && Array.isArray(value.waypoints) && typeof value.revision === 'string') {
         setWaypointDocument(value)
         setWaypointProblem(null)
@@ -372,11 +419,11 @@ function RobotDashboard({ robotId, onSelect }: { robotId: string; onSelect: (rob
     if (!waypointDocument) throw new Error('Waypoint 설정을 불러오지 못했습니다.')
     let response: Response
     try {
-      response = await fetch(`/api/v1/waypoints${robotQuery(robotId)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: waypointDocument.revision, ...change }) })
+      response = await api(`/api/v1/waypoints${robotQuery(robotId)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: waypointDocument.revision, ...change }) })
     } catch { throw new Error('서버에 연결할 수 없습니다.') }
     if (!response.ok) {
       if (response.status === 409) {
-        const latest = await fetch(`/api/v1/waypoints${robotQuery(robotId)}`).then(r => r.ok ? r.json() : null).catch(() => null)
+        const latest = await api(`/api/v1/waypoints${robotQuery(robotId)}`).then(r => r.ok ? r.json() : null).catch(() => null)
         if (latest) { setWaypointDocument(latest); setLiveMap(current => current ? { ...current, waypoints: latest.waypoints } : current) }
       }
       const body = await response.json().catch(() => null)
@@ -400,7 +447,7 @@ function RobotDashboard({ robotId, onSelect }: { robotId: string; onSelect: (rob
   const banner = view.serverProblem ? '서버 상태를 갱신할 수 없습니다. 현재 로봇 연결 상태를 확인할 수 없습니다.' : connection === 'disconnected' ? '로봇과 연결이 끊겼습니다. 아래 정보는 마지막으로 받은 상태입니다.' : connection === 'delayed' ? '로봇 상태가 늦게 오고 있습니다. 지금 상태는 확인할 수 없습니다.' : connection === 'checking' ? '로봇 연결을 확인하고 있습니다. 아직 받은 정보가 없습니다.' : null
   return <>
     {demo && <div className="demo-banner">데모 데이터 · 실제 로봇을 제어하지 않습니다</div>}
-    <header><div className="container header-inner"><div className="brand"><h1>LIMBO 관제</h1><RobotPicker current={robotName} robots={robots} pending={requestPending} disabled={!!demo} onSelect={onSelect} />{demo && <span className="mode-tag">데모 데이터</span>}</div><div className="connection"><span role="status" className="overall"><Badge status={summary.label} tone={summary.tone}>{summary.label}</Badge>{summary.detail && <span>{summary.detail}</span>}</span><span className="last-received">로봇 {labels[connection]} · {state?.bridge.last_received_at ? `마지막 수신 ${timeText(state.bridge.last_received_at)} · ${ageText(state.bridge.age_s, delta)}` : '수신 기록 없음'}</span></div></div></header>
+    <header><div className="container header-inner"><div className="brand"><h1>LIMBO 관제</h1><RobotPicker current={robotName} robots={robots} pending={requestPending} disabled={!!demo} onSelect={onSelect} />{demo && <span className="mode-tag">데모 데이터</span>}</div><div className="connection"><span role="status" className="overall"><Badge status={summary.label} tone={summary.tone}>{summary.label}</Badge>{summary.detail && <span>{summary.detail}</span>}</span><span className="last-received">로봇 {labels[connection]} · {state?.bridge.last_received_at ? `마지막 수신 ${timeText(state.bridge.last_received_at)} · ${ageText(state.bridge.age_s, delta)}` : '수신 기록 없음'}</span></div>{account && <AccountBar account={account} onAuth={onAuth} />}</div></header>
     {banner && <div className={`banner ${connection}`} role={connection === 'checking' ? 'status' : 'alert'}><div className="container">{banner}</div></div>}
     {demo && <DemoTools demo={demo} />}
     <main className="container"><div className="page-meta"><span>{demo ? '가상 로봇 상태 및 제어 흐름 검증' : '로봇 상태 모니터링 · 순찰 제어'}</span><a href={demo ? '/' : '/demo'}>{demo ? '실제 수신 화면으로 →' : '가상 제어 데모 보기 →'}</a></div>

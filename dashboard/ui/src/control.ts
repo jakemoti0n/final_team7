@@ -1,5 +1,6 @@
 import type { Command, RequestResult, Result, Stage } from './commands'
 import type { ServerCommand, ServerStage, View } from './types'
+import { api } from './auth'
 
 // 실제 화면 제어: 서버 명령 단계 → 화면 3단계 (docs/CONTROL_API_DRAFT.md §3.1).
 // 성공은 서버가 confirmed라고 한 것만. 클릭·응답만으로 성공 표시하지 않고, 자동 재전송하지 않는다.
@@ -34,6 +35,9 @@ const postErrors: Record<string, string> = {
   invalid_route: '저장된 waypoint 경로가 올바르지 않습니다. 마지막 지점이 정지 지점인지 확인해 주세요.',
   waypoints_unavailable: '서버가 waypoint 파일을 읽지 못했습니다.',
   waypoints_not_configured: '서버에 waypoint 파일이 설정되지 않았습니다.',
+  login_required: '로그인이 끝나 요청을 보내지 않았습니다. 다시 로그인해 주세요.',
+  password_change_required: '비밀번호를 바꾼 뒤 사용할 수 있습니다.',
+  cross_site_request: '다른 사이트에서 보낸 요청이라 서버가 거절했습니다.',
 }
 function sendFailed(command: Command, detail: string): RequestResult {
   return { id: '—', command, at: new Date().toISOString(), stages: ['failed', 'unknown', 'unknown'], result: 'failed', detail }
@@ -82,7 +86,7 @@ export function commandReason(view: View, command: Command, lock: string) {
 export class LiveControl {
   private local: { result: RequestResult; base: string | null } | null = null
   /** robotId: 명령을 보낼 로봇. 비우면 서버의 기본 로봇 */
-  constructor(private changed: () => void, private post: typeof fetch = (...a) => fetch(...a), private robotId = '') {}
+  constructor(private changed: () => void, private post: typeof fetch = (...a) => api(...a), private robotId = '') {}
   current(view: View): RequestResult | null {
     const server = view.snapshot?.command ?? null
     if (this.local && (server?.request_id ?? null) === this.local.base) return this.local.result

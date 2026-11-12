@@ -1,6 +1,6 @@
 #!/bin/bash
 # 내 PC에서 AWS와 같은 구성으로 시험하기 (docs/AWS_DEPLOY.md 16절)
-#   Docker의 관제 서버 + Caddy(HTTPS·basic auth)를 켜고,
+#   Docker의 관제 서버 + Caddy(HTTPS)를 켜고,
 #   실제 Bridge를 https://localhost 로 로봇 토큰을 들고 붙인다.
 # 먼저 시뮬레이션을 같은 ROS_DOMAIN_ID(기본 97)로 켜 둔다. 어느 폴더에서 실행해도 된다:
 #   dashboard/deploy/local_https_bridge.sh
@@ -16,8 +16,8 @@ fail() { echo "오류: $*" >&2; exit 1; }
 env_value() { grep -E "^$1=" "$DASH/.env" | tail -1 | cut -d= -f2- | sed -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//'; }
 
 # 1. 준비물 확인
-[ -f "$DASH/.env" ] || fail "dashboard/.env가 없습니다. dashboard/.env.example을 복사해 DOMAIN=localhost, 해시, 토큰을 채우세요 (AWS_DEPLOY.md 7절)"
-DOMAIN=$(env_value DOMAIN); TOKEN=$(env_value ROBOT_TOKEN); USER_NAME=$(env_value BASIC_AUTH_USER)
+[ -f "$DASH/.env" ] || fail "dashboard/.env가 없습니다. dashboard/.env.example을 복사해 DOMAIN=localhost, 첫 관리자(ADMIN_USERNAME/ADMIN_PASSWORD), 토큰을 채우세요 (AWS_DEPLOY.md 7절)"
+DOMAIN=$(env_value DOMAIN); TOKEN=$(env_value ROBOT_TOKEN); USER_NAME=$(env_value ADMIN_USERNAME || true)
 [ "$DOMAIN" = localhost ] || fail ".env의 DOMAIN이 '$DOMAIN'입니다. 이 스크립트는 로컬 시험용이라 DOMAIN=localhost여야 합니다"
 [ -n "$TOKEN" ] || fail ".env의 ROBOT_TOKEN이 비어 있습니다"
 docker info >/dev/null 2>&1 || fail "docker를 쓸 수 없습니다. Docker가 켜져 있는지, docker 그룹에 들어간 뒤 다시 로그인했는지 확인하세요"
@@ -55,7 +55,7 @@ EOF
 
 echo
 echo "== 준비 완료"
-echo "   화면:  https://localhost  (아이디 ${USER_NAME:-?}, 비밀번호는 해시를 만들 때 쓴 것. 인증서 경고는 '고급 → 계속')"
+echo "   화면:  https://localhost  (처음이면 .env의 ADMIN_USERNAME ${USER_NAME:-?}/ADMIN_PASSWORD로 로그인 후 비밀번호 변경. 인증서 경고는 '고급 → 계속')"
 echo "   ROS_DOMAIN_ID=$ROS_DOMAIN_ID (시뮬레이션과 같아야 함)"
 echo "   Bridge 설정: $WORK/bridge.yaml"
 echo "   끄기: Ctrl+C (컨테이너는 남음, 끄려면 dashboard/에서 docker compose down)"

@@ -7,3 +7,7 @@ ui/test-results/
 ui/playwright-report/
 ui/*.tsbuildinfo
 artifacts/
+# 화면 로그인 사용자 DB (로컬에서 users_db를 켰을 때). 운영 DB는 서버 볼륨 /data에만 있다
+*.db
+*.db-wal
+*.db-shm

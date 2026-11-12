@@ -302,6 +302,6 @@ queued → delivered → accepted → confirmed        (성공)
 | 버전 | 텔레메트리를 v2로 올릴지, v1에 선택 필드로 넣을지 | v2 (v1은 모르는 필드를 거부하므로 선택 필드도 결국 호환 깨짐) |
 | 명령 통로 | long poll vs 텔레메트리 응답에 싣기 | long poll (정지 지연·전송 실패 중 막힘) |
 | 제한 시간 | 응답 5초 / 확인 5초 / 명령 유효 5초 / 서비스 3초 | 데모 값 그대로 시작, 실물에서 조정 |
-| 인증 | 화면 → 서버 명령에 인증이 없으면 같은 네트워크 누구나 로봇을 멈출 수 있음 | **2026-11-06 결정**: 로봇용 4경로(telemetry, commands/next·claim·result)는 서버가 공유 토큰(`Authorization: Bearer`, 없거나 틀리면 401 `unauthorized`)으로, 브라우저용은 앞단 Caddy basic auth로 막는다. 로컬 개발은 `allow_no_robot_token`. `dashboard/README.md` 「로봇 토큰과 인터넷 공개」 |
+| 인증 | 화면 → 서버 명령에 인증이 없으면 같은 네트워크 누구나 로봇을 멈출 수 있음 | **2026-11-06 결정**: 로봇용 4경로(telemetry, commands/next·claim·result)는 서버가 공유 토큰(`Authorization: Bearer`, 없거나 틀리면 401 `unauthorized`)으로, 브라우저용은 앞단 Caddy basic auth로 막는다. 로컬 개발은 `allow_no_robot_token`. `dashboard/README.md` 「로봇 토큰과 인터넷 공개」. **2026-11-12 (76) 변경**: 브라우저용은 basic auth 대신 관제 서버의 사람별 계정 로그인(세션 쿠키, 사용자 DB SQLite, 계정은 모두 관리자)으로 막고 명령에 요청한 아이디(`issued_by`)를 남긴다. `dashboard/README.md` 「화면 로그인·회원 관리」 |
 | 재시작 버튼 | PRD의 프로그램 재시작 | 이번 범위에서 뺌 (`CONTROL_SCREEN.md`) |
 | 담당 | Bridge·서버·화면 구현을 누가 | 계약 합의 후 나눔 |

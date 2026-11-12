@@ -1,4 +1,4 @@
-# 관제 서버 + Caddy(HTTPS·basic auth). dashboard/에서: docker compose up -d --build
+# 관제 서버 + Caddy(HTTPS). 화면 로그인은 서버가 한다. dashboard/에서: docker compose up -d --build
 # 값은 같은 폴더의 .env (cp .env.example .env 후 채움). 안내: docs/AWS_DEPLOY.md
 services:
   dashboard:
@@ -11,8 +11,12 @@ services:
       ROBOT_TOKEN: ${ROBOT_TOKEN:?ROBOT_TOKEN을 .env에 넣으세요}
       MAP_YAML: ${MAP_YAML:-limbo/src/limbo_navigation/maps/human_test_map.yaml}
       INITIAL_WAYPOINTS: ${INITIAL_WAYPOINTS:-test_waypoints.yaml}
+      # 첫 관리자. 사용자 DB(/data/users.db)에 계정이 하나도 없을 때만 쓴다 (첫 로그인 때 비밀번호 변경).
+      # 계정이 생긴 뒤에는 무시되므로 첫 로그인 후 .env에서 ADMIN_PASSWORD 줄을 지워도 된다
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     volumes:
-      - waypoints:/data          # 화면에서 편집한 waypoint. 컨테이너를 다시 만들어도 남음
+      - waypoints:/data          # 화면에서 편집한 waypoint와 사용자 DB(users.db). 컨테이너를 다시 만들어도 남음
     expose:
       - "8000"                   # 밖으로 열지 않음. Caddy만 접근
 
@@ -27,8 +31,6 @@ services:
       - "443:443/udp"
     environment:
       DOMAIN: ${DOMAIN:?DOMAIN을 .env에 넣으세요}
-      BASIC_AUTH_USER: ${BASIC_AUTH_USER:?BASIC_AUTH_USER를 .env에 넣으세요}
-      BASIC_AUTH_HASH: ${BASIC_AUTH_HASH:?BASIC_AUTH_HASH를 .env에 넣으세요}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data         # 발급받은 인증서. 지우면 다시 발급(횟수 제한 있음)

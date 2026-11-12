@@ -101,7 +101,8 @@ corepack pnpm dev
 | 종류 | 경로 | 보호 |
 |---|---|---|
 | 로봇용 (Bridge가 부름) | `POST /api/v1/telemetry`, `GET /api/v1/commands/next`, `POST /api/v1/commands/{id}/claim`, `POST /api/v1/commands/{id}/result` | 서버가 **공유 토큰**으로 검사: `Authorization: Bearer <토큰>`. 없거나 틀리면 401 `unauthorized` |
-| 브라우저용 | 화면(`/`, `/demo`, `/assets`), 나머지 `/api/v1/*`(명령 요청·상태·WebSocket·지도·waypoint), `/healthz` | 서버는 검사하지 않는다. 인터넷에 열 때는 **앞단 Caddy의 basic auth**로 막는다(로봇용 4경로는 basic auth에서 빼고 토큰만). 배포는 `docs/AWS_DEPLOY.md` |
+| 브라우저용 | 나머지 `/api/v1/*`(명령 요청·상태·WebSocket·지도·waypoint·회원 관리) | 서버가 **로그인 세션**(쿠키)으로 검사. 아래 「화면 로그인·회원 관리」 |
+| 누구나 | 화면 파일(`/`, `/demo`, `/assets`), `/api/v1/auth/login`·`/auth/logout`, `/healthz` | 검사 없음. 화면은 열리지만 로그인 전에는 로그인 창만 보인다. 데모(`/demo`)는 서버 API를 쓰지 않는다 |
 
 토큰은 서버와 Bridge가 **같은 값**을 쓴다. git에 올리지 않는다. 16자 이상, 공백 없이. 만들기:
 
@@ -135,6 +136,45 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST -H 'content-type: application/j
 
 환경 변수 `ROBOT_TOKEN`이 있으면 `allow_no_robot_token: true`여도 토큰을 검사한다. 가상 송신기도 `--token`(기본값은 환경 변수 `ROBOT_TOKEN`)으로 헤더를 붙인다.
 
+## 화면 로그인·회원 관리
+
+관제 화면은 서버 안의 사용자 DB(SQLite 파일 하나)로 로그인한다. 계정은 **모두 관리자** 한 등급이라, 로그인한 사람은 누구나 관제 조작(정지·재개·순찰 시작·종료, waypoint 편집)과 회원 관리를 할 수 있다. 자가 가입은 없고 계정은 다른 관리자가 만들어 준다.
+
+| 항목 | 내용 |
+|---|---|
+| 사용자 DB | 설정의 `users_db`. 운영(컨테이너)은 `/data/users.db`(볼륨이라 컨테이너를 다시 만들어도 남음). 비밀번호는 scrypt 해시로만 저장 |
+| 첫 관리자 | 계정이 하나도 없을 때 서버가 시작하면 환경 변수 `ADMIN_USERNAME`·`ADMIN_PASSWORD`로 만든다. 그 비밀번호는 임시라 첫 로그인 때 새 비밀번호로 바꾸기 전에는 관제 화면을 쓸 수 없다. 계정이 있으면 두 값은 무시된다. 계정도 없고 두 값도 없으면 **서버가 시작하지 않는다**(`RuntimeError: No dashboard users yet`) |
+| 회원 관리 | 화면 헤더의 「회원 관리」: 계정 추가(아이디·이름·임시 비밀번호), 비밀번호 초기화, 사용 중지·다시 사용, 삭제. 새 계정과 초기화한 비밀번호는 임시라 본인이 첫 로그인 때 바꾼다 |
+| 규칙 | 아이디는 영문·숫자·`_.-` 3~32자(대소문자 구분 없이 같은 아이디), 비밀번호 5자 이상. 자기 계정은 삭제·사용 중지할 수 없고(다른 관리자가 함), 사용 중인 마지막 계정은 지울 수 없다 |
+| 세션 | 로그인하면 `limbo_session` 쿠키(HttpOnly, SameSite=Strict, https면 Secure). 마지막 활동 후 12시간(`session_idle_s`), 로그인 후 7일(`session_max_s`)이 지나면 다시 로그인. 실시간 화면을 보고 있는 것도 활동으로 친다 |
+| 바로 끊김 | 로그아웃, 사용 중지, 삭제, 비밀번호 초기화를 하면 그 계정의 로그인이 모두 끊긴다. 열려 있던 실시간 화면도 30초 안에 로그인 창으로 돌아간다. 본인이 비밀번호를 바꾸면 지금 기기만 남고 다른 기기의 로그인이 끊긴다 |
+| 공격 대비 | 같은 IP·같은 아이디로 5분에 10번 틀리면 잠시 429. 다른 사이트에서 보낸 변경 요청(`Origin`이 다름)은 403 `cross_site_request` |
+| 기록 | 로그인·로그인 실패·회원 관리·명령·waypoint 변경을 누가 했는지 서버 로그에 `audit:`로 남긴다. 명령은 스냅샷 `command.issued_by`에도 아이디가 들어간다 |
+
+**비밀번호를 잊었을 때·계정을 명령으로 다룰 때** (서버가 켜져 있어도 됨, 비밀번호는 화면에 보이지 않게 두 번 묻는다):
+
+```bash
+# 컨테이너(서버의 dashboard/에서)
+docker compose exec dashboard python -m server.users list
+docker compose exec dashboard python -m server.users passwd admin      # 다시 설정 + 그 계정 로그인 모두 끊기 + 사용 중지였으면 다시 사용
+docker compose exec dashboard python -m server.users add park --name 박관제 --temporary   # --temporary: 첫 로그인 때 바꾸게 함
+# 로컬: --db 로 파일을 준다
+.venv/bin/python -m server.users --db /tmp/users.db add admin
+```
+
+**로컬 개발(127.0.0.1)**: 기본 `config.json`은 `users_db: null`, `allow_no_login: true`라 로그인 없이 열린다(헤더에 계정 메뉴가 없음). `users_db`가 없는데 `allow_no_login`도 아니면 서버가 시작하지 않는다. 로컬에서 로그인까지 시험하려면 `users_db`를 넣은 설정으로 띄운다:
+
+```bash
+# dashboard에서. users.db는 git에서 제외됨
+cp config.json /tmp/login-config.json
+python3 - <<'PY'
+import json; c = json.load(open('/tmp/login-config.json')); c.update(users_db='dashboard/users.db', allow_no_login=False)
+json.dump(c, open('/tmp/login-config.json', 'w'), indent=2)
+PY
+DASHBOARD_CONFIG=/tmp/login-config.json ADMIN_USERNAME=admin ADMIN_PASSWORD=temp1 \
+  .venv/bin/python -m uvicorn server.app:app --host 127.0.0.1 --port 8000 --workers 1
+```
+
 ## 인터넷(AWS) 배포
 
 컨테이너 두 개(관제 서버 + Caddy)로 올린다. 처음부터 끝까지의 순서는 [docs/AWS_DEPLOY.md](../docs/AWS_DEPLOY.md)를 따른다.
@@ -142,10 +182,10 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST -H 'content-type: application/j
 | 파일 | 내용 |
 |---|---|
 | `Dockerfile` | UI 빌드(node 24, pnpm lockfile 그대로) → Python 3.12 서버. `uvicorn --workers 1` 고정, root 아닌 사용자. 빌드 context는 저장소 루트(지도·기본 waypoint가 `limbo/`에 있음), 넣는 파일은 `Dockerfile.dockerignore`가 고름 |
-| `docker-compose.yml` | `dashboard`(8000, 밖으로 안 엶) + `caddy`(80·443). 볼륨: `waypoints`(편집한 waypoint), `caddy_data`(인증서) |
-| `Caddyfile` | HTTPS 자동 발급, 화면·브라우저 API는 basic auth, 로봇용 4경로와 `/healthz`는 basic auth 없이 서버로(로봇은 토큰) |
-| `.env.example` | `DOMAIN`, `BASIC_AUTH_USER`/`BASIC_AUTH_HASH`, `ROBOT_TOKEN`, `MAP_YAML`, `INITIAL_WAYPOINTS`. 복사해 `.env`로(git 제외) |
-| `deploy/config.json`, `deploy/entrypoint.sh` | 컨테이너용 설정(waypoint는 `/data/waypoints.yaml`, `allow_no_robot_token: false`). 처음 시작 때 볼륨이 비었으면 `INITIAL_WAYPOINTS`를 복사하고, `MAP_YAML`을 설정에 끼운 뒤 서버 실행 |
+| `docker-compose.yml` | `dashboard`(8000, 밖으로 안 엶) + `caddy`(80·443). 볼륨: `waypoints`(`/data`: 편집한 waypoint와 사용자 DB `users.db`), `caddy_data`(인증서) |
+| `Caddyfile` | HTTPS 자동 발급만. 로그인은 서버가 한다(화면은 로그인 세션, 로봇용 4경로는 토큰). 로봇용 경로는 압축하지 않음 |
+| `.env.example` | `DOMAIN`, `ADMIN_USERNAME`/`ADMIN_PASSWORD`(첫 관리자, 처음 시작 때만), `ROBOT_TOKEN`, `MAP_YAML`, `INITIAL_WAYPOINTS`. 복사해 `.env`로(git 제외) |
+| `deploy/config.json`, `deploy/entrypoint.sh` | 컨테이너용 설정(waypoint는 `/data/waypoints.yaml`, 사용자 DB는 `/data/users.db`, `allow_no_robot_token: false`, `allow_no_login: false`). 처음 시작 때 볼륨이 비었으면 `INITIAL_WAYPOINTS`를 복사하고, `MAP_YAML`을 설정에 끼운 뒤 서버 실행 |
 
 ## 주행 시작·정지·재개·종료
 
@@ -242,15 +282,21 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 | `POST /api/v1/telemetry` | 텔레메트리 v1, v2(`patrol`·`pose` 추가) 또는 v3(`launcher` 추가), 최대 UTF-8 8192바이트 |
 | `GET /api/v1/robots` | `{"default": "LIMBO-01", "robots": [{"robot_id", "status", "last_received_at"}]}`. 헤더 로봇 목록용 |
 | `GET /api/v1/state` | `?robot_id=`(생략하면 기본 로봇, 모르면 404 `unknown_robot`). 전체 현재 판정, 마지막 값, 순찰·위치, 마지막 명령, 설정, 알림 |
-| `POST /api/v1/stream-ticket` | WebSocket 일회용 입장표 `{"ticket"}` (30초 유효). basic auth 뒤에 있음 |
-| `WS /api/v1/stream` | `?ticket=`(필수, 없거나 틀리면 거절) `&robot_id=`(모르면 4404로 닫음). 연결 즉시, 새 유효 수신·명령 변화 시, 1초 타이머마다 전체 상태. Safari(iPhone)는 WebSocket에 basic auth를 싣지 않으므로 Caddy는 이 경로만 basic auth 없이 넘기고 입장표로 검사한다 |
-| `POST /api/v1/commands` | 화면 → 서버. `{"command":"pause"\|"resume"\|"start"\|"stop", "robot_id"?: "LIMBO-02"}`(생략하면 기본 로봇, 모르면 404 `unknown_robot`). 202와 요청 정보, 처리 중이면 409 `command_in_progress`, 로봇 연결이 `connected`가 아니면 409 `bridge_not_connected`. start·stop은 추가로 409 `bridge_unsupported`(이전 Bridge)·`patrol_already_running`·`patrol_not_running`·`invalid_route`, 503 `waypoints_unavailable` |
+| `POST /api/v1/stream-ticket` | WebSocket 일회용 입장표 `{"ticket"}` (30초 유효). 로그인 세션이 있어야 받는다 |
+| `WS /api/v1/stream` | `?ticket=`(필수, 없거나 틀리면 거절) `&robot_id=`(모르면 4404로 닫음). 연결 즉시, 새 유효 수신·명령 변화 시, 1초 타이머마다 전체 상태. 입장표를 받은 세션이 끝나면(로그아웃·사용 중지·만료) 30초 안에 4401로 닫는다 |
+| `POST /api/v1/commands` | 화면 → 서버. `{"command":"pause"\|"resume"\|"start"\|"stop", "robot_id"?: "LIMBO-02"}`(생략하면 기본 로봇, 모르면 404 `unknown_robot`). 202와 요청 정보(`issued_by`: 요청한 아이디), 처리 중이면 409 `command_in_progress`, 로봇 연결이 `connected`가 아니면 409 `bridge_not_connected`. start·stop은 추가로 409 `bridge_unsupported`(이전 Bridge)·`patrol_already_running`·`patrol_not_running`·`invalid_route`, 503 `waypoints_unavailable` |
 | `GET /api/v1/commands/next` | Bridge → 서버. `robot_id`, `bridge_session_id`, `wait_s`(최대 10초 long poll). 명령이 있으면 `request_id`·`command`·`ttl_ms`(start는 `route`도: `revision`·`bounds`·`waypoints`), 없으면 204(아직 텔레메트리를 보내지 않은 로봇도 204). 현재 세션에 한 번만 내준다 |
 | `POST /api/v1/commands/{request_id}/claim` | Bridge가 서비스를 부르기 직전 아직 유효한지 확인. 허락되면 응답 제한을 이 시각부터 다시 센다. 끝난 명령이거나 다른 로봇의 명령이면 409 `command_closed`·`unknown_robot` |
 | `POST /api/v1/commands/{request_id}/result` | Bridge의 결과 보고(`accepted`·`rejected`·`no_response`·`service_unavailable`·`expired`). 끝난 명령의 늦은 보고는 결과를 바꾸지 않는다 |
 | `GET /api/v1/map` | `?robot_id=`. 그 로봇의 지도 메타데이터(`image`에 `?robot_id=`가 붙음)(해상도·원점·크기·waypoint). 지도 미설정 시 404 `map_not_configured` |
 | `GET /api/v1/map.png` | `?robot_id=`. SLAM PGM을 변환한 회색조 PNG |
 | `GET /healthz` | `{"status":"ok"}`, 서버 생존 확인만 의미 |
+| `POST /api/v1/auth/login` | `{"username","password"}` → 200과 `limbo_session` 쿠키, 틀리면 401 `invalid_credentials`(없는 아이디와 틀린 비밀번호를 구분하지 않음), 너무 많이 틀리면 429 `too_many_attempts` |
+| `POST /api/v1/auth/logout` | 세션을 지우고 쿠키 삭제 |
+| `GET /api/v1/auth/me` | `{"login_required", "user": {"id","username","display_name","must_change_password"}}`. 로그인 없이 연 서버면 `{"login_required": false, "user": null}` |
+| `PUT /api/v1/auth/password` | `{"current_password","new_password"}`. 현재 비밀번호가 틀리면 403 `wrong_password`. 임시 비밀번호 상태에서는 이 경로와 `auth/*`만 쓸 수 있고 나머지는 403 `password_change_required` |
+| `GET·POST /api/v1/users` | 회원 목록(해시 제외) / 계정 추가 `{"username","password","display_name"?}` → 201(임시 비밀번호). 같은 아이디면 409 `username_taken` |
+| `PATCH·DELETE /api/v1/users/{id}` | `{"display_name"?, "active"?, "password"?}`(password는 초기화, 임시가 됨) / 삭제 204. 자기 계정은 409 `cannot_disable_self`·`cannot_delete_self`, 마지막 계정은 409 `last_admin` |
 
 명령 API 본문도 텔레메트리와 같이 `application/json`, 8192바이트 이하만 받는다. 명령은 한 번에 하나만 처리하며 마지막 명령은 다음 명령 전까지 스냅샷에 남는다.
 
@@ -339,7 +385,7 @@ cd /home/itkwon/limbo_ros2_workspace/final_team7/dashboard/ui
 CHROME_PATH=/opt/google/chrome/chrome corepack pnpm test:e2e
 ```
 
-E2E는 테스트용 FastAPI를 127.0.0.1:8017에서 자동 실행한다. 기존 8017 서버를 종료하고 실행한다. 저장소 루트 기준으로 1440·1024·768·390px 스크린샷은 `dashboard/artifacts/`에 생성되고, 테스트 실패 자료는 `dashboard/ui/test-results/`에 남는다. 모든 생성물·가상환경·의존성은 git에서 제외한다.
+E2E는 테스트용 FastAPI를 127.0.0.1:8017(로그인 없음)과 127.0.0.1:8018(로그인 켬, `ui/e2e/login-config.json`, 실행할 때마다 빈 사용자 DB `dashboard/artifacts/e2e-users.db`에서 첫 관리자부터)에서 자동 실행한다. 기존 8017·8018 서버를 종료하고 실행한다. 저장소 루트 기준으로 1440·1024·768·390px 스크린샷은 `dashboard/artifacts/`에 생성되고, 테스트 실패 자료는 `dashboard/ui/test-results/`에 남는다. 모든 생성물·가상환경·의존성은 git에서 제외한다.
 
 ## 기존 Bridge 통합
 

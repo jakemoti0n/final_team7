@@ -94,8 +94,9 @@ class Store:
             return cfg.command_stop_response_timeout_s, cfg.command_stop_confirm_timeout_s
         return cfg.command_response_timeout_s, cfg.command_confirm_timeout_s
 
-    def issue(self, command, route=None):
-        """화면의 명령 요청. (HTTP 상태, 본문). route는 start일 때 Bridge에 실어 보낼 waypoint 경로"""
+    def issue(self, command, route=None, issued_by=None):
+        """화면의 명령 요청. (HTTP 상태, 본문). route는 start일 때 Bridge에 실어 보낼 waypoint 경로,
+        issued_by는 요청한 사용자 아이디 (로그인 없이 연 로컬 개발이면 None)"""
         if self.command and self.command["stage"] not in FINAL:
             return 409, ("command_in_progress", "Another command is still in progress")
         if self.connection()[0] != "connected":
@@ -105,7 +106,7 @@ class Store:
                             issued_at=self.utc(), updated_at=self.utc(), issued_mono=now,
                             delivered_mono=None, claimed_mono=None, accepted_mono=None, session=self.session,
                             count_at_call=None, route=route, accepted_launcher=None,
-                            accepted_patrol_state=None)
+                            accepted_patrol_state=None, issued_by=issued_by)
         return 202, self.command_view()
 
     def take_command(self, session):
@@ -218,7 +219,7 @@ class Store:
         c = self.command
         if not c:
             return None
-        view = {k: c[k] for k in ("request_id", "command", "stage", "message", "issued_at", "updated_at")}
+        view = {k: c[k] for k in ("request_id", "command", "stage", "message", "issued_at", "updated_at", "issued_by")}
         view["age_s"] = max(0., self.monotonic() - c["issued_mono"])  # 화면이 브라우저 시계와 비교하지 않게
         return view
 

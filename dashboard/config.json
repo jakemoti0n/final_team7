@@ -15,5 +15,7 @@
   "map_yaml": "limbo/src/limbo_navigation/maps/human_test_map.yaml",
   "waypoints_yaml": "limbo/src/limbo_patrol/config/test_waypoints.yaml",
   "robot_token_file": null,
-  "allow_no_robot_token": true
+  "allow_no_robot_token": true,
+  "users_db": null,
+  "allow_no_login": true
 }

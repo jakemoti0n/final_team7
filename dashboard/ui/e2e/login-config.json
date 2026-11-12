@@ -1,0 +1,5 @@
+{
+  "robot_id": "LIMBO-01",
+  "users_db": "dashboard/artifacts/e2e-users.db",
+  "allow_no_robot_token": true
+}
