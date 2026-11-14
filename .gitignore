@@ -33,3 +33,6 @@ relay_prog/state/
 
 # 배포 비밀값 (dashboard/.env.example을 복사해 채움)
 dashboard/.env
+
+# 루트 임시 디렉토리
+/tmp/
