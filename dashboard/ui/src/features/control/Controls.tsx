@@ -1,20 +1,19 @@
+import type { ReactNode } from 'react'
 import type { MockProvider } from '../../demo'
 import type { Command } from '../../commands'
-import { driveControl, lockReason, stopReason, waypointLocked, type LiveControl } from '../../control'
-import type { MapInfo } from '../../map'
+import { driveControl, lockReason, stopReason, type LiveControl } from '../../control'
 import type { View } from '../../types'
 import { Card } from '../../components/Card'
 import { ResultBox } from './ResultBox'
-import { WaypointPanel, type WaypointChange, type WaypointDocument, type WaypointMode } from '../waypoints/WaypointPanel'
 
-export function Controls({ demo, live, view, delta, map, waypointDocument, waypointProblem, changeWaypoint, waypointMode, picked, setWaypointMode, setPicked }: { demo: MockProvider | null; live: LiveControl | null; view: View; delta: number; map: MapInfo | null; waypointDocument: WaypointDocument | null; waypointProblem: string | null; changeWaypoint: (change: WaypointChange) => Promise<void>; waypointMode: WaypointMode | null; picked: [number, number] | null; setWaypointMode: (mode: WaypointMode | null) => void; setPicked: (point: [number, number] | null) => void }) {
+/** 로봇 제어 카드: 주행 시작·정지·재개 버튼 하나와 순찰 종료, 마지막 명령 결과. routesLink는 순찰 경로 페이지로 가는 링크 */
+export function Controls({ demo, live, view, delta, routesLink }: { demo: MockProvider | null; live: LiveControl | null; view: View; delta: number; routesLink: ReactNode }) {
   const request = demo ? demo.machine.current : live!.current(view)
   // 주행 시작·순찰 종료도 일시정지·재개와 같은 명령 통로: 서버가 쌓고 로봇의 Bridge가 로봇 컴퓨터에서 실행한다
   const { action, reason } = driveControl(view, request)
   const stopLock = stopReason(view, lockReason(view, request))
   const pending = request?.result === 'pending'
   const stopping = pending && request?.command === 'stop'
-  const locked = waypointLocked(view, request)
   const launcher = view.snapshot?.launcher
   const send = (command: Command) => { if (demo) demo.request(command); else void live!.send(view, command) }
   const label = action === 'start' ? '주행 시작' : action === 'pause' ? '주행 정지' : '주행 재개'
@@ -27,7 +26,7 @@ export function Controls({ demo, live, view, delta, map, waypointDocument, waypo
       <span data-testid="patrol-stop-wrap" title={stopLock || undefined}><button className="patrol-stop" type="button" disabled={!!stopLock} aria-busy={stopping} onClick={() => send('stop')}>{stopping ? '순찰 종료 중' : '순찰 종료'}</button></span>
       {exitNote && <p className="muted" role="status">{exitNote}</p>}
       {request && <ResultBox key={request.id} result={request} delta={delta} />}
-      <WaypointPanel demo={demo} map={map} document={waypointDocument} locked={locked} problem={waypointProblem} onChange={changeWaypoint} mode={waypointMode} picked={picked} setMode={setWaypointMode} setPicked={setPicked} />
+      <p className="control-routes muted">순찰할 지점은 {routesLink}에서 확인하고 바꿉니다.</p>
     </div>
   </Card>
 }

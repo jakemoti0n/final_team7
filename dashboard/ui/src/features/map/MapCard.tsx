@@ -5,13 +5,13 @@ import { ageText } from '../../format'
 import { Card } from '../../components/Card'
 
 const FOLLOW_SPAN_M = 10   // 로봇 따라가기: 로봇 중심 가로세로 10 m
-export function MapCard({ map, view, delta, onPick, onSelect }: { map: MapInfo | null; view: View; delta: number; onPick?: (point: [number, number]) => void; onSelect?: (robotId: string) => void }) {
+export function MapCard({ map, view, delta, onPick, onSelect, title = '지도' }: { map: MapInfo | null; view: View; delta: number; onPick?: (point: [number, number]) => void; onSelect?: (robotId: string) => void; title?: string }) {
   const [follow, setFollow] = useState(false)
   const pose = view.snapshot?.pose
   const patrol = view.serverProblem ? null : view.snapshot?.patrol
   const has = !!pose && pose.x != null && pose.y != null && pose.yaw != null
   const stale = view.serverProblem || !pose || pose.stale
-  if (!map) return <Card title="지도" className="map-card"><p className="empty">{view.snapshot?.map_available === false ? '서버에 지도가 설정되지 않았습니다' : '지도를 불러오는 중입니다'}</p></Card>
+  if (!map) return <Card title={title} className="map-card"><p className="empty">{view.snapshot?.map_available === false ? '서버에 지도가 설정되지 않았습니다' : '지도를 불러오는 중입니다'}</p></Card>
   const points = map.waypoints.map(w => toPixel(map, w.x, w.y))
   const next = patrol?.state && patrol.state !== 'completed' ? patrol.waypoint_index : -1
   const [rx, ry] = has ? toPixel(map, pose!.x!, pose!.y!) : [0, 0]
@@ -22,7 +22,7 @@ export function MapCard({ map, view, delta, onPick, onSelect }: { map: MapInfo |
   const others = view.serverProblem ? [] : (view.snapshot?.robots ?? []).filter(r => r.robot_id !== view.snapshot?.robot_id && r.pose)
   // 지점 편집 중에는 지도 클릭이 위치 선택이므로 다른 로봇 표시를 누를 수 없게 한다
   const selectable = !!onSelect && !onPick
-  return <Card title="지도" className="map-card">
+  return <Card title={title} className="map-card">
     <div className={`map-frame ${onPick ? 'editing' : ''}`}><svg viewBox={box.join(' ')} role="img" aria-label="순찰 지도와 로봇 위치" onClick={event => {
       if (!onPick) return
       const svg = event.currentTarget, matrix = svg.getScreenCTM()

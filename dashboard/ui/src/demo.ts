@@ -1,6 +1,6 @@
 import { CommandMachine, resultLabels, type Command, type Outcome, type RequestResult } from './commands'
 import { commandReason, lockReason } from './control'
-import { topicKeys, type Snapshot, type Provider, type View, type Alert, type Launcher, type PatrolInfo, type PoseInfo } from './types'
+import { topicKeys, type Snapshot, type Provider, type View, type Alert, type Launcher, type PatrolInfo, type PoseInfo, type RobotSummary } from './types'
 import type { MapInfo, Waypoint } from './map'
 
 export type Scenario = 'normal' | 'partial' | 'delayed' | 'disconnected' | 'initial' | 'server'
@@ -107,6 +107,15 @@ export class MockProvider implements Provider {
     return at ? { frame_id: 'map', x: this.x, y: this.y, yaw: this.yaw, position_std_m: .08, last_received_at: at, age_s: age, stale }
       : { frame_id: null, x: null, y: null, yaw: null, position_std_m: null, last_received_at: null, age_s: null, stale: true }
   }
+  /** 플릿 현황용 가상 로봇 목록 (서버 /api/v1/state의 robots와 같은 모양). LIMBO-02는 연결됨, LIMBO-03은 끊긴 지 48초 */
+  private fleet(status: Snapshot['bridge']['status'], at: string | null, now: string): RobotSummary[] {
+    const lost = new Date(Date.parse(now) - 48000).toISOString()
+    return [
+      { robot_id: 'LIMBO-01', status, last_received_at: at, pose: null },
+      { robot_id: 'LIMBO-02', status: 'connected', last_received_at: now, pose: { x: 3.2, y: -3.9, yaw: 3.1, age_s: .2, stale: false } },
+      { robot_id: 'LIMBO-03', status: 'disconnected', last_received_at: lost, pose: { x: -4.6, y: 1.2, yaw: -1.5, age_s: 48, stale: true } },
+    ]
+  }
   private update() {
     const initial = this.scenario === 'initial'
     const uncertain = this.scenario === 'delayed' || this.scenario === 'disconnected'
@@ -125,6 +134,7 @@ export class MockProvider implements Provider {
       motion: { status: initial ? 'unconfirmed' : uncertain ? 'unknown' : 'moving', rotating: false, current: initial || uncertain ? null : motion, age_s: initial ? null : age, last_valid: initial ? null : motion }, alerts: [...this.alerts],
       patrol: initial ? null : this.patrolInfo(at, age), pose: this.poseInfo(initial ? null : at, initial ? null : age, uncertain), command: null, map_available: true,
       launcher: initial ? null : this.launcher(),
+      robots: this.fleet(initial ? 'checking' : uncertain ? this.scenario as 'delayed' | 'disconnected' : 'connected', initial ? null : at, now),
       patrol_running: this.bridgeVersion === 'legacy' ? this.patrol === 'paused' || this.patrol === 'patrolling' : this.launched === 'running',
     }
     this.current = { snapshot, serverProblem: this.scenario === 'server', receivedMono: performance.now() }

@@ -171,7 +171,7 @@ test('silent stream becomes a browser problem and tab return fetches a fresh sna
 test('demo waypoints can be added, moved on the map, and deleted without API calls', async ({ page }) => {
   const apiRequests: string[] = []
   page.on('request', request => { if (request.url().includes('/api/')) apiRequests.push(request.url()) })
-  await page.goto('/demo')
+  await page.goto('/demo?page=routes')
   await page.getByLabel('가상 순찰 상태').selectOption('empty')
   const panel = page.getByRole('region', { name: 'Waypoint 목록' })
   await expect(panel.getByRole('listitem')).toHaveCount(10)
@@ -211,7 +211,7 @@ test('live waypoint editor sends changes and updates the map without modifying t
     doc = { ...doc, revision: `r${actions.length + 1}`, waypoints }
     await route.fulfill({ json: doc })
   })
-  await page.goto('/')
+  await page.goto('/?page=routes')
   const panel = page.getByRole('region', { name: 'Waypoint 목록' })
   await expect(panel).toContainText('route.yaml')
   await panel.getByRole('button', { name: '새 지점 만들기' }).click()
@@ -248,7 +248,7 @@ test('live waypoint names and drag order persist through the API', async ({ page
     doc = { ...doc, revision: `r${actions.length + 1}`, waypoints: points }
     await route.fulfill({ json: doc })
   })
-  await page.goto('/')
+  await page.goto('/?page=routes')
   const panel = page.getByRole('region', { name: 'Waypoint 목록' })
   await expect(panel.getByRole('listitem')).toHaveCount(3)
   await panel.getByRole('listitem').filter({ hasText: 'B' }).getByRole('button', { name: '이름 변경' }).click()
@@ -279,7 +279,7 @@ test('live drive start sends a start command with the saved route and confirms f
 })
 
 test('waypoint drag handle appears to the right of row actions', async ({ page }) => {
-  await page.goto('/demo')
+  await page.goto('/demo?page=routes')
   const row = page.getByRole('region', { name: 'Waypoint 목록' }).locator('li').first()
   const name = await row.getByTestId('waypoint-name').boundingBox()
   const handle = await row.getByRole('button', { name: 'A 순서 끌어서 변경' }).boundingBox()
@@ -293,18 +293,62 @@ test('waypoint drag handle appears to the right of row actions', async ({ page }
 
 
 test('waypoint controls lock during patrol and unlock after termination in demo', async ({ page }) => {
-  await page.goto('/demo')
+  await page.goto('/demo?page=routes')
   const panel = page.getByRole('region', { name: 'Waypoint 목록' })
   const add = panel.getByRole('button', { name: '새 지점 만들기' })
   await expect(add).toBeDisabled()
   await expect(panel.getByTestId('waypoint-add-wrap')).toHaveAttribute('title', '주행 완료 후 변경 가능합니다')
   await expect(panel.getByRole('button', { name: '이름 변경' }).first()).toBeDisabled()
   await expect(panel.getByRole('button', { name: 'A 순서 끌어서 변경' })).toBeDisabled()
+  await expect(page.getByTestId('route-lock')).toContainText('순찰 노드가 실행 중이라')
   await page.getByLabel('가상 순찰 상태').selectOption('paused')
   await expect(add).toBeDisabled()
+  // 순찰 종료는 로봇 관제 페이지에 있다. 페이지를 오가도 데모 상태는 이어진다
+  const menu = page.getByRole('navigation', { name: '관제 메뉴' })
+  await menu.getByRole('link', { name: '로봇 관제' }).click()
   await page.getByRole('button', { name: '순찰 종료' }).click()
-  await expect(add).toBeEnabled()
   await expect(page.getByRole('button', { name: '주행 시작', exact: true })).toBeEnabled()
+  await menu.getByRole('link', { name: '순찰 경로' }).click()
+  await expect(add).toBeEnabled()
+  await expect(page.getByTestId('route-lock')).toContainText('편집할 수 있습니다')
+})
+
+test('sidebar pages keep the address, survive reload and back, and the fleet page lists every robot', async ({ page }) => {
+  await page.goto('/demo')
+  const menu = page.getByRole('navigation', { name: '관제 메뉴' })
+  await expect(menu.getByRole('link', { name: '로봇 관제' })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('로봇 관제')
+  await expect(page.getByRole('region', { name: 'Waypoint 목록' })).toHaveCount(0)   // 경로 편집은 순찰 경로 페이지에만
+  await menu.getByRole('link', { name: '플릿 현황' }).click()
+  await expect(page).toHaveURL(/\/demo\?page=fleet$/)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('플릿 현황')
+  const robots = page.getByTestId('fleet-robot')
+  await expect(robots).toHaveCount(3)
+  await expect(robots.filter({ hasText: 'LIMBO-03' })).toContainText('연결 끊김')
+  await expect(robots.filter({ hasText: 'LIMBO-02' }).getByRole('button')).toBeDisabled()   // 데모는 LIMBO-01만
+  await page.reload()
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('플릿 현황')
+  await menu.getByRole('link', { name: '순찰 경로' }).click()
+  await expect(page.getByRole('region', { name: 'Waypoint 목록' })).toBeVisible()
+  await page.goBack()
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('플릿 현황')
+  await robots.filter({ hasText: 'LIMBO-01' }).getByRole('button', { name: '관제 화면으로' }).click()
+  await expect(page).toHaveURL(/\/demo$/)
+  await expect(page.getByTestId('speed-value')).not.toHaveText('—')
+})
+
+test('fleet page opens another live robot on the control page', async ({ page, request }) => {
+  const other = 'LIMBO-E2E-4'
+  expect((await request.post('/api/v1/telemetry', { data: telemetryV2('patrolling') })).ok()).toBe(true)
+  expect((await request.post('/api/v1/telemetry', { data: { ...telemetryV2('paused'), robot_id: other } })).ok()).toBe(true)
+  await page.goto('/?page=fleet')
+  const row = page.getByTestId('fleet-robot').filter({ hasText: other })
+  await expect(row).toContainText('연결됨')
+  await row.getByRole('button', { name: `${other} 관제 보기` }).click()
+  await expect(page).toHaveURL(new RegExp(`\\?robot=${other}$`))
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('로봇 관제')
+  await expect(page.getByRole('button', { name: /로봇 선택/ })).toHaveText(new RegExp(other))
+  await expect(page.getByTestId('patrol-state')).toContainText('일시정지')
 })
 
 test('live patrol termination sends a stop command; only Bridge-started nodes can be stopped', async ({ page, request }) => {

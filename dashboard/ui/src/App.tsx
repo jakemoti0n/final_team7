@@ -4,6 +4,7 @@ import { api, logout, me, onAuthLost, type Account, type AuthState } from './aut
 import Login from './Login'
 import ChangePassword from './ChangePassword'
 import { RobotDashboard } from './pages/RobotDashboard'
+import { pageHref, readPage, type PageKey } from './navigation'
 
 const ROBOT_KEY = 'limbo.robot'
 /** 처음 볼 로봇: 주소의 ?robot= → 이 브라우저에서 마지막으로 고른 로봇 → 비움(서버 기본 로봇) */
@@ -45,6 +46,19 @@ function AuthGate() {
 function RobotApp({ account, onAuth }: { account: Account | null; onAuth: (next: AuthState | null) => void }) {
   const demoMode = location.pathname === '/demo'
   const [robotId, setRobotId] = useState(() => demoMode ? '' : initialRobot())
+  // 페이지는 로봇을 바꿔도 유지한다. 주소(?page=)에 남겨 새로 고침·뒤로 가기에도 맞춘다
+  const [page, setPage] = useState<PageKey>(() => readPage())
+  useEffect(() => {
+    const sync = () => setPage(readPage())
+    addEventListener('popstate', sync)
+    return () => removeEventListener('popstate', sync)
+  }, [])
+  const navigate = (next: PageKey) => {
+    if (next === readPage()) return
+    history.pushState(null, '', pageHref(next))
+    setPage(next)
+    scrollTo(0, 0)
+  }
   const choose = (next: string) => {
     setRobotId(next)
     const url = new URL(location.href)
@@ -61,5 +75,5 @@ function RobotApp({ account, onAuth }: { account: Account | null; onAuth: (next:
     }).catch(() => {})
     return () => controller.abort()
   }, [demoMode, robotId])
-  return <RobotDashboard key={robotId} robotId={robotId} onSelect={choose} account={account} onAuth={onAuth} />
+  return <RobotDashboard key={robotId} robotId={robotId} onSelect={choose} account={account} onAuth={onAuth} page={page} onNavigate={navigate} />
 }

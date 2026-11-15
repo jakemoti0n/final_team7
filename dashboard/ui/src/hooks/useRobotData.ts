@@ -59,3 +59,4 @@ export function useRobotData(robotId: string) {
   }
   return { provider, demo, view, now, live, map, waypointDocument, waypointProblem, changeWaypoint }
 }
+export type RobotData = ReturnType<typeof useRobotData>
