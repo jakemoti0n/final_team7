@@ -1,0 +1,1089 @@
+<!DOCTYPE html><html lang="ko"><head></head><body class="bg-surface text-on-surface antialiased selection:bg-positive-accent selection:text-primary min-h-screen flex"><svg class="inline-defs-container" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"></svg>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+<meta content="web_dashboard" name="shell-type">
+<title>LIMBO Fleet - 순찰 경로 관리</title>
+<!-- Google Material Symbols & Font Awesome Embed -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<!-- Pretendard Webfont -->
+<link as="style" crossorigin="" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+<!-- Google Fonts: JetBrains Mono for telemetry -->
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+    @font-face {
+      font-family: 'GmarketSans';
+      src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansMedium.woff') format('woff');
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'GmarketSans';
+      src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansBold.woff') format('woff');
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    /* Core typography isolation to prevent icon font clobbering */
+    body, button, input, select, textarea, p, span:not(.material-symbols-outlined), div, a, label, li {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+    }
+
+    h1, h2, h3, h4, h5, h6, .font-headline-lg, .font-headline-md, .font-headline-sm, .brand-font {
+      font-family: 'GmarketSans', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    }
+
+    .font-telemetry {
+      font-family: 'JetBrains Mono', monospace !important;
+    }
+
+    /* Critical isolation for Material Symbols so Korean fonts never overwrite icons */
+    .material-symbols-outlined {
+      font-family: 'Material Symbols Outlined' !important;
+      font-weight: normal;
+      font-style: normal;
+      font-size: 20px;
+      line-height: 1 !important;
+      letter-spacing: normal;
+      text-transform: none;
+      display: inline-flex !important;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      -moz-osx-font-smoothing: grayscale;
+      font-feature-settings: 'liga';
+    }
+
+    /* Scrollbar cleanup */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.04);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.18);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 0, 0, 0.3);
+    }
+  </style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#003b1b",
+            "primary-container": "#14532d",
+            "on-primary": "#ffffff",
+            "positive-accent": "#DCFCE7",
+            "secondary": "#006e2d",
+            "secondary-container": "#7cf994",
+            "secondary-fixed": "#7ffc97",
+            "surface": "#F7F8F3",
+            "surface-container-lowest": "#ffffff",
+            "surface-container-low": "#f1f3ff",
+            "surface-container": "#e9edff",
+            "surface-container-high": "#e1e8fd",
+            "surface-container-highest": "#dce2f7",
+            "on-surface": "#141b2b",
+            "on-surface-variant": "#404941",
+            "surface-subtle": "#E5E7EB",
+            "border-grid": "#E2E8F0",
+            "outline": "#717970",
+            "outline-variant": "#c0c9be",
+            "warning": "#D97706",
+            "warning-surface": "#FEF3C7",
+            "critical": "#DC2626",
+            "critical-surface": "#FEE2E2",
+            "on-error": "#ffffff",
+            "inverse-surface": "#293040",
+            "inverse-on-surface": "#edf0ff",
+          },
+          spacing: {
+            "space-xs": "0.25rem",
+            "space-sm": "0.5rem",
+            "space-md": "0.75rem",
+            "space-lg": "1.25rem",
+            "space-xl": "2rem",
+          }
+        }
+      }
+    };
+  </script>
+
+
+<!-- MOBILE SLIDE-OUT BACKDROP -->
+<div class="fixed inset-0 bg-inverse-surface/40 backdrop-blur-sm z-50 hidden transition-opacity lg:hidden" id="mobile-sidebar-backdrop" onclick="toggleMobileSidebar()"></div>
+<!-- ASIDE SIDEBAR: 260px fixed width, full desktop view & responsive mobile drawer -->
+<aside class="fixed left-0 top-0 h-full w-[260px] bg-surface-container-lowest border-r border-border-grid z-50 flex flex-col justify-between shadow-[0_2px_12px_rgba(0,0,0,0.03)] -translate-x-full transition-transform duration-300 lg:translate-x-0 lg:flex" id="main-sidebar">
+<div class="flex flex-col">
+<!-- Brand Title Header -->
+<div class="h-16 flex items-center justify-between px-5 border-b border-border-grid">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-primary-container flex items-center justify-center shadow-xs">
+<span class="material-symbols-outlined text-secondary-fixed text-[22px]">smart_toy</span>
+</div>
+<div class="flex flex-col">
+<span class="brand-font font-bold text-lg text-primary tracking-tight leading-none">LIMBO Fleet</span>
+<span class="text-[11px] font-medium text-on-surface-variant mt-1">자율주행 관제 플랫폼</span>
+</div>
+</div>
+<button aria-label="사이드바 닫기" class="lg:hidden p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low" onclick="toggleMobileSidebar()">
+<span class="material-symbols-outlined text-[22px]">close</span>
+</button>
+</div>
+<!-- Active Unit Selector -->
+<div class="px-4 py-3 border-b border-surface-container-high bg-surface-container-low/40">
+  <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 font-pretendard">ACTIVE TARGET UNIT</label>
+  <div class="relative">
+    <select class="w-full appearance-none bg-surface-container-lowest border border-outline-variant/60 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 pr-8 focus:outline-none focus:ring-2 focus:ring-primary font-pretendard shadow-xs cursor-pointer hover:border-outline">
+      <option value="LIMBO-01" selected="">LIMBO-01 (자율순찰)</option>
+      <option value="LIMBO-02">LIMBO-02 (대기 모드)</option>
+      <option value="LIMBO-03">LIMBO-03 (자율순찰)</option>
+      <option value="LIMBO-04">LIMBO-04 (급속 충전 중)</option>
+    </select>
+    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path></svg>
+    </div>
+  </div>
+</div>
+<!-- Navigation Menu: 5 Core Items in Specified Order -->
+<nav class="flex flex-col gap-1 p-3">
+<!-- 1. 플릿 현황 -->
+<a class="px-3.5 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all flex items-center gap-3 text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-[20px] text-on-surface-variant">grid_view</span>
+<span>플릿 현황</span>
+</a>
+<!-- 2. 로봇 관제 -->
+<a class="px-3.5 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all flex items-center gap-3 text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-[20px] text-on-surface-variant">precision_manufacturing</span>
+<span>로봇 관제</span>
+</a>
+<!-- 3. Telemetry -->
+<a class="px-3.5 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all flex items-center gap-3 text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-[20px] text-on-surface-variant">monitoring</span>
+<span>Telemetry</span>
+</a>
+<!-- 4. 순찰 경로 관리 (Active) -->
+<a class="px-3.5 py-2.5 rounded-lg bg-primary-container text-on-primary font-semibold shadow-xs flex items-center gap-3 text-sm transition-all" href="#">
+<span class="material-symbols-outlined text-[20px] text-positive-accent">route</span>
+<span>순찰 경로 관리</span>
+</a>
+<!-- 5. Audit Logs -->
+<a class="px-3.5 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all flex items-center gap-3 text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-[20px] text-on-surface-variant">history</span>
+<span>Audit Logs</span>
+</a>
+</nav>
+</div>
+<!-- Bottom Safety & Topology Status -->
+<div class="p-3.5 border-t border-border-grid flex flex-col gap-2.5">
+<!-- E-STOP -->
+<div class="bg-critical-surface border border-red-200 rounded-lg p-2.5 flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-critical text-[20px]">fmd_bad</span>
+<span class="text-[11px] text-critical font-bold uppercase tracking-wide">비상 정지</span>
+</div>
+<button class="px-3 py-1 bg-critical hover:bg-red-700 text-on-error rounded font-bold text-xs shadow-xs transition-colors uppercase tracking-wider flex items-center justify-center">
+          E-STOP
+        </button>
+</div>
+<!-- Network Topology Indicator -->
+<div class="flex items-center justify-between px-1 text-xs">
+<span class="text-on-surface-variant text-[11px] uppercase tracking-wider font-semibold">네트워크 토폴로지</span>
+<span class="flex items-center gap-1.5 text-secondary text-[11px] font-bold">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+          ONLINE
+        </span>
+</div>
+</div>
+</aside>
+<!-- MAIN CONTAINER: left offset by 260px on desktop -->
+<div class="pl-0 lg:pl-[260px] w-full min-w-0 max-w-full flex flex-col min-h-screen">
+<!-- TOP HEADER -->
+<header class="fixed top-0 left-0 lg:left-[260px] right-0 h-16 bg-surface/95 backdrop-blur-md border-b border-border-grid shadow-xs z-40 flex items-center justify-between px-4 lg:px-6">
+<div class="flex items-center gap-3 min-w-0 flex-1 overflow-x-auto">
+<!-- Mobile Drawer Toggle -->
+<button aria-label="메뉴 열기" class="lg:hidden p-2 rounded-lg text-primary hover:bg-surface-container shrink-0" onclick="toggleMobileSidebar()">
+<span class="material-symbols-outlined text-[22px]">menu</span>
+</button>
+<!-- Active Robot & Patrol Status Pill -->
+<div class="flex items-center gap-2 bg-surface-container-lowest border border-border-grid px-3 py-1.5 rounded-full shadow-xs shrink-0">
+<span class="w-2.5 h-2.5 rounded-full bg-secondary animate-pulse"></span>
+<span class="font-telemetry text-xs font-bold text-primary">BOT-01</span>
+<span class="hidden sm:inline-block text-[11px] text-secondary font-bold uppercase tracking-wider bg-positive-accent px-2 py-0.5 rounded">자동순찰</span>
+</div>
+<!-- Battery Telemetry -->
+<div class="flex items-center gap-1.5 bg-surface-container-lowest border border-border-grid px-3 py-1.5 rounded-full shadow-xs shrink-0">
+<span class="material-symbols-outlined text-[18px] text-secondary">battery_charging_full</span>
+<span class="font-telemetry text-xs font-bold text-primary">88%</span>
+</div>
+<!-- Network Topology -->
+<div class="hidden md:flex items-center gap-2 bg-surface-container-lowest border border-border-grid px-3 py-1.5 rounded-full shrink-0">
+<span class="text-[11px] text-on-surface-variant uppercase font-semibold">Topology</span>
+<div class="flex items-center gap-1 font-telemetry text-xs">
+<span class="text-secondary font-bold">CLI</span>
+<span class="text-on-surface-variant text-[10px]">⇄</span>
+<span class="text-secondary font-bold">SRV</span>
+<span class="text-on-surface-variant text-[10px]">⇄</span>
+<span class="text-secondary font-bold">BOT</span>
+</div>
+</div>
+<!-- Latency -->
+<div class="hidden xl:flex items-center gap-1.5 bg-surface-container-lowest border border-border-grid px-3 py-1.5 rounded-full shrink-0">
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant">network_ping</span>
+<span class="text-[11px] text-on-surface-variant uppercase">PING:</span>
+<span class="font-telemetry text-xs text-on-surface font-semibold">14ms</span>
+</div>
+</div>
+<!-- Right Operational Utilities and Admin Profile -->
+<div class="flex items-center gap-3 shrink-0 pl-3">
+<div class="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-positive-accent text-secondary text-xs font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span>SYSTEM READY</span>
+</div>
+<!-- Notification Icon -->
+<button aria-label="알림" class="relative w-9 h-9 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-warning"></span>
+</button>
+<!-- Admin Profile -->
+<div class="flex items-center gap-2 pl-2 border-l border-border-grid">
+<div class="flex items-center gap-2 p-1 rounded-lg hover:bg-surface-container transition-colors cursor-pointer">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary flex items-center justify-center font-telemetry text-xs font-bold shadow-xs">
+              OP
+            </div>
+<div class="hidden md:flex flex-col text-left">
+<span class="text-xs font-bold text-primary leading-tight">operator_kim</span>
+<span class="text-[10px] text-on-surface-variant uppercase">Fleet Lead</span>
+</div>
+</div>
+<button aria-label="설정" class="w-8 h-8 rounded-lg hover:bg-surface-container text-on-surface-variant flex items-center justify-center transition-colors" title="운영 환경설정">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+</button>
+</div>
+</div>
+</header>
+<!-- MAIN SCROLLABLE CONTENT: pt-16 matches header -->
+<main class="w-full pt-20 pb-20 px-4 lg:px-6 max-w-full">
+<div class="max-w-[1600px] mx-auto flex flex-col gap-5">
+<!-- 1. ROUTE METADATA & CONTROL HEADER -->
+<section class="bg-surface-container-lowest rounded-xl border border-border-grid shadow-xs p-5">
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+<!-- Left Info Block -->
+<div class="flex flex-col gap-2">
+<div class="flex flex-wrap items-center gap-2">
+<span class="text-[11px] uppercase tracking-wider text-secondary font-bold bg-positive-accent px-2.5 py-0.5 rounded">
+                  Autonomous Route Planner
+                </span>
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-positive-accent text-primary-container font-telemetry text-xs font-bold">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+                  편집 가능 (순찰 대기 상태)
+                </span>
+<span class="font-telemetry text-xs text-on-surface-variant bg-surface-container-low border border-border-grid px-2.5 py-0.5 rounded">
+                  waypoints.yaml (동기화 완료 v2.4)
+                </span>
+</div>
+<!-- Route Title -->
+<div class="flex flex-wrap items-baseline gap-3 mt-1">
+<h1 class="brand-font text-2xl font-bold text-primary tracking-tight">
+                  구역 정기 자율 순찰 (Standard Patrol)
+                </h1>
+<span class="text-xs text-on-surface-variant font-medium">
+                  대상 기기: <strong class="text-primary font-telemetry font-bold">LIMBO-01 (Apex)</strong>
+</span>
+</div>
+<!-- Telemetry Metadata Line -->
+<div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-on-surface-variant mt-0.5">
+<span class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-secondary">pin_drop</span>
+                  총 등록 지점: <strong class="text-on-surface font-telemetry font-semibold">6개 지점</strong>
+</span>
+<span class="text-border-grid">•</span>
+<span class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-secondary">straighten</span>
+                  총 순찰 거리: <strong class="text-on-surface font-telemetry font-semibold">184 m</strong>
+</span>
+<span class="text-border-grid">•</span>
+<span class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-secondary">schedule</span>
+                  예상 소요 시간: <strong class="text-on-surface font-telemetry font-semibold">14분 20초</strong>
+</span>
+<span class="text-border-grid">•</span>
+<span class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-secondary">speed</span>
+                  최고 제한 속도: <strong class="text-on-surface font-telemetry font-semibold">0.8 m/s</strong>
+</span>
+</div>
+</div>
+<!-- Right Single Action: + 웨이포인트 추가 -->
+<div class="flex items-center gap-2 self-start lg:self-center shrink-0">
+<button class="h-10 px-4 rounded-lg bg-secondary text-on-secondary hover:bg-primary transition-all text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95" onclick="openNewWaypointDrawer()" type="button">
+<span class="material-symbols-outlined text-[18px]">add_location_alt</span>
+<span>+ 웨이포인트 추가</span>
+</button>
+</div>
+</div>
+</section>
+<!-- 2. MAIN DUAL WORK AREA: 7 Cols (2D SLAM Map) | 5 Cols (Waypoint Sequencer & Inspector) -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+<!-- LEFT: 2D SLAM Grid Map & Route Visualizer (Col 1-7) -->
+<section class="lg:col-span-7 flex flex-col bg-surface-container-lowest rounded-xl border border-border-grid shadow-xs overflow-hidden">
+<!-- Map Header -->
+<div class="px-4 py-3 bg-surface-container-low border-b border-border-grid flex flex-wrap items-center justify-between gap-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[20px]">map</span>
+<h2 class="brand-font text-base font-bold text-primary">2D SLAM 지도 &amp; 경로 벡터</h2>
+<span class="font-telemetry text-[11px] text-on-surface-variant bg-surface-container px-2 py-0.5 rounded border border-border-grid font-medium">
+                  Scale: 1m = 48px
+                </span>
+</div>
+<!-- Map Toolbar Buttons -->
+<div class="flex items-center gap-1 bg-surface-container-lowest p-1 rounded-lg border border-border-grid shadow-xs">
+<button aria-label="확대" class="w-8 h-8 rounded flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors" onclick="zoomMap(1.1)" title="확대" type="button">
+<span class="material-symbols-outlined text-[18px]">zoom_in</span>
+</button>
+<button aria-label="축소" class="w-8 h-8 rounded flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors" onclick="zoomMap(0.9)" title="축소" type="button">
+<span class="material-symbols-outlined text-[18px]">zoom_out</span>
+</button>
+
+<button class="w-8 h-8 rounded flex items-center justify-center text-secondary bg-positive-accent transition-colors" id="toggle-grid-btn" onclick="toggleGridLines()" title="격자 그리드 표시/숨김" type="button">
+<span class="material-symbols-outlined text-[18px]">grid_4x4</span>
+</button>
+<button class="w-8 h-8 rounded flex items-center justify-center text-warning hover:bg-warning-surface transition-colors" id="toggle-keepout-btn" onclick="toggleKeepoutZones()" title="위험 구역(Keep-out) 표시/숨김" type="button">
+<span class="material-symbols-outlined text-[18px]">fmd_bad</span>
+</button>
+</div>
+</div>
+<!-- Canvas Viewport -->
+<div class="relative w-full h-[520px] bg-[#0f141c] overflow-hidden select-none cursor-crosshair" id="slam-canvas-container">
+<!-- Coordinate & Heading Readouts -->
+<div class="absolute top-3 left-3 z-10 flex flex-col gap-1.5 pointer-events-none">
+<div class="bg-inverse-surface/90 backdrop-blur-sm text-inverse-on-surface px-2.5 py-1 rounded text-xs font-telemetry shadow border border-slate-700/50">
+                  CURSOR: <span class="text-positive-accent font-bold" id="cursor-coords">X: 0.94m, Y: 0.09m</span>
+</div>
+<div class="bg-inverse-surface/90 backdrop-blur-sm text-inverse-on-surface px-2.5 py-1 rounded text-xs font-telemetry shadow border border-slate-700/50">
+                  HEADING: <span class="text-secondary-fixed font-bold">88.4° (North-East)</span>
+</div>
+</div>
+<!-- Simulation Tracker Badge -->
+<div class="hidden absolute top-3 right-3 z-10 bg-primary-container text-on-primary px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-2 border border-secondary" id="sim-status-badge">
+<span class="w-2.5 h-2.5 rounded-full bg-secondary-fixed animate-ping"></span>
+<span class="font-telemetry text-xs font-bold">SIMULATING: 0.6 m/s</span>
+</div>
+<!-- SVG SLAM Canvas -->
+<svg class="w-full h-full transform transition-transform duration-150 origin-center" id="route-svg" viewBox="0 0 800 520">
+<defs>
+<pattern height="40" id="slam-grid" patternUnits="userSpaceOnUse" width="40">
+<path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(226, 232, 240, 0.08)" stroke-width="1"></path>
+</pattern>
+<marker id="route-arrow" markerHeight="6" markerWidth="6" orient="auto-start-reverse" refX="6" refY="5" viewBox="0 0 10 10">
+<path d="M 0 1 L 8 5 L 0 9 z" fill="#7ffc97"></path>
+</marker>
+<marker id="return-arrow" markerHeight="6" markerWidth="6" orient="auto-start-reverse" refX="6" refY="5" viewBox="0 0 10 10">
+<path d="M 0 1 L 8 5 L 0 9 z" fill="#96d5a3"></path>
+</marker>
+</defs>
+<!-- SLAM Grid Base -->
+<rect fill="url(#slam-grid)" height="100%" id="canvas-grid-rect" width="100%"></rect>
+<!-- Facility Wall Obstacles -->
+<g id="facility-structures" opacity="0.85">
+<path d="M 40 40 L 760 40 L 760 480 L 40 480 Z" fill="none" stroke="#293040" stroke-width="6"></path>
+<rect fill="#293040" height="150" width="16" x="220" y="40"></rect>
+<rect fill="#293040" height="160" width="16" x="220" y="320"></rect>
+<rect fill="#293040" height="190" rx="4" width="20" x="480" y="160"></rect>
+<rect fill="#293040" height="200" width="14" x="660" y="40"></rect>
+<circle cx="360" cy="250" fill="#293040" r="18"></circle>
+<circle cx="560" cy="400" fill="#293040" r="18"></circle>
+</g>
+<!-- Keep-out Safety Zones -->
+<g class="transition-opacity duration-300" id="keepout-layer">
+<rect fill="#DC2626" fill-opacity="0.18" height="90" stroke="#DC2626" stroke-dasharray="4,4" stroke-width="1.5" width="120" x="260" y="45"></rect>
+<text fill="#ffdad6" font-family="'Pretendard', sans-serif" font-size="11" font-weight="600" text-anchor="middle" x="320" y="95">계단 주의 (STAIRS)</text>
+<rect fill="#D97706" fill-opacity="0.16" height="110" stroke="#D97706" stroke-dasharray="4,4" stroke-width="1.5" width="110" x="620" y="340"></rect>
+<text fill="#FEF3C7" font-family="'Pretendard', sans-serif" font-size="11" font-weight="600" text-anchor="middle" x="675" y="400">서버실 진입제한</text>
+</g>
+<!-- Route Paths -->
+<g id="route-path-lines">
+<line marker-end="url(#route-arrow)" stroke="#7ffc97" stroke-dasharray="8,5" stroke-width="3" x1="140" x2="140" y1="360" y2="160"></line>
+<line marker-end="url(#route-arrow)" stroke="#7ffc97" stroke-dasharray="8,5" stroke-width="3" x1="140" x2="380" y1="160" y2="160"></line>
+<line marker-end="url(#route-arrow)" stroke="#7ffc97" stroke-dasharray="8,5" stroke-width="3" x1="380" x2="600" y1="160" y2="160"></line>
+<line marker-end="url(#route-arrow)" stroke="#7ffc97" stroke-dasharray="8,5" stroke-width="3" x1="600" x2="600" y1="160" y2="360"></line>
+<path d="M 600 360 L 370 380 L 140 360" fill="none" marker-end="url(#return-arrow)" stroke="#96d5a3" stroke-dasharray="4,4" stroke-width="3"></path>
+</g>
+<!-- Tolerance Radii -->
+<circle cx="140" cy="160" fill="rgba(127, 252, 151, 0.12)" r="16" stroke="#7ffc97" stroke-dasharray="2,2" stroke-width="1"></circle>
+<circle cx="380" cy="160" fill="rgba(127, 252, 151, 0.12)" r="22" stroke="#7ffc97" stroke-dasharray="2,2" stroke-width="1"></circle>
+<circle cx="600" cy="160" fill="rgba(217, 119, 6, 0.15)" r="26" stroke="#D97706" stroke-dasharray="2,2" stroke-width="1"></circle>
+<circle cx="600" cy="360" fill="rgba(127, 252, 151, 0.12)" r="16" stroke="#7ffc97" stroke-dasharray="2,2" stroke-width="1"></circle>
+<!-- 1. HOME NODE -->
+<g class="cursor-pointer group" onclick="selectWaypoint('item-home')">
+<circle class="group-hover:scale-110 transition-transform origin-center" cx="140" cy="360" fill="#14532d" r="18" stroke="#ffffff" stroke-width="2"></circle>
+<text fill="#ffffff" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="700" text-anchor="middle" x="140" y="364">H</text>
+<rect fill="#141b2b" fill-opacity="0.9" height="24" rx="4" width="96" x="92" y="390"></rect>
+<text fill="#f9f9ff" font-family="'Pretendard', sans-serif" font-size="11" font-weight="600" text-anchor="middle" x="140" y="406">충전 도크 (HOME)</text>
+</g>
+<!-- 2. W1 PASS NODE -->
+<g class="cursor-pointer group" onclick="selectWaypoint('item-w1')">
+<circle class="group-hover:scale-110 transition-transform origin-center" cx="140" cy="160" fill="#006e2d" r="14" stroke="#ffffff" stroke-width="2"></circle>
+<text fill="#ffffff" font-family="'JetBrains Mono', monospace" font-size="10" font-weight="700" text-anchor="middle" x="140" y="164">W1</text>
+<rect fill="#141b2b" fill-opacity="0.85" height="22" rx="4" width="94" x="93" y="118"></rect>
+<text fill="#edf0ff" font-family="'Pretendard', sans-serif" font-size="11" text-anchor="middle" x="140" y="133">안내데스크 (W1)</text>
+</g>
+<!-- 3. W2 PASS NODE -->
+<g class="cursor-pointer group" onclick="selectWaypoint('item-w2')">
+<circle class="group-hover:scale-110 transition-transform origin-center" cx="380" cy="160" fill="#006e2d" r="14" stroke="#ffffff" stroke-width="2"></circle>
+<text fill="#ffffff" font-family="'JetBrains Mono', monospace" font-size="10" font-weight="700" text-anchor="middle" x="380" y="164">W2</text>
+<rect fill="#141b2b" fill-opacity="0.85" height="22" rx="4" width="96" x="332" y="118"></rect>
+<text fill="#edf0ff" font-family="'Pretendard', sans-serif" font-size="11" text-anchor="middle" x="380" y="133">중앙홀 서측 (W2)</text>
+</g>
+<!-- 4. MID STOP NODE -->
+<g class="cursor-pointer group" onclick="selectWaypoint('item-mid')">
+<circle class="animate-pulse" cx="600" cy="160" fill="none" r="24" stroke="#D97706" stroke-width="1.5"></circle>
+<circle class="group-hover:scale-110 transition-transform origin-center" cx="600" cy="160" fill="#D97706" r="16" stroke="#ffffff" stroke-width="2"></circle>
+<text fill="#ffffff" font-family="'JetBrains Mono', monospace" font-size="10" font-weight="700" text-anchor="middle" x="600" y="164">MID</text>
+<rect fill="#FEF3C7" height="34" rx="4" stroke="#D97706" stroke-width="1" width="128" x="536" y="105"></rect>
+<text fill="#92400E" font-family="'Pretendard', sans-serif" font-size="10" font-weight="700" text-anchor="middle" x="600" y="120">휴게라운지 수거 (MID)</text>
+<text fill="#B45309" font-family="'JetBrains Mono', monospace" font-size="9" text-anchor="middle" x="600" y="132">Stop 30s • Fill Check</text>
+</g>
+<!-- 5. W3 PASS NODE -->
+<g class="cursor-pointer group" onclick="selectWaypoint('item-w3')">
+<circle class="group-hover:scale-110 transition-transform origin-center" cx="600" cy="360" fill="#006e2d" r="14" stroke="#ffffff" stroke-width="2"></circle>
+<text fill="#ffffff" font-family="'JetBrains Mono', monospace" font-size="10" font-weight="700" text-anchor="middle" x="600" y="364">W3</text>
+<rect fill="#141b2b" fill-opacity="0.85" height="22" rx="4" width="98" x="551" y="390"></rect>
+<text fill="#edf0ff" font-family="'Pretendard', sans-serif" font-size="11" text-anchor="middle" x="600" y="405">엘리베이터 앞 (W3)</text>
+</g>
+<!-- Active Robot Avatar -->
+<g class="transition-transform duration-700 ease-linear" id="simulated-robot" transform="translate(140, 360)">
+<circle cx="0" cy="0" fill="#16A34A" r="13" stroke="#ffffff" stroke-width="2"></circle>
+<polygon fill="#ffffff" points="0,-16 6,-8 -6,-8"></polygon>
+<circle cx="0" cy="0" fill="#14532d" r="4"></circle>
+</g>
+</svg>
+<!-- Floorplan Context Visual Banner -->
+<div class="absolute bottom-3 right-3 max-w-[210px] hidden md:flex items-center gap-2 p-2 rounded-lg bg-inverse-surface/90 text-inverse-on-surface shadow-xl backdrop-blur-md border border-slate-700/50">
+<div class="w-12 h-12 rounded overflow-hidden shrink-0 bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="구역 A 로비 현장" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAqxjwJ2rcdPB3tOPrQ6BXy2SvF-XkX7pWvf3JIvZuc8fEgNrI3H_97J4QO2IIYsFp7iFBXFmy5RjzTGzW0Bfjwk_cccIPIB-fEKd6qKm2LB84JB074WLSd8nwlXyud8VktUtMj-vwt9QmBG0gQ8usoxDpcP9Zp9N_ZleHABludipSO8e-ntoqbacNLeLpp0hgCGqD0cHg62my4kiNWKLyKGcexzMRluxeJHd-K6EY">
+</div>
+<div class="flex flex-col min-w-0">
+<span class="text-[10px] font-bold uppercase tracking-wider text-secondary-fixed">구역 A 로비 현장</span>
+<span class="text-[11px] text-surface-container-high truncate">라이다 스캔 100% 일치</span>
+</div>
+</div>
+</div>
+<!-- Map Legend -->
+<div class="px-4 py-3 bg-surface-container-low border-t border-border-grid flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+<div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+<div class="flex items-center gap-1.5 text-on-surface-variant">
+<span class="w-3 h-3 rounded-full bg-primary-container shrink-0"></span>
+<span>충전 도크 (Home)</span>
+</div>
+<div class="flex items-center gap-1.5 text-on-surface-variant">
+<span class="w-3 h-3 rounded-full bg-secondary shrink-0"></span>
+<span>통과 지점 (Pass)</span>
+</div>
+<div class="flex items-center gap-1.5 text-on-surface-variant">
+<span class="w-3 h-3 rounded-full bg-warning shrink-0"></span>
+<span>정지/임무 (Stop)</span>
+</div>
+<div class="flex items-center gap-1.5 text-on-surface-variant">
+<span class="w-4 h-1 border-t-2 border-dashed border-critical shrink-0"></span>
+<span>위험 제한 구역</span>
+</div>
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px] text-secondary">info</span>
+<span>지도를 클릭하여 노드 추가 및 위치 보정</span>
+</div>
+</div>
+</section>
+<!-- RIGHT: Waypoint Sequencer & Inspector Panel (Col 8-12) -->
+<section class="lg:col-span-5 flex flex-col gap-5">
+<!-- Sequencer Header & Search Box -->
+<div class="bg-surface-container-lowest rounded-xl border border-border-grid shadow-xs p-4 flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[22px]">format_list_numbered</span>
+<h2 class="brand-font text-base font-bold text-primary">순찰 웨이포인트 목록</h2>
+<span class="px-2 py-0.5 rounded-full bg-surface-container text-primary font-telemetry text-xs font-bold border border-border-grid">
+                    6개
+                  </span>
+</div>
+<!-- YAML Viewer Button -->
+<button class="h-8 px-2.5 rounded-lg border border-border-grid text-on-surface-variant hover:text-primary hover:bg-surface-container-low transition-colors font-telemetry text-xs font-semibold flex items-center gap-1.5" onclick="toggleYamlPreview()" type="button">
+<span class="material-symbols-outlined text-[16px]">code</span>
+<span>YAML 보기</span>
+</button>
+</div>
+<!-- Search Input -->
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-[18px]">search</span>
+<input class="w-full pl-9 pr-3 py-1.5 bg-surface-container-low border border-border-grid rounded-lg text-xs text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:ring-1 focus:ring-secondary transition-all" id="wp-search" oninput="filterWaypoints(this.value)" placeholder="웨이포인트 이름, 노드 ID, 유형 검색..." type="text">
+</div>
+</div>
+<!-- Scrollable Waypoint List -->
+<div class="flex flex-col gap-2 max-h-[460px] overflow-y-auto pr-1" id="waypoint-list-container">
+<!-- ITEM 1: HOME -->
+<div class="wp-card p-3 rounded-xl bg-surface-container-lowest border-l-4 border-l-primary border border-border-grid hover:bg-surface-container/60 transition-all cursor-pointer shadow-xs" id="item-home" onclick="selectWaypoint('item-home')">
+<div class="flex items-center justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<span class="w-7 h-7 rounded-lg bg-primary-container text-on-primary font-telemetry text-xs flex items-center justify-center font-bold shrink-0">1</span>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="font-telemetry font-bold text-xs text-primary truncate">[HOME] 충전 도크 스테이션</span>
+<span class="material-symbols-outlined text-[16px] text-outline" title="고정 시작점">lock</span>
+</div>
+<div class="flex items-center gap-2 font-telemetry text-[11px] text-on-surface-variant mt-0.5">
+<span>X: 1.80m</span>
+<span>Y: 3.00m</span>
+<span class="text-border-grid">|</span>
+<span class="text-primary font-medium">대기: 0s (도크 복귀)</span>
+</div>
+</div>
+</div>
+<span class="px-2 py-0.5 rounded bg-positive-accent text-primary-container text-[11px] font-bold shrink-0">
+                    START / BASE
+                  </span>
+</div>
+</div>
+<!-- ITEM 2: W1 -->
+<div class="wp-card p-3 rounded-xl bg-surface-container-lowest border border-border-grid hover:bg-surface-container/60 transition-all cursor-pointer shadow-xs" id="item-w1" onclick="selectWaypoint('item-w1')">
+<div class="flex items-center justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<span class="w-7 h-7 rounded-lg bg-surface-container text-primary font-telemetry text-xs flex items-center justify-center font-bold shrink-0">2</span>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="text-xs font-semibold text-on-surface truncate">[W1] 로비 안내데스크 통과 지점</span>
+<span class="px-1.5 py-0.2 rounded text-[10px] bg-positive-accent text-secondary font-bold">통과 (Pass)</span>
+</div>
+<div class="flex items-center gap-1.5 font-telemetry text-[11px] text-on-surface-variant mt-0.5">
+<span>X: 1.80m</span>
+<span>Y: 1.20m</span>
+<span class="text-border-grid">•</span>
+<span>오차 ±0.15m</span>
+<span class="text-border-grid">•</span>
+<span>속도 0.6 m/s</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-0.5 shrink-0" onclick="event.stopPropagation()">
+<button aria-label="위로 이동" class="w-8 h-8 rounded hover:bg-surface-container-high text-on-surface-variant flex items-center justify-center transition-colors" onclick="moveWaypoint('item-w1', -1)" type="button">
+<span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+</button>
+<button aria-label="아래로 이동" class="w-8 h-8 rounded hover:bg-surface-container-high text-on-surface-variant flex items-center justify-center transition-colors" onclick="moveWaypoint('item-w1', 1)" type="button">
+<span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+</button>
+<button aria-label="삭제" class="w-8 h-8 rounded hover:bg-critical-surface text-critical flex items-center justify-center transition-colors" onclick="removeWaypoint('item-w1')" type="button">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+</div>
+<!-- ITEM 3: W2 -->
+<div class="wp-card p-3 rounded-xl bg-surface-container-lowest border border-border-grid hover:bg-surface-container/60 transition-all cursor-pointer shadow-xs" id="item-w2" onclick="selectWaypoint('item-w2')">
+<div class="flex items-center justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<span class="w-7 h-7 rounded-lg bg-surface-container text-primary font-telemetry text-xs flex items-center justify-center font-bold shrink-0">3</span>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="text-xs font-semibold text-on-surface truncate">[W2] 중앙홀 서측 통과 지점</span>
+<span class="px-1.5 py-0.2 rounded text-[10px] bg-positive-accent text-secondary font-bold">통과 (Pass)</span>
+</div>
+<div class="flex items-center gap-1.5 font-telemetry text-[11px] text-on-surface-variant mt-0.5">
+<span>X: 4.00m</span>
+<span>Y: 1.20m</span>
+<span class="text-border-grid">•</span>
+<span>오차 ±0.20m</span>
+<span class="text-border-grid">•</span>
+<span>속도 0.8 m/s</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-0.5 shrink-0" onclick="event.stopPropagation()">
+<button aria-label="위로 이동" class="w-8 h-8 rounded hover:bg-surface-container-high text-on-surface-variant flex items-center justify-center transition-colors" onclick="moveWaypoint('item-w2', -1)" type="button">
+<span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+</button>
+<button aria-label="아래로 이동" class="w-8 h-8 rounded hover:bg-surface-container-high text-on-surface-variant flex items-center justify-center transition-colors" onclick="moveWaypoint('item-w2', 1)" type="button">
+<span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+</button>
+<button aria-label="삭제" class="w-8 h-8 rounded hover:bg-critical-surface text-critical flex items-center justify-center transition-colors" onclick="removeWaypoint('item-w2')" type="button">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+</div>
+<!-- ITEM 4: MID (Selected Default) -->
+<div class="wp-card p-3 rounded-xl bg-surface-container border-2 border-secondary shadow-xs cursor-pointer" id="item-mid" onclick="selectWaypoint('item-mid')">
+<div class="flex items-center justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<span class="w-7 h-7 rounded-lg bg-warning text-on-error font-telemetry text-xs flex items-center justify-center font-bold shrink-0">4</span>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="text-xs font-bold text-primary truncate">[MID] 휴게라운지 정지 및 압축 수거</span>
+<span class="px-1.5 py-0.2 rounded text-[10px] bg-warning-surface text-warning font-bold">정지 지점 (Stop)</span>
+</div>
+<div class="flex items-center gap-1.5 font-telemetry text-[11px] text-on-surface-variant mt-0.5">
+<span>X: 6.00m</span>
+<span>Y: 1.20m</span>
+<span class="text-border-grid">•</span>
+<span class="text-warning font-bold">대기: 30s (수거량 측정)</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-0.5 shrink-0" onclick="event.stopPropagation()">
+<button aria-label="위로 이동" class="w-8 h-8 rounded hover:bg-surface-container-high text-on-surface-variant flex items-center justify-center transition-colors" onclick="moveWaypoint('item-mid', -1)" type="button">
+<span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+</button>
+<button aria-label="아래로 이동" class="w-8 h-8 rounded hover:bg-surface-container-high text-on-surface-variant flex items-center justify-center transition-colors" onclick="moveWaypoint('item-mid', 1)" type="button">
+<span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+</button>
+<button aria-label="삭제" class="w-8 h-8 rounded hover:bg-critical-surface text-critical flex items-center justify-center transition-colors" onclick="removeWaypoint('item-mid')" type="button">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+</div>
+<!-- ITEM 5: W3 -->
+<div class="wp-card p-3 rounded-xl bg-surface-container-lowest border border-border-grid hover:bg-surface-container/60 transition-all cursor-pointer shadow-xs" id="item-w3" onclick="selectWaypoint('item-w3')">
+<div class="flex items-center justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<span class="w-7 h-7 rounded-lg bg-surface-container text-primary font-telemetry text-xs flex items-center justify-center font-bold shrink-0">5</span>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="text-xs font-semibold text-on-surface truncate">[W3] 엘리베이터 앞 통과 지점</span>
+<span class="px-1.5 py-0.2 rounded text-[10px] bg-positive-accent text-secondary font-bold">통과 (Pass)</span>
+</div>
+<div class="flex items-center gap-1.5 font-telemetry text-[11px] text-on-surface-variant mt-0.5">
+<span>X: 6.00m</span>
+<span>Y: 3.00m</span>
+<span class="text-border-grid">•</span>
+<span>오차 ±0.15m</span>
+<span class="text-border-grid">•</span>
+<span>속도 0.5 m/s</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-0.5 shrink-0" onclick="event.stopPropagation()">
+<button aria-label="위로 이동" class="w-8 h-8 rounded hover:bg-surface-container-high text-on-surface-variant flex items-center justify-center transition-colors" onclick="moveWaypoint('item-w3', -1)" type="button">
+<span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+</button>
+<button aria-label="아래로 이동" class="w-8 h-8 rounded hover:bg-surface-container-high text-on-surface-variant flex items-center justify-center transition-colors" onclick="moveWaypoint('item-w3', 1)" type="button">
+<span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+</button>
+<button aria-label="삭제" class="w-8 h-8 rounded hover:bg-critical-surface text-critical flex items-center justify-center transition-colors" onclick="removeWaypoint('item-w3')" type="button">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+</div>
+<!-- ITEM 6: HOME_RETURN -->
+<div class="wp-card p-3 rounded-xl bg-surface-container-lowest border-r-4 border-r-secondary border border-border-grid hover:bg-surface-container/60 transition-all cursor-pointer shadow-xs" id="item-return" onclick="selectWaypoint('item-return')">
+<div class="flex items-center justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<span class="w-7 h-7 rounded-lg bg-surface-container-highest text-primary font-telemetry text-xs flex items-center justify-center font-bold shrink-0">6</span>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="text-xs font-semibold text-primary truncate">[HOME_RETURN] 최종 복귀 지점</span>
+<span class="material-symbols-outlined text-[16px] text-outline">lock</span>
+</div>
+<div class="flex items-center gap-2 font-telemetry text-[11px] text-on-surface-variant mt-0.5">
+<span>X: 1.80m</span>
+<span>Y: 3.00m</span>
+<span class="text-border-grid">•</span>
+<span>도킹 정렬 후 충전 개시</span>
+</div>
+</div>
+</div>
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant text-[11px] shrink-0 font-medium">
+                    삭제 불가
+                  </span>
+</div>
+</div>
+</div>
+<!-- SELECTED NODE INSPECTOR -->
+<div class="bg-surface-container-lowest rounded-xl border border-border-grid shadow-xs p-4 flex flex-col gap-3">
+<div class="flex items-center justify-between border-b border-border-grid pb-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[20px]">tune</span>
+<h3 class="brand-font text-sm font-bold text-primary">선택 노드 속성 검사기 (Inspector)</h3>
+</div>
+<span class="font-telemetry text-xs text-secondary font-bold" id="inspector-node-id">NODE: MID (ID #4)</span>
+</div>
+<form class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="inspector-form" onsubmit="event.preventDefault(); applyNodeEdit();">
+<!-- Name -->
+<div class="sm:col-span-2 flex flex-col gap-1">
+<label class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant" for="input-wp-name">
+                    웨이포인트 이름 (1~32자 중복 금지)
+                  </label>
+<input class="px-3 py-1.5 bg-surface-container-low border border-border-grid rounded-lg text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-secondary" id="input-wp-name" maxlength="32" type="text" value="휴게라운지 정지 및 압축 수거">
+</div>
+<!-- Type -->
+<div class="sm:col-span-2 flex flex-col gap-1">
+<label class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">노드 통과 속성</label>
+<div class="grid grid-cols-2 gap-2">
+<label class="flex items-center gap-2 p-2 rounded-lg bg-surface-container-low border border-border-grid cursor-pointer hover:bg-surface-container transition-colors">
+<input class="text-secondary focus:ring-secondary" name="node_type" type="radio" value="pass">
+<div class="flex flex-col">
+<span class="text-xs font-bold text-on-surface">통과 지점 (Pass)</span>
+<span class="text-[10px] text-on-surface-variant">목표선 지속 주행</span>
+</div>
+</label>
+<label class="flex items-center gap-2 p-2 rounded-lg bg-warning-surface border border-warning/40 cursor-pointer">
+<input checked="" class="text-warning focus:ring-warning" name="node_type" type="radio" value="stop">
+<div class="flex flex-col">
+<span class="text-xs font-bold text-warning">정지 지점 (Stop)</span>
+<span class="text-[10px] text-on-surface-variant">지정 대기/임무 수행</span>
+</div>
+</label>
+</div>
+</div>
+<!-- X -->
+<div class="flex flex-col gap-1">
+<label class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant" for="input-coord-x">X 좌표 (m 단위)</label>
+<input class="px-3 py-1.5 bg-surface-container-low border border-border-grid rounded-lg font-telemetry text-xs text-primary font-bold focus:outline-none focus:ring-1 focus:ring-secondary" id="input-coord-x" step="0.01" type="number" value="6.00">
+</div>
+<!-- Y -->
+<div class="flex flex-col gap-1">
+<label class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant" for="input-coord-y">Y 좌표 (m 단위)</label>
+<input class="px-3 py-1.5 bg-surface-container-low border border-border-grid rounded-lg font-telemetry text-xs text-primary font-bold focus:outline-none focus:ring-1 focus:ring-secondary" id="input-coord-y" step="0.01" type="number" value="1.20">
+</div>
+<!-- Dwell -->
+<div class="flex flex-col gap-1">
+<label class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant" for="input-dwell">정지 대기 시간 (초)</label>
+<div class="flex items-center gap-1.5">
+<input class="w-full px-3 py-1.5 bg-surface-container-low border border-border-grid rounded-lg font-telemetry text-xs text-primary font-bold focus:outline-none focus:ring-1 focus:ring-secondary" id="input-dwell" max="600" min="0" type="number" value="30">
+<span class="text-xs text-on-surface-variant shrink-0 font-medium">sec</span>
+</div>
+</div>
+<!-- Speed -->
+<div class="flex flex-col gap-1">
+<label class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant" for="input-speed">구간 진입 속도</label>
+<div class="flex items-center gap-1.5">
+<input class="w-full px-3 py-1.5 bg-surface-container-low border border-border-grid rounded-lg font-telemetry text-xs text-primary font-bold focus:outline-none focus:ring-1 focus:ring-secondary" id="input-speed" max="1.2" min="0.1" step="0.1" type="number" value="0.6">
+<span class="text-xs text-on-surface-variant shrink-0 font-medium">m/s</span>
+</div>
+</div>
+<!-- Inspector Actions -->
+<div class="sm:col-span-2 pt-2 border-t border-border-grid flex flex-col sm:flex-row items-center justify-between gap-2">
+<span class="text-[11px] text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px] text-secondary">verified_user</span>
+                    저장 시 로봇 서버에 즉시 검증 배포
+                  </span>
+<div class="flex items-center gap-2 w-full sm:w-auto">
+<button class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg border border-border-grid text-on-surface text-xs font-semibold hover:bg-surface-container transition-colors" onclick="resetNodeInspector()" type="button">
+                      원래대로
+                    </button>
+<button class="flex-1 sm:flex-none px-4 py-1.5 rounded-lg bg-secondary text-on-secondary text-xs font-bold hover:bg-primary transition-colors shadow-xs" type="submit">
+                      노드 속성 적용
+                    </button>
+</div>
+</div>
+</form>
+</div>
+</section>
+</div>
+<!-- 3. BOTTOM PRESETS & AUDIT TRAIL CHANGELOG -->
+<section class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+<!-- Mission Profiles (Col 1-7) -->
+
+<!-- Audit Trail (Col 8-12) -->
+<div class="bg-surface-container-lowest rounded-xl border border-border-grid shadow-xs p-5 flex flex-col gap-4 lg:col-span-12">
+<div class="flex items-center justify-between border-b border-border-grid pb-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[22px]">history_edu</span>
+<h3 class="brand-font text-base font-bold text-primary">경로 변경 이력 (Audit Trail)</h3>
+</div>
+<span class="font-telemetry text-xs text-on-surface-variant font-medium">Git Sync 3e92a</span>
+</div>
+<div class="flex flex-col divide-y divide-border-grid text-xs">
+<div class="py-2.5 flex items-start justify-between gap-2">
+<div class="flex flex-col min-w-0">
+<span class="text-on-surface font-medium truncate">admin이 [W2] 중앙홀 서측 통과 지점 좌표 수정</span>
+<span class="text-on-surface-variant text-[11px] font-telemetry mt-0.5">X: 3.80m → 4.00m (장애물 회피 반경 0.2m 확장)</span>
+</div>
+<span class="font-telemetry text-on-surface-variant shrink-0 text-[11px]">14:35:12</span>
+</div>
+<div class="py-2.5 flex items-start justify-between gap-2">
+<div class="flex flex-col min-w-0">
+<span class="text-on-surface font-medium truncate">operator_kim이 [MID] 대기시간 변경</span>
+<span class="text-on-surface-variant text-[11px] font-telemetry mt-0.5">대기시간: 20s → 30s (수거량 측정 안정화)</span>
+</div>
+<span class="font-telemetry text-on-surface-variant shrink-0 text-[11px]">11:20:44</span>
+</div>
+<div class="py-2.5 flex items-start justify-between gap-2">
+<div class="flex flex-col min-w-0">
+<span class="text-on-surface font-medium truncate">system_sync: [Zone A Standard Patrol] 빌드 완료</span>
+<span class="text-on-surface-variant text-[11px] font-telemetry mt-0.5">waypoints.yaml 파일 로봇 플래시 메모리 전송</span>
+</div>
+<span class="font-telemetry text-on-surface-variant shrink-0 text-[11px]">09:15:02</span>
+</div>
+<div class="py-2.5 flex items-start justify-between gap-2">
+<div class="flex flex-col min-w-0">
+<span class="text-on-surface font-medium truncate">admin이 [STAIRS_KEEPOUT] 위험 구역 다각형 추가</span>
+<span class="text-on-surface-variant text-[11px] font-telemetry mt-0.5">위험 영역 바운딩 박스 (260, 45, 120, 90)</span>
+</div>
+<span class="font-telemetry text-on-surface-variant shrink-0 text-[11px]">어제 17:40</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+</div>
+<!-- MODAL: YAML RAW CODE VIEWER -->
+<div class="fixed inset-0 z-50 bg-inverse-surface/50 backdrop-blur-sm hidden flex items-center justify-center p-4" id="yaml-modal">
+<div class="bg-surface-container-lowest rounded-xl max-w-2xl w-full p-5 shadow-2xl border border-border-grid flex flex-col gap-4">
+<div class="flex items-center justify-between border-b border-border-grid pb-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[22px]">terminal</span>
+<h3 class="brand-font text-base font-bold text-primary">waypoints.yaml 소스 코드</h3>
+</div>
+<button class="w-8 h-8 rounded-lg hover:bg-surface-container flex items-center justify-center text-on-surface" onclick="toggleYamlPreview()" type="button">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<pre class="bg-[#0f141c] text-[#7ffc97] p-4 rounded-lg font-telemetry text-xs overflow-x-auto max-h-[380px] leading-relaxed border border-slate-800">mission_name: "Zone_A_Standard_Patrol"
+robot_id: "LIMBO-01"
+version: "2.4"
+timestamp: "2026-11-13T14:35:12Z"
+waypoints:
+  - id: "HOME"
+    name: "Charging_Dock_Base"
+    type: "dock_station"
+    x: 1.80
+    y: 3.00
+    tolerance: 0.05
+    dwell_time: 0
+  - id: "W1"
+    name: "Lobby_Information_Desk"
+    type: "pass_through"
+    x: 1.80
+    y: 1.20
+    tolerance: 0.15
+    speed_limit: 0.6
+  - id: "W2"
+    name: "Central_Hall_West"
+    type: "pass_through"
+    x: 4.00
+    y: 1.20
+    tolerance: 0.20
+    speed_limit: 0.8
+  - id: "MID"
+    name: "Lounge_Trash_Collection"
+    type: "stop_and_measure"
+    x: 6.00
+    y: 1.20
+    dwell_time: 30
+    sensor_action: "ultrasound_fill_level"
+  - id: "W3"
+    name: "Elevator_Corridor"
+    type: "pass_through"
+    x: 6.00
+    y: 3.00
+    tolerance: 0.15
+    speed_limit: 0.5
+  - id: "HOME_RETURN"
+    name: "Charging_Dock_Return"
+    type: "dock_final"
+    x: 1.80
+    y: 3.00
+      </pre>
+<div class="flex items-center justify-end gap-2 pt-1 border-t border-border-grid">
+<button class="px-3.5 py-1.5 rounded-lg border border-border-grid hover:bg-surface-container text-on-surface text-xs font-semibold transition-colors flex items-center gap-1.5" onclick="navigator.clipboard.writeText('yaml content copied'); alert('YAML 구성이 클립보드에 복사되었습니다.');" type="button">
+<span class="material-symbols-outlined text-[16px]">content_copy</span>
+<span>복사하기</span>
+</button>
+<button class="px-4 py-1.5 rounded-lg bg-primary-container text-on-primary text-xs font-bold transition-colors" onclick="toggleYamlPreview()" type="button">
+          닫기
+        </button>
+</div>
+</div>
+</div>
+<!-- INTERACTIVE SCRIPTS -->
+<script>
+    let currentZoom = 1;
+
+    // Track map cursor position
+    const canvasContainer = document.getElementById('slam-canvas-container');
+    const coordDisplay = document.getElementById('cursor-coords');
+
+    if (canvasContainer && coordDisplay) {
+      canvasContainer.addEventListener('mousemove', (e) => {
+        const rect = canvasContainer.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / 48).toFixed(2);
+        const y = ((e.clientY - rect.top) / 48).toFixed(2);
+        coordDisplay.textContent = `X: ${x}m, Y: ${y}m`;
+      });
+    }
+
+    // Zoom Map controls
+    function zoomMap(factor) {
+      currentZoom = Math.min(Math.max(currentZoom * factor, 0.7), 2.2);
+      const svg = document.getElementById('route-svg');
+      if (svg) svg.style.transform = `scale(${currentZoom})`;
+    }
+
+    function resetMapView() {
+      currentZoom = 1;
+      const svg = document.getElementById('route-svg');
+      if (svg) svg.style.transform = `scale(1)`;
+    }
+
+    function toggleGridLines() {
+      const rect = document.getElementById('canvas-grid-rect');
+      const btn = document.getElementById('toggle-grid-btn');
+      if (!rect || !btn) return;
+      if (rect.getAttribute('fill') === 'none') {
+        rect.setAttribute('fill', 'url(#slam-grid)');
+        btn.classList.add('bg-positive-accent', 'text-secondary');
+        btn.classList.remove('text-on-surface-variant');
+      } else {
+        rect.setAttribute('fill', 'none');
+        btn.classList.remove('bg-positive-accent', 'text-secondary');
+        btn.classList.add('text-on-surface-variant');
+      }
+    }
+
+    function toggleKeepoutZones() {
+      const keepout = document.getElementById('keepout-layer');
+      const btn = document.getElementById('toggle-keepout-btn');
+      if (!keepout || !btn) return;
+      if (keepout.style.opacity === '0') {
+        keepout.style.opacity = '1';
+        btn.classList.add('text-warning');
+        btn.classList.remove('text-on-surface-variant');
+      } else {
+        keepout.style.opacity = '0';
+        btn.classList.remove('text-warning');
+        btn.classList.add('text-on-surface-variant');
+      }
+    }
+
+    // Select Waypoint Card from list or SVG
+    function selectWaypoint(elementId) {
+      const cards = document.querySelectorAll('.wp-card');
+      cards.forEach(c => {
+        c.classList.remove('border-2', 'border-secondary', 'bg-surface-container');
+        c.classList.add('bg-surface-container-lowest');
+      });
+
+      const target = document.getElementById(elementId);
+      if (target) {
+        target.classList.remove('bg-surface-container-lowest');
+        target.classList.add('border-2', 'border-secondary', 'bg-surface-container');
+      }
+
+      // Populate Inspector
+      const inspectorId = document.getElementById('inspector-node-id');
+      const nameInput = document.getElementById('input-wp-name');
+      const xInput = document.getElementById('input-coord-x');
+      const yInput = document.getElementById('input-coord-y');
+
+      if (elementId === 'item-w1') {
+        inspectorId.textContent = 'NODE: W1 (ID #2)';
+        nameInput.value = '로비 안내데스크 통과 지점';
+        xInput.value = '1.80';
+        yInput.value = '1.20';
+      } else if (elementId === 'item-w2') {
+        inspectorId.textContent = 'NODE: W2 (ID #3)';
+        nameInput.value = '중앙홀 서측 통과 지점';
+        xInput.value = '4.00';
+        yInput.value = '1.20';
+      } else if (elementId === 'item-mid') {
+        inspectorId.textContent = 'NODE: MID (ID #4)';
+        nameInput.value = '휴게라운지 정지 및 압축 수거';
+        xInput.value = '6.00';
+        yInput.value = '1.20';
+      } else if (elementId === 'item-w3') {
+        inspectorId.textContent = 'NODE: W3 (ID #5)';
+        nameInput.value = '엘리베이터 앞 통과 지점';
+        xInput.value = '6.00';
+        yInput.value = '3.00';
+      } else if (elementId === 'item-home') {
+        inspectorId.textContent = 'NODE: HOME (BASE)';
+        nameInput.value = '충전 도크 스테이션';
+        xInput.value = '1.80';
+        yInput.value = '3.00';
+      }
+    }
+
+    function moveWaypoint(itemId, direction) {
+      const el = document.getElementById(itemId);
+      if (!el) return;
+      if (direction === -1 && el.previousElementSibling && el.previousElementSibling.id !== 'item-home') {
+        el.parentNode.insertBefore(el, el.previousElementSibling);
+      } else if (direction === 1 && el.nextElementSibling && el.nextElementSibling.id !== 'item-return') {
+        el.parentNode.insertBefore(el.nextElementSibling, el);
+      }
+    }
+
+    function removeWaypoint(itemId) {
+      if (confirm('해당 순찰 지점을 삭제하시겠습니까? 연결된 경로 벡터가 재계산됩니다.')) {
+        const el = document.getElementById(itemId);
+        if (el) el.remove();
+      }
+    }
+
+    function toggleYamlPreview() {
+      const modal = document.getElementById('yaml-modal');
+      if (modal) modal.classList.toggle('hidden');
+    }
+
+    function filterWaypoints(query) {
+      const term = query.toLowerCase();
+      const cards = document.querySelectorAll('.wp-card');
+      cards.forEach(card => {
+        const text = card.textContent.toLowerCase();
+        card.style.display = text.includes(term) ? '' : 'none';
+      });
+    }
+
+    function applyNodeEdit() {
+      alert('노드 속성이 갱신되었습니다. 변경사항이 캐시에 반영되었습니다.');
+    }
+
+    function resetNodeInspector() {
+      selectWaypoint('item-mid');
+    }
+
+    function openNewWaypointDrawer() {
+      alert('지도에서 새 웨이포인트를 생성할 좌표를 클릭해주세요.');
+    }
+
+    function loadPresetProfile(presetName) {
+      if (confirm(`'${presetName}' 프로필을 불러오시겠습니까? 현재 변경 중인 노드가 대체됩니다.`)) {
+        alert(`'${presetName}' 경로가 활성화되었습니다.`);
+      }
+    }
+
+    function toggleMobileSidebar() {
+      const sidebar = document.getElementById('main-sidebar');
+      const backdrop = document.getElementById('mobile-sidebar-backdrop');
+      if (!sidebar || !backdrop) return;
+      const isClosed = sidebar.classList.contains('-translate-x-full');
+      if (isClosed) {
+        sidebar.classList.remove('-translate-x-full');
+        backdrop.classList.remove('hidden');
+      } else {
+        sidebar.classList.add('-translate-x-full');
+        backdrop.classList.add('hidden');
+      }
+    }
+  </script>
+
+
+
+
+</body></html>

@@ -1,0 +1,613 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><meta content="web_dashboard" name="shell-type"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet"><style>@font-face { font-family: 'GmarketSans'; font-weight: 300; font-style: normal; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansLight.woff') format('woff'); } @font-face { font-family: 'GmarketSans'; font-weight: 500; font-style: normal; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansMedium.woff') format('woff'); } @font-face { font-family: 'GmarketSans'; font-weight: 700; font-style: normal; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansBold.woff') format('woff'); } body, input, select, textarea, button { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; } .font-headline-lg, .font-headline-md, .font-headline-sm { font-family: 'GmarketSans', sans-serif !important; } .font-telemetry-lg, .font-telemetry-md, code, pre { font-family: 'JetBrains Mono', monospace !important; } .material-symbols-outlined { font-family: 'Material Symbols Outlined' !important; }</style><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"on-secondary-fixed":"#002109","border-grid":"#E2E8F0","tertiary-fixed":"#e2e3de","tertiary":"#30322f","surface":"#E5E7EB","surface-variant":"#dce2f7","on-secondary-container":"#007230","surface-container-low":"#f1f3ff","on-tertiary-fixed":"#1a1c19","surface-subtle":"#E5E7EB","on-secondary-fixed-variant":"#005320","on-background":"#141b2b","on-primary-fixed":"#00210d","warning-surface":"#FEF3C7","secondary-container":"#7cf994","background":"#f9f9ff","error-container":"#ffdad6","on-tertiary-fixed-variant":"#454744","inverse-surface":"#293040","tertiary-container":"#464946","secondary-fixed-dim":"#62df7d","on-surface":"#141b2b","positive-accent":"#DCFCE7","on-primary":"#ffffff","primary-fixed":"#b1f2be","surface-container-highest":"#dce2f7","inverse-primary":"#96d5a3","warning":"#D97706","error":"#ba1a1a","on-primary-fixed-variant":"#12512c","on-surface-variant":"#404941","on-tertiary-container":"#b6b8b3","secondary":"#006e2d","surface-bright":"#f9f9ff","primary":"#003b1b","critical-surface":"#FEE2E2","outline-variant":"#c0c9be","on-primary-container":"#87c695","primary-container":"#14532d","secondary-fixed":"#7ffc97","on-error":"#ffffff","surface-container":"#e9edff","on-tertiary":"#ffffff","surface-container-lowest":"#ffffff","tertiary-fixed-dim":"#c5c7c2","primary-fixed-dim":"#96d5a3","surface-tint":"#2e6a41","critical":"#DC2626","accent":"#DCFCE7","on-secondary":"#ffffff","surface-dim":"#d3daef","on-error-container":"#93000a","inverse-on-surface":"#edf0ff","surface-container-high":"#e1e8fd","outline":"#717970"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"space-xs":"0.25rem","gutter":"1rem","space-xl":"2rem","space-lg":"1.25rem","space-md":"0.75rem","margin":"1.5rem","space-sm":"0.5rem"},"fontFamily":{"headline-lg":["\"Gmarket Sans, sans-serif\""],"body-sm":["\"Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif\""],"body-md":["\"Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif\""],"body-lg":["\"Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif\""],"telemetry-lg":["\"JetBrains Mono, monospace\""],"headline-lg-mobile":["\"Gmarket Sans, sans-serif\""],"headline-sm":["\"Gmarket Sans, sans-serif\""],"headline-md":["\"Gmarket Sans, sans-serif\""],"label-caps":["\"Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif\""],"telemetry-md":["\"JetBrains Mono, monospace\""]},"fontSize":{"headline-lg":["36px",{"lineHeight":"44px","fontWeight":"700"}],"body-sm":["12px",{"lineHeight":"16px","fontWeight":"400"}],"body-md":["14px",{"lineHeight":"20px","fontWeight":"400"}],"body-lg":["16px",{"lineHeight":"24px","fontWeight":"600"}],"telemetry-lg":["24px",{"lineHeight":"28px","fontWeight":"700"}],"headline-lg-mobile":["28px",{"lineHeight":"36px","fontWeight":"700"}],"headline-sm":["18px",{"lineHeight":"24px","fontWeight":"500"}],"headline-md":["24px",{"lineHeight":"32px","fontWeight":"700"}],"label-caps":["11px",{"lineHeight":"14px","letterSpacing":"0.05em","fontWeight":"600"}],"telemetry-md":["16px",{"lineHeight":"20px","fontWeight":"600"}]}}}}</script></head><body class="bg-background font-body-md text-on-surface antialiased min-h-screen"><aside class="fixed left-0 top-0 h-full w-72 bg-surface-container-lowest z-50 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex flex-col"><div class="px-space-margin pt-space-lg pb-space-md"><div class="flex items-center gap-space-sm"><div class="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[20px]">smart_toy</span></div><div><div class="font-headline-sm text-headline-sm text-primary font-bold tracking-tight leading-none">LIMBO 관제</div><div class="font-label-caps text-label-caps text-outline uppercase tracking-wider mt-1">AUTONOMOUS FLEET CORE</div></div></div></div><div class="px-space-margin mb-space-md"><label class="font-label-caps text-label-caps text-outline uppercase block mb-1.5">ACTIVE TARGET UNIT</label><div class="flex items-center justify-between px-space-md py-space-sm bg-surface-container-low rounded-xl cursor-pointer hover:bg-surface-container transition-colors"><div class="flex items-center gap-space-sm"><span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span><div class="font-body-md text-body-md font-semibold text-on-surface">LIMBO-01</div><span class="font-body-sm text-body-sm text-outline-variant">|</span><span class="font-body-sm text-body-sm text-on-secondary-container font-medium">자율순찰</span></div><span class="material-symbols-outlined text-outline text-[18px]">expand_more</span></div></div><nav class="flex flex-col gap-1 px-space-sm" data-active-classes="bg-primary-container text-on-primary font-bold shadow-sm"><a class="flex items-center gap-space-md px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="fleet-overview" href="#"><span class="material-symbols-outlined text-[20px]">grid_view</span><span class="font-body-md text-body-md">플릿 현황</span></a><a class="flex items-center gap-space-md px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="robot-control" href="#"><span class="material-symbols-outlined text-[20px]">precision_manufacturing</span><span class="font-body-md text-body-md">로봇 관제</span></a><a class="flex items-center gap-space-md px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="telemetry" href="#"><span class="material-symbols-outlined text-[20px]">cell_tower</span><span class="font-body-md text-body-md">Telemetry</span></a><a class="flex items-center gap-space-md px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="patrol-routes" href="#"><span class="material-symbols-outlined text-[20px]">alt_route</span><span class="font-body-md text-body-md">순찰 경로 관리</span></a><a aria-current="page" class="flex items-center gap-space-md px-space-md py-space-sm rounded-xl transition-all bg-primary-container text-on-primary font-bold shadow-sm" data-path="audit-logs" href="#"><span class="material-symbols-outlined text-[20px]">description</span><span class="font-body-md text-body-md">Audit Logs</span></a></nav></div><div class="p-space-margin bg-surface-container-lowest"><div class="p-space-md rounded-xl bg-surface-container-low flex flex-col gap-space-xs"><div class="flex items-center justify-between"><span class="font-label-caps text-label-caps text-outline uppercase">FLEET NETWORK</span><span class="font-label-caps text-label-caps text-on-secondary-container font-semibold">ONLINE</span></div><div class="w-full h-1.5 bg-surface rounded-full overflow-hidden"><div class="h-full w-full bg-secondary-container rounded-full"></div></div><div class="flex items-center justify-between text-outline mt-1"><span class="font-body-sm text-body-sm">정상 연결됨</span><span class="font-telemetry-md text-[11px] text-on-surface-variant font-semibold">5/5 NODES</span></div></div></div></aside><div class="pl-72"><header class="fixed top-0 left-72 right-0 h-16 bg-surface-container-lowest/90 backdrop-blur-xl z-40 shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-16 w-full px-space-margin flex items-center justify-between gap-space-gutter"><div class="flex items-center gap-space-md overflow-x-auto py-1"><div class="flex items-center gap-space-xs px-space-md py-1 bg-positive-accent text-primary-container rounded-full"><span class="w-2 h-2 rounded-full bg-secondary"></span><span class="font-body-sm text-body-sm font-semibold">SYSTEM READY</span></div><div class="flex items-center gap-space-xs px-space-md py-1 bg-surface-container-low rounded-full"><span class="font-label-caps text-label-caps text-outline uppercase">TARGET</span><span class="font-body-sm text-body-sm font-bold text-on-surface">BOT-01 자율순찰</span></div><div class="flex items-center gap-space-xs px-space-md py-1 bg-surface-container-low rounded-full"><span class="material-symbols-outlined text-secondary text-[16px]">battery_charging_80</span><span class="font-telemetry-md text-body-sm text-on-surface font-semibold">84%</span></div><div class="flex items-center gap-space-xs px-space-md py-1 bg-surface-container-low rounded-full"><span class="material-symbols-outlined text-outline text-[16px]">speed</span><span class="font-telemetry-md text-body-sm text-on-surface font-semibold">14ms</span></div></div><div class="flex items-center gap-space-gutter"><button class="relative p-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" type="button"><span class="material-symbols-outlined text-[22px]">notifications</span><span class="absolute top-1 right-1 w-2 h-2 bg-critical rounded-full"></span></button><div class="flex items-center gap-space-md"><div class="hidden sm:flex flex-col text-right"><span class="font-body-sm text-body-sm font-semibold text-on-surface leading-tight">operator_kim</span><span class="font-label-caps text-label-caps text-outline uppercase">FLEET LEAD</span></div><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></div></header><main class="w-full pt-16 bg-background min-h-screen"><div class="flex flex-col w-full">
+<div class="p-space-margin flex flex-col gap-space-lg">
+<!-- Header Title Section -->
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-space-xs">
+<span class="px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-caps text-label-caps uppercase tracking-wider">SYSTEM SECURITY &amp; OPERATION HISTORY</span>
+<span class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-positive-accent text-primary-container font-label-caps text-label-caps font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
+            LIVE SYNC ACTIVE
+          </span>
+</div>
+<h1 class="font-headline-md text-headline-md text-on-surface font-bold tracking-tight">LIMBO 감사 및 이벤트 로그 (Audit Logs)</h1>
+<p class="font-body-md text-body-md text-outline">실시간 로봇 제어 명령, ROS2 통신 상태 변화, 시스템 경고 및 하드웨어 이벤트 감사 추적</p>
+</div>
+<div class="flex items-center gap-space-sm flex-wrap">
+<div class="flex items-center gap-1.5 px-space-md py-2 rounded-xl bg-surface-container-lowest text-on-surface shadow-sm">
+<span class="w-2.5 h-2.5 rounded-full bg-secondary animate-ping"></span>
+<span class="font-body-sm text-body-sm font-semibold">동기화 중 (1Hz)</span>
+</div>
+<button class="flex items-center gap-1.5 px-space-md py-2 rounded-xl bg-surface-container-lowest text-on-surface hover:bg-surface-container shadow-sm transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">sync</span>
+<span class="font-body-sm text-body-sm font-semibold">새로고침</span>
+</button>
+<button class="flex items-center gap-1.5 px-space-md py-2 rounded-xl bg-surface-container-lowest text-on-surface hover:bg-surface-container shadow-sm transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">download</span>
+<span class="font-body-sm text-body-sm font-semibold">CSV 내보내기</span>
+</button>
+<button class="flex items-center gap-1.5 px-space-md py-2 rounded-xl bg-primary-container text-on-primary hover:bg-secondary transition-colors shadow-sm" type="button">
+<span class="material-symbols-outlined text-[18px]">data_object</span>
+<span class="font-body-sm text-body-sm font-semibold">JSON Audit Dump</span>
+</button>
+</div>
+</div>
+<!-- KPI Summary Metric Cards (4-Column Bento) -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-space-md">
+<!-- Total Logs -->
+<div class="p-space-lg rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between relative overflow-hidden">
+<div class="absolute -right-4 -bottom-4 w-24 h-24 bg-surface-container-low rounded-full opacity-60 pointer-events-none"></div>
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-outline uppercase font-semibold">당일 발생 총 로그</span>
+<div class="w-7 h-7 rounded-lg bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]">list_alt</span>
+</div>
+</div>
+<div class="mt-space-md">
+<div class="flex items-baseline gap-2">
+<span class="font-telemetry-lg text-telemetry-lg text-on-surface font-bold">1,428</span>
+<span class="font-body-sm text-body-sm text-outline">건</span>
+</div>
+<div class="flex items-center gap-1 text-on-secondary-container mt-1">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+<span class="font-body-sm text-body-sm font-semibold">전일 대비 +8.4%</span>
+<span class="font-body-sm text-body-sm text-outline">· 정상 기록량</span>
+</div>
+</div>
+</div>
+<!-- Warn Severity -->
+<div class="p-space-lg rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between relative overflow-hidden">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-outline uppercase font-semibold">심각도: 주의/경고 (Warn)</span>
+<div class="w-7 h-7 rounded-lg bg-warning-surface flex items-center justify-center">
+<span class="material-symbols-outlined text-warning text-[18px]">warning</span>
+</div>
+</div>
+<div class="mt-space-md">
+<div class="flex items-baseline gap-2">
+<span class="font-telemetry-lg text-telemetry-lg text-warning font-bold">14</span>
+<span class="font-body-sm text-body-sm text-outline">건</span>
+</div>
+<div class="flex items-center gap-1 text-warning mt-1">
+<span class="w-1.5 h-1.5 rounded-full bg-warning"></span>
+<span class="font-body-sm text-body-sm font-semibold">미해결 2건</span>
+<span class="font-body-sm text-body-sm text-outline">· Wi-Fi 지연/적재</span>
+</div>
+</div>
+</div>
+<!-- Error Severity -->
+<div class="p-space-lg rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between relative overflow-hidden">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-outline uppercase font-semibold">심각도: 오류/이상 (Error)</span>
+<div class="w-7 h-7 rounded-lg bg-critical-surface flex items-center justify-center">
+<span class="material-symbols-outlined text-critical text-[18px]">error</span>
+</div>
+</div>
+<div class="mt-space-md">
+<div class="flex items-baseline gap-2">
+<span class="font-telemetry-lg text-telemetry-lg text-on-surface font-bold">3</span>
+<span class="font-body-sm text-body-sm text-outline">건</span>
+</div>
+<div class="flex items-center gap-1 text-on-secondary-container mt-1">
+<span class="material-symbols-outlined text-[16px]">check_circle</span>
+<span class="font-body-sm text-body-sm font-semibold">3건 조치 완료</span>
+<span class="font-body-sm text-body-sm text-outline">· 치명적 결함 0</span>
+</div>
+</div>
+</div>
+<!-- Confirmed Operator Controls -->
+<div class="p-space-lg rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between relative overflow-hidden">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-outline uppercase font-semibold">명령 제어 감사 (Confirmed)</span>
+<div class="w-7 h-7 rounded-lg bg-positive-accent flex items-center justify-center">
+<span class="material-symbols-outlined text-primary-container text-[18px]">verified_user</span>
+</div>
+</div>
+<div class="mt-space-md">
+<div class="flex items-baseline gap-2">
+<span class="font-telemetry-lg text-telemetry-lg text-primary-container font-bold">142</span>
+<span class="font-body-sm text-body-sm text-outline">건</span>
+</div>
+<div class="flex items-center justify-between mt-1">
+<div class="flex items-center gap-1 text-on-secondary-container">
+<span class="font-telemetry-md text-[13px] font-bold">99.3%</span>
+<span class="font-body-sm text-body-sm text-outline">성공</span>
+</div>
+<span class="font-body-sm text-body-sm text-outline">개입 6건</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Multi-Filter & Search Toolbar -->
+<div class="p-space-lg rounded-xl bg-surface-container-lowest shadow-sm flex flex-col gap-space-md">
+<div class="grid grid-cols-1 md:grid-cols-12 gap-space-sm items-center">
+<!-- Search Input -->
+<div class="md:col-span-4 relative">
+<span class="material-symbols-outlined absolute left-3 top-2.5 text-outline text-[18px]">search</span>
+<input class="w-full pl-9 pr-3 py-2 text-body-md font-body-md bg-surface-container-low text-on-surface rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary placeholder:text-outline/70" placeholder="메시지, 토픽, 오퍼레이터 ID, 로봇 번호 검색..." type="text">
+</div>
+<!-- Severity Filter -->
+<div class="md:col-span-3">
+<select class="w-full px-3 py-2 text-body-md font-body-md bg-surface-container-low text-on-surface rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary">
+<option>심각도: 전체 (All Levels)</option>
+<option>정상 (INFO)</option>
+<option>주의 (WARN)</option>
+<option>오류 (ERROR)</option>
+<option>명령 실행 (CONTROL)</option>
+<option>지속 중인 문제 (Active Alert)</option>
+</select>
+</div>
+<!-- Subsystem Filter -->
+<div class="md:col-span-3">
+<select class="w-full px-3 py-2 text-body-md font-body-md bg-surface-container-low text-on-surface rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary">
+<option>구간/유형: 전체 파이프라인</option>
+<option>브라우저↔서버 링크 (WebRTC/WS)</option>
+<option>서버↔로봇 Bridge (Zenoh/MQTT)</option>
+<option>ROS2 센서 토픽 (LiDAR/Odom/IMU)</option>
+<option>오퍼레이터 제어 명령 (E-STOP/Teleop)</option>
+<option>전원 및 하드웨어 (BMS/Locker/Payload)</option>
+</select>
+</div>
+<!-- Robot Unit Filter -->
+<div class="md:col-span-2">
+<select class="w-full px-3 py-2 text-body-md font-body-md bg-surface-container-low text-on-surface rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary">
+<option>전체 로봇 (Fleet)</option>
+<option>LIMBO-01 (자율순찰)</option>
+<option>LIMBO-02 (대기모드)</option>
+<option>LIMBO-03 (복귀주행)</option>
+<option>LIMBO-04 (도킹충전)</option>
+</select>
+</div>
+</div>
+<!-- Quick Timers & Action Row -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm pt-space-xs">
+<div class="flex items-center gap-space-xs flex-wrap">
+<span class="font-label-caps text-label-caps text-outline uppercase mr-1">TIME WINDOW:</span>
+<button class="px-2.5 py-1 rounded-lg bg-surface-container-high text-on-surface font-body-sm text-body-sm font-semibold hover:bg-surface-container transition-colors" type="button">최근 1시간</button>
+<button class="px-2.5 py-1 rounded-lg bg-surface-container text-outline font-body-sm text-body-sm hover:text-on-surface transition-colors" type="button">최근 6시간</button>
+<button class="px-2.5 py-1 rounded-lg bg-surface-container text-outline font-body-sm text-body-sm hover:text-on-surface transition-colors" type="button">최근 24시간</button>
+<button class="px-2.5 py-1 rounded-lg bg-surface-container text-outline font-body-sm text-body-sm hover:text-on-surface transition-colors" type="button">오늘 (Asia/Seoul)</button>
+</div>
+<div class="flex items-center gap-space-md justify-between sm:justify-end">
+<span class="font-body-sm text-body-sm text-outline">
+            전체 <strong class="text-on-surface font-semibold">1,428</strong>건 중 <strong class="text-on-surface font-semibold">24</strong>건 표시 (서버 보관 최대 100일)
+          </span>
+<button class="flex items-center gap-1 text-outline hover:text-on-surface font-body-sm text-body-sm" type="button">
+<span class="material-symbols-outlined text-[16px]">restart_alt</span>
+<span>초기화</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Main Content Split: Audit Log Table + Selected Detail Inspector -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-md items-start">
+<!-- Data Table Card -->
+<div class="lg:col-span-8 flex flex-col bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
+<div class="px-space-lg py-space-md bg-surface-container-low flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container text-[20px]">manage_search</span>
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">감사 로그 실시간 스트림</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="font-telemetry-md text-[12px] text-outline">KST 2026-11-13 UTC+9</span>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead>
+<tr class="bg-surface-container-high/60 text-outline font-label-caps text-label-caps uppercase tracking-wider">
+<th class="py-3 px-space-md">발생 시각</th>
+<th class="py-3 px-space-md">심각도</th>
+<th class="py-3 px-space-md">타깃 유닛</th>
+<th class="py-3 px-space-md">분류/구간</th>
+<th class="py-3 px-space-md">이벤트 요약 및 세부 내역</th>
+<th class="py-3 px-space-md">주체</th>
+<th class="py-3 px-space-md">상태</th>
+<th class="py-3 px-space-md text-right">상세</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface/40 font-body-sm text-body-sm text-on-surface">
+<!-- Row 1: Selected / Highlighted Active Inspection -->
+<tr class="bg-positive-accent/20 hover:bg-positive-accent/30 transition-colors cursor-pointer" onclick="selectAuditRow('LOG-20261113-09418', '주행 명령 실행 확인 [confirmed] (목표: W3 중앙홀 서측)', 'LIMBO-01', 'Navigation / Bridge', 'operator_kim', '11:42:09.184', 'ros2_trace_9f81a7b', '/cmd_vel, /limbo/odom')">
+<td class="py-3 px-space-md font-telemetry-md text-[12px] text-on-surface-variant whitespace-nowrap">
+                  11:42:09<span class="text-outline">.184</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="px-2 py-0.5 rounded-full bg-positive-accent text-primary-container font-label-caps text-label-caps font-bold">CONTROL</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="font-telemetry-md text-body-sm font-bold text-on-surface">LIMBO-01</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="px-1.5 py-0.5 rounded bg-surface-container text-outline text-[11px] font-medium">Nav/Bridge</span>
+</td>
+<td class="py-3 px-space-md max-w-xs">
+<div class="font-semibold text-primary font-body-sm truncate">주행 명령 실행 확인 [confirmed] (목표: W3 중앙홀 서측)</div>
+<div class="text-outline text-[11px] truncate">waypoint_id: wp_hall_w3, speed_limit: 0.8m/s</div>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap font-telemetry-md text-[12px] text-on-surface-variant">operator_kim</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="flex items-center gap-1 text-on-secondary-container font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                    Confirmed
+                  </span>
+</td>
+<td class="py-3 px-space-md text-right whitespace-nowrap">
+<button class="w-7 h-7 rounded-lg bg-surface-container flex items-center justify-center text-primary-container hover:bg-positive-accent transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 2: Warning Latency -->
+<tr class="hover:bg-surface-container-low transition-colors cursor-pointer" onclick="selectAuditRow('LOG-20261113-09415', 'LiDAR 필터 수신 지연 감지 (24ms &gt; 임계 20ms)', 'LIMBO-01', 'ROS2 Topic', 'system/ros2_sensor_node', '11:41:52.003', 'ros2_trace_9f81a72', '/limbo/scan_filtered')">
+<td class="py-3 px-space-md font-telemetry-md text-[12px] text-on-surface-variant whitespace-nowrap">
+                  11:41:52<span class="text-outline">.003</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="px-2 py-0.5 rounded-full bg-warning-surface text-warning font-label-caps text-label-caps font-bold">WARN</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="font-telemetry-md text-body-sm font-bold text-on-surface">LIMBO-01</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="px-1.5 py-0.5 rounded bg-surface-container text-outline text-[11px] font-medium">ROS2 Topic</span>
+</td>
+<td class="py-3 px-space-md max-w-xs">
+<div class="font-medium text-warning font-body-sm truncate">LiDAR 필터 수신 지연 감지 (24ms &gt; 임계 20ms)</div>
+<div class="text-outline text-[11px] truncate">packet_drop_rate: 0.02%, auto_recovered: true</div>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap font-telemetry-md text-[12px] text-outline">system/node</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="text-warning font-semibold">Active</span>
+</td>
+<td class="py-3 px-space-md text-right whitespace-nowrap">
+<button class="w-7 h-7 rounded-lg bg-surface-container-low flex items-center justify-center text-outline hover:text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 3: Operator Pause Intervention -->
+<tr class="hover:bg-surface-container-low transition-colors cursor-pointer" onclick="selectAuditRow('LOG-20261113-09411', '오퍼레이터 operator_kim: 순찰 일시정지 명령 전송', 'LIMBO-02', 'Operator Cmd', 'operator_kim', '11:39:18.892', 'ros2_trace_9f819fa', '/limbo_02/patrol_mgr')">
+<td class="py-3 px-space-md font-telemetry-md text-[12px] text-on-surface-variant whitespace-nowrap">
+                  11:39:18<span class="text-outline">.892</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="px-2 py-0.5 rounded-full bg-positive-accent text-primary-container font-label-caps text-label-caps font-bold">CONTROL</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="font-telemetry-md text-body-sm font-bold text-on-surface">LIMBO-02</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="px-1.5 py-0.5 rounded bg-surface-container text-outline text-[11px] font-medium">Operator</span>
+</td>
+<td class="py-3 px-space-md max-w-xs">
+<div class="font-medium text-on-surface font-body-sm truncate">오퍼레이터 operator_kim: 순찰 일시정지 명령 전송</div>
+<div class="text-outline text-[11px] truncate">reason: "관람객 밀집 통행로 안전 확보", duration: manual</div>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap font-telemetry-md text-[12px] text-on-surface-variant">operator_kim</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="text-on-secondary-container font-semibold">Resolved</span>
+</td>
+<td class="py-3 px-space-md text-right whitespace-nowrap">
+<button class="w-7 h-7 rounded-lg bg-surface-container-low flex items-center justify-center text-outline hover:text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 4: Wi-Fi Roaming INFO -->
+<tr class="hover:bg-surface-container-low transition-colors cursor-pointer" onclick="selectAuditRow('LOG-20261113-09405', 'Wi-Fi AP 고속 핸드오버 완료 (AP-03 -&gt; AP-04)', 'LIMBO-01', 'Network Bridge', 'system/network', '11:36:44.215', 'ros2_trace_9f8191c', '/limbo_01/telemetry/net')">
+<td class="py-3 px-space-md font-telemetry-md text-[12px] text-on-surface-variant whitespace-nowrap">
+                  11:36:44<span class="text-outline">.215</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="px-2 py-0.5 rounded-full bg-surface-container text-on-surface font-label-caps text-label-caps font-bold">INFO</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="font-telemetry-md text-body-sm font-bold text-on-surface">LIMBO-01</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="px-1.5 py-0.5 rounded bg-surface-container text-outline text-[11px] font-medium">Bridge</span>
+</td>
+<td class="py-3 px-space-md max-w-xs">
+<div class="font-medium text-on-surface font-body-sm truncate">Wi-Fi AP 고속 핸드오버 완료 (AP-03 -&gt; AP-04)</div>
+<div class="text-outline text-[11px] truncate">rssi: -58dBm, handover_downtime: 18ms</div>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap font-telemetry-md text-[12px] text-outline">system/net</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="text-on-secondary-container font-semibold">Resolved</span>
+</td>
+<td class="py-3 px-space-md text-right whitespace-nowrap">
+<button class="w-7 h-7 rounded-lg bg-surface-container-low flex items-center justify-center text-outline hover:text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 5: Trash Bin Capacity Warning -->
+<tr class="hover:bg-surface-container-low transition-colors cursor-pointer" onclick="selectAuditRow('LOG-20261113-09398', '쓰레기 적재량 75% 초과 감지 -&gt; 자동 수거 복귀 권장 발생', 'LIMBO-03', 'Hardware / BMS', 'system/payload_sensor', '11:32:10.510', 'ros2_trace_9f81881', '/limbo_03/bin_capacity')">
+<td class="py-3 px-space-md font-telemetry-md text-[12px] text-on-surface-variant whitespace-nowrap">
+                  11:32:10<span class="text-outline">.510</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="px-2 py-0.5 rounded-full bg-warning-surface text-warning font-label-caps text-label-caps font-bold">WARN</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="font-telemetry-md text-body-sm font-bold text-on-surface">LIMBO-03</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="px-1.5 py-0.5 rounded bg-surface-container text-outline text-[11px] font-medium">Payload</span>
+</td>
+<td class="py-3 px-space-md max-w-xs">
+<div class="font-medium text-warning font-body-sm truncate">쓰레기 적재량 75% 초과 감지 -&gt; 자동 수거 복귀 권장 발생</div>
+<div class="text-outline text-[11px] truncate">current_capacity: 78.4%, threshold: 75.0%</div>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap font-telemetry-md text-[12px] text-outline">payload_node</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="text-warning font-semibold">Active</span>
+</td>
+<td class="py-3 px-space-md text-right whitespace-nowrap">
+<button class="w-7 h-7 rounded-lg bg-surface-container-low flex items-center justify-center text-outline hover:text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 6: Charging Station Docking Success -->
+<tr class="hover:bg-surface-container-low transition-colors cursor-pointer" onclick="selectAuditRow('LOG-20261113-09385', '배터리 충전 도킹 성공 (ST-01 스테이션, 전압 25.4V 안정화)', 'LIMBO-04', 'Power / BMS', 'system/docking_fsm', '11:28:01.309', 'ros2_trace_9f81744', '/limbo_04/bms/charging')">
+<td class="py-3 px-space-md font-telemetry-md text-[12px] text-on-surface-variant whitespace-nowrap">
+                  11:28:01<span class="text-outline">.309</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="px-2 py-0.5 rounded-full bg-surface-container text-on-surface font-label-caps text-label-caps font-bold">INFO</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="font-telemetry-md text-body-sm font-bold text-on-surface">LIMBO-04</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="px-1.5 py-0.5 rounded bg-surface-container text-outline text-[11px] font-medium">Power/BMS</span>
+</td>
+<td class="py-3 px-space-md max-w-xs">
+<div class="font-medium text-on-surface font-body-sm truncate">배터리 충전 도킹 성공 (ST-01 스테이션, 전압 25.4V 안정화)</div>
+<div class="text-outline text-[11px] truncate">station_id: ST-01, current_amp: 4.8A, state_of_charge: 18%</div>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap font-telemetry-md text-[12px] text-outline">bms_service</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="text-on-secondary-container font-semibold">Resolved</span>
+</td>
+<td class="py-3 px-space-md text-right whitespace-nowrap">
+<button class="w-7 h-7 rounded-lg bg-surface-container-low flex items-center justify-center text-outline hover:text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 7: Patrol Paused Confirmed -->
+<tr class="hover:bg-surface-container-low transition-colors cursor-pointer" onclick="selectAuditRow('LOG-20261113-09372', '순찰 노드 일시정지 완료 (has_resumable_task: true)', 'LIMBO-01', 'Navigation', 'operator_kim', '11:21:40.910', 'ros2_trace_9f81602', '/limbo_01/patrol_state')">
+<td class="py-3 px-space-md font-telemetry-md text-[12px] text-on-surface-variant whitespace-nowrap">
+                  11:21:40<span class="text-outline">.910</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="px-2 py-0.5 rounded-full bg-positive-accent text-primary-container font-label-caps text-label-caps font-bold">CONTROL</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="font-telemetry-md text-body-sm font-bold text-on-surface">LIMBO-01</span>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="px-1.5 py-0.5 rounded bg-surface-container text-outline text-[11px] font-medium">Navigation</span>
+</td>
+<td class="py-3 px-space-md max-w-xs">
+<div class="font-medium text-on-surface font-body-sm truncate">순찰 노드 일시정지 완료 (has_resumable_task: true)</div>
+<div class="text-outline text-[11px] truncate">checkpoint: CP-08 (중앙 쉼터 북측), resume_token_cached</div>
+</td>
+<td class="py-3 px-space-md whitespace-nowrap font-telemetry-md text-[12px] text-on-surface-variant">operator_kim</td>
+<td class="py-3 px-space-md whitespace-nowrap">
+<span class="text-on-secondary-container font-semibold">Confirmed</span>
+</td>
+<td class="py-3 px-space-md text-right whitespace-nowrap">
+<button class="w-7 h-7 rounded-lg bg-surface-container-low flex items-center justify-center text-outline hover:text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">visibility</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination & Rows Selection Footer -->
+<div class="px-space-lg py-space-md bg-surface-container-lowest flex flex-col sm:flex-row items-center justify-between gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<span class="font-body-sm text-body-sm text-outline">페이지당 표시:</span>
+<select class="px-2 py-1 bg-surface-container-low text-on-surface font-body-sm text-body-sm rounded focus:outline-none">
+<option>25개 보기</option>
+<option>50개 보기</option>
+<option>100개 보기</option>
+</select>
+</div>
+<div class="flex items-center gap-1">
+<button class="w-8 h-8 rounded-lg bg-surface-container-low flex items-center justify-center text-outline hover:text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">chevron_left</span>
+</button>
+<button class="w-8 h-8 rounded-lg bg-primary-container text-on-primary font-body-sm text-body-sm font-bold" type="button">1</button>
+<button class="w-8 h-8 rounded-lg bg-surface-container-low text-on-surface font-body-sm text-body-sm hover:bg-surface-container transition-colors" type="button">2</button>
+<button class="w-8 h-8 rounded-lg bg-surface-container-low text-on-surface font-body-sm text-body-sm hover:bg-surface-container transition-colors" type="button">3</button>
+<button class="w-8 h-8 rounded-lg bg-surface-container-low text-on-surface font-body-sm text-body-sm hover:bg-surface-container transition-colors" type="button">4</button>
+<button class="w-8 h-8 rounded-lg bg-surface-container-low text-on-surface font-body-sm text-body-sm hover:bg-surface-container transition-colors" type="button">5</button>
+<button class="w-8 h-8 rounded-lg bg-surface-container-low flex items-center justify-center text-outline hover:text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Right Column: Audit Inspector & Real-time Payload Details -->
+<div class="lg:col-span-4 flex flex-col gap-space-md">
+<!-- Target Log Inspection Card -->
+<div class="p-space-lg rounded-xl bg-surface-container-lowest shadow-sm flex flex-col gap-space-md">
+<div class="flex items-center justify-between pb-space-sm bg-surface-container-lowest">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container text-[20px]">terminal</span>
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">감사 로그 정밀 분석</span>
+</div>
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-telemetry-md text-[11px] font-bold" id="detail-log-id">LOG-20261113-09418</span>
+</div>
+<!-- Trace Timeline Pipeline -->
+<div class="flex flex-col gap-2">
+<span class="font-label-caps text-label-caps text-outline uppercase font-semibold">TRACE PIPELINE LATENCY</span>
+<div class="p-space-md rounded-xl bg-surface-container-low flex flex-col gap-2.5">
+<div class="flex items-center justify-between text-body-sm">
+<span class="flex items-center gap-1.5 text-on-surface font-medium">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+                  1. WebRTC / WS 브라우저 명령 요청
+                </span>
+<span class="font-telemetry-md text-[11px] text-outline">3.2 ms</span>
+</div>
+<div class="w-full h-1 bg-surface rounded-full overflow-hidden">
+<div class="w-full h-full bg-secondary"></div>
+</div>
+<div class="flex items-center justify-between text-body-sm">
+<span class="flex items-center gap-1.5 text-on-surface font-medium">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+                  2. Zenoh Bridge 로봇 수신 및 확인
+                </span>
+<span class="font-telemetry-md text-[11px] text-outline">5.1 ms</span>
+</div>
+<div class="w-full h-1 bg-surface rounded-full overflow-hidden">
+<div class="w-full h-full bg-secondary"></div>
+</div>
+<div class="flex items-center justify-between text-body-sm">
+<span class="flex items-center gap-1.5 text-on-surface font-medium">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+                  3. ROS2 Nav2 /cmd_vel 서브스크라이버 반영
+                </span>
+<span class="font-telemetry-md text-[11px] text-outline">2.8 ms</span>
+</div>
+<div class="w-full h-1 bg-surface rounded-full overflow-hidden">
+<div class="w-full h-full bg-secondary"></div>
+</div>
+</div>
+</div>
+<!-- Meta Key-Values -->
+<div class="grid grid-cols-2 gap-space-sm pt-space-xs">
+<div class="p-2 rounded-lg bg-surface-container-low">
+<span class="font-label-caps text-[10px] text-outline block">TRACE ID</span>
+<span class="font-telemetry-md text-[12px] font-bold text-on-surface" id="detail-trace-id">ros2_trace_9f81a7b</span>
+</div>
+<div class="p-2 rounded-lg bg-surface-container-low">
+<span class="font-label-caps text-[10px] text-outline block">ISSUER</span>
+<span class="font-telemetry-md text-[12px] font-bold text-primary" id="detail-issuer">operator_kim</span>
+</div>
+<div class="p-2 rounded-lg bg-surface-container-low">
+<span class="font-label-caps text-[10px] text-outline block">TARGET UNIT</span>
+<span class="font-telemetry-md text-[12px] font-bold text-on-surface" id="detail-unit">LIMBO-01</span>
+</div>
+<div class="p-2 rounded-lg bg-surface-container-low">
+<span class="font-label-caps text-[10px] text-outline block">PIPELINE TOTAL</span>
+<span class="font-telemetry-md text-[12px] font-bold text-on-secondary-container">11.1 ms (정상)</span>
+</div>
+</div>
+<!-- Topic Badges -->
+<div class="flex flex-col gap-1.5">
+<span class="font-label-caps text-label-caps text-outline uppercase font-semibold">ASSOCIATED ROS2 TOPICS</span>
+<div class="flex flex-wrap gap-1.5" id="detail-topics">
+<span class="px-2 py-0.5 rounded bg-surface-container font-telemetry-md text-[11px] text-on-surface">/cmd_vel</span>
+<span class="px-2 py-0.5 rounded bg-surface-container font-telemetry-md text-[11px] text-on-surface">/limbo/odom</span>
+<span class="px-2 py-0.5 rounded bg-surface-container font-telemetry-md text-[11px] text-on-surface">/patrol/goal</span>
+</div>
+</div>
+<!-- Raw Payload Viewport -->
+<div class="flex flex-col gap-1.5">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-outline uppercase font-semibold">JSON AUDIT PAYLOAD</span>
+<button class="text-outline hover:text-on-surface font-label-caps text-[10px] flex items-center gap-1" type="button">
+<span class="material-symbols-outlined text-[13px]">content_copy</span>
+                복사
+              </button>
+</div>
+<pre class="p-space-md rounded-xl bg-on-background text-inverse-on-surface font-telemetry-md text-[11px] overflow-x-auto leading-relaxed shadow-inner" id="detail-payload"><code>{
+  "timestamp": "2026-11-13T11:42:09.184+09:00",
+  "log_id": "LOG-20261113-09418",
+  "trace_id": "ros2_trace_9f81a7b",
+  "actor": {
+    "type": "OPERATOR",
+    "account": "operator_kim",
+    "ip_address": "192.168.10.42"
+  },
+  "action": "NAV_GOAL_RESUME",
+  "target": "LIMBO-01",
+  "params": {
+    "waypoint_id": "wp_hall_w3",
+    "max_linear_vel": 0.8,
+    "avoidance_mode": "DYNAMIC_REACTIVE"
+  },
+  "status": "CONFIRMED_SUCCESS",
+  "ros2_feedback": {
+    "node": "nav2_bt_navigator",
+    "result_code": 0
+  }
+}</code></pre>
+</div>
+</div>
+<!-- Compliance & Tamper Evident Guarantee Card -->
+<div class="p-space-md rounded-xl bg-surface-container-low flex flex-col gap-2 shadow-sm">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[18px]">verified</span>
+<span class="font-body-sm text-body-sm font-bold text-on-surface">무단 위·변조 방지 감사 서명 (WORM Storage)</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline">
+            본 시스템의 모든 이벤트는 SHA-256 해시 체인으로 기록되며, 산업안전 및 개인정보 보호 규정에 의거 90일간 암호화 보존됩니다.
+          </p>
+<div class="flex items-center justify-between pt-1">
+<span class="font-telemetry-md text-[10px] text-outline">BLOCK: #884,912 · SIGNED</span>
+<span class="font-label-caps text-label-caps text-on-secondary-container font-semibold">VALIDATED</span>
+</div>
+</div>
+</div>
+</div>
+<!-- System Notice Footer Note -->
+<div class="py-space-sm px-space-md rounded-xl bg-surface-container-lowest text-center">
+<span class="font-body-sm text-body-sm text-outline">
+        ※ 모든 감사 기록은 무단 위변조 방지 규정에 따라 90일간 암호화 보관되며, 법적 분쟁 시 오퍼레이터의 수동 개입 로그는 증빙 자료로 활용될 수 있습니다.
+      </span>
+</div>
+</div>
+</div>
+<script>
+  function selectAuditRow(logId, summary, unit, section, actor, time, traceId, topics) {
+    var idEl = document.getElementById('detail-log-id');
+    var traceEl = document.getElementById('detail-trace-id');
+    var issuerEl = document.getElementById('detail-issuer');
+    var unitEl = document.getElementById('detail-unit');
+    var payloadEl = document.getElementById('detail-payload');
+    var topicsEl = document.getElementById('detail-topics');
+
+    if (idEl) idEl.innerText = logId;
+    if (traceEl) traceEl.innerText = traceId;
+    if (issuerEl) issuerEl.innerText = actor;
+    if (unitEl) unitEl.innerText = unit;
+
+    if (topicsEl) {
+      var arr = topics.split(', ');
+      var html = '';
+      for (var i = 0; i < arr.length; i++) {
+        html += '<span class="px-2 py-0.5 rounded bg-surface-container font-telemetry-md text-[11px] text-on-surface">' + arr[i] + '</span>';
+      }
+      topicsEl.innerHTML = html;
+    }
+
+    if (payloadEl) {
+      payloadEl.innerHTML = '<code>{\n' +
+        '  "timestamp": "2026-11-13T' + time + '+09:00",\n' +
+        '  "log_id": "' + logId + '",\n' +
+        '  "trace_id": "' + traceId + '",\n' +
+        '  "actor": {\n' +
+        '    "type": "' + (actor.indexOf('operator') !== -1 ? 'OPERATOR' : 'SYSTEM_NODE') + '",\n' +
+        '    "account": "' + actor + '"\n' +
+        '  },\n' +
+        '  "summary": "' + summary + '",\n' +
+        '  "target": "' + unit + '",\n' +
+        '  "subsystem": "' + section + '",\n' +
+        '  "verified": true\n' +
+        '}</code>';
+    }
+  }
+</script></main></div>
+
+</body></html>

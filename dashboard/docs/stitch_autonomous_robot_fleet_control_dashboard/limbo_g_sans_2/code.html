@@ -1,0 +1,257 @@
+<!DOCTYPE html><html lang="ko"><head></head><body class="bg-background text-on-surface antialiased selection:bg-positive-accent selection:text-primary min-h-screen"><svg class="inline-defs-container" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"></svg>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+<meta content="web_dashboard" name="shell-type">
+<title>LIMBO Fleet - 자율주행 관제 플랫폼</title>
+<!-- Google Material Symbols & Font Awesome Embed -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<!-- Pretendard Webfont -->
+<link as="style" crossorigin="" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+<!-- Google Fonts: JetBrains Mono for telemetry -->
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "critical": "#DC2626",
+          "secondary-fixed": "#7ffc97",
+          "primary-container": "#14532d",
+          "surface-container-high": "#e1e8fd",
+          "on-surface": "#141b2b",
+          "inverse-primary": "#96d5a3",
+          "background": "#f9f9ff",
+          "on-tertiary": "#ffffff",
+          "surface-subtle": "#E5E7EB",
+          "on-tertiary-fixed-variant": "#454744",
+          "on-tertiary-fixed": "#1a1c19",
+          "warning": "#D97706",
+          "secondary-fixed-dim": "#62df7d",
+          "positive-accent": "#DCFCE7",
+          "surface-bright": "#f9f9ff",
+          "on-primary": "#ffffff",
+          "surface-container-lowest": "#ffffff",
+          "error-container": "#ffdad6",
+          "on-error-container": "#93000a",
+          "surface-tint": "#2e6a41",
+          "on-primary-fixed": "#00210d",
+          "accent": "#DCFCE7",
+          "primary-fixed": "#b1f2be",
+          "primary": "#003b1b",
+          "outline": "#717970",
+          "on-secondary-fixed": "#002109",
+          "surface": "#E5E7EB",
+          "on-primary-fixed-variant": "#12512c",
+          "surface-container-low": "#f1f3ff",
+          "critical-surface": "#FEE2E2",
+          "border-grid": "#E2E8F0",
+          "on-background": "#141b2b",
+          "warning-surface": "#FEF3C7",
+          "tertiary": "#30322f",
+          "inverse-on-surface": "#edf0ff",
+          "on-error": "#ffffff",
+          "on-primary-container": "#87c695",
+          "tertiary-fixed": "#e2e3de",
+          "surface-variant": "#dce2f7",
+          "inverse-surface": "#293040",
+          "surface-dim": "#d3daef",
+          "on-secondary-container": "#007230",
+          "on-surface-variant": "#404941",
+          "outline-variant": "#c0c9be",
+          "tertiary-fixed-dim": "#c5c7c2",
+          "surface-container-highest": "#dce2f7",
+          "tertiary-container": "#464946",
+          "primary-fixed-dim": "#96d5a3",
+          "on-tertiary-container": "#b6b8b3",
+          "error": "#ba1a1a",
+          "secondary": "#006e2d",
+          "on-secondary": "#ffffff",
+          "on-secondary-fixed-variant": "#005320",
+          "secondary-container": "#7cf994",
+          "surface-container": "#e9edff"
+        },
+        "borderRadius": {
+          "DEFAULT": "0.125rem",
+          "lg": "0.25rem",
+          "xl": "0.5rem",
+          "full": "0.75rem"
+        },
+        "spacing": {
+          "space-sm": "0.5rem",
+          "space-md": "0.75rem",
+          "space-xl": "2rem",
+          "space-xs": "0.25rem",
+          "margin": "1.5rem",
+          "gutter": "1rem",
+          "space-lg": "1.25rem"
+        },
+        "fontFamily": {
+          "headline-md": ["\"Gmarket Sans, sans-serif\""],
+          "label-caps": ["\"Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif\""],
+          "telemetry-lg": ["\"JetBrains Mono, monospace\""],
+          "headline-lg": ["\"Gmarket Sans, sans-serif\""],
+          "headline-lg-mobile": ["\"Gmarket Sans, sans-serif\""],
+          "telemetry-md": ["\"JetBrains Mono, monospace\""],
+          "body-lg": ["\"Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif\""],
+          "body-md": ["\"Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif\""],
+          "headline-sm": ["\"Gmarket Sans, sans-serif\""],
+          "body-sm": ["\"Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif\""],
+          "brand-font": ["\"Gmarket Sans, sans-serif\""]
+        },
+        "fontSize": {
+          "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+          "label-caps": ["11px", { "lineHeight": "14px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+          "telemetry-lg": ["24px", { "lineHeight": "28px", "fontWeight": "700" }],
+          "headline-lg": ["36px", { "lineHeight": "44px", "fontWeight": "700" }],
+          "headline-lg-mobile": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+          "telemetry-md": ["16px", { "lineHeight": "20px", "fontWeight": "600" }],
+          "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+          "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+          "headline-sm": ["18px", { "lineHeight": "24px", "fontWeight": "500" }],
+          "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }]
+        }
+      }
+    }
+  };
+</script>
+<style>
+  @layer base {
+    html {
+      overscroll-behavior: none;
+    }
+  }
+  @font-face {
+    font-family: 'GmarketSans';
+    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansMedium.woff') format('woff');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'GmarketSans';
+    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansBold.woff') format('woff');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+  body, button, input, select, textarea, p, span:not(.material-symbols-outlined), div, a, label, li {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  }
+  .brand-font, h1, h2, h3, h4, h5, h6 {
+    font-family: 'GmarketSans', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  .font-telemetry {
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .material-symbols-outlined {
+    font-family: 'Material Symbols Outlined' !important;
+    font-weight: normal;
+    font-style: normal;
+    font-size: 20px;
+    line-height: 1 !important;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'liga';
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.18);
+    border-radius: 4px;
+  }
+</style>
+<link id="limbo-custom-fonts" rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css"><style id="limbo-enhanced-fonts">
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
+@font-face {
+  font-family: 'GmarketSans';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansLight.woff') format('woff');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'GmarketSans';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansMedium.woff') format('woff');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'GmarketSans';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansBold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+body, button, input, select, textarea, table, th, td, p, div, label, li {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important;
+}
+span:not(.material-symbols-outlined) {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important;
+}
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined' !important;
+}
+h1, h2, h3, h4, h5, h6, .brand-font, .font-headline-md, .font-headline-sm, .gmarket-font {
+  font-family: 'GmarketSans', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+.font-telemetry, .font-telemetry-lg, .font-mono {
+  font-family: 'JetBrains Mono', 'Pretendard', monospace !important;
+}
+</style>
+
+<!-- MOBILE DRAWER BACKDROP -->
+<div class="fixed inset-0 bg-inverse-surface/40 backdrop-blur-sm z-50 hidden transition-opacity lg:hidden" id="mobile-sidebar-backdrop" onclick="toggleMobileSidebar()"></div>
+<!-- ASIDE SIDEBAR -->
+<aside class="fixed left-0 top-0 h-full w-72 bg-surface-container-lowest z-50 flex flex-col justify-between border-r border-border-grid shadow-[0_1px_8px_rgba(0,0,0,0.04)]" id="main-sidebar"><div class="flex flex-col"><div class="px-5 pt-5 pb-3"><div class="flex items-center gap-2"><div class="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[20px]">smart_toy</span></div><div><div class="font-headline-sm text-headline-sm text-primary font-bold tracking-tight leading-none">LIMBO 관제</div><div class="font-label-caps text-label-caps text-outline uppercase tracking-wider mt-1">AUTONOMOUS FLEET CORE</div></div></div></div><div class="px-5 mb-3"><label class="font-label-caps text-label-caps text-outline uppercase block mb-1.5">ACTIVE TARGET UNIT</label><div class="flex items-center justify-between px-3 py-2 bg-surface-container-low rounded-xl cursor-pointer hover:bg-surface-container transition-colors"><div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span><div class="font-body-md text-body-md font-semibold text-on-surface">LIMBO-01</div><span class="font-body-sm text-body-sm text-outline-variant">|</span><span class="font-body-sm text-body-sm text-on-secondary-container font-medium">자율순찰</span></div><span class="material-symbols-outlined text-outline text-[18px]">expand_more</span></div></div><nav class="flex flex-col gap-1 px-3" data-active-classes="bg-primary-container text-on-primary font-bold shadow-sm"><a class="flex items-center gap-3 px-3 py-2 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="fleet-overview" href="#"><span class="material-symbols-outlined text-[20px]">grid_view</span><span class="font-body-md text-body-md">플릿 현황</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="robot-control" href="#"><span class="material-symbols-outlined text-[20px]">precision_manufacturing</span><span class="font-body-md text-body-md">로봇 관제</span></a><a aria-current="page" class="flex items-center gap-3 px-3 py-2 rounded-xl transition-all bg-primary-container text-on-primary font-bold shadow-sm" data-path="telemetry" href="#"><span class="material-symbols-outlined text-[20px]">cell_tower</span><span class="font-body-md text-body-md">Telemetry</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="patrol-routes" href="#"><span class="material-symbols-outlined text-[20px]">alt_route</span><span class="font-body-md text-body-md">순찰 경로 관리</span></a><a class="flex items-center gap-3 px-3 py-2 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="audit-logs" href="#"><span class="material-symbols-outlined text-[20px]">description</span><span class="font-body-md text-body-md">Audit Logs</span></a></nav></div><div class="p-5 bg-surface-container-lowest"><div class="p-3 rounded-xl bg-surface-container-low flex flex-col gap-1"><div class="flex items-center justify-between"><span class="font-label-caps text-label-caps text-outline uppercase">FLEET NETWORK</span><span class="font-label-caps text-label-caps text-on-secondary-container font-semibold">ONLINE</span></div><div class="w-full h-1.5 bg-surface rounded-full overflow-hidden"><div class="h-full w-full bg-secondary-container rounded-full"></div></div><div class="flex items-center justify-between text-outline mt-1"><span class="font-body-sm text-body-sm">정상 연결됨</span><span class="font-telemetry-md text-[11px] text-on-surface-variant font-semibold">5/5 NODES</span></div></div></div></aside>
+<!-- TOP HEADER -->
+<header class="fixed top-0 left-0 lg:left-72 right-0 h-16 bg-surface-bright/95 backdrop-blur-md border-b border-border-grid z-40 flex items-center justify-between px-4 lg:px-6"><div class="flex items-center gap-3 min-w-0 flex-1 overflow-x-auto"><button aria-label="메뉴 열기" class="lg:hidden p-2 rounded text-primary hover:bg-surface-container shrink-0" onclick="toggleMobileSidebar()"><span class="material-symbols-outlined text-[22px]">menu</span></button><div class="flex items-center gap-2 bg-surface-container-lowest border border-border-grid px-3 py-1.5 rounded-full shadow-xs shrink-0"><span class="w-2.5 h-2.5 rounded-full bg-secondary animate-pulse"></span><span class="font-telemetry text-xs font-bold text-primary">LIMBO-01</span><span class="hidden sm:inline-block text-[11px] text-secondary font-bold uppercase tracking-wider bg-positive-accent px-2 py-0.5 rounded">자율순찰</span></div><div class="flex items-center gap-1.5 bg-surface-container-lowest border border-border-grid px-3 py-1.5 rounded-full shadow-xs shrink-0"><span class="material-symbols-outlined text-[18px] text-secondary">battery_charging_full</span><span class="font-telemetry text-xs font-bold text-primary">88%</span></div><div class="hidden md:flex items-center gap-2 bg-surface-container-lowest border border-border-grid px-3 py-1.5 rounded-full shrink-0"><span class="text-[11px] text-on-surface-variant uppercase font-semibold">Topology</span><div class="flex items-center gap-1 font-telemetry text-xs"><span class="text-secondary font-bold">CLI</span><span class="text-on-surface-variant text-[10px]">⇄</span><span class="text-secondary font-bold">SRV</span><span class="text-on-surface-variant text-[10px]">⇄</span><span class="text-secondary font-bold">BOT</span></div></div><div class="hidden xl:flex items-center gap-1.5 bg-surface-container-lowest border border-border-grid px-3 py-1.5 rounded-full shrink-0"><span class="material-symbols-outlined text-[16px] text-on-surface-variant">network_ping</span><span class="text-[11px] text-on-surface-variant uppercase">PING:</span><span class="font-telemetry text-xs text-on-surface font-semibold">14ms</span></div></div><div class="flex items-center gap-3 shrink-0 pl-3"><div class="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-positive-accent text-secondary text-xs font-bold"><span class="w-1.5 h-1.5 rounded-full bg-secondary"></span><span>SYSTEM READY</span></div><button aria-label="알림" class="relative w-9 h-9 rounded hover:bg-surface-container text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors"><span class="material-symbols-outlined text-[20px]">notifications</span><span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-warning"></span></button><div class="flex items-center gap-2 pl-2 border-l border-border-grid"><div class="flex items-center gap-2 p-1 rounded hover:bg-surface-container transition-colors cursor-pointer"><div class="w-8 h-8 rounded bg-primary-container text-on-primary flex items-center justify-center font-telemetry text-xs font-bold shadow-xs">OP</div><div class="hidden md:flex flex-col text-left"><span class="text-xs font-bold text-primary leading-tight">operator_kim</span><span class="text-[10px] text-on-surface-variant uppercase font-medium">Fleet Lead</span></div></div><button aria-label="설정" class="w-8 h-8 rounded hover:bg-surface-container text-on-surface-variant flex items-center justify-center transition-colors" title="운영 환경설정"><span class="material-symbols-outlined text-[18px]">settings</span></button></div></div></header>
+<!-- MAIN CONTENT SLOT: Left padding lg:pl-64 matches sidebar width 16rem, pt-16 matches header height h-16 -->
+<main class="pt-16 lg:pl-72 min-h-screen"><div class="flex flex-col w-full"><div class="w-full px-4 lg:px-8 py-6 flex flex-col gap-6"><section class="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-surface-container-lowest p-5 rounded-xl shadow-xs"><div class="flex flex-col gap-2 min-w-0"><div class="flex flex-wrap items-center gap-3"><h1 class="font-headline-md text-headline-md text-primary tracking-tight" style="font-family: GmarketSans, sans-serif; font-weight: 700;">LIMBO 실시간 텔레메트리 (Telemetry)</h1><div class="flex items-center gap-2 px-2.5 py-1 rounded-full bg-positive-accent text-primary-container text-xs font-semibold"><span class="w-2 h-2 rounded-full bg-secondary animate-ping"></span><span class="font-telemetry tracking-wide uppercase">REAL-TIME STREAMING</span></div></div><div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-on-surface-variant font-medium"><span class="font-telemetry text-primary font-bold">TARGET UNIT: LIMBO-01 (Apex)</span><span class="text-outline-variant">·</span><span class="font-telemetry text-on-surface">IP: 192.168.1.105</span></div></div><div class="flex flex-wrap items-center gap-3 shrink-0"><div class="flex items-center bg-surface-container-low p-1 rounded-lg"><span class="font-label-caps text-label-caps text-on-surface-variant px-2 uppercase">주기</span><button class="px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors rounded" type="button">100ms</button><button class="px-2.5 py-1 text-xs font-semibold bg-surface-container-lowest text-primary shadow-xs rounded" type="button">250ms</button><button class="px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors rounded" type="button">500ms</button></div><div class="flex items-center gap-2"><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface text-xs font-semibold transition-colors" type="button"><span class="material-symbols-outlined text-[16px]">restart_alt</span><span>수신 초기화</span></button><button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-on-primary hover:bg-primary-container text-xs font-semibold shadow-xs transition-colors" type="button"><span class="material-symbols-outlined text-[16px]">file_download</span><span>로그 덤프 (.json)</span></button></div></div></section><section class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="bg-surface-container-lowest rounded-xl p-5 shadow-xs flex flex-col justify-between gap-4"><div class="flex items-center justify-between"><div class="flex items-center gap-2"><div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-primary"><span class="material-symbols-outlined text-[18px]">cloud_sync</span></div><div><span class="font-label-caps text-label-caps uppercase text-on-surface-variant block">TIER 1 파이프라인</span><span class="font-body-md text-body-md font-semibold text-primary">브라우저 ⇄ 관제 서버</span></div></div><span class="px-2 py-0.5 rounded text-[11px] font-bold bg-positive-accent text-secondary">Live</span></div><div class="grid grid-cols-2 gap-3 pt-2 bg-surface-container-low p-3 rounded-lg"><div><span class="text-[11px] text-on-surface-variant block font-medium">WebSocket RTT</span><div class="flex items-baseline gap-1 mt-0.5"><span class="font-telemetry-lg text-telemetry-lg text-primary">12</span><span class="font-telemetry text-xs text-on-surface-variant">ms</span></div></div><div><span class="text-[11px] text-on-surface-variant block font-medium">패킷 손실률</span><div class="flex items-baseline gap-1 mt-0.5"><span class="font-telemetry-lg text-telemetry-lg text-secondary">0.0</span><span class="font-telemetry text-xs text-on-surface-variant">%</span></div></div></div></div><div class="bg-surface-container-lowest rounded-xl p-5 shadow-xs flex flex-col justify-between gap-4"><div class="flex items-center justify-between"><div class="flex items-center gap-2"><div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-primary"><span class="material-symbols-outlined text-[18px]">hub</span></div><div><span class="font-label-caps text-label-caps uppercase text-on-surface-variant block">TIER 2 파이프라인</span><span class="font-body-md text-body-md font-semibold text-primary">서버 ⇄ 로봇 Bridge</span></div></div><span class="px-2 py-0.5 rounded text-[11px] font-bold bg-positive-accent text-secondary">Connected</span></div><div class="grid grid-cols-2 gap-3 pt-2 bg-surface-container-low p-3 rounded-lg"><div><span class="text-[11px] text-on-surface-variant block font-medium">ROS2 Bridge 지연</span><div class="flex items-baseline gap-1 mt-0.5"><span class="font-telemetry-lg text-telemetry-lg text-primary">18</span><span class="font-telemetry text-xs text-on-surface-variant">ms</span></div></div><div><span class="text-[11px] text-on-surface-variant block font-medium">마지막 하트비트</span><div class="flex items-baseline gap-1 mt-0.5"><span class="font-telemetry-lg text-telemetry-lg text-primary">0.2</span><span class="font-telemetry text-xs text-on-surface-variant">s 전</span></div></div></div></div><div class="bg-surface-container-lowest rounded-xl p-5 shadow-xs flex flex-col justify-between gap-4"><div class="flex items-center justify-between"><div class="flex items-center gap-2"><div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-primary"><span class="material-symbols-outlined text-[18px]">sensors</span></div><div><span class="font-label-caps text-label-caps uppercase text-on-surface-variant block">TIER 3 파이프라인</span><span class="font-body-md text-body-md font-semibold text-primary">ROS2 센서 토픽 스트림</span></div></div><span class="px-2 py-0.5 rounded text-[11px] font-bold bg-positive-accent text-secondary">4/4 Active</span></div><div class="grid grid-cols-2 gap-3 pt-2 bg-surface-container-low p-3 rounded-lg"><div><span class="text-[11px] text-on-surface-variant block font-medium">종합 수신 빈도</span><div class="flex items-baseline gap-1 mt-0.5"><span class="font-telemetry-lg text-telemetry-lg text-primary">68.4</span><span class="font-telemetry text-xs text-on-surface-variant">Hz</span></div></div><div><span class="text-[11px] text-on-surface-variant block font-medium">결손 토픽 경고</span><div class="flex items-baseline gap-1 mt-0.5"><span class="font-telemetry-lg text-telemetry-lg text-primary">0</span><span class="font-body-sm text-body-sm text-secondary font-bold">건 (정상)</span></div></div></div></div></section><div class="bg-surface-container-high text-primary rounded-xl px-4 py-3 flex items-center justify-between text-xs font-medium"><div class="flex items-center gap-2.5"><span class="material-symbols-outlined text-[18px] text-secondary">verified_user</span><span>모든 통신 및 센서 데이터 스트림이 오차 20ms 미만으로 실시간 정상 동기화 중입니다.</span></div><div class="hidden sm:flex items-center gap-2 font-telemetry text-on-surface-variant text-[11px]"><span>SYNC PROTOCOL:</span><span class="bg-surface-container-lowest px-2 py-0.5 rounded text-primary font-bold">ROS2_CDR_V2</span></div></div><div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"><div class="lg:col-span-7 flex flex-col gap-6"><div class="bg-surface-container-lowest rounded-xl p-5 shadow-xs flex flex-col gap-4"><div class="flex items-center justify-between"><div class="flex items-center gap-2"><h2 class="font-headline-sm text-headline-sm text-primary">실시간 ROS2 센서 토픽 수신 현황</h2><span class="px-2 py-0.5 text-xs font-semibold rounded bg-surface-container-low text-on-surface font-telemetry">ACTIVE TOPICS: 4</span></div><span class="material-symbols-outlined text-secondary text-[20px]" title="실시간 데이터 수신 중">sync</span></div><div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5"><div class="bg-surface-container-low p-4 rounded-xl flex flex-col justify-between gap-3"><div class="flex items-start justify-between gap-2"><div><span class="font-telemetry text-xs font-bold text-primary block truncate">/limbo/odom</span><span class="text-[11px] text-on-surface-variant block font-mono">nav_msgs/Odometry</span></div><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-positive-accent text-secondary shrink-0">수신 중</span></div><div class="grid grid-cols-2 gap-2 text-xs"><div><span class="text-[11px] text-on-surface-variant block">발행 주기</span><span class="font-telemetry text-sm font-bold text-on-surface">30.0 Hz</span></div><div><span class="text-[11px] text-on-surface-variant block">수신 지연</span><span class="font-telemetry text-sm font-bold text-secondary">14 ms</span></div></div><div class="pt-2 bg-surface-container-lowest px-3 py-2 rounded-lg text-[11px] flex flex-col gap-1 font-telemetry"><div class="flex justify-between"><span class="text-on-surface-variant">선속도 / 각속도</span><span class="font-bold text-primary">0.38 m/s | 0.02 r/s</span></div><div class="flex justify-between"><span class="text-on-surface-variant">누적 주행</span><span class="font-bold text-on-surface">4.12 km</span></div></div></div><div class="bg-surface-container-low p-4 rounded-xl flex flex-col justify-between gap-3"><div class="flex items-start justify-between gap-2"><div><span class="font-telemetry text-xs font-bold text-primary block truncate">/scan</span><span class="text-[11px] text-on-surface-variant block font-mono">sensor_msgs/LaserScan</span></div><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-positive-accent text-secondary shrink-0">수신 중</span></div><div class="grid grid-cols-2 gap-2 text-xs"><div><span class="text-[11px] text-on-surface-variant block">발행 주기</span><span class="font-telemetry text-sm font-bold text-on-surface">15.0 Hz</span></div><div><span class="text-[11px] text-on-surface-variant block">수신 지연</span><span class="font-telemetry text-sm font-bold text-secondary">22 ms</span></div></div><div class="pt-2 bg-surface-container-lowest px-3 py-2 rounded-lg text-[11px] flex flex-col gap-1 font-telemetry"><div class="flex justify-between"><span class="text-on-surface-variant">측정 샘플 수</span><span class="font-bold text-primary">720 pts</span></div><div class="flex justify-between"><span class="text-on-surface-variant">최소 장애물 거리</span><span class="font-bold text-on-surface">1.42 m (좌전방)</span></div></div></div><div class="bg-surface-container-low p-4 rounded-xl flex flex-col justify-between gap-3"><div class="flex items-start justify-between gap-2"><div><span class="font-telemetry text-xs font-bold text-primary block truncate">/scan_filtered</span><span class="text-[11px] text-on-surface-variant block font-mono">sensor_msgs/LaserScan</span></div><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-positive-accent text-secondary shrink-0">수신 중</span></div><div class="grid grid-cols-2 gap-2 text-xs"><div><span class="text-[11px] text-on-surface-variant block">발행 주기</span><span class="font-telemetry text-sm font-bold text-on-surface">15.0 Hz</span></div><div><span class="text-[11px] text-on-surface-variant block">수신 지연</span><span class="font-telemetry text-sm font-bold text-secondary">24 ms</span></div></div><div class="pt-2 bg-surface-container-lowest px-3 py-2 rounded-lg text-[11px] flex flex-col gap-1 font-telemetry"><div class="flex justify-between"><span class="text-on-surface-variant">세이프티 마진</span><span class="font-bold text-primary">0.45 m</span></div><div class="flex justify-between"><span class="text-on-surface-variant">침범 위험 감지</span><span class="font-bold text-secondary">0 건 (CLEAR)</span></div></div></div><div class="bg-surface-container-low p-4 rounded-xl flex flex-col justify-between gap-3"><div class="flex items-start justify-between gap-2"><div><span class="font-telemetry text-xs font-bold text-primary block truncate">/camera/depth/image_raw</span><span class="text-[11px] text-on-surface-variant block font-mono">sensor_msgs/Image</span></div><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-positive-accent text-secondary shrink-0">수신 중</span></div><div class="grid grid-cols-2 gap-2 text-xs"><div><span class="text-[11px] text-on-surface-variant block">발행 주기</span><span class="font-telemetry text-sm font-bold text-on-surface">10.0 Hz</span></div><div><span class="text-[11px] text-on-surface-variant block">수신 지연</span><span class="font-telemetry text-sm font-bold text-on-surface">38 ms</span></div></div><div class="pt-2 bg-surface-container-lowest px-3 py-2 rounded-lg text-[11px] flex flex-col gap-1 font-telemetry"><div class="flex justify-between"><span class="text-on-surface-variant">해상도 / 포맷</span><span class="font-bold text-primary">640×480 16UC1</span></div><div class="flex justify-between"><span class="text-on-surface-variant">시야각 (FOV)</span><span class="font-bold text-on-surface">87° × 58°</span></div></div></div></div></div><div class="bg-surface-container-lowest rounded-xl p-5 shadow-xs flex flex-col gap-4"><div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2"><div><h2 class="font-headline-sm text-headline-sm text-primary">토픽별 수신 레이턴시 실시간 추이</h2><span class="text-xs text-on-surface-variant font-medium">최근 60초간의 토픽 수신 지연(ms) 변동 모니터링</span></div><div class="flex items-center gap-3 text-xs font-telemetry"><div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-secondary"></span><span class="text-on-surface">/limbo/odom</span></div><div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-primary-container"></span><span class="text-on-surface">/scan</span></div><div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-warning"></span><span class="text-on-surface">/camera/depth</span></div></div></div><div class="relative w-full h-52 bg-surface-container-low rounded-xl p-3 flex flex-col justify-between overflow-hidden"><div class="absolute inset-x-3 top-6 flex items-center justify-between text-[10px] font-telemetry text-critical"><span class="bg-surface-container-lowest px-1 rounded shadow-xs">경고 임계치: 100ms</span><div class="w-full h-px ml-2 bg-critical/30 stroke-dasharray"></div></div><div class="absolute inset-x-3 top-28 flex items-center justify-between text-[10px] font-telemetry text-on-surface-variant"><span class="bg-surface-container-lowest px-1 rounded">평균: 18.2ms</span><div class="w-full h-px ml-2 bg-on-surface-variant/20"></div></div><svg class="w-full h-full pt-4" preserveAspectRatio="none" viewBox="0 0 600 160"><defs><linearGradient id="grad-odom" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#006e2d" stop-opacity="0.25"></stop><stop offset="100%" stop-color="#006e2d" stop-opacity="0.0"></stop></linearGradient></defs><line stroke="#DC2626" stroke-dasharray="4 4" stroke-opacity="0.4" stroke-width="1" x1="0" x2="600" y1="40" y2="40"></line><line stroke="#717970" stroke-dasharray="2 2" stroke-opacity="0.2" stroke-width="1" x1="0" x2="600" y1="80" y2="80"></line><line stroke="#717970" stroke-opacity="0.1" stroke-width="1" x1="0" x2="600" y1="120" y2="120"></line><path d="M 0 130 Q 50 128, 100 125 T 200 120 T 300 126 T 400 122 T 500 128 T 600 124 L 600 160 L 0 160 Z" fill="url(#grad-odom)"></path><path d="M 0 95 Q 40 80, 80 102 T 160 88 T 240 76 T 320 98 T 400 84 T 480 92 T 560 80 T 600 86" fill="none" stroke="#D97706" stroke-linejoin="round" stroke-width="2"></path><path d="M 0 115 Q 50 110, 100 118 T 200 108 T 300 114 T 400 106 T 500 112 T 600 110" fill="none" stroke="#14532d" stroke-linejoin="round" stroke-width="2"></path><path d="M 0 130 Q 50 128, 100 125 T 200 120 T 300 126 T 400 122 T 500 128 T 600 124" fill="none" stroke="#006e2d" stroke-linecap="round" stroke-width="2.5"></path><circle class="animate-pulse" cx="600" cy="124" fill="#006e2d" r="4"></circle><circle cx="600" cy="110" fill="#14532d" r="3.5"></circle><circle cx="600" cy="86" fill="#D97706" r="3.5"></circle></svg><div class="flex justify-between items-center text-[10px] font-telemetry text-on-surface-variant pt-1 px-1"><span>-60s</span><span>-45s</span><span>-30s</span><span>-15s</span><span class="text-secondary font-bold">Live</span></div></div></div></div><div class="lg:col-span-5 flex flex-col gap-6"><div class="bg-surface-container-lowest rounded-xl p-5 shadow-xs flex flex-col gap-5"><div class="flex items-center justify-between"><h2 class="font-headline-sm text-headline-sm text-primary">하드웨어 및 수거함 진단</h2><div class="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold bg-positive-accent text-secondary font-telemetry"><span class="w-1.5 h-1.5 rounded-full bg-secondary"></span><span>NORMAL 0x0000</span></div></div><div class="flex flex-col gap-2 bg-surface-container-low p-4 rounded-xl"><div class="flex items-center justify-between"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-[20px] text-secondary">battery_horiz_075</span><span class="font-body-md text-body-md font-semibold text-primary">메인 리튬인산철(LFP) 배터리</span></div><span class="font-telemetry-lg text-telemetry-lg text-primary">84%</span></div><div class="w-full h-2.5 bg-surface-container rounded-full overflow-hidden"><div class="h-full bg-secondary rounded-full" style="width: 84%;"></div></div><div class="grid grid-cols-3 gap-2 mt-1 pt-2 bg-surface-container-lowest p-2.5 rounded-lg text-center font-telemetry text-xs"><div><span class="text-[10px] text-on-surface-variant block font-sans">전압</span><span class="font-bold text-on-surface">25.4 V</span></div><div><span class="text-[10px] text-on-surface-variant block font-sans">방전 전류</span><span class="font-bold text-on-surface">-2.1 A</span></div><div><span class="text-[10px] text-on-surface-variant block font-sans">셀 평균 온도</span><span class="font-bold text-primary">28.5 °C</span></div></div></div><div class="flex flex-col gap-2 bg-surface-container-low p-4 rounded-xl"><div class="flex items-center justify-between"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-[20px] text-primary">delete_outline</span><span class="font-body-md text-body-md font-semibold text-primary">적재함 실시간 용량 모니터링</span></div><div class="flex items-baseline gap-1"><span class="font-telemetry-lg text-telemetry-lg text-primary">62%</span><span class="text-xs font-telemetry text-on-surface-variant">(18.6L / 30L)</span></div></div><div class="w-full h-2.5 bg-surface-container rounded-full overflow-hidden"><div class="h-full bg-primary-container rounded-full" style="width: 62%;"></div></div><div class="bg-surface-container-lowest p-3 rounded-lg flex flex-col gap-2 mt-1"><div class="flex items-center justify-between text-xs"><span class="text-on-surface-variant font-medium">센싱 방식</span><span class="font-telemetry text-primary font-semibold">자율 압축 미적용 모델 · 초음파 4채널 계측</span></div><div class="flex items-center justify-between text-xs"><span class="text-on-surface-variant font-medium">투입구 도어</span><span class="font-telemetry text-secondary font-bold">닫힘 (대기 모드)</span></div><div class="flex items-center justify-between text-xs pt-1 border-t-0 bg-positive-accent/50 p-2 rounded"><span class="text-on-surface-variant text-[11px]">안전 여유 공간</span><span class="text-primary font-bold text-[11px]">수거 권장까지 약 11.4 L 여유</span></div></div></div><div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5"><div class="bg-surface-container-low p-3.5 rounded-xl flex flex-col justify-between gap-2"><div class="flex items-center gap-1.5 text-xs font-semibold text-primary"><span class="material-symbols-outlined text-[16px]">rotate_right</span><span>BLDC 구동 모터</span></div><div class="font-telemetry text-xs flex flex-col gap-1 bg-surface-container-lowest p-2 rounded-lg"><div class="flex justify-between"><span class="text-on-surface-variant">L 모터</span><span class="font-bold text-on-surface">42.0 RPM (31.2°C)</span></div><div class="flex justify-between"><span class="text-on-surface-variant">R 모터</span><span class="font-bold text-on-surface">41.8 RPM (31.6°C)</span></div></div></div><div class="bg-surface-container-low p-3.5 rounded-xl flex flex-col justify-between gap-2"><div class="flex items-center gap-1.5 text-xs font-semibold text-primary"><span class="material-symbols-outlined text-[16px]">memory</span><span>Jetson Orin Nano</span></div><div class="font-telemetry text-xs flex flex-col gap-1 bg-surface-container-lowest p-2 rounded-lg"><div class="flex justify-between"><span class="text-on-surface-variant">CPU 사용률</span><span class="font-bold text-primary">24%</span></div><div class="flex justify-between"><span class="text-on-surface-variant">RAM 점유</span><span class="font-bold text-on-surface">3.4 GB / 8 GB</span></div></div></div></div><div class="bg-surface-container-low p-4 rounded-xl flex flex-col gap-3"><div class="flex items-center justify-between"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px] text-secondary">wifi</span><span class="text-xs font-bold text-primary font-body-md">Wi-Fi 링크 &amp; 네트워크 품질</span></div><div class="flex items-center gap-1 font-telemetry text-xs font-bold text-secondary"><span>-54 dBm</span><span class="text-on-surface-variant font-normal">(92%)</span></div></div><div class="grid grid-cols-2 gap-2 text-[11px] font-telemetry bg-surface-container-lowest p-2.5 rounded-lg"><div><span class="text-on-surface-variant block font-sans">연결 SSID</span><span class="font-bold text-primary">LIMBO-CAMPUS-AP4</span></div><div><span class="text-on-surface-variant block font-sans">실시간 전송 속도</span><span class="font-bold text-on-surface">Tx 840KB/s | Rx 1.2MB/s</span></div><div class="col-span-2 flex justify-between pt-1 text-[10px] text-on-surface-variant"><span>인터페이스: 192.168.1.105 (wlan0)</span><span>MAC: e4:5f:01:aa:98:21</span></div></div></div></div></div></div><section class="bg-surface-container-lowest rounded-xl p-5 shadow-xs flex flex-col gap-4"><div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div class="flex items-center gap-2"><h2 class="font-headline-sm text-headline-sm text-primary">실시간 텔레메트리 이벤트 및 통신 이력</h2><span class="w-2 h-2 rounded-full bg-secondary animate-ping"></span><span class="text-xs text-on-surface-variant font-medium">LIVE</span></div><div class="flex items-center bg-surface-container-low p-1 rounded-lg text-xs font-semibold"><button class="px-3 py-1 bg-surface-container-lowest text-primary rounded shadow-xs" type="button">전체 로그</button><button class="px-3 py-1 text-on-surface-variant hover:text-primary transition-colors" type="button">경고/이상</button><button class="px-3 py-1 text-on-surface-variant hover:text-primary transition-colors" type="button">시스템 정보</button></div></div><div class="w-full overflow-x-auto"><table class="w-full text-left text-xs font-body-sm"><thead><tr class="bg-surface-container-low text-on-surface-variant font-label-caps uppercase"><th class="py-2.5 px-3 rounded-l-lg whitespace-nowrap">수신 시각 (KST)</th><th class="py-2.5 px-3 whitespace-nowrap">분류</th><th class="py-2.5 px-3 whitespace-nowrap">발생 채널 / 토픽</th><th class="py-2.5 px-4">이벤트 상세 내용</th><th class="py-2.5 px-3 text-right rounded-r-lg whitespace-nowrap">상태</th></tr></thead><tbody class="divide-y-0"><tr class="hover:bg-surface-container-low/60 transition-colors"><td class="py-3 px-3 font-telemetry text-on-surface-variant whitespace-nowrap">14:28:44.201</td><td class="py-3 px-3 whitespace-nowrap"><span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-surface-container-high text-primary font-telemetry">TOPIC_SYNC</span></td><td class="py-3 px-3 font-telemetry font-bold text-primary whitespace-nowrap">/scan</td><td class="py-3 px-4 text-on-surface">LiDAR 패킷 수신 주기 15.0Hz 안정 상태 유지 및 720개 거리 포인트 유효성 검증 완료</td><td class="py-3 px-3 text-right whitespace-nowrap"><span class="px-2 py-0.5 rounded text-[11px] font-bold bg-positive-accent text-secondary">정상</span></td></tr><tr class="hover:bg-surface-container-low/60 transition-colors"><td class="py-3 px-3 font-telemetry text-on-surface-variant whitespace-nowrap">14:27:12.890</td><td class="py-3 px-3 whitespace-nowrap"><span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-surface-container-high text-primary font-telemetry">NETWORK</span></td><td class="py-3 px-3 font-telemetry font-bold text-primary whitespace-nowrap">wlan0</td><td class="py-3 px-4 text-on-surface">Wi-Fi AP 고속 핸드오버 성공: CAMPUS-AP3 (-72 dBm) → CAMPUS-AP4 (-54 dBm)</td><td class="py-3 px-3 text-right whitespace-nowrap"><span class="px-2 py-0.5 rounded text-[11px] font-bold bg-positive-accent text-secondary">완료</span></td></tr><tr class="hover:bg-surface-container-low/60 transition-colors"><td class="py-3 px-3 font-telemetry text-on-surface-variant whitespace-nowrap">14:24:05.112</td><td class="py-3 px-3 whitespace-nowrap"><span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-warning-surface text-warning font-telemetry">MARGIN_CHECK</span></td><td class="py-3 px-3 font-telemetry font-bold text-primary whitespace-nowrap">/scan_filtered</td><td class="py-3 px-4 text-on-surface">순찰 구역 전방 보행자 통과로 1.42m 거리 일시 감지됨 (안전 거리 0.45m 충족 상태로 주행 유지)</td><td class="py-3 px-3 text-right whitespace-nowrap"><span class="px-2 py-0.5 rounded text-[11px] font-bold bg-warning-surface text-warning">주의 통과</span></td></tr><tr class="hover:bg-surface-container-low/60 transition-colors"><td class="py-3 px-3 font-telemetry text-on-surface-variant whitespace-nowrap">14:20:19.450</td><td class="py-3 px-3 whitespace-nowrap"><span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-surface-container-high text-primary font-telemetry">HARDWARE</span></td><td class="py-3 px-3 font-telemetry font-bold text-primary whitespace-nowrap">bldc_driver</td><td class="py-3 px-4 text-on-surface">모터 드라이버 온도 안정화 완료 (Left: 31.2°C, Right: 31.6°C) 및 에러 플래그 클리어</td><td class="py-3 px-3 text-right whitespace-nowrap"><span class="px-2 py-0.5 rounded text-[11px] font-bold bg-positive-accent text-secondary">정상</span></td></tr><tr class="hover:bg-surface-container-low/60 transition-colors"><td class="py-3 px-3 font-telemetry text-on-surface-variant whitespace-nowrap">14:15:00.000</td><td class="py-3 px-3 whitespace-nowrap"><span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-surface-container-high text-primary font-telemetry">POWER</span></td><td class="py-3 px-3 font-telemetry font-bold text-primary whitespace-nowrap">battery_bms</td><td class="py-3 px-4 text-on-surface">LFP 배터리 팩 반전 전류 -2.1A 안정 상태 기록, 잔여 가동 시간 3.8시간 산출</td><td class="py-3 px-3 text-right whitespace-nowrap"><span class="px-2 py-0.5 rounded text-[11px] font-bold bg-positive-accent text-secondary">정상</span></td></tr></tbody></table></div></section></div></div></main>
+<script>
+  function toggleMobileSidebar() {
+    const sidebar = document.getElementById('main-sidebar');
+    const backdrop = document.getElementById('mobile-sidebar-backdrop');
+    if (!sidebar || !backdrop) return;
+    const isClosed = sidebar.classList.contains('-translate-x-full');
+    if (isClosed) {
+      sidebar.classList.remove('-translate-x-full');
+      backdrop.classList.remove('hidden');
+    } else {
+      sidebar.classList.add('-translate-x-full');
+      backdrop.classList.add('hidden');
+    }
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+</body></html>
