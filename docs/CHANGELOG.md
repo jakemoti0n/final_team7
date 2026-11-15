@@ -8,6 +8,25 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-15 (73) 실물 순찰 9 시도 실패 기록: 부팅 서비스가 젯슨 USB 허브를 끊는 문제(해결), RoboClaw USB 미인식(미해결)
+
+**할 일**
+- 하드웨어 담당: RoboClaw USB를 다른 PC에서 확인하고 단자/보드 점검(`docs/KNOWN_ISSUES.md` 2026-11-15). 풀릴 때까지 실물 자율 주행 불가
+- 젯슨의 `limbo-real.service`는 **disabled 상태로 두었음**(PM 승인). 다시 켜기 전에 ① `lidar_cloud_guard.py` numpy ImportError, ② `fastdds_camera.xml`의 `interfaceWhiteList 127.0.0.1`(노트북에서 토픽을 전혀 못 봄)을 정리할 것. 둘 다 젯슨 작업 트리의 미커밋 변경(46개, 11-12)이라 이 커밋에는 없음
+
+**변경**
+- `docs/TROUBLESHOOTING.md` 실물 절: 부팅 서비스가 OAK를 열다 꺼지면서 내장 허브 2.0 쪽이 끊기는 문제(증상·원인·소프트 복구 실패·disable 후 재부팅으로 확인)
+- `docs/KNOWN_ISSUES.md`: RoboClaw USB 미인식(−71) 항목
+- `docs/REAL_PATROL_RUN.md`: 종료 정리에 `/dev/shm/sem.fastrtps_*`도 같이 지움(11-11)
+
+**원인과 근거**
+- 젯슨 재부팅 3회 모두 커널 로그에서 OAK 인식(5.6 s) → 서비스 런치 종료 시각에 `usb 1-2: USB disconnect`. 서비스 disable 뒤 재부팅에서는 2분 넘게 유지 → 서비스가 원인
+- RoboClaw는 정상 케이블·정상 포트로도 커널 사건 없음 → 젯슨 쪽이 아니라 RoboClaw 쪽
+
+**확인**(2026-11-15 젯슨)
+- 서비스 inactive/disabled, ROS 프로세스 0, `/dev/shm` fastrtps 0개로 정리해 둠. 순찰 9는 출발하지 못함(기록 없음)
+- 노트북 감시 화면(RViz·카메라·`/rosout`·상태, VNC 패드 카메라/2D 지도 뷰어)은 11-11에 팀원 런치로 수신 확인. 저장소 반영 여부는 PM 결정 대기
+
 ## 2026-11-07 (72) AWS에서 화면 빌드가 메모리 부족으로 실패하던 문제: rollup을 4.40.2로 고정 (빌드 3분·2.9 GB → 1초·0.3 GB)
 
 **할 일**

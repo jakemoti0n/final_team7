@@ -146,7 +146,7 @@ for n in start_nav2_real start_real teleop_drive; do
   P=$(ps -eo pid,args | grep "[r]os2 launch .*$n" | awk '{print $1}'); [ -n "$P" ] && kill -INT $P; sleep 8
 done
 ps -eo pid,args | grep -E "[r]os2 launch|[n]av2_|[a]mcl|[l]ivox" | wc -l     # 0이어야 함
-ros2 daemon stop; rm -f /dev/shm/fastrtps_*                                 # ROS 프로세스가 없을 때만
+ros2 daemon stop; rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_*         # ROS 프로세스가 없을 때만(sem.* 세마포어도 같이, 11-11)
 sudo shutdown -h now
 ```
 

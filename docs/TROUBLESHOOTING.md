@@ -272,6 +272,12 @@
 
 ## 실물(Jetson·RoboClaw·센서)
 
+### 부팅 서비스가 OAK를 열다 꺼지면서 젯슨 내장 USB 허브의 2.0 쪽이 통째로 끊김 — 2026-11-15
+- **증상**: 로봇 전원과 함께 켜진 젯슨에서 RoboClaw·OAK가 `lsusb`에 없음(내장 허브 0bda:0489와 블루투스만). 커널 로그는 부팅 5.6 s에 `usb 1-2.4: Movidius MyriadX` 인식 → 30 s(또는 54 s)에 `usb 1-2.4: USB disconnect` 직후 `usb 1-2: USB disconnect`(허브의 USB 2.0 쪽 자체). 과전류 메시지 없음. 재부팅 2회 모두 같은 시각대에 재현
+- **원인**: 11-12에 설치된 `limbo-real.service`(systemd, `run_real.sh --full`, `Restart=always` 10 s)가 부팅마다 떠서 `lidar_cloud_guard.py: ImportError: numpy.core.multiarray failed to import`로 실패하고(16회 재시작), 런치가 종료될 때 펌웨어 로드 중인 OAK 컨테이너를 SIGINT→SIGTERM→SIGKILL로 끊는다. 그 순간(17:23:58~59) 허브 2.0 쪽이 떨어진다. 전기적 기전(허브 5 V 순간 강하로 추정)은 확인 못 했고, 서비스 없이 부팅하면 재현되지 않는다
+- **해결**: 소프트 복구는 전부 실패했다 — 허브 3.0 쪽 `2-1` unbind/bind, 호스트 컨트롤러 `tegra-xusb/3610000.usb` unbind/bind(그동안 `lsusb` 0줄) 모두 2.0 쪽이 돌아오지 않음. 재부팅만 복구된다. PM 승인으로 `sudo systemctl stop limbo-real` → `disable` → 재부팅. 서비스를 다시 켜려면 numpy 문제(`lidar_cloud_guard.py`가 쓰는 파이썬 환경)부터 고쳐야 한다. 재시작마다 `/dev/shm/fastrtps_*`·`sem.fastrtps_*`가 쌓이니(184개) ROS 프로세스가 없을 때 지운다
+- **확인**: 17:40 부팅(서비스 disabled) 후 +44 s~+167 s 동안 허브 2.0 쪽·OAK 유지. 같은 부팅에서 RoboClaw는 별도 문제로 미인식(`docs/KNOWN_ISSUES.md` 2026-11-15)
+
 ### 새로 부팅한 젯슨에서 실물 Nav2가 활성화되지 않음(`Managed nodes are active` 안 찍힘) — AMCL 초기 위치 전에 Nav2를 띄움 — 2026-11-11
 - **증상**: `run_nav2_real.sh`를 띄우고 35 s 뒤 `Managed nodes are active` 0건. nav2.log: `Activating planner_server` 60 s 뒤 `[global_costmap]: Failed to activate global_costmap because transform from base_link to map did not become available` → `lifecycle_manager_navigation: Failed to change state for node: planner_server` → `Failed to bring up all requested nodes. Aborting bringup`. 그 사이 real.log에는 `[amcl]: AMCL cannot publish a pose or update the transform. Please set the initial pose...`가 2 s마다
 - **원인**: 실물 AMCL(`amcl_real.yaml`)은 `set_initial_pose: false`라 `/initialpose`를 받기 전엔 `map→odom`을 내지 않는다. Nav2 비용 지도는 활성화 때 `base_link→map` TF를 60 s 기다리고(`initial_transform_timeout`), 못 받으면 활성화 실패 → 생명주기 관리자가 기동을 중단하고 스스로 다시 올리지 않는다. 11-10 절차 문서는 런치 3개를 다 띄운 뒤 위치 탐색·초기 위치를 보내는 순서였는데, 11-10에는 Nav2를 다시 띄울 때마다 AMCL이 이미 그날의 자세를 갖고 있어 드러나지 않았다
