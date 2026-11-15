@@ -40,12 +40,12 @@ function ResultBox({ result, delta }: { result: RequestResult; delta: number }) 
   const stageLabels = { waiting: '대기', running: '진행 중', done: '완료', failed: '실패', unknown: '확인 불가' }
   const age = requestAge(result, delta)
   const [open, setOpen] = useState(false)
-  if (result.result !== 'pending' && age >= FOLD_AFTER_S && !open) return <div className="result folded" role="status">
+  if (result.result !== 'pending' && age >= FOLD_AFTER_S && !open) return <div className="result folded" role="status" data-testid="command-result">
     <Badge status={result.result}>{resultLabels[result.command][result.result]}</Badge><span>{ageText(age)}</span><button className="link" onClick={() => setOpen(true)}>자세히</button></div>
-  return <div className="result" role="status" aria-busy={result.result === 'pending'}>
+  return <div className="result" role="status" data-testid="command-result" aria-busy={result.result === 'pending'}>
     <Badge status={result.result}>{resultLabels[result.command][result.result]}</Badge>
     <p>{result.detail}</p>
-    <ol className="steps">{['요청 전송', '로봇 응답', '상태 확인'].map((label, i) => <li key={label}>{label}<strong>{stageLabels[result.stages[i]]}</strong></li>)}</ol>
+    <ol className="steps" data-testid="command-steps">{['요청 전송', '로봇 응답', '상태 확인'].map((label, i) => <li key={label}>{label}<strong>{stageLabels[result.stages[i]]}</strong></li>)}</ol>
     <small>요청 시각 {timeText(result.at)} · {ageText(age)}</small>{result.id !== '—' && <small className="request-id">요청 ID {result.id}</small>}
   </div>
 }
@@ -127,12 +127,12 @@ function WaypointPanel({ demo, map, document, problem, locked, onChange, mode, p
     <div className="waypoint-heading"><strong>Waypoint 목록</strong><span>{waypoints.length}개</span></div>
     <p className="muted">{demo ? '데모 경로입니다. 변경 내용은 새로고침하면 초기화됩니다.' : document ? `${document.file}에 저장됩니다. 변경된 경로는 다음 순찰 시작 시 적용됩니다.` : problem || 'Waypoint 설정을 불러오는 중입니다.'}</p>
     {waypoints.length ? <ol className="waypoint-list">{waypoints.map((w, i) => <li key={w.name} className={overIndex === i && dragIndex !== i ? 'drag-over' : ''} onDragOver={event => { if (dragIndex !== null && !locked && !busy) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setOverIndex(i) } }} onDragLeave={() => { if (overIndex === i) setOverIndex(null) }} onDrop={event => { event.preventDefault(); dropAt(i) }}>
-      <span className="waypoint-row-main"><span className="waypoint-name"><strong>{w.name}</strong><small>{w.type === 'stop' ? '정지' : '통과'} · {w.x.toFixed(2)}, {w.y.toFixed(2)} m</small></span></span>
+      <span className="waypoint-row-main"><span className="waypoint-name" data-testid="waypoint-name"><strong>{w.name}</strong><small data-testid="waypoint-coords">{w.type === 'stop' ? '정지' : '통과'} · {w.x.toFixed(2)}, {w.y.toFixed(2)} m</small></span></span>
       <span className="waypoint-actions"><span title={locked ? waypointLockHint : undefined}><button type="button" disabled={locked || busy || (!demo && !document)} onClick={() => { setMode(null); setPicked(null); setRenameIndex(i); setRenameDraft(w.name); setMessage('') }}>이름 변경</button></span><span title={locked ? waypointLockHint : undefined}><button type="button" disabled={locked || busy || (!demo && !document)} onClick={() => begin({ kind: 'move', index: i })}>위치 교체</button></span><span title={locked ? waypointLockHint : undefined}><button type="button" disabled={locked || busy || (!demo && !document) || (!demo && (waypoints.length === 1 || i === waypoints.length - 1))} onClick={() => void apply({ action: 'delete', name: w.name }, `${w.name} 지점을 삭제해`)}>삭제</button></span></span><span className="waypoint-drag-wrap" title={locked ? waypointLockHint : '끌어서 순서 변경'}><button className="waypoint-drag" type="button" draggable={!locked && !busy && (demo !== null || document !== null)} disabled={locked || busy || (!demo && !document)} aria-label={`${w.name} 순서 끌어서 변경`} title="끌어서 순서 변경" onDragStart={event => { setDragIndex(i); event.dataTransfer.setData('text/plain', w.name); event.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => { setDragIndex(null); setOverIndex(null) }}>⋮⋮</button></span>
       {renameIndex === i && !locked && <div className="waypoint-rename"><label>새 이름<input value={renameDraft} maxLength={32} onChange={event => setRenameDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') saveName(); if (event.key === 'Escape') setRenameIndex(null) }} /></label><button type="button" disabled={locked || busy} onClick={saveName}>저장</button><button type="button" disabled={busy} onClick={() => setRenameIndex(null)}>취소</button></div>}
     </li>)}</ol> : <p className="muted">저장된 지점이 없습니다.</p>}
     <small>순서를 바꾸려면 ⋮⋮ 표시를 다른 지점으로 끌어 놓으세요.</small>
-    <span title={locked ? waypointLockHint : undefined}><button className="waypoint-add" type="button" disabled={locked || busy || !map || (!demo && !document)} onClick={() => begin({ kind: 'add' })}>+ 새 지점 만들기</button></span>
+    <span data-testid="waypoint-add-wrap" title={locked ? waypointLockHint : undefined}><button className="waypoint-add" type="button" disabled={locked || busy || !map || (!demo && !document)} onClick={() => begin({ kind: 'add' })}>+ 새 지점 만들기</button></span>
     {mode && !locked && <div className="waypoint-editor"><p>{mode.kind === 'add' ? '새 지점의 이름과 종류를 정하고 지도에서 위치를 선택하세요. 통과 지점은 마지막 정지 지점 앞에 들어갑니다.' : `${waypoints[mode.index]?.name ?? '지점'}의 새 위치를 지도에서 선택하세요.`}</p>
       {mode.kind === 'add' && <div className="waypoint-fields"><label>이름<input value={name} maxLength={32} onChange={e => setName(e.target.value)} /></label><label>종류<select value={type} onChange={e => setType(e.target.value as 'pass' | 'stop')}><option value="stop">정지</option><option value="pass">통과</option></select></label></div>}
       <p role="status">{picked ? `선택한 위치: ${picked[0].toFixed(2)}, ${picked[1].toFixed(2)} m` : '지도에서 위치를 클릭하세요.'}</p>
@@ -157,8 +157,8 @@ function Controls({ demo, live, view, delta, map, waypointDocument, waypointProb
   const exitNote = launcher?.state === 'exited' && launcher.exit_code ? `순찰 노드가 종료 코드 ${launcher.exit_code}로 끝났습니다. 로그(로봇 컴퓨터): ${launcher.log ?? '—'}` : ''
   return <Card title="로봇 제어" className="controls">
     <div className="control-body"><p id="control-reason" role="status" className="muted">{reason || (action === 'start' ? '저장된 waypoint 경로를 로봇에 보내 새 순찰을 시작합니다.' : action === 'pause' ? '현재 순찰을 일시정지합니다.' : '멈춘 지점부터 순찰을 이어서 합니다.')}</p>
-      <button className={`command ${action === 'pause' ? 'pause' : 'resume'}`} disabled={!!reason || pending} aria-busy={pending && request?.command !== 'stop'} aria-describedby="control-reason" onClick={() => send(action)}><span aria-hidden="true">{action === 'pause' ? '■' : '▷'}</span>{pending && request?.command !== 'stop' ? busyLabel : label}</button>
-      <span title={stopLock || undefined}><button className="patrol-stop" type="button" disabled={!!stopLock} aria-busy={stopping} onClick={() => send('stop')}>{stopping ? '순찰 종료 중' : '순찰 종료'}</button></span>
+      <button data-testid="drive-command" className={`command ${action === 'pause' ? 'pause' : 'resume'}`} disabled={!!reason || pending} aria-busy={pending && request?.command !== 'stop'} aria-describedby="control-reason" onClick={() => send(action)}><span aria-hidden="true">{action === 'pause' ? '■' : '▷'}</span>{pending && request?.command !== 'stop' ? busyLabel : label}</button>
+      <span data-testid="patrol-stop-wrap" title={stopLock || undefined}><button className="patrol-stop" type="button" disabled={!!stopLock} aria-busy={stopping} onClick={() => send('stop')}>{stopping ? '순찰 종료 중' : '순찰 종료'}</button></span>
       {exitNote && <p className="muted" role="status">{exitNote}</p>}
       {request && <ResultBox key={request.id} result={request} delta={delta} />}
       <WaypointPanel demo={demo} map={map} document={waypointDocument} locked={locked} problem={waypointProblem} onChange={changeWaypoint} mode={waypointMode} picked={picked} setMode={setWaypointMode} setPicked={setPicked} />
@@ -182,7 +182,7 @@ function PatrolCard({ view }: { view: View }) {
   // 받은 적은 있는데 상태가 없음 = 순찰 노드가 꺼졌거나 모르는 상태 (Bridge가 발행자가 없으면 비움)
   const lost = !!patrol && !state && patrol.update_count > 0
   const shown = state ? patrolLabel(state, patrol!.reason) : null
-  return <Card title="순찰"><div className="movement patrol-state" role="status">{shown ? <Badge status={state!} tone={old ? 'neutral' : shown.tone}>{shown.label}{old && ' (마지막 상태)'}</Badge> : lost ? <Badge status="lost" tone="warn">순찰 상태 확인 불가</Badge> : <Badge status="unknown">{view.serverProblem ? '현재 확인 불가' : '확인 전'}</Badge>}<span className="patrol-target">{target}</span></div>
+  return <Card title="순찰"><div className="movement patrol-state" role="status" data-testid="patrol-state">{shown ? <Badge status={state!} tone={old ? 'neutral' : shown.tone}>{shown.label}{old && ' (마지막 상태)'}</Badge> : lost ? <Badge status="lost" tone="warn">순찰 상태 확인 불가</Badge> : <Badge status="unknown">{view.serverProblem ? '현재 확인 불가' : '확인 전'}</Badge>}<span className="patrol-target">{target}</span></div>
     <p className="muted">{!patrol ? '순찰 상태 수신 대기' : old ? '로봇과 연결이 원활하지 않아 지금 상태는 알 수 없습니다' : lost ? '순찰 프로그램이 꺼져 있거나 상태를 알 수 없습니다' : state === 'failed' && patrol.reason ? `사유: ${patrol.reason}` : shown?.note ? shown.note : `마지막 상태 변경 ${timeText(patrol.last_received_at)}`}</p></Card>
 }
 const FOLLOW_SPAN_M = 10   // 로봇 따라가기: 로봇 중심 가로세로 10 m
@@ -215,22 +215,22 @@ function MapCard({ map, view, delta, onPick, onSelect }: { map: MapInfo | null; 
       {map.image ? <image href={map.image} width={map.width} height={map.height} className="map-image" /> : <rect width={map.width} height={map.height} className="map-blank" />}
       <polyline points={points.map(p => p.join(',')).join(' ')} className="route" strokeWidth={unit * .4} strokeDasharray={`${unit * 1.4} ${unit}`} />
       {map.waypoints.map((w, i) => { const [x, y] = points[i]; const tone = i === next ? 'next' : patrol && i < patrol.waypoint_index ? 'passed' : ''
-        return <g key={w.name} className={`waypoint ${tone}`}>{w.type === 'stop' ? <rect x={x - unit * 1.1} y={y - unit * 1.1} width={unit * 2.2} height={unit * 2.2} strokeWidth={unit * .35} /> : <circle cx={x} cy={y} r={unit * 1.1} strokeWidth={unit * .35} />}
+        return <g key={w.name} className={`waypoint ${tone}`} data-testid="map-waypoint">{w.type === 'stop' ? <rect x={x - unit * 1.1} y={y - unit * 1.1} width={unit * 2.2} height={unit * 2.2} strokeWidth={unit * .35} /> : <circle cx={x} cy={y} r={unit * 1.1} strokeWidth={unit * .35} />}
           {i === next && <circle cx={x} cy={y} r={unit * 2.4} className="next-ring" strokeWidth={unit * .4} />}<text x={x + unit * 2} y={y - unit * 1.6} fontSize={unit * 3.4}>{w.name}</text></g> })}
       {others.map(r => { const [ox, oy] = toPixel(map, r.pose!.x, r.pose!.y)
         const go = selectable ? () => onSelect!(r.robot_id) : undefined
-        return <g key={r.robot_id} className={`robot other ${r.pose!.stale ? 'stale' : ''} ${selectable ? 'selectable' : ''}`} transform={`translate(${ox} ${oy})`}
+        return <g key={r.robot_id} data-testid="map-robot-other" className={`robot other ${r.pose!.stale ? 'stale' : ''} ${selectable ? 'selectable' : ''}`} transform={`translate(${ox} ${oy})`}
           role={selectable ? 'button' : undefined} tabIndex={selectable ? 0 : undefined} aria-label={`${r.robot_id}${r.pose!.stale ? ' (마지막 위치)' : ''}${selectable ? ' 로봇 보기' : ''}`}
           onClick={go ? event => { event.stopPropagation(); go() } : undefined} onKeyDown={go ? event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); go() } } : undefined}>
           {selectable && <title>{`${r.robot_id} 로봇 보기`}</title>}
-          <circle r={unit * 4.6} className="hit" strokeWidth={unit * .5} />
+          <circle r={unit * 4.6} className="hit" data-testid="map-robot-hit" strokeWidth={unit * .5} />
           <g transform={`rotate(${headingDeg(r.pose!.yaw)})`}><path d={`M ${unit * 3.8} 0 L ${-unit * 2.3} ${unit * 2.6} L ${-unit * 1.1} 0 L ${-unit * 2.3} ${-unit * 2.6} Z`} className="robot-mark" strokeWidth={unit * .3} /></g>
           <text x={unit * 3.4} y={unit * 4.6} fontSize={unit * 3}>{r.robot_id}</text></g> })}
-      {has && <g className={`robot ${stale ? 'stale' : ''}`} transform={`translate(${rx} ${ry})`}>
+      {has && <g data-testid="map-robot" className={`robot ${stale ? 'stale' : ''}`} transform={`translate(${rx} ${ry})`}>
         <circle r={Math.max(uncertaintyPx(map, pose!.position_std_m), unit * 2.6)} className="uncertainty" strokeWidth={unit * .25} />
         <g transform={`rotate(${headingDeg(pose!.yaw!)})`}><path d={`M ${unit * 4.4} 0 L ${-unit * 2.7} ${unit * 3} L ${-unit * 1.3} 0 L ${-unit * 2.7} ${-unit * 3} Z`} className="robot-mark" strokeWidth={unit * .3} /></g></g>}
     </svg></div>
-    <div className="map-legend"><span role="status">{!has ? '로봇 위치 수신 대기' : stale ? `위치 확인 불가 · 마지막 위치 ${ageText(pose!.age_s, delta)}` : `위치 수신 ${ageText(pose!.age_s, delta)}${pose!.position_std_m != null ? ` · 오차 약 ±${(2 * pose!.position_std_m).toFixed(2)} m` : ''}`}</span>
+    <div className="map-legend" data-testid="map-legend"><span role="status">{!has ? '로봇 위치 수신 대기' : stale ? `위치 확인 불가 · 마지막 위치 ${ageText(pose!.age_s, delta)}` : `위치 수신 ${ageText(pose!.age_s, delta)}${pose!.position_std_m != null ? ` · 오차 약 ±${(2 * pose!.position_std_m).toFixed(2)} m` : ''}`}</span>
       <button className="map-toggle" aria-pressed={follow} disabled={!has} onClick={() => setFollow(f => !f)}>{follow ? '전체 지도 보기' : '로봇 따라가기'}</button>
       {onPick && <span className="map-pick-hint">지도에서 지점 위치를 클릭하세요</span>}
       <span className="legend-keys">{others.length > 0 && <span><i className="key other" />다른 로봇{selectable ? ' (누르면 전환)' : ''}</span>}<span><i className="key next" />다음 목표</span><span><i className="key stop" />정지 지점</span><span><i className="key pass" />통과 지점</span></span></div>
@@ -263,7 +263,7 @@ export function overall(view: View): { tone: Tone; label: string; detail: string
   return { tone: 'good', label: '정상', detail: '' }
 }
 function Reception({ state, serverProblem, delta }: { state: Snapshot | null; serverProblem: boolean; delta: number }) {
-  return <details className="card reception"><summary className="card-heading">센서 수신 상세<small>개발자용 · 토픽 4개의 수신 상태</small></summary>
+  return <details className="card reception" data-testid="reception"><summary className="card-heading">센서 수신 상세<small>개발자용 · 토픽 4개의 수신 상태</small></summary>
     <table><thead><tr><th>항목</th><th>수신 상태</th><th>마지막 수신</th><th>수신 빈도</th></tr></thead>
       <tbody>{topicKeys.map(key => {
         const topic = state?.topics[key]
@@ -279,7 +279,7 @@ function Reception({ state, serverProblem, delta }: { state: Snapshot | null; se
   </details>
 }
 function AlertRow({ alert }: { alert: Snapshot['alerts'][number] }) {
-  return <li className="alert-row"><time dateTime={alert.at}>{timeText(alert.at)}</time><Badge status={alert.severity}>{{ info: '정보', warning: '주의', error: '오류' }[alert.severity]}</Badge><span>{alert.message}</span>{alert.active && <small>지속 중</small>}</li>
+  return <li className="alert-row" data-testid="alert-row"><time dateTime={alert.at}>{timeText(alert.at)}</time><Badge status={alert.severity}>{{ info: '정보', warning: '주의', error: '오류' }[alert.severity]}</Badge><span>{alert.message}</span>{alert.active && <small>지속 중</small>}</li>
 }
 const ROBOT_KEY = 'limbo.robot'
 /** 처음 볼 로봇: 주소의 ?robot= → 이 브라우저에서 마지막으로 고른 로봇 → 비움(서버 기본 로봇) */
@@ -351,8 +351,8 @@ function AuthGate() {
 function AccountBar({ account, onAuth }: { account: Account; onAuth: (next: AuthState | null) => void }) {
   const [panel, setPanel] = useState<'users' | 'password' | null>(null)
   const close = useCallback(() => setPanel(null), [])
-  return <div className="account">
-    <span className="account-name" title={account.display_name || undefined}>{account.username}</span>
+  return <div className="account" data-testid="account">
+    <span className="account-name" data-testid="account-name" title={account.display_name || undefined}>{account.username}</span>
     <button type="button" onClick={() => setPanel('users')}>회원 관리</button>
     <button type="button" onClick={() => setPanel('password')}>비밀번호 변경</button>
     <button type="button" onClick={() => onAuth(null)}>로그아웃</button>
@@ -447,18 +447,18 @@ function RobotDashboard({ robotId, onSelect, account, onAuth }: { robotId: strin
   const banner = view.serverProblem ? '서버 상태를 갱신할 수 없습니다. 현재 로봇 연결 상태를 확인할 수 없습니다.' : connection === 'disconnected' ? '로봇과 연결이 끊겼습니다. 아래 정보는 마지막으로 받은 상태입니다.' : connection === 'delayed' ? '로봇 상태가 늦게 오고 있습니다. 지금 상태는 확인할 수 없습니다.' : connection === 'checking' ? '로봇 연결을 확인하고 있습니다. 아직 받은 정보가 없습니다.' : null
   return <>
     {demo && <div className="demo-banner">데모 데이터 · 실제 로봇을 제어하지 않습니다</div>}
-    <header><div className="container header-inner"><div className="brand"><h1>LIMBO 관제</h1><RobotPicker current={robotName} robots={robots} pending={requestPending} disabled={!!demo} onSelect={onSelect} />{demo && <span className="mode-tag">데모 데이터</span>}</div><div className="connection"><span role="status" className="overall"><Badge status={summary.label} tone={summary.tone}>{summary.label}</Badge>{summary.detail && <span>{summary.detail}</span>}</span><span className="last-received">로봇 {labels[connection]} · {state?.bridge.last_received_at ? `마지막 수신 ${timeText(state.bridge.last_received_at)} · ${ageText(state.bridge.age_s, delta)}` : '수신 기록 없음'}</span></div>{account && <AccountBar account={account} onAuth={onAuth} />}</div></header>
-    {banner && <div className={`banner ${connection}`} role={connection === 'checking' ? 'status' : 'alert'}><div className="container">{banner}</div></div>}
+    <header><div className="container header-inner"><div className="brand"><h1>LIMBO 관제</h1><RobotPicker current={robotName} robots={robots} pending={requestPending} disabled={!!demo} onSelect={onSelect} />{demo && <span className="mode-tag">데모 데이터</span>}</div><div className="connection" data-testid="connection"><span role="status" className="overall" data-testid="overall-status"><Badge status={summary.label} tone={summary.tone}>{summary.label}</Badge>{summary.detail && <span>{summary.detail}</span>}</span><span className="last-received" data-testid="last-received">로봇 {labels[connection]} · {state?.bridge.last_received_at ? `마지막 수신 ${timeText(state.bridge.last_received_at)} · ${ageText(state.bridge.age_s, delta)}` : '수신 기록 없음'}</span></div>{account && <AccountBar account={account} onAuth={onAuth} />}</div></header>
+    {banner && <div data-testid="banner" className={`banner ${connection}`} role={connection === 'checking' ? 'status' : 'alert'}><div className="container">{banner}</div></div>}
     {demo && <DemoTools demo={demo} />}
     <main className="container"><div className="page-meta"><span>{demo ? '가상 로봇 상태 및 제어 흐름 검증' : '로봇 상태 모니터링 · 순찰 제어'}</span><a href={demo ? '/' : '/demo'}>{demo ? '실제 수신 화면으로 →' : '가상 제어 데모 보기 →'}</a></div>
       <div className="summary"><PatrolCard view={view} />
-        <Card title="이동"><div className="movement" role="status"><Badge status={motionStatus} />{!view.serverProblem && state?.motion.rotating && <span>회전 중</span>}
-          <div className={`speed ${retained ? 'muted' : ''}`}><strong>{value ? value.linear_speed_mps.toFixed(2) : '—'}</strong><span>m/s</span>{retained && <Badge status="unknown">마지막 수신 값</Badge>}</div></div>
+        <Card title="이동"><div className="movement" role="status" data-testid="motion-state"><Badge status={motionStatus} />{!view.serverProblem && state?.motion.rotating && <span>회전 중</span>}
+          <div data-testid="speed" className={`speed ${retained ? 'muted' : ''}`}><strong data-testid="speed-value">{value ? value.linear_speed_mps.toFixed(2) : '—'}</strong><span>m/s</span>{retained && <Badge status="unknown">마지막 수신 값</Badge>}</div></div>
           <p className="muted">{value ? `주행 정보 ${timeText(value.last_received_at)} 기준 추정값` : '유효한 주행 정보 수신 대기'} · 멈춰 있다고 일시정지가 확인된 것은 아닙니다</p></Card></div>
       <div className="body-grid"><MapCard map={map} view={view} delta={delta} onPick={waypointMode ? setPicked : undefined} onSelect={demo ? undefined : onSelect} /><Controls demo={demo} live={live} view={view} delta={delta} map={map} waypointDocument={waypointDocument} waypointProblem={waypointProblem} changeWaypoint={changeWaypoint} waypointMode={waypointMode} picked={picked} setWaypointMode={setWaypointMode} setPicked={setPicked} /></div>
       <Card title="최근 알림" className="alerts">{state?.alerts.length ? <ul>{state.alerts.map(alert => <AlertRow key={alert.id} alert={alert} />)}</ul> : <p className="empty">최근 알림이 없습니다</p>}</Card>
       <Reception state={state} serverProblem={view.serverProblem} delta={delta} />
-      <footer>{demo ? '데모의 상태 확인은 가상 이벤트에 기반합니다.' : `${robotName} · 수신 정보 기반 관제`}<span>표시 시각 Asia/Seoul</span></footer>
+      <footer data-testid="page-footer">{demo ? '데모의 상태 확인은 가상 이벤트에 기반합니다.' : `${robotName} · 수신 정보 기반 관제`}<span>표시 시각 Asia/Seoul</span></footer>
     </main>
   </>
 }

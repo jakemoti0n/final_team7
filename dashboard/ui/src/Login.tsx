@@ -17,7 +17,7 @@ export default function Login({ onDone, notice }: { onDone: (state: AuthState) =
     <form className="card auth-card" onSubmit={submit} aria-labelledby="login-title">
       <h1 id="login-title">LIMBO 관제</h1>
       <p className="muted">관리자 계정으로 로그인하세요. 계정이 없으면 다른 관리자에게 만들어 달라고 요청하세요.</p>
-      {notice && !problem && <p className="auth-notice" role="status">{notice}</p>}
+      {notice && !problem && <p className="auth-notice" role="status" data-testid="auth-notice">{notice}</p>}
       <label>아이디<input name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} required value={username} onChange={e => setUsername(e.target.value)} autoFocus /></label>
       <label>비밀번호<input name="password" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></label>
       {problem && <p className="auth-error" role="alert">{problem}</p>}

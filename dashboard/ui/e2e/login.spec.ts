@@ -24,9 +24,9 @@ test('first admin logs in, must change password, adds a member who then logs in'
 
   await signIn(page, 'admin', 'first-pass')
   await changeFirstPassword(page, 'first-pass', 'admin-pass')
-  await expect(page.locator('.account-name')).toHaveText('admin')
-  await expect(page.locator('.last-received')).toBeVisible()           // 실시간 화면이 열렸다 (입장표·WebSocket)
-  await expect(page.locator('.banner')).not.toContainText('서버 상태를 갱신할 수 없습니다', { timeout: 5000 })
+  await expect(page.getByTestId('account-name')).toHaveText('admin')
+  await expect(page.getByTestId('last-received')).toBeVisible()           // 실시간 화면이 열렸다 (입장표·WebSocket)
+  await expect(page.getByTestId('banner')).not.toContainText('서버 상태를 갱신할 수 없습니다', { timeout: 5000 })
 
   await page.getByRole('button', { name: '회원 관리' }).click()
   const dialog = page.getByRole('dialog')
@@ -35,17 +35,17 @@ test('first admin logs in, must change password, adds a member who then logs in'
   await dialog.getByLabel('임시 비밀번호').fill('kim-temp')
   await dialog.getByRole('button', { name: '계정 추가' }).click()
   await expect(dialog.getByRole('status')).toContainText('kim 계정을 만들었습니다')
-  const kim = dialog.locator('.user-list li', { hasText: 'kim' })
+  const kim = dialog.getByRole('list', { name: '계정 목록' }).getByRole('listitem').filter({ hasText: 'kim' })
   await expect(kim).toContainText('임시 비밀번호')
-  const self = dialog.locator('.user-list li', { hasText: '나' })
+  const self = dialog.getByRole('list', { name: '계정 목록' }).getByRole('listitem').filter({ hasText: '나' })
   await expect(self.getByRole('button', { name: '삭제' })).toHaveCount(0)   // 자기 계정은 지울 수 없다
   await dialog.getByRole('button', { name: '회원 관리 닫기' }).click()
 
   await page.getByRole('button', { name: '로그아웃' }).click()
-  await expect(page.locator('.auth-notice')).toHaveText('로그아웃했습니다.')
+  await expect(page.getByTestId('auth-notice')).toHaveText('로그아웃했습니다.')
   await signIn(page, 'kim', 'kim-temp')
   await changeFirstPassword(page, 'kim-temp', 'kim-pass')
-  await expect(page.locator('.account-name')).toHaveText('kim')
+  await expect(page.getByTestId('account-name')).toHaveText('kim')
   const cookies = await page.context().cookies()
   expect(cookies.find(c => c.name === 'limbo_session')).toMatchObject({ httpOnly: true, sameSite: 'Strict' })
 })
@@ -53,5 +53,5 @@ test('first admin logs in, must change password, adds a member who then logs in'
 test('demo stays open without login', async ({ page }) => {
   await page.goto('/demo')
   await expect(page.getByText('데모 데이터 · 실제 로봇을 제어하지 않습니다')).toBeVisible()
-  await expect(page.locator('.account')).toHaveCount(0)
+  await expect(page.getByTestId('account')).toHaveCount(0)
 })
