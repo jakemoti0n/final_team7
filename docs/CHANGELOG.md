@@ -8,6 +8,26 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-15 (77) 관제 화면 디자인 개편 1단계(Stitch 시안): 사이드바와 페이지 3개(로봇 관제·플릿 현황·순찰 경로), 시안 색·글꼴·모서리. 서버·Bridge 수정 없음
+
+**할 일**
+- 서버: `git pull` → `dashboard/`에서 `docker compose up -d --build`(UI만 바뀜. `.env`·볼륨 그대로). 새 npm 의존성(`pretendard`, `@fontsource/jetbrains-mono`)은 이미지 빌드 중 lockfile대로 설치된다
+- 팀 공유: **waypoint 편집 위치가 바뀌었다.** 로봇 관제 화면의 로봇 제어 카드 → 사이드바 「순찰 경로」 페이지(주소 `?page=routes`). 순찰 노드가 돌고 있으면 그 페이지에서 잠긴 이유와 「로봇 관제」 링크가 보인다
+- 로컬 e2e: `pnpm build` 뒤 실행(e2e 서버는 `ui/dist`를 보여 준다). Playwright 브라우저가 없으면 `CHROME_PATH=/usr/bin/google-chrome pnpm exec playwright test`
+
+**변경**
+- 페이지: 왼쪽 사이드바(제품 이름·관제 대상 로봇·메뉴), 상단에 페이지 제목과 연결 상태. **로봇 관제**(순찰·이동·지도·제어·알림·센서 수신), **플릿 현황**(서버가 아는 로봇 전체의 연결 상태 대수, 플릿 지도, 로봇 목록: 연결 상태·마지막 수신·같은 지도 위치, 「관제 보기」로 그 로봇 관제), **순찰 경로**(지도 + waypoint 편집). 페이지는 주소 `?page=fleet|routes`로 나눠 서버 경로를 늘리지 않았고 새로 고침·뒤로 가기가 된다. 실시간 연결은 화면 틀에 하나라 페이지를 오가도 연결·진행 중인 명령이 이어진다. 좁은 화면(999 px 이하)에서는 사이드바가 위쪽 띠와 탭이 된다
+- 순찰 카드에 진행 막대(지난 지점 = 순찰 노드가 보낸 `waypoint_index / waypoint_count`, 연결이 원활하지 않으면 회색)
+- 디자인 토큰 `ui/src/styles/tokens.css`(색·모서리·그림자·글꼴), 규칙 문서 `ui/DESIGN.md`. 색은 시안 값을 쓰되 글자 대비 4.5:1 미만인 것은 진하게(경고 `#92400E`, 링크 `#15803D`). `style.css`를 규칙당 한 줄로 풀고 색은 토큰만 쓴다
+- 글꼴: 본문 Pretendard, 제목 Gmarket Sans(한글 2,350자로 줄여 약 120 KB, SIL OFL), 숫자 JetBrains Mono. 모두 빌드에 포함(외부 CDN 없음). 첫 접속 때 글꼴 약 0.55 MB를 더 받는다
+- 코드 구조: `App.tsx`(464줄)를 `components/`·`features/`·`pages/`·`hooks/useRobotData.ts`로 나눔. 판단 로직 파일(`live.ts`·`control.ts`·`commands.ts`·`map.ts`·`auth.ts`)은 그대로
+- 데모(`/demo`): 플릿 현황용 가상 로봇 LIMBO-02(연결)·LIMBO-03(끊김) 추가. 관제는 LIMBO-01만
+- 시험: e2e가 CSS 클래스 대신 `data-testid`·role로 요소를 찾는다(디자인을 바꿔도 시험 유지). waypoint 시험은 순찰 경로 페이지에서, 페이지 이동·플릿 시험 2개 추가(e2e 31개, 단위 38개)
+
+**원인과 근거**
+- Stitch 시안(`dashboard/docs/stitch_autonomous_robot_fleet_control_dashboard/`)을 반영하되 1단계는 서버·Bridge를 고치지 않는 범위로 한정했다. 시안의 적재량·배터리 %·쓰레기 수거 통계는 로봇에 센서가 없어 만들 수 없고, E-STOP·「SYSTEM READY」 같은 고정 문구는 「모르는 것은 모른다고 표시」 원칙(UX 요구사항)과 맞지 않아 넣지 않았다
+- 토큰 치환과 파일 분리 단계는 데모 6개 시나리오 × 3개 화면 폭을 시계를 멈춘 상태로 찍어 HTML·픽셀이 같음을 확인했다
+
 ## 2026-11-12 (76) 관제 화면 로그인을 사람별 계정으로: 서버 안 사용자 DB(SQLite), 로그인 화면·회원 관리, Caddy basic auth 제거
 
 **할 일**

@@ -1,67 +1,83 @@
 /*
- * 관제 화면 디자인 토큰. 색·글꼴·그림자 값은 이 파일 하나에서만 정한다.
+ * 관제 화면 디자인 토큰. 색·글꼴·모서리·그림자 값은 이 파일 하나에서만 정한다.
  * 컴포넌트 CSS(style.css)는 var(--…)만 쓴다. ui/DESIGN.md의 토큰 표와 함께 바꾼다.
+ * 값의 출처: Stitch 시안 autonomous_metric_control/DESIGN.md. 글자로 쓰는 색은 바탕과의 대비 4.5:1 이상으로 조정했다.
  */
 :root {
+  /* 주 색 (사이드바 선택·주 버튼·제품 표시) */
+  --color-primary: #14532d;
+  --color-primary-hover: #166534;
+  --color-on-primary: #fff;
+
   /* 글자 */
-  --color-ink: #17264a;            /* 제목·강조 글자, 카드 윗선 */
-  --color-text: #2b3445;           /* 본문 */
-  --color-text-muted: #5b6576;     /* 보조 설명 */
-  --color-text-faint: #7b8391;     /* 오래된 값·사용 안 함 */
-  --color-text-label: #4d5768;     /* 데모 도구 라벨 */
+  --color-ink: #111827;            /* 제목·강조 글자·지도 경로 */
+  --color-text: #1f2937;           /* 본문 */
+  --color-text-muted: #4b5563;     /* 보조 설명 */
+  --color-text-faint: #6b7280;     /* 오래된 값·사용 안 함 */
+  --color-text-label: #374151;     /* 데모 도구 라벨 */
 
   /* 바탕·면 */
-  --color-bg: #eef0f3;             /* 페이지 바탕 */
+  --color-bg: #f7f8f3;             /* 페이지 바탕 */
   --color-surface: #fff;           /* 카드 */
-  --color-surface-sunken: #f5f6f8; /* 표 머리·빈 지도·입력 묶음 */
-  --color-surface-result: #f7f8fa; /* 명령 결과 상자 */
-  --color-surface-strong: #e3e6eb; /* 데모 도구 띠 */
-  --color-banner: #e1e4ea;         /* 기본 경고 띠 */
+  --color-surface-sunken: #f3f4f6; /* 표 머리·빈 지도·입력 묶음 */
+  --color-surface-result: #f9faf7; /* 명령 결과 상자 */
+  --color-surface-strong: #eceee6; /* 데모 도구 띠 */
+  --color-banner: #e5e7eb;         /* 기본 경고 띠 */
 
   /* 선 */
-  --color-border: #d7dbe2;
-  --color-border-subtle: #e3e6eb;
-  --color-border-strong: #8c95a4;  /* 버튼·입력 */
-  --color-border-input: #9aa3b0;
+  --color-border: #e2e8f0;
+  --color-border-subtle: #edf0f4;
+  --color-border-strong: #cbd5e1;  /* 버튼·입력 */
+  --color-border-input: #cbd5e1;
 
-  /* 강조(상호작용) */
-  --color-accent: #0b7a80;         /* 링크·포커스·다음 목표 */
-  --color-accent-strong: #0b615f;
-  --color-accent-hover: #e6eef0;   /* 버튼 hover 바탕 */
-  --color-accent-tint: #f3faf9;    /* 지점 추가 버튼 바탕 */
-  --color-accent-tint-2: #e6f3f0;  /* 끌어 놓을 자리 */
-  --color-accent-panel: #f5f8f8;   /* 지점 편집 상자 */
-  --color-accent-border: #b9d4d2;
+  /* 강조(상호작용): 링크·포커스·선택 */
+  --color-accent: #15803d;
+  --color-accent-strong: #14532d;
+  --color-accent-hover: #f0fdf4;   /* 버튼 hover 바탕 */
+  --color-accent-tint: #f0fdf4;    /* 지점 추가 버튼·지금 보는 로봇 */
+  --color-accent-tint-2: #dcfce7;  /* 끌어 놓을 자리 */
+  --color-accent-panel: #f6fbf7;   /* 지점 편집 상자 */
+  --color-accent-border: #bbf7d0;
+
+  /* 위험 동작 버튼 (주행 정지) */
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
 
   /* 상태 4톤 (good·warn·bad·neutral). 색만으로 구분하지 않는다: 기호·문구도 함께 */
-  --color-good-fg: #1d7a43;
-  --color-good-fg-strong: #1d5a3a;
-  --color-good-bg: #e6f3eb;
-  --color-good-border: #c4dfce;
-  --color-warn-fg: #a65300;
-  --color-warn-bg: #fdf0e1;
-  --color-warn-border: #efd1b0;
-  --color-warn-row: #fffcf7;
-  --color-bad-fg: #c42b2b;
-  --color-bad-fg-strong: #a32323;
-  --color-bad-hover: #a82222;
-  --color-bad-bg: #fbe9e9;
-  --color-bad-border: #efbebe;
-  --color-neutral-fg: #5f6878;
-  --color-neutral-bg: #eceef2;
-  --color-neutral-border: #d3d7de;
+  --color-good-fg: #166534;
+  --color-good-fg-strong: #14532d;
+  --color-good-bg: #dcfce7;
+  --color-good-border: #bbf7d0;
+  --color-warn-fg: #92400e;
+  --color-warn-bg: #fef3c7;
+  --color-warn-border: #fde68a;
+  --color-warn-row: #fffbeb;
+  --color-bad-fg: #b91c1c;
+  --color-bad-fg-strong: #991b1b;
+  --color-bad-hover: #b91c1c;
+  --color-bad-bg: #fee2e2;
+  --color-bad-border: #fecaca;
+  --color-neutral-fg: #4b5563;
+  --color-neutral-bg: #f3f4f6;
+  --color-neutral-border: #e5e7eb;
 
   /* 지도 */
-  --color-map-bg: #cdcdcd;
-  --color-map-robot: #c42b2b;
-  --color-map-robot-other: #5f6878;
-  --color-map-uncertainty-fill: rgba(196, 43, 43, .14);
-  --color-map-uncertainty-stroke: rgba(196, 43, 43, .55);
+  --color-map-bg: #e5e7eb;
+  --color-map-next: #0e7490;       /* 다음 목표 지점 (로봇 초록과 구분) */
+  --color-map-robot: #16a34a;
+  --color-map-robot-other: #6b7280;
+  --color-map-uncertainty-fill: rgba(22, 163, 74, .14);
+  --color-map-uncertainty-stroke: rgba(22, 163, 74, .55);
 
-  /* 그림자·가림막 */
-  --shadow-menu: 0 8px 24px rgba(23, 38, 74, .16);
-  --shadow-overlay: 0 12px 36px rgba(23, 38, 74, .25);
-  --color-overlay: rgba(23, 38, 74, .45);
+  /* 모서리: 입력·버튼 4px, 카드·지도·큰 버튼 8px, 배지 끝까지 둥글게 */
+  --radius-sm: 4px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+
+  /* 그림자·가림막: 떠 있는 것(메뉴·창)만 */
+  --shadow-menu: 0 4px 12px rgba(17, 24, 39, .08);
+  --shadow-overlay: 0 12px 36px rgba(17, 24, 39, .18);
+  --color-overlay: rgba(17, 24, 39, .4);
 
   /* 글꼴: 본문 Pretendard, 제목 Gmarket Sans, 숫자·시각 JetBrains Mono */
   --font-body: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Noto Sans KR", sans-serif;
