@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest'
 import { LiveControl, driveControl, fromServer, lockReason, pauseReason, resumeReason, stageShapes, startReason, stopReason, waypointLocked } from './control'
 import { headingDeg, isMapInfo, toPixel, uncertaintyPx } from './map'
 import { MockProvider } from './demo'
-import { overall, patrolLabel } from './App'
+import { overall, patrolLabel } from './status'
 import type { ServerCommand, ServerStage, Snapshot, View } from './types'
 
 function view(change: (s: Snapshot) => void = () => {}, serverProblem = false): View {

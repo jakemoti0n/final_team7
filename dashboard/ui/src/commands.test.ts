@@ -1,7 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { CommandMachine, type Command, type Outcome } from './commands'
 import { MockProvider } from './demo'
-import { ageText, timeText } from './App'
+import { ageText, timeText } from './format'
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
 describe('three independent stages and explicit outcomes', () => {
