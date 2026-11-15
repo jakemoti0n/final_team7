@@ -1,0 +1,20 @@
+/*
+ * 제목 글꼴 Gmarket Sans. 외부 CDN 없이 빌드에 포함한다.
+ * 파일은 KS X 1001 한글 2,350자 + 영문·기호만 남긴 것 (src/assets/fonts/README.md).
+ * 빠진 글자는 본문 글꼴(Pretendard)로 그려진다.
+ * 본문 Pretendard와 숫자 JetBrains Mono는 npm 패키지에서 main.tsx가 불러온다.
+ */
+@font-face {
+  font-family: "Gmarket Sans";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("../assets/fonts/GmarketSansBold.subset.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Gmarket Sans";
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url("../assets/fonts/GmarketSansMedium.subset.woff2") format("woff2");
+}

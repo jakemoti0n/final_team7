@@ -1,0 +1,70 @@
+/*
+ * 관제 화면 디자인 토큰. 색·글꼴·그림자 값은 이 파일 하나에서만 정한다.
+ * 컴포넌트 CSS(style.css)는 var(--…)만 쓴다. ui/DESIGN.md의 토큰 표와 함께 바꾼다.
+ */
+:root {
+  /* 글자 */
+  --color-ink: #17264a;            /* 제목·강조 글자, 카드 윗선 */
+  --color-text: #2b3445;           /* 본문 */
+  --color-text-muted: #5b6576;     /* 보조 설명 */
+  --color-text-faint: #7b8391;     /* 오래된 값·사용 안 함 */
+  --color-text-label: #4d5768;     /* 데모 도구 라벨 */
+
+  /* 바탕·면 */
+  --color-bg: #eef0f3;             /* 페이지 바탕 */
+  --color-surface: #fff;           /* 카드 */
+  --color-surface-sunken: #f5f6f8; /* 표 머리·빈 지도·입력 묶음 */
+  --color-surface-result: #f7f8fa; /* 명령 결과 상자 */
+  --color-surface-strong: #e3e6eb; /* 데모 도구 띠 */
+  --color-banner: #e1e4ea;         /* 기본 경고 띠 */
+
+  /* 선 */
+  --color-border: #d7dbe2;
+  --color-border-subtle: #e3e6eb;
+  --color-border-strong: #8c95a4;  /* 버튼·입력 */
+  --color-border-input: #9aa3b0;
+
+  /* 강조(상호작용) */
+  --color-accent: #0b7a80;         /* 링크·포커스·다음 목표 */
+  --color-accent-strong: #0b615f;
+  --color-accent-hover: #e6eef0;   /* 버튼 hover 바탕 */
+  --color-accent-tint: #f3faf9;    /* 지점 추가 버튼 바탕 */
+  --color-accent-tint-2: #e6f3f0;  /* 끌어 놓을 자리 */
+  --color-accent-panel: #f5f8f8;   /* 지점 편집 상자 */
+  --color-accent-border: #b9d4d2;
+
+  /* 상태 4톤 (good·warn·bad·neutral). 색만으로 구분하지 않는다: 기호·문구도 함께 */
+  --color-good-fg: #1d7a43;
+  --color-good-fg-strong: #1d5a3a;
+  --color-good-bg: #e6f3eb;
+  --color-good-border: #c4dfce;
+  --color-warn-fg: #a65300;
+  --color-warn-bg: #fdf0e1;
+  --color-warn-border: #efd1b0;
+  --color-warn-row: #fffcf7;
+  --color-bad-fg: #c42b2b;
+  --color-bad-fg-strong: #a32323;
+  --color-bad-hover: #a82222;
+  --color-bad-bg: #fbe9e9;
+  --color-bad-border: #efbebe;
+  --color-neutral-fg: #5f6878;
+  --color-neutral-bg: #eceef2;
+  --color-neutral-border: #d3d7de;
+
+  /* 지도 */
+  --color-map-bg: #cdcdcd;
+  --color-map-robot: #c42b2b;
+  --color-map-robot-other: #5f6878;
+  --color-map-uncertainty-fill: rgba(196, 43, 43, .14);
+  --color-map-uncertainty-stroke: rgba(196, 43, 43, .55);
+
+  /* 그림자·가림막 */
+  --shadow-menu: 0 8px 24px rgba(23, 38, 74, .16);
+  --shadow-overlay: 0 12px 36px rgba(23, 38, 74, .25);
+  --color-overlay: rgba(23, 38, 74, .45);
+
+  /* 글꼴: 본문 Pretendard, 제목 Gmarket Sans, 숫자·시각 JetBrains Mono */
+  --font-body: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Noto Sans KR", sans-serif;
+  --font-heading: "Gmarket Sans", var(--font-body);
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
