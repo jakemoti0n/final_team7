@@ -17,5 +17,6 @@
   "robot_token_file": null,
   "allow_no_robot_token": true,
   "users_db": null,
-  "allow_no_login": true
+  "allow_no_login": true,
+  "visitor_enabled": true
 }

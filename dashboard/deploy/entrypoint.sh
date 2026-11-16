@@ -3,6 +3,7 @@
 set -eu
 : "${MAP_YAML:=limbo/src/limbo_navigation/maps/human_test_map.yaml}"
 : "${INITIAL_WAYPOINTS:=test_waypoints.yaml}"
+: "${VISITOR_ENABLED:=false}"
 
 # waypoint는 볼륨(/data)에 둔다. 컨테이너를 다시 만들어도 남는다. 볼륨이 비었을 때(처음)만 기본 파일을 복사
 if [ ! -f /data/waypoints.yaml ]; then
@@ -18,11 +19,17 @@ if [ ! -f "/srv/$MAP_YAML" ]; then
   exit 1
 fi
 
-# 이미지 안 deploy/config.json에 지도만 바꿔 끼운다. 토큰은 환경 변수 ROBOT_TOKEN (없으면 서버가 시작 거부)
-python - "$MAP_YAML" <<'PY'
+case "$VISITOR_ENABLED" in
+  true|false) ;;
+  *) echo "VISITOR_ENABLED must be true or false (got: $VISITOR_ENABLED)" >&2; exit 1 ;;
+esac
+
+# 이미지 안 deploy/config.json에 지도와 방문자 화면 켜기만 바꿔 끼운다. 토큰은 환경 변수 ROBOT_TOKEN (없으면 서버가 시작 거부)
+python - "$MAP_YAML" "$VISITOR_ENABLED" <<'PY'
 import json, sys
 config = json.load(open('/srv/dashboard/deploy/config.json'))
 config['map_yaml'] = sys.argv[1]
+config['visitor_enabled'] = sys.argv[2] == 'true'
 json.dump(config, open('/tmp/dashboard-config.json', 'w'))
 PY
 export DASHBOARD_CONFIG=/tmp/dashboard-config.json

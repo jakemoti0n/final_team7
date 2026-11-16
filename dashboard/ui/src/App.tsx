@@ -5,6 +5,7 @@ import Login from './Login'
 import ChangePassword from './ChangePassword'
 import { RobotDashboard } from './pages/RobotDashboard'
 import { pageHref, readPage, type PageKey } from './navigation'
+import { VisitorPage } from './pages/VisitorPage'
 
 const ROBOT_KEY = 'limbo.robot'
 /** 처음 볼 로봇: 주소의 ?robot= → 이 브라우저에서 마지막으로 고른 로봇 → 비움(서버 기본 로봇) */
@@ -13,8 +14,10 @@ function initialRobot() {
   if (fromUrl) return fromUrl
   try { return localStorage.getItem(ROBOT_KEY) ?? '' } catch { return '' }
 }
-/** 로그인 확인 후 관제 화면. 데모(/demo)는 서버를 쓰지 않으므로 로그인 없이 바로 연다 */
+/** 로그인 확인 후 관제 화면. 데모(/demo)는 서버를 쓰지 않으므로 로그인 없이 바로 연다.
+ *  방문자 안내(/visitor)는 로그인 없이 읽기 전용 (?demo면 가상 데이터) */
 export default function App() {
+  if (location.pathname === '/visitor') return <VisitorPage demo={new URLSearchParams(location.search).has('demo')} />
   if (location.pathname === '/demo') return <RobotApp account={null} onAuth={() => {}} />
   return <AuthGate />
 }

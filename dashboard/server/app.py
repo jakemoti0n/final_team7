@@ -51,6 +51,7 @@ SESSION_COOKIE = "limbo_session"
 SESSION_RECHECK_S = 30        # 열린 실시간 연결이 로그인(세션)이 아직 유효한지 다시 보는 간격
 LOGIN_WINDOW_S = 300          # 로그인 실패를 세는 기간
 LOGIN_LIMIT = 10              # 같은 IP·같은 아이디로 기간 안에 허용하는 실패 횟수
+VISITOR_POSITION_MAX_AGE_S = 60   # 방문자 화면: 이보다 오래된 위치는 보여 주지 않는다 (엉뚱한 곳으로 안내하지 않게)
 
 # 누가 무엇을 했는지 (로그인·회원 관리·명령·waypoint). uvicorn은 루트 로거의 INFO를 찍지 않으므로 따로 둔다
 audit = logging.getLogger("dashboard.audit")
@@ -714,16 +715,76 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
             with suppress(RuntimeError, WebSocketDisconnect):
                 await websocket.close()
 
+    # ---- 방문자 안내 (로그인 없음, 읽기 전용). visitor_enabled일 때만 열린다 ----
+
+    def visitor_closed():
+        return error(404, "visitor_disabled", "Visitor page is not enabled")
+
+    def visitor_robot(robot, home):
+        """방문자에게 보여도 되는 것만: 이름, 쉬운 상태, 대략 위치. snapshot()을 부르지 않아 알림·revision을 건드리지 않는다"""
+        connection, _ = robot.store.connection()
+        patrol_state = ((robot.store.payload or {}).get("patrol") or {}).get("state")
+        if connection == "disconnected":
+            status = "offline"
+        elif connection != "connected":
+            status = "checking"   # 처음 확인 중이거나 수신 지연: 지금 상태를 모른다
+        elif patrol_state in ("pausing", "paused"):
+            status = "paused"
+        elif robot.store.patrol_running():
+            status = "patrolling"
+        else:
+            status = "idle"
+        position = None
+        same_map = home.map_key is not None and robot.map_key == home.map_key
+        pose = robot.store.pose_view() if same_map else None
+        if pose is not None and (pose["age_s"] is None or pose["age_s"] <= VISITOR_POSITION_MAX_AGE_S):
+            position = dict(x=round(pose["x"] * 2) / 2, y=round(pose["y"] * 2) / 2, stale=pose["stale"],
+                            age_s=None if pose["age_s"] is None else round(pose["age_s"]))
+        return dict(robot_id=robot.id, status=status, position=position)
+
+    @app.get("/api/v1/visitor/state")
+    async def visitor_state():
+        if not settings.visitor_enabled:
+            return visitor_closed()
+        home = find("")
+        meta = home.map_meta
+        items = [visitor_robot(robot, home) for robot in robots.values()]
+        body = dict(server_utc=base_store.utc(), robots=items,
+                    operating=sum(item["status"] in ("patrolling", "paused", "idle") for item in items),
+                    map=None if meta is None else dict(resolution=meta["resolution"], origin=meta["origin"],
+                                                       width=meta["width"], height=meta["height"],
+                                                       image="/api/v1/visitor/map.png"))
+        return JSONResponse(body, headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/v1/visitor/map.png")
+    async def visitor_map():
+        if not settings.visitor_enabled:
+            return visitor_closed()
+        home = find("")
+        if home.map_png is None:
+            return error(404, "map_not_configured", "Set map_yaml in the server config")
+        return Response(home.map_png, media_type="image/png", headers={"Cache-Control": "no-cache"})
+
     dist = ROOT / "ui" / "dist"
     if (dist / "assets").is_dir():
         app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
 
-    @app.get("/")
-    @app.get("/demo")
-    async def ui():
+    def index_html():
         if not (dist / "index.html").exists():
             return error(503, "server_error", "Build dashboard/ui first; see README")
         return FileResponse(dist / "index.html", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/")
+    @app.get("/demo")
+    async def ui():
+        return index_html()
+
+    @app.get("/visitor")
+    async def visitor_ui(demo: str | None = None):
+        # 데모(?demo)는 서버 데이터를 쓰지 않으므로 꺼져 있어도 연다
+        if not settings.visitor_enabled and demo is None:
+            return visitor_closed()
+        return index_html()
 
     return app
 

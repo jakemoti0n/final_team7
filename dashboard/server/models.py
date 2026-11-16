@@ -266,6 +266,9 @@ class Settings(StrictModel):
     allow_no_login: bool = False
     session_idle_s: Annotated[float, Field(gt=0)] = 12 * 3600     # 마지막 활동 후 이 시간이 지나면 다시 로그인
     session_max_s: Annotated[float, Field(gt=0)] = 7 * 24 * 3600  # 로그인 후 이 시간이 지나면 다시 로그인
+    # 방문자 안내 화면(/visitor)과 그 API. 로그인 없이 누구나 읽으므로 기본은 꺼짐.
+    # 켜면 로봇 이름·쉬운 상태·대략 위치(0.5 m 단위)만 내보내고 명령은 받지 않는다
+    visitor_enabled: bool = False
 
     @model_validator(mode="after")
     def ordered(self):

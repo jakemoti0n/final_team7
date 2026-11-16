@@ -11,6 +11,8 @@ services:
       ROBOT_TOKEN: ${ROBOT_TOKEN:?ROBOT_TOKEN을 .env에 넣으세요}
       MAP_YAML: ${MAP_YAML:-limbo/src/limbo_navigation/maps/human_test_map.yaml}
       INITIAL_WAYPOINTS: ${INITIAL_WAYPOINTS:-test_waypoints.yaml}
+      # 방문자 안내 화면(https://도메인/visitor). 로그인 없이 누구나 보므로 행사 때만 true
+      VISITOR_ENABLED: ${VISITOR_ENABLED:-false}
       # 첫 관리자. 사용자 DB(/data/users.db)에 계정이 하나도 없을 때만 쓴다 (첫 로그인 때 비밀번호 변경).
       # 계정이 생긴 뒤에는 무시되므로 첫 로그인 후 .env에서 ADMIN_PASSWORD 줄을 지워도 된다
       ADMIN_USERNAME: ${ADMIN_USERNAME:-}

@@ -8,6 +8,23 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-16 (78) 방문자 안내 화면(/visitor): 로그인 없이 휴대폰으로 LIMBO 위치 보기. 읽기 전용, 설정으로 켤 때만. Bridge 수정 없음
+
+**할 일**
+- 서버: `git pull` → `dashboard/`에서 `docker compose up -d --build`. **방문자 안내는 꺼진 채로 올라간다**(`VISITOR_ENABLED` 기본 `false`). `.env`는 그대로 써도 된다
+- 행사 때 켜기: `dashboard/.env`에 `VISITOR_ENABLED=true` → `docker compose up -d`. 확인은 `curl -s -o /dev/null -w "%{http_code}\n" https://<DOMAIN>/api/v1/visitor/state`가 `200`. 끝나면 `false`로 되돌리고 다시 `docker compose up -d`(`docs/AWS_DEPLOY.md` 7절 「방문자 안내 켜고 끄기」)
+- 로컬 개발(`dashboard/config.json`)은 켜 두었다: `http://127.0.0.1:8000/visitor`. 미리 보기는 `/visitor?demo`
+
+**변경**
+- 서버: `GET /visitor`, `GET /api/v1/visitor/state`, `GET /api/v1/visitor/map.png`. 로그인 없음, 설정 `visitor_enabled`가 꺼져 있으면 404 `visitor_disabled`. 내보내는 것은 로봇 이름, 쉬운 상태(순찰 중·잠시 멈춤·대기 중·상태 확인 중·연결 끊김), 0.5 m 단위 위치(방향 없음), 운행 대수, 기본 로봇의 지도 크기뿐. 1분 넘은 위치는 보내지 않는다. 방문자 요청은 운영자 화면의 알림·revision을 건드리지 않는다
+- 배포: `.env`의 `VISITOR_ENABLED`(true/false) → `docker-compose.yml` → `deploy/entrypoint.sh`가 설정에 끼운다. 다른 값이면 컨테이너가 시작하지 않는다
+- 화면(`ui/src/pages/VisitorPage.tsx`, `ui/src/features/visitor/`): 휴대폰 세로 화면 우선 한 열. 운행 대수, 지도(지금 위치 초록 점, 마지막 위치 회색 점선 원), 로봇 목록(상태 배지와 위치 문구). 3초마다 받고, 받지 못하면 모든 위치를 마지막 위치로·운행 대수는 「확인할 수 없습니다」로. 데모 `/visitor?demo`(가상 로봇 3대)
+- 시험: 서버 5개(꺼짐 404, 공개 필드만·반올림, 상태 판정·1분 넘은 위치 숨김, 다른 지도 로봇, 로그인 켠 서버에서도 운영자 API는 401), UI 단위 4개, e2e 3개(데모 390·1024 px, 실제 수신·수신 끊김·서버 꺼짐, 꺼진 서버 404). 서버 151, 단위 42, e2e 34 통과
+
+**원인과 근거**
+- Stitch 시안 `visitor_portal` 중 지금 있는 데이터로 만들 수 있는 부분만 만들었다. 적재량(센서 없음), 내 위치와 거리(실내 측위 없음), 수거 호출(로그인 없는 명령은 위험), 만족도·비콘 정밀도(근거 없는 숫자), 구역 이름(행사장 구역 정보 없음)은 넣지 않았다
+- 행사장 Wi-Fi(공인 IP)로 거르는 방식은 쓰지 않기로 했다. 대신 주소를 아는 누구나 볼 수 있다는 전제로 공개해도 되는 값만 내보내고, 기본은 꺼 두어 행사 때만 켠다
+
 ## 2026-11-15 (77) 관제 화면 디자인 개편 1단계(Stitch 시안): 사이드바와 페이지 3개(로봇 관제·플릿 현황·순찰 경로), 시안 색·글꼴·모서리. 서버·Bridge 수정 없음
 
 **할 일**

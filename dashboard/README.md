@@ -275,6 +275,24 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 
 지도에는 **같은 지도 파일을 쓰는 다른 로봇**도 회색 화살표와 이름으로 그린다(선택한 로봇은 빨간 화살표). 연결이 늦거나 위치가 오래되면 흐리게 그린다. 회색 화살표를 누르면(키보드는 Tab 후 Enter) 그 로봇으로 전환한다. 지점 편집 중에는 지도 클릭이 위치 선택이라 누를 수 없다. 다른 로봇의 위치는 1초마다 갱신된다(서버 주기 갱신). 지도가 다른 로봇은 좌표가 맞지 않아 그리지 않는다.
 
+## 방문자 안내 (/visitor)
+
+행사 방문객이 휴대폰으로 LIMBO 위치를 보는 **로그인 없는 읽기 전용** 화면이다. 설정 `visitor_enabled`가 `true`일 때만 열리고(기본 `false`), 꺼져 있으면 `/visitor`와 아래 API가 모두 404 `visitor_disabled`다. 로컬 개발 `config.json`은 켜 두었고, 클라우드는 `.env`의 `VISITOR_ENABLED=true`로 켠다([docs/AWS_DEPLOY.md](../docs/AWS_DEPLOY.md) 「방문자 안내 켜고 끄기」).
+
+- **주소를 아는 사람은 누구나 본다.** 접속 주소(IP)로 거르지 않으므로 공개해도 되는 것만 내보낸다: 로봇 이름, 쉬운 상태, 0.5 m 단위로 반올림한 위치(방향 없음). 경고·센서·명령·순찰 경로·다음 목표는 내보내지 않고 명령을 받는 경로도 없다. 행사 때만 켜고 끝나면 끈다
+- 상태: `patrolling` 순찰 중, `paused` 잠시 멈춤(순찰 노드 `pausing`·`paused`), `idle` 대기 중, `checking` 상태 확인 중(처음 확인 중·수신 지연), `offline` 연결 끊김. 운행 대수(`operating`)는 앞의 셋을 센다
+- 위치: 기본 로봇(`robot_id`)의 지도에 그린다. 지도가 다른 로봇은 위치 없이 이름·상태만. 오래된 위치(odom 지연 기준 이상·연결 불확실)는 회색 점선 원과 「마지막 위치 · n초 전」, **1분이 넘은 위치는 보내지 않는다**(방문객을 엉뚱한 곳으로 보내지 않게)
+- 화면은 3초마다 받는다. 받지 못하면 「정보를 새로 받을 수 없습니다」와 함께 모든 위치를 마지막 위치로, 운행 대수는 「확인할 수 없습니다」로 바꾼다. 서버가 꺼지면(404) 「지금은 안내를 하지 않습니다」
+- 방문자 요청은 운영자 화면의 알림·revision을 바꾸지 않는다
+- 데모: `/visitor?demo`(서버를 부르지 않는 가상 로봇 3대). 서버 설정과 관계없이 열린다
+- 넣지 않은 것: 적재량(센서 없음), 내 위치·거리(실내 측위 없음), 수거 호출(로그인 없는 명령은 위험), 만족도 같은 근거 없는 숫자, 행사장 구역 이름
+
+| 경로 | 역할 |
+|---|---|
+| `GET /visitor` | 방문자 화면(`ui/dist/index.html`) |
+| `GET /api/v1/visitor/state` | `{"server_utc", "operating", "robots": [{"robot_id", "status", "position": {"x","y","stale","age_s"} \| null}], "map": {"resolution","origin","width","height","image"} \| null}`. `Cache-Control: no-store` |
+| `GET /api/v1/visitor/map.png` | 기본 로봇 지도 PNG |
+
 ## 인터페이스와 구조
 
 | 경로 | 역할 |

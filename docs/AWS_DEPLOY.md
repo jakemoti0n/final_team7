@@ -129,6 +129,7 @@ nano .env
 | `ADMIN_PASSWORD` | 첫 관리자의 **임시** 비밀번호(5자 이상). 첫 로그인 때 새 비밀번호로 바꾸게 된다. **작은따옴표로 감싸** 넣는다(`$` 같은 글자가 바뀌지 않게) |
 | `ROBOT_TOKEN` | 로봇용 토큰. 아래 명령으로 만든다. **로봇 쪽에도 같은 값** |
 | `MAP_YAML`, `INITIAL_WAYPOINTS` | 지도와 처음 waypoint 파일. 서로 맞는 짝으로(`.env.example` 주석) |
+| `VISITOR_ENABLED` | 방문자 안내 화면(`/visitor`). 평소 `false`, 행사 때만 `true` (아래 「방문자 안내 켜고 끄기」) |
 
 ```bash
 # 로봇 토큰
@@ -146,9 +147,25 @@ ADMIN_PASSWORD='temp-1234'
 ROBOT_TOKEN=qH3v...43자쯤...
 MAP_YAML=limbo/src/limbo_navigation/maps/aischool_2f_map.yaml
 INITIAL_WAYPOINTS=aischool_waypoints.yaml
+VISITOR_ENABLED=false
 ```
 
 > **sslip.io란**: `13-125-10-20.sslip.io` 같은 이름을 물으면 그 안의 IP(13.125.10.20)를 그대로 돌려주는 공개 DNS다. 도메인을 사지 않아도 이름이 생겨서 Let's Encrypt 인증서를 받을 수 있다. 시험·과제용으로 충분하다. 오래 쓸 서비스면 도메인을 사서 쓴다.
+
+### 방문자 안내 켜고 끄기
+
+방문자 안내(`https://<DOMAIN>/visitor`)는 **로그인 없이 주소를 아는 누구나** 볼 수 있다. 보이는 것은 로봇 이름·상태·대략 위치(0.5 m 단위)뿐이고 로봇에 명령을 보낼 수는 없다. 그래도 행사 때만 켠다.
+
+```bash
+cd ~/limbo/dashboard
+nano .env                      # VISITOR_ENABLED=true (끌 때는 false)
+docker compose up -d           # 바뀐 환경 변수로 dashboard 컨테이너만 다시 만든다 (계정·waypoint 볼륨 그대로)
+curl -s -o /dev/null -w "%{http_code}\n" https://<DOMAIN>/api/v1/visitor/state   # 켜졌으면 200, 꺼졌으면 404
+```
+
+- 값은 `true`·`false`만. 다른 값이면 dashboard가 시작하지 않고 로그에 `VISITOR_ENABLED must be true or false`
+- 행사장에서는 `https://<DOMAIN>/visitor` 주소를 QR 코드로 붙여 두면 된다. 휴대폰 화면에 맞춰 만들었다
+- 미리 보기: `https://<DOMAIN>/visitor?demo`는 꺼져 있어도 가상 로봇으로 열린다
 
 ## 8. 실행
 
