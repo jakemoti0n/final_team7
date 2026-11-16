@@ -22,6 +22,7 @@ test('visitor demo on a phone and a tablet', async ({ page }) => {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 })
     await page.goto('/visitor?demo')
     await expect(page.getByRole('heading', { name: 'LIMBO 실시간 안내' })).toBeVisible()
+    await expect(page).toHaveTitle('LIMBO 실시간 안내')
     await expect(page.getByTestId('visitor-count')).toHaveText('LIMBO 2대 운행 중')
     const robots = page.getByTestId('visitor-robot')
     await expect(robots).toHaveCount(3)

@@ -17,7 +17,10 @@ function initialRobot() {
 /** 로그인 확인 후 관제 화면. 데모(/demo)는 서버를 쓰지 않으므로 로그인 없이 바로 연다.
  *  방문자 안내(/visitor)는 로그인 없이 읽기 전용 (?demo면 가상 데이터) */
 export default function App() {
-  if (location.pathname === '/visitor') return <VisitorPage demo={new URLSearchParams(location.search).has('demo')} />
+  if (location.pathname === '/visitor') {
+    document.title = 'LIMBO 실시간 안내'   // 방문객 휴대폰 탭·북마크에 보이는 이름 (index.html 기본값은 운영자용 'LIMBO 관제')
+    return <VisitorPage demo={new URLSearchParams(location.search).has('demo')} />
+  }
   if (location.pathname === '/demo') return <RobotApp account={null} onAuth={() => {}} />
   return <AuthGate />
 }
