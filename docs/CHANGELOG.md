@@ -8,6 +8,21 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-19 (84) 방문자 화면: iPhone에서 「마지막으로 확인한 위치」 점선 원이 반쪽만 보이던 것 고침. Bridge 수정 없음
+
+**할 일**
+- 서버: `git pull` → `dashboard/`에서 `docker compose up -d --build`
+
+**변경**
+- 화면(`VisitorPage.tsx`, `style.css`): 범례의 점선 원을 CSS `border: dashed` + `border-radius:50%`에서 작은 SVG 원으로
+- 화면(`visitor.ts`의 `dashedCircle`, `VisitorMap.tsx`, `GuideVisitorMap.tsx`): 지도 위 점선 원의 점선 길이를 원 둘레를 n칸으로 똑같이 나눠 정한다(이음매에서 점이 붙거나 잘리지 않게)
+- 시험: UI 단위 1개 추가(둘레를 똑같이 나눔). 방문자 UI 단위 7, 방문자 e2e 4 통과(Chrome)
+
+**원인과 근거**
+- iOS Safari(WebKit)는 둥근 테두리의 점선을 제대로 그리지 못한다. 15 px 원은 테두리 전체가 둥근 모서리라 반쪽만 그려졌다
+- `pathLength`는 옛 Safari가 원에서 무시하므로 쓰지 않고 실제 길이로 계산했다
+- WebKit이 없어 iPhone에서는 아직 확인하지 못했다
+
 ## 2026-11-19 (83) 방문자 화면에 안내 약도: 가운데에 그린 약도(또는 그림)와 LIMBO 위치, 왼쪽 아래 작은 창에 실제 지도. Bridge 수정 없음
 
 **할 일**

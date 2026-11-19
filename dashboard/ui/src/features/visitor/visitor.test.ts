@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { demoVisitorState, operatingText, parseVisitorState, positionAge } from './visitor'
+import { dashedCircle, demoVisitorState, operatingText, parseVisitorState, positionAge } from './visitor'
 
 const good = {
   server_utc: '2026-11-16T00:00:00Z', operating: 1,
@@ -60,4 +60,12 @@ it('visitor guide is drawn with the editor drawing (no control points)', () => {
   const g = asGuide({ ...demoVisitorGuide(), image: { file: 'image-0123456789abcdef.png', width: 10, height: 10, transform: [1, 0, 0, 0, -1, 0], show_areas: true, url: '/x' } })
   expect(g.image).toEqual({ file: 'image-0123456789abcdef.png', width: 10, height: 10, transform: [1, 0, 0, 0, -1, 0], points: [], show_areas: true })
   expect(g.areas.length).toBe(4)
+})
+
+describe('dashedCircle', () => {
+  it('splits the circumference into n equal dash+gap steps', () => {
+    const [dash, gap] = dashedCircle(5, 8).split(' ').map(Number)
+    expect((dash + gap) * 8).toBeCloseTo(2 * Math.PI * 5, 2)
+    expect(dash).toBeGreaterThan(gap)
+  })
 })

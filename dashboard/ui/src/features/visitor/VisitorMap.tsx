@@ -1,5 +1,5 @@
 import { toPixel } from '../../map'
-import { mapInfo, visitorStatus, type VisitorMap as MapData, type VisitorRobot } from './visitor'
+import { dashedCircle, mapInfo, visitorStatus, type VisitorMap as MapData, type VisitorRobot } from './visitor'
 
 /**
  * 방문자 지도: 행사장 지도 위에 LIMBO 위치만 큰 점으로. 방향·순찰 경로·목표 지점은 그리지 않는다.
@@ -22,7 +22,7 @@ export function VisitorMap({ map, robots, stale, fit = true }: { map: MapData; r
       const [x, y] = toPixel(info, r.position!.x, r.position!.y)
       return <g key={r.robot_id} data-testid="visitor-marker" data-robot={r.robot_id} className={`visitor-marker ${old(r) ? 'stale' : ''}`} transform={`translate(${x} ${y})`}>
         {!old(r) && <circle r={unit * 5.5} className="halo" />}
-        <circle r={unit * 3} className="dot" strokeWidth={unit * .6} strokeDasharray={old(r) ? `${unit * 1.2} ${unit * .9}` : undefined} />
+        <circle r={unit * 3} className="dot" strokeWidth={unit * .6} strokeDasharray={old(r) ? dashedCircle(unit * 3, 9) : undefined} />
         <text y={-unit * 4.6} fontSize={unit * 3.6} textAnchor="middle" strokeWidth={unit * .9}>{r.robot_id}</text>
       </g>
     })}

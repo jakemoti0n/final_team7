@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { GuideDrawing } from '../guide/GuideDrawing'
 import { contentBox, inside, svgY, viewBoxAround, viewBoxOf } from '../guide/guide'
 import { VisitorMap } from './VisitorMap'
-import { asGuide, visitorStatus, type VisitorGuide, type VisitorMap as MapData, type VisitorRobot } from './visitor'
+import { asGuide, dashedCircle, visitorStatus, type VisitorGuide, type VisitorMap as MapData, type VisitorRobot } from './visitor'
 
 /**
  * 방문자 화면의 메인 지도: 관제 화면에서 그린 안내 약도(구역·이름 또는 그림) 위에 LIMBO 위치.
@@ -32,7 +32,7 @@ export function GuideVisitorMap({ guide, map, robots, stale }: { guide: VisitorG
           return <g key={r.robot_id} data-testid="visitor-marker" data-robot={r.robot_id} className={`visitor-marker ${old(r) ? 'stale' : ''}`} transform={`translate(${x} ${y})`}>
             {/* 약도에는 이름표가 있으므로 실제 지도 화면보다 조금 작게 */}
             {!old(r) && <circle r={unit * 4} className="halo" />}
-            <circle r={unit * 2.3} className="dot" strokeWidth={unit * .5} strokeDasharray={old(r) ? `${unit * 1} ${unit * .8}` : undefined} />
+            <circle r={unit * 2.3} className="dot" strokeWidth={unit * .5} strokeDasharray={old(r) ? dashedCircle(unit * 2.3, 8) : undefined} />
             <text y={-unit * 3.6} fontSize={unit * 3.2} textAnchor="middle" strokeWidth={unit * .8}>{r.robot_id}</text>
           </g>
         })}

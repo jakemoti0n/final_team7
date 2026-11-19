@@ -69,6 +69,15 @@ export function mapInfo(map: VisitorMap): MapInfo {
   return { ...map, waypoints: [] }
 }
 
+/**
+ * 점선 원(마지막으로 확인한 위치)의 stroke-dasharray. 둘레를 n칸으로 똑같이 나눠 이음매에서 점이 붙거나 잘리지 않게 한다.
+ * pathLength는 옛 Safari가 원에서 무시하므로 쓰지 않고 실제 길이로 계산한다.
+ */
+export function dashedCircle(r: number, n = 10) {
+  const step = 2 * Math.PI * r / n
+  return `${+(step * .55).toFixed(4)} ${+(step * .45).toFixed(4)}`
+}
+
 /** 위치를 받은 뒤 지난 시간(초): 서버가 알려 준 나이 + 받은 뒤 화면에서 지난 시간 */
 export function positionAge(position: VisitorPosition, sinceReceived: number) {
   return position.age_s === null ? null : position.age_s + Math.max(0, sinceReceived)
