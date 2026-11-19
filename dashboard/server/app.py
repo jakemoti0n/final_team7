@@ -18,7 +18,7 @@ from pydantic import ValidationError
 
 from . import mapdata
 from .waypoints import WaypointFile, WaypointError
-from .guide import GuideFile, GuideError, MAX_BYTES as GUIDE_MAX_BYTES
+from .guide import GuideFile, GuideError, MAX_BYTES as GUIDE_MAX_BYTES, MAX_IMAGE_BYTES, IMAGE_TYPES
 from .models import CommandClaim, CommandRequest, CommandResult, Settings, Telemetry, uuid_string
 from .state import Store, FINAL
 from .users import UserError, UserStore, token_hash
@@ -544,6 +544,49 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
         guide = document["guide"]
         audit.info("guide saved by %s (%d areas, %d markers)", who(user), len(guide["areas"]), len(guide["markers"]))
         return document
+
+    @app.put("/api/v1/guide/image")
+    async def upload_guide_image(request: Request):
+        """약도 그림 올리기 (본문은 그림 그대로). 약도를 저장해야 쓰인다"""
+        user, denied = require_user(request)
+        if denied:
+            return denied
+        if guide_file is None:
+            return guide_missing()
+        if request.headers.get("content-type", "").split(";")[0].strip().lower() not in IMAGE_TYPES.values():
+            return error(415, "unsupported_media_type", "Upload a PNG, JPEG or WebP image")
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > MAX_IMAGE_BYTES:
+                return error(413, "image_too_large", f"Image must be at most {MAX_IMAGE_BYTES // (1024 * 1024)} MB")
+            body.extend(chunk)
+        try:
+            info = guide_file.save_image(bytes(body))
+        except GuideError as exc:
+            return error(413 if exc.code == "image_too_large" else 422, exc.code, str(exc))
+        except OSError as exc:
+            logging.error("guide image not saved: %s", exc)
+            return error(503, "guide_unavailable", "Image cannot be saved")
+        audit.info("guide image %s uploaded by %s", info["file"], who(user))
+        return JSONResponse(info, status_code=201)
+
+    def guide_image_response(name):
+        found = guide_file.image(name) if guide_file is not None else None
+        if found is None:
+            return error(404, "image_not_found", "No such guide image")
+        data, media = found
+        # 이름이 내용의 해시라 바뀌지 않는다. 그림을 문서로 열어도 스크립트가 돌지 않게 막는다
+        return Response(data, media_type=media, headers={
+            "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'"})
+
+    @app.get("/api/v1/guide/image/{name}")
+    async def guide_image(request: Request, name: str):
+        if (denied := require_user(request)[1]):
+            return denied
+        if guide_file is None:
+            return guide_missing()
+        return guide_image_response(name)
 
     @app.get("/api/v1/guide/file")
     async def download_guide(request: Request):

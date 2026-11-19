@@ -118,9 +118,8 @@ def test_bad_payloads(rig):
     guide = client.get('/api/v1/guide').json()['guide']
     # 서버의 JSON 해석은 Infinity·NaN 글자를 받아들이므로 좌표 검사에서 걸러야 한다
     import json
-    guide_text = json.dumps(guide)[:-len(']}')] + ', {"name": "x", "category": "other", "x": Infinity, "y": 0}]}'
-    assert guide_text.count('"markers": [, ') == 1
-    guide_text = guide_text.replace('"markers": [, ', '"markers": [')
+    marked = {**guide, 'markers': [{'name': 'x', 'category': 'other', 'x': '__INF__', 'y': 0}]}
+    guide_text = json.dumps(marked).replace('"__INF__"', 'Infinity')
     body = '{"revision": "", "guide": ' + guide_text + '}'
     response = client.put('/api/v1/guide', content=body.encode(), headers={'content-type': 'application/json'})
     assert response.status_code == 422 and response.json()['error']['code'] == 'invalid_guide'
@@ -176,3 +175,121 @@ def test_project_config_points_to_a_writable_guide_folder():
     root = Path(__file__).resolve().parents[1]
     assert json.loads((root / 'config.json').read_text())['guide_yaml'].startswith('dashboard/guides/')
     assert json.loads((root / 'deploy' / 'config.json').read_text())['guide_yaml'] == '/data/guide.yaml'
+
+
+# ---- 약도 그림 (메인 약도를 그림 파일로) ----
+
+import os
+import struct as _struct
+import time
+
+from server import mapdata
+
+
+def png(width=40, height=30):
+    return mapdata.png_gray(width, height, bytes(width * height))
+
+
+def jpeg(width=64, height=48):
+    app0 = b'\xff\xe0' + _struct.pack('>H', 16) + b'JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00'
+    sof = b'\xff\xc0' + _struct.pack('>HBHHB', 11, 8, height, width, 1) + b'\x01\x11\x00'
+    return b'\xff\xd8' + app0 + sof + b'\xff\xd9'
+
+
+def webp_vp8x(width=300, height=200):
+    body = b'VP8X' + _struct.pack('<I', 10) + b'\x00\x00\x00\x00' + (width - 1).to_bytes(3, 'little') + (height - 1).to_bytes(3, 'little')
+    return b'RIFF' + _struct.pack('<I', 4 + len(body)) + b'WEBP' + body
+
+
+def webp_lossless(width=17, height=9):
+    bits = (width - 1) | ((height - 1) << 14)
+    body = b'VP8L' + _struct.pack('<I', 5) + b'\x2f' + bits.to_bytes(4, 'little')
+    return b'RIFF' + _struct.pack('<I', 4 + len(body)) + b'WEBP' + body
+
+
+def upload(client, data, kind='image/png'):
+    return client.put('/api/v1/guide/image', content=data, headers={'content-type': kind})
+
+
+def placed(info, transform=None):
+    """그리기 영역(-10..20) 안에 0.1 m/px로 놓은 그림"""
+    return {'file': info['file'], 'width': info['width'], 'height': info['height'],
+            'transform': transform or [0.1, 0, -5, 0, -0.1, 15], 'points': [], 'show_areas': False}
+
+
+@pytest.mark.parametrize('maker,kind,ext,size', [
+    (png, 'image/png', 'png', (40, 30)), (jpeg, 'image/jpeg', 'jpg', (64, 48)),
+    (webp_vp8x, 'image/webp', 'webp', (300, 200)), (webp_lossless, 'image/webp', 'webp', (17, 9))])
+def test_upload_reads_type_and_size(rig, maker, kind, ext, size):
+    client, path = rig
+    data = maker()
+    response = upload(client, data, kind)
+    assert response.status_code == 201, response.json()
+    info = response.json()
+    assert info['file'] == f"image-{hashlib.sha256(data).hexdigest()[:16]}.{ext}" and (info['width'], info['height']) == size
+    assert (path.parent / 'map_guide_files' / info['file']).read_bytes() == data
+    served = client.get(f"/api/v1/guide/image/{info['file']}")
+    assert served.content == data and served.headers['content-type'] == kind
+    assert served.headers['x-content-type-options'] == 'nosniff' and "default-src 'none'" in served.headers['content-security-policy']
+
+
+def test_upload_rejects_other_files(rig):
+    client, _ = rig
+    assert upload(client, b'<svg xmlns="http://www.w3.org/2000/svg"/>', 'image/svg+xml').status_code == 415
+    bad = upload(client, b'GIF89a' + bytes(20), 'image/png')
+    assert bad.status_code == 422 and bad.json()['error']['code'] == 'invalid_image'
+    assert upload(client, png()[:20], 'image/png').status_code == 422                       # 잘린 PNG
+    huge = upload(client, png() + bytes(guide_module.MAX_IMAGE_BYTES), 'image/png')
+    assert huge.status_code == 413
+    assert client.get('/api/v1/guide/image/image-0000000000000000.png').status_code == 404
+    assert client.get('/api/v1/guide/image/..%2Fmap.yaml').status_code == 404
+
+
+def test_guide_with_image_saves_and_checks_it(rig):
+    client, path = rig
+    info = upload(client, png()).json()
+    guide = client.get('/api/v1/guide').json()['guide']
+    assert guide['image'] is None
+    guide['image'] = placed(info)
+    guide['image']['points'] = [{'image': [0, 0], 'map': [-5, 15]}]
+    saved = client.put('/api/v1/guide', json={'revision': '', 'guide': guide})
+    assert saved.status_code == 200, saved.json()
+    image = saved.json()['guide']['image']
+    assert image['transform'] == [0.1, 0, -5, 0, -0.1, 15] and image['points'][0]['map'] == [-5, 15]
+    assert yaml.safe_load(path.read_text(encoding='utf-8'))['image']['file'] == info['file']
+    revision = saved.json()['revision']
+    for change, reason in [
+        (dict(transform=[0.1, 0, -5, 0, -0.1, 50]), 'inside bounds'),        # 영역 밖
+        (dict(transform=[0.1, 0.1, 0, 0.1, 0.1, 0]), 'flatten'),            # 납작한 변환
+        (dict(transform=[0.1, 0, 0, 0, -0.1]), '6 numbers'),
+        (dict(file='../map.yaml'), 'upload'),
+        (dict(file='image-ffffffffffffffff.png'), 'missing'),                # 올리지 않은 그림
+        (dict(width=0), 'width'),
+        (dict(show_areas='yes'), 'show_areas'),
+    ]:
+        broken = {**guide, 'image': {**guide['image'], **change}}
+        response = client.put('/api/v1/guide', json={'revision': revision, 'guide': broken})
+        assert response.status_code == 422 and reason in response.json()['error']['message'], (change, response.json())
+
+
+def test_old_guide_files_without_image_still_load(rig):
+    client, path = rig
+    path.parent.mkdir()
+    path.write_text('version: 1\nmap: map.yaml\nbounds: {x_min: 0, y_min: 0, x_max: 10, y_max: 10}\n'
+                    'categories: [{key: other, label: 기타, color: "#FFFFFF", icon: none}]\nareas: []\nmarkers: []\n')
+    assert client.get('/api/v1/guide').json()['guide']['image'] is None
+
+
+def test_unused_images_are_pruned_after_an_hour(rig):
+    client, path = rig
+    old = upload(client, png(10, 10)).json()['file']
+    fresh = upload(client, png(11, 11)).json()['file']
+    used = upload(client, png(12, 12)).json()
+    files = path.parent / 'map_guide_files'
+    hour_ago = time.time() - 7200
+    for name in (old, used['file']):
+        os.utime(files / name, (hour_ago, hour_ago))
+    guide = client.get('/api/v1/guide').json()['guide']
+    guide['image'] = placed(used)
+    assert client.put('/api/v1/guide', json={'revision': '', 'guide': guide}).status_code == 200
+    assert sorted(p.name for p in files.iterdir()) == sorted([fresh, used['file']])   # 쓰는 것·막 올린 것은 남음

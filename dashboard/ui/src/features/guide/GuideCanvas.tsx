@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { MapInfo, Waypoint } from '../../map'
-import { GuideDrawing } from './GuideDrawing'
+import { GuideDrawing, GuideImageLayer, type PlacedImage } from './GuideDrawing'
 import {
   bbox, clampPoint, contentBox, FINE_SNAP_M, inside, rectangle, simplePolygon, snapPoint, svgY, viewBoxAround, viewBoxOf, nextName,
   type Bounds, type Guide, type Point,
 } from './guide'
 
-export type Tool = 'select' | 'rect' | 'polygon' | 'marker'
+export type Tool = 'select' | 'rect' | 'polygon' | 'marker' | 'pick'   // pick: 기준점 맞추기에서 지도 위 점 고르기
 export type Selection = { kind: 'area' | 'marker'; index: number } | null
 export type Background = 'sketch' | 'original' | 'none'
 
 type Gesture =
-  | { kind: 'pan'; startX: number; startY: number; box: number[] }
+  | { kind: 'pan'; startX: number; startY: number; box: number[]; pick?: Point; moved?: boolean }
   | { kind: 'move-area'; index: number; start: Point; before: Guide; last: Point }
   | { kind: 'move-marker'; index: number; before: Guide }
   | { kind: 'vertex'; index: number; vertex: number; before: Guide }
@@ -22,8 +22,12 @@ type Gesture =
  * 선택 도구: 구역·표시점을 누르면 고르고, 끌면 옮긴다. 꼭짓점(●)을 끌면 모양을, 변 가운데(○)를 끌면 꼭짓점을 더한다.
  * 빈 곳을 끌면 화면 이동, 휠은 확대·축소. 좌표는 0.25 m 격자에 맞추고 Alt를 누르면 5 cm.
  */
-export function GuideCanvas({ guide, map, background, opacity, showWaypoints, previewMode, tool, category, selection, onSelect, apply, preview, commit, onMessage }: {
+export function GuideCanvas({ guide, map, background, opacity, showWaypoints, previewMode, tool, category, selection, onSelect, apply, preview, commit, onMessage, image, overlay, picks, onPick }: {
   guide: Guide; map: MapInfo | null; background: Background; opacity: number; showWaypoints: boolean; previewMode: boolean
+  image?: PlacedImage | null          // 그림 약도 (구역 아래)
+  overlay?: PlacedImage | null        // 기준점 맞추는 중: 지금 계산한 변환으로 겹쳐 보기
+  picks?: { point: Point; label: string; done: boolean }[]   // 기준점 맞추기에서 찍은 지도 점
+  onPick?: (point: Point) => void
   tool: Tool; category: string; selection: Selection; onSelect: (s: Selection) => void
   apply: (next: Guide | ((g: Guide) => Guide)) => void; preview: (g: Guide) => void; commit: (before: Guide) => void; onMessage: (m: string) => void
 }) {
@@ -76,6 +80,12 @@ export function GuideCanvas({ guide, map, background, opacity, showWaypoints, pr
     // 입력 칸에 있던 초점을 뺀다: 고치던 이름이 저장되고(onBlur), Enter·Delete가 그리기 판으로 간다
     if (document.activeElement instanceof HTMLElement && document.activeElement.closest('input, select, textarea')) document.activeElement.blur()
     const svg = svgRef.current!
+    if (tool === 'pick') {
+      // 짧게 누르면 점 고르기, 끌면 화면 이동
+      svgRef.current!.setPointerCapture(event.pointerId)
+      setGesture({ kind: 'pan', startX: event.clientX, startY: event.clientY, box, pick: toMeters(event, false) })
+      return
+    }
     const point = toMeters(event)
     const hit = hitOf(event.target)
     if (tool === 'rect') { svg.setPointerCapture(event.pointerId); setGesture({ kind: 'rect', start: point, end: point }); return }
@@ -111,6 +121,7 @@ export function GuideCanvas({ guide, map, background, opacity, showWaypoints, pr
 
   const onPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (tool === 'polygon' || tool === 'rect' || tool === 'marker') setHover(toMeters(event))
+    if (tool === 'pick') setHover(toMeters(event, false))
     if (!gesture) return
     const point = toMeters(event)
     if (gesture.kind === 'pan') {
@@ -118,6 +129,7 @@ export function GuideCanvas({ guide, map, background, opacity, showWaypoints, pr
       const [w, h] = [gesture.box[2], gesture.box[3]]
       // 화면 비율 때문에 보이는 폭이 viewBox보다 넓을 수 있으므로 큰 쪽 비율로 옮긴다
       const s = Math.max(scale, h / svg.clientHeight)
+      if (!gesture.moved && Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) > 4) setGesture({ ...gesture, moved: true })
       setBox([gesture.box[0] - (event.clientX - gesture.startX) * s, gesture.box[1] - (event.clientY - gesture.startY) * s, w, h])
     } else if (gesture.kind === 'rect') {
       setGesture({ ...gesture, end: point })
@@ -140,6 +152,7 @@ export function GuideCanvas({ guide, map, background, opacity, showWaypoints, pr
 
   const onPointerUp = () => {
     if (!gesture) return
+    if (gesture.kind === 'pan' && gesture.pick && !gesture.moved) onPick?.(gesture.pick)
     if (gesture.kind === 'rect') {
       const [a, b] = [gesture.start, gesture.end]
       if (Math.abs(a[0] - b[0]) >= 0.25 && Math.abs(a[1] - b[1]) >= 0.25) {
@@ -223,7 +236,12 @@ export function GuideCanvas({ guide, map, background, opacity, showWaypoints, pr
       {map && !previewMode && <MapLayer map={map} href={mapHref} opacity={opacity} />}
       {!previewMode && <path d={grid.join('')} className="guide-grid" vectorEffect="non-scaling-stroke" />}
       {map && !previewMode && <rect className="guide-map-extent" x={map.origin[0]} y={svgY(map.origin[1] + map.height * map.resolution)} width={map.width * map.resolution} height={map.height * map.resolution} vectorEffect="non-scaling-stroke" />}
-      <GuideDrawing guide={guide} selected={previewMode ? null : selection} />
+      <GuideDrawing guide={guide} selected={previewMode ? null : selection} image={image}
+        showAreas={!previewMode || !guide.image || guide.image.show_areas} />
+      {overlay && <GuideImageLayer image={overlay} />}
+      {picks?.map((p, i) => <g key={i} className={`guide-pick ${p.done ? 'done' : ''}`} pointerEvents="none" data-testid="guide-pick-map">
+        <circle cx={p.point[0]} cy={svgY(p.point[1])} r={unit * 1.1} vectorEffect="non-scaling-stroke" />
+        <text x={p.point[0] + unit * 1.4} y={svgY(p.point[1]) - unit * 1.2} fontSize={unit * 2.4}>{p.label}</text></g>)}
       {showWaypoints && !previewMode && map?.waypoints.map(w => <WaypointMark key={w.name} w={w} unit={unit} />)}
       {selectedArea && <g className="guide-handles">
         {selectedArea.polygon.map(([x, y], i) => {

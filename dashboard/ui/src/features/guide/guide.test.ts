@@ -97,3 +97,63 @@ it('content box covers areas and markers', () => {
   expect(contentBox(sample())).toEqual({ x_min: 0, y_min: 0, x_max: 33.9, y_max: 3 })
   expect(contentBox(emptyGuide(map, null))).toBeNull()
 })
+
+// ---- 그림 약도 ----
+import { addPick, completePairs } from './Calibration'
+import { placeImage } from './MainImage'
+import { applyTransform, boundsCovering, fitTransform, imageCorners, matchTemplate, svgMatrix, templateSize, templateTransform, type Transform } from './guide'
+
+it('template: 1 m = ppm px from the top-left of the drawing area', () => {
+  const b = { x_min: -20, y_min: -20, x_max: 34, y_max: 28 }
+  expect(templateSize(b, 20)).toEqual([1080, 960])
+  const t = templateTransform(b, 20)
+  expect(applyTransform(t, [0, 0])).toEqual([-20, 28])
+  expect(applyTransform(t, [1080, 960])).toEqual([34, -20])
+  expect(matchTemplate(b, 1080, 960)).toBe(20); expect(matchTemplate(b, 2161, 1920)).toBe(40); expect(matchTemplate(b, 900, 1230)).toBeNull()
+})
+
+it('fits rotation + scale + shift exactly from 3 or more points, and reports error', () => {
+  // 90° 돌리고 1/60로 줄이고 옮긴 그림 (실제 지도로 만든 시험 그림과 같은 변환)
+  const truth: Transform = [0, -1 / 60, 18, -1 / 60, 0, 10.5]
+  const pairs = [[90, 1080], [120, 120], [810, 150], [840, 990]].map(p => ({ image: p as [number, number], map: applyTransform(truth, p as [number, number]) }))
+  const fit = fitTransform(pairs)!
+  fit.transform.forEach((v, i) => expect(v).toBeCloseTo(truth[i], 9))
+  expect(fit.rms).toBeLessThan(1e-9)
+  const noisy = pairs.map((p, i) => i === 0 ? { ...p, map: [p.map[0] + 0.4, p.map[1]] as [number, number] } : p)
+  const rough = fitTransform(noisy)!
+  // 점이 4개뿐이면 한 점의 오차가 여러 점에 나뉘어 보이므로, 평균 어긋남이 생기는 것만 본다
+  expect(rough.rms).toBeGreaterThan(0.05); expect(rough.rms).toBeLessThan(0.4)
+  expect(fitTransform(pairs.slice(0, 2))).toBeNull()
+  expect(fitTransform([{ image: [0, 0], map: [0, 0] }, { image: [1, 1], map: [1, 1] }, { image: [2, 2], map: [2, 2] }])).toBeNull()   // 한 줄
+})
+
+it('svg matrix places image pixels at map metres with y flipped', () => {
+  const t: Transform = [0.1, 0, -5, 0, -0.1, 15]
+  expect(svgMatrix(t)).toBe('matrix(0.1 0 0 0.1 -5 -15)')
+  expect(imageCorners({ transform: t, width: 100, height: 50 })).toEqual([[-5, 15], [5, 15], [5, 10], [-5, 10]])
+})
+
+it('bounds widen to cover an image placed outside, with a 1 m margin', () => {
+  const b = { x_min: 0, y_min: 0, x_max: 10, y_max: 10 }
+  expect(boundsCovering(b, [[2, 2], [8, 8]])).toEqual(b)
+  expect(boundsCovering(b, [[-3.2, 2], [12.5, 11]])).toEqual({ x_min: -5, y_min: 0, x_max: 14, y_max: 12 })
+  const g = { ...emptyGuide(map, 'm.yaml'), bounds: b }
+  const placed = placeImage(g, { file: 'image-0000000000000000.png', width: 100, height: 100 }, [], [0.2, 0, -5, 0, -0.2, 20])
+  expect(placed.widened).toBe(true)
+  expect(guideProblems(placed.guide)).toEqual([])
+})
+
+it('control point pairs fill the first open slot on either side', () => {
+  let pairs = addPick([], 'image', [1, 1])
+  pairs = addPick(pairs, 'image', [2, 2])                 // 그림 점 둘 먼저
+  pairs = addPick(pairs, 'map', [10, 10])                 // 첫 짝에 지도 점
+  expect(pairs).toEqual([{ image: [1, 1], map: [10, 10] }, { image: [2, 2] }])
+  expect(completePairs(pairs)).toEqual([{ image: [1, 1], map: [10, 10] }])
+  expect(addPick(pairs, 'map', [20, 20])[1]).toEqual({ image: [2, 2], map: [20, 20] })
+})
+
+it('an image outside the drawing area is a problem before saving', () => {
+  const g = emptyGuide(map, 'm.yaml')
+  g.image = { file: 'image-0000000000000000.png', width: 100, height: 100, transform: [1, 0, 0, 0, -1, 0], points: [], show_areas: false }
+  expect(guideProblems(g).some(p => p.includes('그림'))).toBe(true)
+})

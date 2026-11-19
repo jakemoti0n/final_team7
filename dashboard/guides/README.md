@@ -7,4 +7,7 @@
 - 클라우드(Docker): 서버는 볼륨의 `/data/guide.yaml`에 저장한다. 이 폴더의 파일은 이미지에 기본값으로 들어가며,
   `.env`의 `INITIAL_GUIDE`로 고르면 처음 시작 때만 복사된다. 클라우드에서 고친 약도는 편집 화면의 **내려받기**로 받아 여기 커밋한다
 
+약도를 그림 파일로 쓰면 그림은 `<약도 이름>_files/`(예: `human_test_map_guide_files/`)에 저장된다. 커밋할 때 이 폴더도 같이 올린다.
+클라우드에서는 그림이 `/data/guide_files/`에 있으므로 `docker compose cp dashboard:/data/guide_files ./`로 받는다.
+
 형식은 `dashboard/server/guide.py` 맨 위 설명을 본다.

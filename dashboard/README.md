@@ -4,7 +4,7 @@ FastAPI 수신·관제 서버와 React/TypeScript 관제 화면(LIMBO 관제). �
 
 
 - `/`: 실제 수신 화면. 순찰 상태에 따라 주행 시작·정지·재개가 한 버튼에 나타나며 waypoint 편집을 지원한다.
-- `/?page=guide`: **약도 편집**. 방문자 화면에 보일 구역(강의실·행사장·화장실·입구 등)과 이름을 기본 로봇의 지도 좌표 위에 그려 `guide_yaml`에 저장한다. 사각형·다각형·표시점, 구역 종류(색·이름·아이콘) 추가, 되돌리기, 방문자 미리보기. 순찰 중에도 편집할 수 있다(`docs/CONTROL_SCREEN.md` E)
+- `/?page=guide`: **약도 편집**. 방문자 화면에 보일 구역(강의실·행사장·화장실·입구 등)과 이름을 기본 로봇의 지도 좌표 위에 그려 `guide_yaml`에 저장한다. 사각형·다각형·표시점, 구역 종류(색·이름·아이콘) 추가, 되돌리기, 방문자 미리보기. 메인 약도를 **그림 파일**(PNG·JPG·WebP)로 바꿀 수 있다: 틀을 내려받아 그 위에 그린 그림은 크기로, 이미 있는 안내도는 기준점 3쌍 이상으로 지도에 맞춘다. 순찰 중에도 편집할 수 있다(`docs/CONTROL_SCREEN.md` E)
 - `/demo`: 독립 Mock 공급자. 실제 서버 API/WebSocket에 접속하지 않는다. 가상 데이터·알림·명령 결과는 이 페이지의 메모리에만 존재한다.
 - 서버 자체는 ROS2를 쓰지 않는다. 주행 시작·순찰 종료도 서버는 명령을 쌓기만 하고, **로봇 컴퓨터의 Bridge**가 그 컴퓨터에서 `patrol_node`를 띄우고 끈다. 그래서 서버를 ROS가 없는 다른 컴퓨터(예: AWS)에 두어도 된다. 로봇 쪽에는 ROS 2 Jazzy, 빌드된 `limbo_patrol`, Bridge가 필요하다. 한 로봇, 단일 프로세스, 메모리 최신 상태 및 최근 알림 100건을 지원한다. 서버 재시작 시 관제 상태가 초기화되며 브라우저 새로고침은 서버 이력을 지우지 않는다.
 
@@ -239,7 +239,7 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 | `command_stop_response_timeout_s` / `command_stop_confirm_timeout_s` | 10초 / 30초. 순찰 종료 전용 (Nav2 목표 취소 후 노드 종료를 기다림) |
 | `map_yaml` | `limbo/src/limbo_navigation/maps/human_test_map.yaml`. 생략하면 지도 API가 404 |
 | `waypoints_yaml` | `limbo/src/limbo_patrol/config/test_waypoints.yaml`. 순찰 경로의 원본. 주행 시작 명령에 실려 로봇으로 간다 |
-| `guide_yaml` | `dashboard/guides/human_test_map_guide.yaml`(컨테이너는 `/data/guide.yaml`). 방문자 안내 약도 파일. 기본 로봇의 지도 좌표(m)로 그리고, 관제 화면이 읽고 쓰므로 **쓸 수 있는 곳**에 둔다. 파일이 없으면 빈 약도로 시작해 처음 저장할 때 만든다. 생략하면 약도 API가 404 `guide_not_configured` |
+| `guide_yaml` | `dashboard/guides/human_test_map_guide.yaml`(컨테이너는 `/data/guide.yaml`). 방문자 안내 약도 파일. 기본 로봇의 지도 좌표(m)로 그리고, 관제 화면이 읽고 쓰므로 **쓸 수 있는 곳**에 둔다. 파일이 없으면 빈 약도로 시작해 처음 저장할 때 만든다. 약도 그림은 옆 폴더 `<이름>_files/`(컨테이너는 `/data/guide_files/`). 생략하면 약도 API가 404 `guide_not_configured` |
 | `robot_token_file` | `null`. 로봇용 경로 토큰 파일. 환경 변수 `ROBOT_TOKEN`이 우선 (「로봇 토큰과 인터넷 공개」) |
 | `allow_no_robot_token` | 기본 `config.json`은 `true`(로컬 개발), 설정에서 빼면 `false`. 토큰이 없을 때 로봇용 경로를 열어 둘지. **인터넷에 열 때는 `false`** |
 
@@ -312,6 +312,8 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 | `GET /api/v1/map.png` | `?robot_id=`. SLAM PGM을 변환한 회색조 PNG |
 | `GET /api/v1/guide` | 방문자 안내 약도 `{revision, exists, file, guide, map, map_matches, map_bounds}`. 파일이 없으면 `exists: false`, `revision: ""`와 빈 약도(기본 구역 종류, 지도보다 사방 10 m 넓은 `bounds`). `map_matches`가 `false`면 다른 지도 좌표로 그린 약도. 파일이 깨졌으면 503 `guide_unavailable` |
 | `PUT /api/v1/guide` | `{"revision", "guide"}`로 문서 전체 저장(본문 256 KiB까지). 처음은 `revision: ""`. 다른 화면이 먼저 저장했으면 409 `revision_conflict`, 검사 실패는 422 `invalid_guide`(이름 1~32자·제어 문자 없음, 종류는 `categories`에 있는 것, 색 `#RRGGBB`, 아이콘은 내장 이름, 다각형 3~64점·변이 엇갈리지 않음, 좌표는 `bounds` 안, 구역 300·표시점 200·종류 50 이하). 순찰 중에도 저장된다(로봇과 무관). 형식은 `server/guide.py` 맨 위 |
+| `PUT /api/v1/guide/image` | 약도 그림 올리기. 본문은 그림 그대로, `Content-Type`은 `image/png`·`image/jpeg`·`image/webp`(아니면 415), 10 MB까지(413), 머리 부분으로 형식·크기를 확인(422 `invalid_image`, 한 변 12000 px까지). 201 `{file, width, height, type}`. 이름은 내용의 해시(`image-<16자>.png`)라 같은 그림은 한 번만 저장. 약도의 `image.file`에 넣고 저장해야 쓰인다. 저장된 약도가 쓰지 않는 그림은 올린 지 1시간 뒤 다음 저장 때 지운다 |
+| `GET /api/v1/guide/image/{file}` | 올린 약도 그림(`Cache-Control: immutable`, `nosniff`, `Content-Security-Policy: default-src 'none'`). 없으면 404 `image_not_found` |
 | `GET /api/v1/guide/file` | 저장된 약도 파일 그대로 내려받기(`Content-Disposition: attachment`). 아직 저장 전이면 404 `guide_not_saved` |
 | `GET /api/v1/map_sketch.svg` | `?robot_id=`. 서버가 지도를 읽을 때 만든 자동 약도(원본과 영역·크기 같음). 못 만들었으면 404 `map_sketch_unavailable`이고 `GET /api/v1/map`의 `sketch`가 `null` |
 | `GET /healthz` | `{"status":"ok"}`, 서버 생존 확인만 의미 |

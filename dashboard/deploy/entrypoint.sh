@@ -23,6 +23,9 @@ if [ -n "$INITIAL_GUIDE" ] && [ ! -f /data/guide.yaml ]; then
     exit 1
   fi
   cp "/srv/defaults/guides/$INITIAL_GUIDE" /data/guide.yaml
+  # 약도 그림 폴더(<이름>_files/)가 있으면 같이: /data/guide.yaml의 그림 폴더는 /data/guide_files
+  files="/srv/defaults/guides/${INITIAL_GUIDE%.yaml}_files"
+  if [ -d "$files" ]; then cp -r "$files" /data/guide_files; fi
   echo "guide: first start, copied $INITIAL_GUIDE to /data/guide.yaml"
 fi
 if [ ! -f "/srv/$MAP_YAML" ]; then

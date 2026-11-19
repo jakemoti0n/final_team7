@@ -136,3 +136,114 @@ test('live guide editor saves the whole guide with its revision and handles a co
   await expect(page.getByTestId('guide-status')).toHaveText('저장된 약도와 같습니다')
   expect(existsSync(repoGuide)).toBe(existedBefore)                               // 저장소 파일은 그대로
 })
+
+// ---- 그림 약도 ----
+import { crc32, deflateSync } from 'node:zlib'
+
+/** 회색 PNG (시험용) */
+function png(width: number, height: number) {
+  const chunk = (kind: string, body: Buffer) => {
+    const head = Buffer.alloc(4); head.writeUInt32BE(body.length)
+    const tail = Buffer.alloc(4); tail.writeUInt32BE(crc32(Buffer.concat([Buffer.from(kind), body])))
+    return Buffer.concat([head, Buffer.from(kind), body, tail])
+  }
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = 0
+  const rows = Buffer.alloc((width + 1) * height, 200)
+  for (let y = 0; y < height; y++) rows[y * (width + 1)] = 0
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(rows)), chunk('IEND', Buffer.alloc(0))])
+}
+async function templateSize(page: Page) {
+  const text = await page.getByRole('button', { name: /틀 내려받기/ }).first().textContent()
+  const [, w, h] = text!.match(/(\d+)×(\d+)/)!
+  return [Number(w), Number(h)]
+}
+/** 그림 판·지도 판의 좌표 → 화면 좌표 (지도는 m, y 뒤집음) */
+async function boardPoint(page: Page, testid: string, x: number, y: number) {
+  return page.getByTestId(testid).evaluate((svg, [px, py]) => {
+    const q = new DOMPoint(px, py).matrixTransform((svg as SVGSVGElement).getScreenCTM()!)
+    return [q.x, q.y] as [number, number]
+  }, [x, y])
+}
+
+test('demo: an image drawn on the downloaded template fits by size; other sizes are refused', async ({ page }) => {
+  await page.goto('/demo?page=guide')
+  await page.getByLabel('그림 파일').check()
+  const [w, h] = await templateSize(page)
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: /틀 내려받기/ }).first().click()
+  expect((await download).suggestedFilename()).toBe('limbo-guide-template-20pxm.png')
+  await page.getByLabel('틀로 그린 그림 올리기').setInputFiles({ name: 'wrong.png', mimeType: 'image/png', buffer: png(w + 30, h) })
+  await expect(page.getByTestId('guide-message')).toContainText('틀')
+  await expect(page.getByTestId('guide-image')).toHaveCount(0)
+  await page.getByLabel('틀로 그린 그림 올리기').setInputFiles({ name: 'drawn.png', mimeType: 'image/png', buffer: png(w, h) })
+  await expect(page.getByTestId('guide-image')).toHaveCount(1)
+  await expect(page.getByTestId('guide-image-info')).toContainText(`${w}×${h} px`)
+  await expect(page.getByTestId('guide-image-info')).toContainText('틀 크기로 맞춤')
+  // 방문자 미리보기: 그림만 (구역은 「그림 위에 구역도 보이기」를 켜야)
+  await page.getByLabel('방문자 미리보기').check()
+  await expect(page.getByTestId('guide-area')).toHaveCount(0)
+  await page.getByLabel('방문자 미리보기').uncheck()
+  await page.getByLabel('그림 위에 그린 구역도 보이기 (방문자 화면)').check()
+  await page.getByLabel('방문자 미리보기').check()
+  await expect(page.getByTestId('guide-area')).toHaveCount(4)
+  await page.getByLabel('방문자 미리보기').uncheck()
+  await page.getByRole('button', { name: '저장', exact: true }).click()
+  await expect(page.getByTestId('guide-status')).toHaveText('저장된 약도와 같습니다')
+})
+
+test('demo: an existing guide image is placed with three control points', async ({ page }) => {
+  await page.goto('/demo?page=guide')
+  await page.getByLabel('그림 파일').check()
+  await page.getByLabel('기준점으로 맞출 그림 올리기').setInputFiles({ name: 'plan.png', mimeType: 'image/png', buffer: png(200, 100) })
+  await expect(page.getByRole('region', { name: '기준점으로 그림 맞추기' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '이대로 맞추기' })).toBeDisabled()
+  // 1 px = 5 cm로 놓을 그림: (20,10)·(180,10)·(20,90) ↔ 지도 (-4,4.5)·(4,4.5)·(-4,0.5). 모서리는 「전체」 단추에 가릴 수 있어 안쪽 점
+  const pairs: [[number, number], [number, number]][] = [[[20, 10], [-4, 4.5]], [[180, 10], [4, 4.5]], [[20, 90], [-4, 0.5]]]
+  for (const [img, m] of pairs) {
+    const [ix, iy] = await boardPoint(page, 'guide-image-board', ...img); await page.mouse.click(ix, iy)
+    const [mx, my] = await boardPoint(page, 'guide-canvas', m[0], -m[1]); await page.mouse.click(mx, my)
+  }
+  await expect(page.getByTestId('guide-pair')).toHaveCount(3)
+  await expect(page.getByTestId('guide-fit')).toContainText('평균 어긋남 0.0')
+  await expect(page.getByTestId('guide-image')).toHaveCount(1)                   // 지도에 겹쳐 보기
+  await page.getByRole('button', { name: '이대로 맞추기' }).click()
+  await expect(page.getByTestId('guide-message')).toContainText('기준점 3개로 맞췄습니다')
+  await expect(page.getByTestId('guide-image-info')).toContainText('기준점 3개로 맞춤')
+  // 다시 맞추기를 열면 찍었던 점이 그대로
+  await page.getByRole('button', { name: '기준점으로 다시 맞추기' }).click()
+  await expect(page.getByTestId('guide-pair')).toHaveCount(3)
+  await page.getByRole('button', { name: '취소' }).click()
+  await page.getByRole('button', { name: '그림 빼기' }).click()
+  await expect(page.getByTestId('guide-image')).toHaveCount(0)
+})
+
+test('live: the image is uploaded as-is and the guide refers to it by the returned name', async ({ page }) => {
+  let uploaded: { type?: string; size: number } | null = null
+  let saved: { guide: { image: { file: string; width: number; transform: number[] } } } | null = null
+  await page.route('**/api/v1/guide', async route => {
+    if (route.request().method() === 'GET') { await route.fulfill({ response: await route.fetch() }); return }
+    saved = route.request().postDataJSON()
+    const base = await (await route.fetch({ method: 'GET' })).json()
+    await route.fulfill({ json: { ...base, revision: 'r1', exists: true, guide: saved!.guide } })
+  })
+  const file = 'image-0123456789abcdef.png'
+  await page.goto('/?page=guide')
+  await page.getByLabel('그림 파일').check()
+  const [w, h] = await templateSize(page)
+  const image = png(w, h)
+  await page.route(`**/api/v1/guide/image/${file}`, route => route.fulfill({ body: image, contentType: 'image/png' }))
+  // 업로드는 가로채서 저장소 폴더에 그림을 만들지 않는다. 화면은 서버가 알려 준 이름·크기를 쓴다
+  await page.route('**/api/v1/guide/image', async route => {
+    uploaded = { type: route.request().headers()['content-type'], size: route.request().postDataBuffer()!.length }
+    await route.fulfill({ status: 201, json: { file, width: w, height: h, type: 'image/png' } })
+  })
+  await page.getByLabel('틀로 그린 그림 올리기').setInputFiles({ name: 'drawn.png', mimeType: 'image/png', buffer: image })
+  await expect(page.getByTestId('guide-image')).toHaveAttribute('href', `/api/v1/guide/image/${file}`)
+  expect(uploaded).toEqual({ type: 'image/png', size: image.length })
+  await page.getByRole('button', { name: '저장', exact: true }).click()
+  await expect(page.getByTestId('guide-message')).toContainText('저장했습니다')
+  expect(saved!.guide.image.file).toBe(file)
+  expect(saved!.guide.image.width).toBe(w)
+  expect(saved!.guide.image.transform[0]).toBeCloseTo(1 / 20)
+  expect(existsSync(repoGuide)).toBe(false)
+})

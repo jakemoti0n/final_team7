@@ -267,11 +267,12 @@ docker compose exec dashboard rm /data/waypoints.yaml
 docker compose up -d --force-recreate    # 다시 시작하며 새 INITIAL_WAYPOINTS를 복사
 ```
 
-약도(`/data/guide.yaml`)도 같은 볼륨에 있고 `INITIAL_GUIDE`는 파일이 없을 때(처음)만 복사된다. 지도를 바꾸면 예전 약도는 좌표가 맞지 않으므로(편집 화면이 「다른 지도로 그린 약도」라고 경고) 내려받기로 보관한 뒤 지운다:
+약도(`/data/guide.yaml`)와 약도 그림(`/data/guide_files/`)도 같은 볼륨에 있고 `INITIAL_GUIDE`는 파일이 없을 때(처음)만 복사된다(그림 폴더 `<이름>_files/`가 있으면 같이). 지도를 바꾸면 예전 약도는 좌표가 맞지 않으므로(편집 화면이 「다른 지도로 그린 약도」라고 경고) 내려받기로 보관한 뒤 지운다:
 
 ```bash
 curl -s -b <로그인 쿠키> https://<DOMAIN>/api/v1/guide/file -o guide-backup.yaml   # 또는 편집 화면의 내려받기
-docker compose exec dashboard rm /data/guide.yaml
+docker compose cp dashboard:/data/guide_files ./guide_files-backup   # 그림을 쓰는 약도면 그림도
+docker compose exec dashboard rm -r /data/guide.yaml /data/guide_files
 docker compose up -d --force-recreate    # INITIAL_GUIDE를 정했으면 다시 복사, 아니면 빈 약도
 ```
 

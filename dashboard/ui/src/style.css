@@ -491,3 +491,32 @@ button.danger:hover:not(:disabled){background:var(--color-bad-bg)}
   .guide-canvas{height:60vh;min-height:300px}
   .guide-savebar{padding:14px 16px}
 }
+/* 약도 그림 (메인 약도를 그림 파일로, 기준점 맞추기) */
+.guide-mode{display:flex;gap:16px}
+.guide-image-info{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid var(--color-border);border-radius:var(--radius-lg);background:var(--color-surface-result)}
+.guide-image-info small{overflow-wrap:anywhere}
+.guide-steps{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--color-text)}
+.guide-steps li{display:flex;flex-direction:column;gap:6px}
+.guide-steps button{font-size:12px;padding:6px 10px}
+.guide-uploads{display:flex;flex-direction:column;gap:6px}
+.guide-file{position:relative;justify-content:center;font-size:13px;cursor:pointer;text-align:center}
+.guide-file input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.guide-file:focus-within{outline:3px solid var(--color-accent);outline-offset:2px}
+.guide-calibrate p{margin:0}
+.guide-calibrate-boards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.guide-calibrate-boards .guide-canvas{height:min(60vh,620px)}
+.guide-image-board{background:#fff}
+.guide-image-board svg{cursor:crosshair}
+.guide-canvas.tool-pick svg{cursor:crosshair}
+.guide-pick circle{fill:rgba(220,38,38,.18);stroke:#DC2626;stroke-width:2px}
+.guide-pick text{fill:#B91C1C;font-weight:800;paint-order:stroke;stroke:#fff;stroke-width:.4px}
+.guide-pick.done circle{fill:rgba(21,128,61,.2);stroke:var(--color-accent)}
+.guide-pick.done text{fill:var(--color-good-fg)}
+.guide-pairs ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.guide-pairs li{display:grid;grid-template-columns:26px minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr) 30px;align-items:center;gap:8px;font-size:13px}
+.guide-pair-no{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--color-primary);color:var(--color-on-primary);font-weight:700;font-size:12px}
+@media(max-width:899px){
+  .guide-calibrate-boards{grid-template-columns:1fr}
+  .guide-pairs li{grid-template-columns:26px 1fr 30px}
+  .guide-pairs li>span:nth-child(3),.guide-pairs li>span:nth-child(4){grid-column:2}
+}

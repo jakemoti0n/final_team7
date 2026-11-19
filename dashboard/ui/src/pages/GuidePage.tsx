@@ -3,7 +3,10 @@ import { Card } from '../components/Card'
 import { setLeaveGuard } from '../navigation'
 import { GuideCanvas, type Background, type Selection, type Tool } from '../features/guide/GuideCanvas'
 import { GuidePanel, Swatch } from '../features/guide/GuidePanel'
-import { useGuide } from '../features/guide/useGuide'
+import { guideImageUrl, useGuide, type UploadedImage } from '../features/guide/useGuide'
+import { MainImage, placeImage } from '../features/guide/MainImage'
+import { addPick, completePairs, ImageBoard, PairList, type Pick } from '../features/guide/Calibration'
+import { fitTransform, type PointPair } from '../features/guide/guide'
 
 export const leaveWarning = '저장하지 않은 약도 변경이 있습니다. 이 페이지를 떠나면 사라집니다. 떠날까요?'
 
@@ -26,15 +29,19 @@ export function GuidePage({ demo }: { demo: boolean }) {
   const [showWaypoints, setShowWaypoints] = useState(true)
   const [previewMode, setPreviewMode] = useState(false)
   const [message, setMessage] = useState('')
+  const [imageOpacity, setImageOpacity] = useState(0.85)
+  // 기준점으로 그림 맞추는 중: 올린 그림과 찍은 점 짝
+  const [calib, setCalib] = useState<{ image: UploadedImage; pairs: Pick[] } | null>(null)
+  const busy = dirty || !!calib
 
   // 저장하지 않고 떠나지 않게: 페이지 이동·로봇 바꾸기는 묻고, 탭 닫기·새로 고침은 브라우저가 묻는다
   useEffect(() => {
-    setLeaveGuard(dirty ? () => confirm(leaveWarning) : null)
-    if (!dirty) return () => setLeaveGuard(null)
+    setLeaveGuard(busy ? () => confirm(leaveWarning) : null)
+    if (!busy) return () => setLeaveGuard(null)
     const onUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
     addEventListener('beforeunload', onUnload)
     return () => { removeEventListener('beforeunload', onUnload); setLeaveGuard(null) }
-  }, [dirty])
+  }, [busy])
   // 고른 항목이 되돌리기 등으로 사라지면 선택을 푼다
   useEffect(() => {
     if (!draft || !selection) return
@@ -64,6 +71,37 @@ export function GuidePage({ demo }: { demo: boolean }) {
   if (problem) return <Card title="약도 편집"><p className="control-body" role="alert">{problem}</p></Card>
   if (!doc || !draft) return <Card title="약도 편집"><p className="control-body muted" role="status">약도를 불러오는 중입니다…</p></Card>
   const current = tools.find(t => t.key === tool)!
+  const placed = draft.image ? { href: guideImageUrl(draft.image.file, demo), width: draft.image.width, height: draft.image.height, transform: draft.image.transform, opacity: previewMode ? 1 : imageOpacity } : null
+  const mapHref = map ? map.sketch ?? map.image : null
+  const startCalibration = (image: UploadedImage, pairs: PointPair[]) => { setPreviewMode(false); setSelection(null); setCalib({ image, pairs: pairs.map(p => ({ image: p.image, map: p.map })) }) }
+  const calibFit = calib ? fitTransform(completePairs(calib.pairs)) : null
+  const finishCalibration = () => {
+    if (!calib || !calibFit) return
+    const { guide, widened } = placeImage(draft, calib.image, completePairs(calib.pairs), calibFit.transform)
+    data.apply(guide); setCalib(null)
+    setMessage(`그림을 기준점 ${completePairs(calib.pairs).length}개로 맞췄습니다 (평균 어긋남 ${calibFit.rms.toFixed(2)} m).${widened ? ' 그림이 들어가도록 그리기 영역을 넓혔습니다.' : ''} 저장하면 방문자 화면에 쓰입니다.`)
+  }
+  if (calib) return <section className="card guide-calibrate" aria-label="기준점으로 그림 맞추기">
+    <h2 className="card-heading">기준점으로 그림 맞추기</h2>
+    <div className="control-body">
+      <p>왼쪽 그림과 오른쪽 지도에서 <b>같은 곳</b>을 차례로 누르세요(번호가 짝입니다). 서로 멀리 떨어진 모서리·벽 끝 3곳 이상이 좋습니다.
+        누르면 점, 끌면 이동, 휠로 확대. 3쌍이 되면 오른쪽 지도에 그림이 반투명하게 겹쳐 보입니다.</p>
+      <div className="guide-calibrate-boards">
+        <ImageBoard image={calib.image} href={guideImageUrl(calib.image.file, demo)} pairs={calib.pairs} onPick={p => setCalib({ ...calib, pairs: addPick(calib.pairs, 'image', p) })} />
+        <GuideCanvas guide={draft} map={map} background={background === 'none' ? 'sketch' : background} opacity={opacity} showWaypoints={false} previewMode={false}
+          tool="pick" category={category} selection={null} onSelect={() => {}} apply={data.apply} preview={data.preview} commit={data.commit} onMessage={setMessage}
+          overlay={calibFit ? { href: guideImageUrl(calib.image.file, demo), width: calib.image.width, height: calib.image.height, transform: calibFit.transform, opacity: 0.5 } : null}
+          picks={calib.pairs.flatMap((p, i) => p.map ? [{ point: p.map, label: String(i + 1), done: !!p.image }] : [])}
+          onPick={p => setCalib({ ...calib, pairs: addPick(calib.pairs, 'map', p) })} />
+      </div>
+      <PairList pairs={calib.pairs} onRemove={i => setCalib({ ...calib, pairs: calib.pairs.filter((_, k) => k !== i) })} />
+      <div className="guide-row">
+        <button type="button" className="primary" disabled={!calibFit} onClick={finishCalibration}>이대로 맞추기</button>
+        <button type="button" onClick={() => setCalib({ ...calib, pairs: [] })} disabled={!calib.pairs.length}>점 모두 지우기</button>
+        <button type="button" onClick={() => { setCalib(null); setMessage('그림 맞추기를 취소했습니다.') }}>취소</button>
+      </div>
+    </div>
+  </section>
   return <>
     <section className="card guide-savebar" aria-label="약도 저장">
       <div>
@@ -92,7 +130,7 @@ export function GuidePage({ demo }: { demo: boolean }) {
         </div>
         <p className="guide-hint muted">{previewMode ? '방문자에게 보일 모습입니다. 지도 바탕·격자·순찰 지점은 빠집니다.' : current.hint}</p>
         <GuideCanvas guide={draft} map={map} background={background} opacity={opacity} showWaypoints={showWaypoints} previewMode={previewMode}
-          tool={tool} category={category} selection={selection} onSelect={setSelection} apply={data.apply} preview={data.preview} commit={data.commit} onMessage={setMessage} />
+          tool={tool} category={category} selection={selection} onSelect={setSelection} apply={data.apply} preview={data.preview} commit={data.commit} onMessage={setMessage} image={placed} />
         <div className="guide-toolbar guide-view">
           <label>지도 바탕<select value={background} onChange={e => setBackground(e.target.value as Background)} disabled={previewMode}>
             <option value="sketch" disabled={!map?.sketch}>자동 약도</option><option value="original" disabled={!map?.image}>원본 지도</option><option value="none">없음</option></select></label>
@@ -101,7 +139,9 @@ export function GuidePage({ demo }: { demo: boolean }) {
         </div>
         {message && <p className="guide-message" role="status" data-testid="guide-message">{message}</p>}
       </section>
-      <section className="card guide-side" aria-label="약도 항목"><GuidePanel guide={draft} map={map} selection={selection} onSelect={setSelection} apply={data.apply} /></section>
+      <section className="card guide-side" aria-label="약도 항목">
+        <MainImage guide={draft} demo={demo} map={map} mapHref={mapHref} apply={data.apply} onCalibrate={startCalibration} onMessage={setMessage} imageOpacity={imageOpacity} setImageOpacity={setImageOpacity} />
+        <GuidePanel guide={draft} map={map} selection={selection} onSelect={setSelection} apply={data.apply} /></section>
     </div>
   </>
 }

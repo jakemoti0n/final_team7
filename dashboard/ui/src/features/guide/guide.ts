@@ -9,7 +9,12 @@ export interface Bounds { x_min: number; y_min: number; x_max: number; y_max: nu
 export interface Category { key: string; label: string; color: string; icon: IconName }
 export interface Area { name: string; category: string; polygon: Point[] }
 export interface Marker { name: string; category: string; x: number; y: number }
-export interface Guide { version: 1; map: string | null; bounds: Bounds; categories: Category[]; areas: Area[]; markers: Marker[] }
+/** 그림 픽셀 (u, v) → 지도 (x, y): x = a·u + b·v + c, y = d·u + e·v + f */
+export type Transform = [number, number, number, number, number, number]
+export interface PointPair { image: Point; map: Point }
+/** 메인 약도를 그림 파일로 쓸 때. 그림은 서버에 따로 올리고(PUT /api/v1/guide/image) 이름만 둔다 */
+export interface GuideImage { file: string; width: number; height: number; transform: Transform; points: PointPair[]; show_areas: boolean }
+export interface Guide { version: 1; map: string | null; bounds: Bounds; categories: Category[]; areas: Area[]; markers: Marker[]; image: GuideImage | null }
 export interface GuideDocument { revision: string; exists: boolean; file: string; guide: Guide; map: string; map_matches: boolean; map_bounds: Bounds }
 
 // 서버 guide.py의 ICONS와 같게
@@ -43,7 +48,7 @@ export function mapBounds(map: MapInfo, margin = 0): Bounds {
 }
 
 export function emptyGuide(map: MapInfo, mapName: string | null): Guide {
-  return { version: 1, map: mapName, bounds: mapBounds(map, BOUNDS_MARGIN_M), categories: defaultCategories.map(c => ({ ...c })), areas: [], markers: [] }
+  return { version: 1, map: mapName, bounds: mapBounds(map, BOUNDS_MARGIN_M), categories: defaultCategories.map(c => ({ ...c })), areas: [], markers: [], image: null }
 }
 
 // ---- 좌표 ----
@@ -141,6 +146,80 @@ export function labelFit(points: Point[], name: string) {
   return { size, showText, showIcon: showText ? size * 2.7 <= h : Math.min(w, h) >= 0.8 }
 }
 
+// ---- 그림 약도: 그림 픽셀 ↔ 지도 m ----
+
+export const TEMPLATE_PX_PER_M = [20, 40]
+
+export function applyTransform([a, b, c, d, e, f]: Transform, [u, v]: Point): Point { return [a * u + b * v + c, d * u + e * v + f] }
+
+export function imageCorners(image: Pick<GuideImage, 'transform' | 'width' | 'height'>): Point[] {
+  return ([[0, 0], [image.width, 0], [image.width, image.height], [0, image.height]] as Point[]).map(p => applyTransform(image.transform, p))
+}
+
+/** SVG(미터, y 뒤집음)에 그림을 놓는 matrix(): 그림 (u, v) → (x, −y) */
+export function svgMatrix([a, b, c, d, e, f]: Transform) { return `matrix(${a} ${-d} ${b} ${-e} ${c} ${-f})` }
+
+/** 틀 그림: 그리기 영역 왼쪽 위가 (0, 0), 1 m = ppm px */
+export function templateSize(b: Bounds, ppm: number) { return [Math.round((b.x_max - b.x_min) * ppm), Math.round((b.y_max - b.y_min) * ppm)] }
+export function templateTransform(b: Bounds, ppm: number): Transform { return [1 / ppm, 0, b.x_min, 0, -1 / ppm, b.y_max] }
+/** 올린 그림이 지금 영역의 틀 크기와 같으면 그 1 m당 px (±1 px). 아니면 null */
+export function matchTemplate(b: Bounds, width: number, height: number) {
+  return TEMPLATE_PX_PER_M.find(ppm => { const [w, h] = templateSize(b, ppm); return Math.abs(w - width) <= 1 && Math.abs(h - height) <= 1 }) ?? null
+}
+
+function solve3(m: number[][], r: number[]): number[] | null {
+  // 가우스 소거 (부분 피벗)
+  const a = m.map((row, i) => [...row, r[i]])
+  for (let col = 0; col < 3; col++) {
+    let pivot = col
+    for (let row = col + 1; row < 3; row++) if (Math.abs(a[row][col]) > Math.abs(a[pivot][col])) pivot = row
+    if (Math.abs(a[pivot][col]) < 1e-12) return null
+    ;[a[col], a[pivot]] = [a[pivot], a[col]]
+    for (let row = 0; row < 3; row++) if (row !== col) {
+      const f = a[row][col] / a[col][col]
+      for (let k = col; k < 4; k++) a[row][k] -= f * a[col][k]
+    }
+  }
+  return [a[0][3] / a[0][0], a[1][3] / a[1][1], a[2][3] / a[2][2]]
+}
+
+/**
+ * 기준점 짝(3개 이상)으로 그림 → 지도 변환을 최소제곱으로 구한다(늘리기·회전·기울이기·이동).
+ * 점들이 거의 한 줄이면 null. 결과에 점마다의 어긋남(m)을 같이 준다
+ */
+export function fitTransform(pairs: PointPair[]): { transform: Transform; errors: number[]; rms: number } | null {
+  if (pairs.length < 3) return null
+  // 숫자 크기를 맞추려고 그림 좌표를 가운데·크기로 정규화한 뒤 푼다
+  const n = pairs.length
+  const mu = pairs.reduce((s, p) => s + p.image[0], 0) / n, mv = pairs.reduce((s, p) => s + p.image[1], 0) / n
+  const scale = Math.max(1e-9, Math.sqrt(pairs.reduce((s, p) => s + (p.image[0] - mu) ** 2 + (p.image[1] - mv) ** 2, 0) / n))
+  const rows = pairs.map(p => [(p.image[0] - mu) / scale, (p.image[1] - mv) / scale, 1])
+  const m = [0, 1, 2].map(i => [0, 1, 2].map(j => rows.reduce((s, r) => s + r[i] * r[j], 0)))
+  const det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+  if (Math.abs(det) < 1e-6 * n ** 3) return null
+  const rx = [0, 1, 2].map(i => rows.reduce((s, r, k) => s + r[i] * pairs[k].map[0], 0))
+  const ry = [0, 1, 2].map(i => rows.reduce((s, r, k) => s + r[i] * pairs[k].map[1], 0))
+  const px = solve3(m, rx), py = solve3(m, ry)
+  if (!px || !py) return null
+  // 정규화를 풀어 원래 그림 좌표의 계수로
+  const a = px[0] / scale, b = px[1] / scale, c = px[2] - a * mu - b * mv
+  const d = py[0] / scale, e = py[1] / scale, f = py[2] - d * mu - e * mv
+  const transform: Transform = [a, b, c, d, e, f]
+  if (Math.abs(a * e - b * d) < 1e-12) return null
+  const errors = pairs.map(p => { const [x, y] = applyTransform(transform, p.image); return Math.hypot(x - p.map[0], y - p.map[1]) })
+  return { transform, errors, rms: Math.sqrt(errors.reduce((s, v) => s + v * v, 0) / n) }
+}
+
+/** 영역이 상자를 담도록 넓힌다 (사방 1 m 여유, 이미 담으면 그대로) */
+export function boundsCovering(b: Bounds, points: Point[], margin = 1): Bounds {
+  const box = bbox(points)
+  const r = (v: number) => Math.round(v * 1000) / 1000
+  return {
+    x_min: box.x_min < b.x_min ? r(Math.floor(box.x_min - margin)) : b.x_min, y_min: box.y_min < b.y_min ? r(Math.floor(box.y_min - margin)) : b.y_min,
+    x_max: box.x_max > b.x_max ? r(Math.ceil(box.x_max + margin)) : b.x_max, y_max: box.y_max > b.y_max ? r(Math.ceil(box.y_max + margin)) : b.y_max,
+  }
+}
+
 // ---- 검사 (서버와 같은 규칙, 저장 전에 알려 주려고) ----
 
 export function nameProblem(name: string) {
@@ -175,6 +254,7 @@ export function guideProblems(g: Guide): string[] {
     if (!keys.has(m.category)) out.push(`표시점 「${m.name}」: 없는 종류입니다.`)
     if (!inside([m.x, m.y], b)) out.push(`표시점 「${m.name}」: 그리기 영역 밖에 있습니다.`)
   })
+  if (g.image && !imageCorners(g.image).every(([x, y]) => inside([round3(x), round3(y)], b))) out.push('약도 그림이 그리기 영역 밖으로 나갑니다. 영역을 넓히세요.')
   return out
 }
 
@@ -200,9 +280,9 @@ export function normalized(g: Guide): Guide {
   }
 }
 
-/** 그린 것(구역·표시점) 전체를 담는 상자. 없으면 null */
+/** 그린 것(구역·표시점·그림) 전체를 담는 상자. 없으면 null */
 export function contentBox(g: Guide): Bounds | null {
-  const points: Point[] = [...g.areas.flatMap(a => a.polygon), ...g.markers.map(m => [m.x, m.y] as Point)]
+  const points: Point[] = [...g.areas.flatMap(a => a.polygon), ...g.markers.map(m => [m.x, m.y] as Point), ...(g.image ? imageCorners(g.image) : [])]
   return points.length ? bbox(points) : null
 }
 
@@ -226,5 +306,6 @@ export function viewBoxOf(b: Bounds) { return [b.x_min, -b.y_max, b.x_max - b.x_
 
 export function isGuideDocument(value: unknown): value is GuideDocument {
   const d = value as GuideDocument
+  if (d?.guide && d.guide.image === undefined) d.guide.image = null   // 예전 서버
   return !!d && typeof d.revision === 'string' && !!d.guide && Array.isArray(d.guide.areas) && Array.isArray(d.guide.categories) && Array.isArray(d.guide.markers) && !!d.guide.bounds
 }

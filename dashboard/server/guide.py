@@ -13,12 +13,20 @@ areas:                                    # 다각형 구역 (꼭짓점 m)
   - {name: 201 강의실, category: classroom, polygon: [[0, 0], [6, 0], [6, 4], [0, 4]]}
 markers:                                  # 점 표시 (입구·안내데스크 등)
   - {name: 정문, category: entrance, x: 0.2, y: -2.8}
+image:                                    # (선택) 메인 약도를 그림 파일로. null이면 구역 그리기가 메인
+  file: image-0123456789abcdef.png        # 약도 파일 옆 <이름>_files/ 폴더 (PUT /api/v1/guide/image로 올림)
+  width: 1080                             # 그림 크기 (px)
+  height: 960
+  transform: [0.05, 0, -20, 0, -0.05, 28] # 그림 픽셀 (u, v) → 지도 (x, y): x = a·u + b·v + c, y = d·u + e·v + f
+  points: []                              # 기준점으로 맞췄으면 그 짝 [{image: [u, v], map: [x, y]}] (다시 고칠 때 씀)
+  show_areas: false                       # 그림 위에 그린 구역도 보일지
 """
 import copy
 import hashlib
 import math
 from pathlib import Path
 import re
+import struct
 
 import yaml
 
@@ -33,6 +41,11 @@ MAX_MARKERS = 200
 MAX_POINTS = 64             # 구역 하나의 꼭짓점 수
 MAX_NAME = 32
 MAX_BYTES = 256 * 1024      # 저장 요청 본문 상한 (구역 300 × 꼭짓점 64도 들어감)
+MAX_IMAGE_BYTES = 10 * 1024 * 1024   # 약도 그림 파일 상한
+MAX_IMAGE_SIDE = 12000               # 그림 한 변의 최대 픽셀
+MAX_POINT_PAIRS = 20
+IMAGE_TYPES = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"}
+IMAGE_NAME = re.compile(r"image-[0-9a-f]{16}\.(png|jpg|webp)")
 
 # 화면에 내장된 아이콘 이름 (ui/src/features/guide/icons.tsx와 같게)
 ICONS = ("none", "classroom", "event", "restroom", "entrance", "exit", "stairs", "elevator",
@@ -69,7 +82,69 @@ def map_bounds(map_meta, margin=0.0):
 def empty_guide(map_meta, map_name):
     """파일이 아직 없을 때의 약도: 기본 종류, 지도보다 사방 10 m 넓은 영역, 구역 없음"""
     return dict(version=VERSION, map=map_name, bounds=map_bounds(map_meta, BOUNDS_MARGIN_M),
-                categories=copy.deepcopy(DEFAULT_CATEGORIES), areas=[], markers=[])
+                categories=copy.deepcopy(DEFAULT_CATEGORIES), areas=[], markers=[], image=None)
+
+
+def image_info(data):
+    """그림 파일의 (확장자, 가로, 세로). 머리 부분만 읽는다. 지원하지 않거나 잘린 파일이면 GuideError"""
+    try:
+        return _image_info(data)
+    except (struct.error, IndexError) as exc:
+        raise GuideError("invalid_image", "Image file is truncated or damaged") from exc
+
+
+def _image_info(data):
+    def bad(message="Image must be a PNG, JPEG or WebP file"):
+        return GuideError("invalid_image", message)
+    if data[:8] == b"\x89PNG\r\n\x1a\n" and data[12:16] == b"IHDR":
+        width, height = struct.unpack(">II", data[16:24])
+        ext = "png"
+    elif data[:3] == b"\xff\xd8\xff":
+        # SOF 표시(가로·세로가 든 조각)를 찾을 때까지 조각을 건너뛴다
+        pos, size = 2, None
+        while pos + 9 < len(data):
+            if data[pos] != 0xFF:
+                raise bad("JPEG file is damaged")
+            marker = data[pos + 1]
+            if marker == 0xFF:
+                pos += 1
+                continue
+            if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+                pos += 2
+                continue
+            length = struct.unpack(">H", data[pos + 2:pos + 4])[0]
+            if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                height, width = struct.unpack(">HH", data[pos + 5:pos + 9])
+                size = (width, height)
+                break
+            pos += 2 + length
+        if size is None:
+            raise bad("JPEG size not found")
+        (width, height), ext = size, "jpg"
+    elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        chunk = data[12:16]
+        if chunk == b"VP8 " and data[23:26] == b"\x9d\x01\x2a":
+            width, height = (struct.unpack("<H", data[26:28])[0] & 0x3FFF), (struct.unpack("<H", data[28:30])[0] & 0x3FFF)
+        elif chunk == b"VP8L" and data[20] == 0x2F:
+            bits = int.from_bytes(data[21:25], "little")
+            width, height = (bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1
+        elif chunk == b"VP8X":
+            width, height = int.from_bytes(data[24:27], "little") + 1, int.from_bytes(data[27:30], "little") + 1
+        else:
+            raise bad("WebP header not recognized")
+        ext = "webp"
+    else:
+        raise bad()
+    if not (1 <= width <= MAX_IMAGE_SIDE and 1 <= height <= MAX_IMAGE_SIDE):
+        raise bad(f"Image sides must be 1–{MAX_IMAGE_SIDE} px")
+    return ext, width, height
+
+
+def image_corners(image):
+    """그림 네 모서리의 지도 좌표"""
+    a, b, c, d, e, f = image["transform"]
+    w, h = image["width"], image["height"]
+    return [(a * u + b * v + c, d * u + e * v + f) for u, v in ((0, 0), (w, 0), (w, h), (0, h))]
 
 
 def _number(value, what):
@@ -125,9 +200,51 @@ def _simple_polygon(points):
     return True
 
 
+def _validate_image(image, inside):
+    if image is None:
+        return None
+    _fields(image, ("file", "width", "height", "transform", "points", "show_areas"), "image")
+    if not isinstance(image["file"], str) or not IMAGE_NAME.fullmatch(image["file"]):
+        raise GuideError("invalid_guide", "image.file must be a name returned by the image upload")
+    for side in ("width", "height"):
+        if isinstance(image[side], bool) or not isinstance(image[side], int) or not 1 <= image[side] <= MAX_IMAGE_SIDE:
+            raise GuideError("invalid_guide", f"image.{side} must be 1–{MAX_IMAGE_SIDE}")
+    if not isinstance(image["transform"], list) or len(image["transform"]) != 6:
+        raise GuideError("invalid_guide", "image.transform needs 6 numbers")
+    transform = [float(_number_raw(v, "image.transform")) for v in image["transform"]]
+    a, b, _, d, e, _ = transform
+    if abs(a * e - b * d) < 1e-12:
+        raise GuideError("invalid_guide", "image.transform must not flatten the image")
+    if not isinstance(image["points"], list) or len(image["points"]) > MAX_POINT_PAIRS:
+        raise GuideError("invalid_guide", f"image.points must be a list of at most {MAX_POINT_PAIRS}")
+    points = []
+    for pair in image["points"]:
+        _fields(pair, ("image", "map"), "image point")
+        if not all(isinstance(p, list) and len(p) == 2 for p in (pair["image"], pair["map"])):
+            raise GuideError("invalid_guide", "image point needs image [u, v] and map [x, y]")
+        points.append(dict(image=[_number(v, "image point") for v in pair["image"]], map=[_number(v, "image point") for v in pair["map"]]))
+    if not isinstance(image["show_areas"], bool):
+        raise GuideError("invalid_guide", "image.show_areas must be true or false")
+    cleaned = dict(file=image["file"], width=image["width"], height=image["height"], transform=transform,
+                   points=points, show_areas=image["show_areas"])
+    if not all(inside(x, y) for x, y in image_corners(cleaned)):
+        raise GuideError("invalid_guide", "The image must lie inside bounds; widen the bounds first")
+    return cleaned
+
+
+def _number_raw(value, what):
+    """반올림하지 않는 수 (변환 행렬은 작은 값이라 mm 반올림하면 망가진다)"""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise GuideError("invalid_guide", f"{what} must be a finite number")
+    return value
+
+
 def validate(guide):
-    """화면이 보낸 약도를 검사해 정리된 사본을 돌려준다(이름 앞뒤 공백 제거, 좌표 mm 단위 반올림)"""
-    _fields(guide, ("version", "map", "bounds", "categories", "areas", "markers"), "Guide")
+    """화면이 보낸 약도를 검사해 정리된 사본을 돌려준다(이름 앞뒤 공백 제거, 좌표 mm 단위 반올림).
+    image 항목은 없어도 된다(예전 파일)"""
+    if isinstance(guide, dict) and "image" not in guide:
+        guide = {**guide, "image": None}
+    _fields(guide, ("version", "map", "bounds", "categories", "areas", "markers", "image"), "Guide")
     if guide["version"] != VERSION:
         raise GuideError("invalid_guide", f"version must be {VERSION}")
     if guide["map"] is not None and not isinstance(guide["map"], str):
@@ -191,7 +308,8 @@ def validate(guide):
             raise GuideError("invalid_guide", f"Marker {name}: position must be inside bounds")
         markers.append(dict(name=name, category=m["category"], x=x, y=y))
 
-    return dict(version=VERSION, map=guide["map"], bounds=bounds, categories=categories, areas=areas, markers=markers)
+    image = _validate_image(guide["image"], lambda x, y: inside(round(x, 3), round(y, 3)))
+    return dict(version=VERSION, map=guide["map"], bounds=bounds, categories=categories, areas=areas, markers=markers, image=image)
 
 
 class GuideFile:
@@ -200,6 +318,7 @@ class GuideFile:
         self.path = Path(path)
         self.map = map_meta
         self.map_name = map_name
+        self.files = self.path.parent / f"{self.path.stem}_files"   # 약도 그림 (guide.yaml → guide_files/)
 
     def read(self):
         """(약도, revision, 파일 있음). 파일이 없으면 revision은 빈 문자열"""
@@ -229,11 +348,44 @@ class GuideFile:
         if request["revision"] != revision:
             raise GuideError("revision_conflict", "Guide file changed; reload and try again")
         guide = validate(request["guide"])
+        if guide["image"] is not None and not (self.files / guide["image"]["file"]).is_file():
+            raise GuideError("invalid_guide", "The image file is missing; upload it again")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         body = "# LIMBO 방문자 안내 약도 (관제 화면 '약도 편집'에서 저장). 좌표는 지도와 같은 m\n"
         body += yaml.safe_dump(guide, allow_unicode=True, sort_keys=False, default_flow_style=None, width=200)
         atomic_write(self.path, body.encode("utf-8"))
+        self._prune(guide["image"]["file"] if guide["image"] else None)
         return self.document()
+
+    def save_image(self, data):
+        """그림을 올린다. 이름은 내용의 해시라 같은 그림은 한 번만 저장된다. 약도를 저장해야 쓰인다"""
+        if len(data) > MAX_IMAGE_BYTES:
+            raise GuideError("image_too_large", f"Image must be at most {MAX_IMAGE_BYTES // (1024 * 1024)} MB")
+        ext, width, height = image_info(data)
+        name = f"image-{hashlib.sha256(data).hexdigest()[:16]}.{ext}"
+        self.files.mkdir(parents=True, exist_ok=True)
+        target = self.files / name
+        if not target.exists():
+            atomic_write(target, data)
+        return dict(file=name, width=width, height=height, type=IMAGE_TYPES[ext])
+
+    def image(self, name):
+        """(바이트, 형식) 또는 None. 이름 규칙에 맞는 파일만"""
+        if not IMAGE_NAME.fullmatch(name):
+            return None
+        try:
+            return (self.files / name).read_bytes(), IMAGE_TYPES[name.rsplit(".", 1)[1]]
+        except FileNotFoundError:
+            return None
+
+    def _prune(self, keep):
+        """저장된 약도가 쓰지 않는 그림을 지운다. 올린 지 1시간이 안 된 것은 남긴다(다른 화면이 저장하기 전일 수 있음)"""
+        import time
+        if not self.files.is_dir():
+            return
+        for item in self.files.iterdir():
+            if IMAGE_NAME.fullmatch(item.name) and item.name != keep and time.time() - item.stat().st_mtime > 3600:
+                item.unlink(missing_ok=True)
 
     def raw(self):
         """내려받기용 파일 내용. 파일이 없으면 None"""

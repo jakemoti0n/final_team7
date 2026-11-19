@@ -20,6 +20,44 @@ function demoGuide(): Guide {
   return g
 }
 let demoSaved: GuideDocument | null = null
+const demoImages = new Map<string, string>()   // 데모에서 올린 그림: 이름 → 이 탭의 blob 주소
+
+export interface UploadedImage { file: string; width: number; height: number }
+
+/** 약도 그림 주소 */
+export function guideImageUrl(file: string, demo: boolean) { return demo ? demoImages.get(file) ?? '' : `/api/v1/guide/image/${encodeURIComponent(file)}` }
+
+function imageSize(url: string) {
+  return new Promise<[number, number]>((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve([img.naturalWidth, img.naturalHeight])
+    img.onerror = () => reject(new Error('그림을 읽을 수 없습니다. PNG·JPG·WebP 파일인지 확인하세요.'))
+    img.src = url
+  })
+}
+
+const IMAGE_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }
+export const MAX_IMAGE_MB = 10
+
+/** 그림 올리기. 데모는 이 탭에만 둔다. 약도를 저장해야 쓰인다 */
+export async function uploadGuideImage(file: File, demo: boolean): Promise<UploadedImage> {
+  const ext = IMAGE_EXT[file.type]
+  if (!ext) throw new Error('PNG·JPG·WebP 그림만 올릴 수 있습니다.')
+  if (file.size > MAX_IMAGE_MB * 1024 * 1024) throw new Error(`그림은 ${MAX_IMAGE_MB} MB까지입니다.`)
+  if (demo) {
+    const url = URL.createObjectURL(file)
+    const [width, height] = await imageSize(url)
+    const name = `image-${[...crypto.getRandomValues(new Uint8Array(8))].map(b => b.toString(16).padStart(2, '0')).join('')}.${ext}`
+    demoImages.set(name, url)
+    return { file: name, width, height }
+  }
+  let response: Response
+  try { response = await api('/api/v1/guide/image', { method: 'PUT', headers: { 'Content-Type': file.type }, body: file }) }
+  catch { throw new Error('서버에 연결할 수 없습니다.') }
+  const body = await response.json().catch(() => null)
+  if (!response.ok) throw new Error(body?.error?.code === 'image_too_large' ? `그림은 ${MAX_IMAGE_MB} MB까지입니다.` : body?.error?.message ? `그림을 올리지 못했습니다: ${body.error.message}` : '그림을 올리지 못했습니다.')
+  return { file: body.file, width: body.width, height: body.height }
+}
 function demoDocument(): GuideDocument {
   demoSaved ??= { revision: 'demo', exists: true, file: 'human_test_map_guide.yaml', guide: demoGuide(), map: 'human_test_map.yaml', map_matches: true, map_bounds: mapBounds(demoMap) }
   return demoSaved
