@@ -2,6 +2,7 @@
   "robot_id": "LIMBO-01",
   "map_yaml": "limbo/src/limbo_navigation/maps/human_test_map.yaml",
   "waypoints_yaml": "/data/waypoints.yaml",
+  "guide_yaml": "/data/guide.yaml",
   "robot_token_file": null,
   "allow_no_robot_token": false,
   "users_db": "/data/users.db",

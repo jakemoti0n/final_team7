@@ -22,7 +22,8 @@ COPY dashboard/deploy ./deploy
 COPY --from=ui /ui/dist ./ui/dist
 COPY limbo/src/limbo_navigation/maps/ /srv/limbo/src/limbo_navigation/maps/
 COPY limbo/src/limbo_patrol/config/ /srv/defaults/waypoints/
-# root가 아닌 사용자로 실행. /data(waypoint 볼륨)는 이 사용자 소유로 만들어 두면 새 볼륨이 그대로 물려받는다
+COPY dashboard/guides/ /srv/defaults/guides/
+# root가 아닌 사용자로 실행. /data(waypoint·약도·사용자 DB 볼륨)는 이 사용자 소유로 만들어 두면 새 볼륨이 그대로 물려받는다
 RUN useradd --system --uid 10001 --home-dir /srv dashboard \
     && mkdir /data && chown dashboard:dashboard /data && chmod 755 deploy/entrypoint.sh
 USER dashboard

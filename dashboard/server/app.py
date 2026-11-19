@@ -18,6 +18,7 @@ from pydantic import ValidationError
 
 from . import mapdata
 from .waypoints import WaypointFile, WaypointError
+from .guide import GuideFile, GuideError, MAX_BYTES as GUIDE_MAX_BYTES
 from .models import CommandClaim, CommandRequest, CommandResult, Settings, Telemetry, uuid_string
 from .state import Store, FINAL
 from .users import UserError, UserStore, token_hash
@@ -29,14 +30,14 @@ def error(status, code, message):
     return JSONResponse({"error": {"code": code, "message": message}}, status_code=status)
 
 
-async def read_json(request):
-    """(본문, 오류 응답). 텔레메트리와 같은 규칙: JSON, 8192바이트 이하."""
+async def read_json(request, limit=8192):
+    """(본문, 오류 응답). 텔레메트리와 같은 규칙: JSON, 기본 8192바이트 이하 (약도 저장만 더 크게)."""
     if request.headers.get("content-type", "").split(";")[0].strip().lower() != "application/json":
         return None, error(415, "unsupported_media_type", "Expected application/json")
     body = bytearray()
     async for chunk in request.stream():
-        if len(body) + len(chunk) > 8192:
-            return None, error(413, "payload_too_large", "Maximum request body is 8192 bytes")
+        if len(body) + len(chunk) > limit:
+            return None, error(413, "payload_too_large", f"Maximum request body is {limit} bytes")
         body.extend(chunk)
     try:
         return json.loads(body.decode("utf-8")), None
@@ -189,6 +190,7 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
             waypoints_yaml = (override and override.waypoints_yaml) or settings.waypoints_yaml
             self.map_meta, self.map_png, self.map_sketch = load_map(map_yaml, waypoints_yaml)
             self.map_key = map_yaml if self.map_meta is not None else None   # 같은 지도인지 비교용
+            self.map_yaml = map_yaml
             if self.map_meta is not None:
                 # 지도 그림 주소에 로봇을 붙인다 (로봇마다 지도가 다를 수 있음)
                 self.map_meta = {**self.map_meta, "image": f"/api/v1/map.png?robot_id={robot_id}",
@@ -229,6 +231,14 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
     for robot_id in settings.robots:
         if robot_id not in robots:
             register(robot_id)
+
+    # 방문자 안내 약도: 기본 로봇의 지도 좌표. 지도가 없으면 그릴 기준이 없으므로 쓰지 않는다
+    home_robot = robots[settings.robot_id]
+    guide_file, guide_lock = None, asyncio.Lock()
+    if settings.guide_yaml and home_robot.map_meta is not None:
+        guide_path = Path(settings.guide_yaml).expanduser()
+        guide_path = guide_path if guide_path.is_absolute() else ROOT.parent / guide_path
+        guide_file = GuideFile(guide_path, home_robot.map_meta, Path(home_robot.map_yaml).name)
 
     def find(robot_id):
         """화면 요청의 로봇. 비우면 기본 로봇, 모르는 로봇이면 None"""
@@ -497,6 +507,60 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
             except (OSError, yaml.YAMLError) as exc:
                 logging.error("waypoints not saved: %s", exc)
                 return error(503, "waypoints_unavailable", "Waypoint file cannot be saved")
+
+    def guide_missing():
+        return error(404, "guide_not_configured", "Set guide_yaml and map_yaml in the server config")
+
+    @app.get("/api/v1/guide")
+    async def get_guide(request: Request):
+        if (denied := require_user(request)[1]):
+            return denied
+        if guide_file is None:
+            return guide_missing()
+        try:
+            return guide_file.document()
+        except (OSError, GuideError) as exc:
+            logging.error("guide not loaded: %s", exc)
+            return error(503, "guide_unavailable", f"Guide file cannot be read: {exc}")
+
+    @app.put("/api/v1/guide")
+    async def save_guide(request: Request):
+        user, denied = require_user(request)
+        if denied:
+            return denied
+        if guide_file is None:
+            return guide_missing()
+        raw, problem = await read_json(request, GUIDE_MAX_BYTES)
+        if problem:
+            return problem
+        async with guide_lock:   # 로봇 동작과 무관하므로 순찰 중에도 저장한다
+            try:
+                document = guide_file.save(raw)
+            except GuideError as exc:
+                return error(409 if exc.code == "revision_conflict" else 422, exc.code, str(exc))
+            except OSError as exc:
+                logging.error("guide not saved: %s", exc)
+                return error(503, "guide_unavailable", "Guide file cannot be saved")
+        guide = document["guide"]
+        audit.info("guide saved by %s (%d areas, %d markers)", who(user), len(guide["areas"]), len(guide["markers"]))
+        return document
+
+    @app.get("/api/v1/guide/file")
+    async def download_guide(request: Request):
+        """저장된 약도 파일 그대로 (클라우드에서 고친 약도를 저장소로 가져갈 때)"""
+        if (denied := require_user(request)[1]):
+            return denied
+        if guide_file is None:
+            return guide_missing()
+        try:
+            body = guide_file.raw()
+        except OSError as exc:
+            logging.error("guide not loaded: %s", exc)
+            return error(503, "guide_unavailable", "Guide file cannot be read")
+        if body is None:
+            return error(404, "guide_not_saved", "The guide has not been saved yet")
+        return Response(body, media_type="application/yaml", headers={
+            "Cache-Control": "no-store", "Content-Disposition": f'attachment; filename="{guide_file.path.name}"'})
 
     @app.get("/api/v1/map.png")
     async def map_image(request: Request, robot_id: str = ""):

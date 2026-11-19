@@ -129,6 +129,7 @@ nano .env
 | `ADMIN_PASSWORD` | 첫 관리자의 **임시** 비밀번호(5자 이상). 첫 로그인 때 새 비밀번호로 바꾸게 된다. **작은따옴표로 감싸** 넣는다(`$` 같은 글자가 바뀌지 않게) |
 | `ROBOT_TOKEN` | 로봇용 토큰. 아래 명령으로 만든다. **로봇 쪽에도 같은 값** |
 | `MAP_YAML`, `INITIAL_WAYPOINTS` | 지도와 처음 waypoint 파일. 서로 맞는 짝으로(`.env.example` 주석) |
+| `INITIAL_GUIDE` | (선택) 처음 방문자 안내 약도. `dashboard/guides/`에 커밋한 파일 이름. 비우면 빈 약도로 시작해 관제 화면 '약도 편집'에서 만든다 |
 | `VISITOR_ENABLED` | 방문자 안내 화면(`/visitor`). 평소 `false`, 행사 때만 `true` (아래 「방문자 안내 켜고 끄기」) |
 
 ```bash
@@ -264,6 +265,14 @@ docker compose exec dashboard python -m server.users list
 # 편집한 waypoint가 지워진다. 먼저 위처럼 백업
 docker compose exec dashboard rm /data/waypoints.yaml
 docker compose up -d --force-recreate    # 다시 시작하며 새 INITIAL_WAYPOINTS를 복사
+```
+
+약도(`/data/guide.yaml`)도 같은 볼륨에 있고 `INITIAL_GUIDE`는 파일이 없을 때(처음)만 복사된다. 지도를 바꾸면 예전 약도는 좌표가 맞지 않으므로(편집 화면이 「다른 지도로 그린 약도」라고 경고) 내려받기로 보관한 뒤 지운다:
+
+```bash
+curl -s -b <로그인 쿠키> https://<DOMAIN>/api/v1/guide/file -o guide-backup.yaml   # 또는 편집 화면의 내려받기
+docker compose exec dashboard rm /data/guide.yaml
+docker compose up -d --force-recreate    # INITIAL_GUIDE를 정했으면 다시 복사, 아니면 빈 약도
 ```
 
 새 지도 파일은 저장소의 `limbo/src/limbo_navigation/maps/`에 커밋된 것만 이미지에 들어간다(새 지도를 추가했으면 `git pull` 후 `--build`).

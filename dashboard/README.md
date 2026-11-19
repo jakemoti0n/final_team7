@@ -184,8 +184,8 @@ DASHBOARD_CONFIG=/tmp/login-config.json ADMIN_USERNAME=admin ADMIN_PASSWORD=temp
 | `Dockerfile` | UI 빌드(node 24, pnpm lockfile 그대로) → Python 3.12 서버. `uvicorn --workers 1` 고정, root 아닌 사용자. 빌드 context는 저장소 루트(지도·기본 waypoint가 `limbo/`에 있음), 넣는 파일은 `Dockerfile.dockerignore`가 고름 |
 | `docker-compose.yml` | `dashboard`(8000, 밖으로 안 엶) + `caddy`(80·443). 볼륨: `waypoints`(`/data`: 편집한 waypoint와 사용자 DB `users.db`), `caddy_data`(인증서) |
 | `Caddyfile` | HTTPS 자동 발급만. 로그인은 서버가 한다(화면은 로그인 세션, 로봇용 4경로는 토큰). 로봇용 경로는 압축하지 않음 |
-| `.env.example` | `DOMAIN`, `ADMIN_USERNAME`/`ADMIN_PASSWORD`(첫 관리자, 처음 시작 때만), `ROBOT_TOKEN`, `MAP_YAML`, `INITIAL_WAYPOINTS`. 복사해 `.env`로(git 제외) |
-| `deploy/config.json`, `deploy/entrypoint.sh` | 컨테이너용 설정(waypoint는 `/data/waypoints.yaml`, 사용자 DB는 `/data/users.db`, `allow_no_robot_token: false`, `allow_no_login: false`). 처음 시작 때 볼륨이 비었으면 `INITIAL_WAYPOINTS`를 복사하고, `MAP_YAML`을 설정에 끼운 뒤 서버 실행 |
+| `.env.example` | `DOMAIN`, `ADMIN_USERNAME`/`ADMIN_PASSWORD`(첫 관리자, 처음 시작 때만), `ROBOT_TOKEN`, `MAP_YAML`, `INITIAL_WAYPOINTS`, `INITIAL_GUIDE`(선택). 복사해 `.env`로(git 제외) |
+| `deploy/config.json`, `deploy/entrypoint.sh` | 컨테이너용 설정(waypoint는 `/data/waypoints.yaml`, 약도는 `/data/guide.yaml`, 사용자 DB는 `/data/users.db`, `allow_no_robot_token: false`, `allow_no_login: false`). 처음 시작 때 볼륨이 비었으면 `INITIAL_WAYPOINTS`를 복사하고, `MAP_YAML`을 설정에 끼운 뒤 서버 실행 |
 
 ## 주행 시작·정지·재개·종료
 
@@ -238,12 +238,13 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 | `command_stop_response_timeout_s` / `command_stop_confirm_timeout_s` | 10초 / 30초. 순찰 종료 전용 (Nav2 목표 취소 후 노드 종료를 기다림) |
 | `map_yaml` | `limbo/src/limbo_navigation/maps/human_test_map.yaml`. 생략하면 지도 API가 404 |
 | `waypoints_yaml` | `limbo/src/limbo_patrol/config/test_waypoints.yaml`. 순찰 경로의 원본. 주행 시작 명령에 실려 로봇으로 간다 |
+| `guide_yaml` | `dashboard/guides/human_test_map_guide.yaml`(컨테이너는 `/data/guide.yaml`). 방문자 안내 약도 파일. 기본 로봇의 지도 좌표(m)로 그리고, 관제 화면이 읽고 쓰므로 **쓸 수 있는 곳**에 둔다. 파일이 없으면 빈 약도로 시작해 처음 저장할 때 만든다. 생략하면 약도 API가 404 `guide_not_configured` |
 | `robot_token_file` | `null`. 로봇용 경로 토큰 파일. 환경 변수 `ROBOT_TOKEN`이 우선 (「로봇 토큰과 인터넷 공개」) |
 | `allow_no_robot_token` | 기본 `config.json`은 `true`(로컬 개발), 설정에서 빼면 `false`. 토큰이 없을 때 로봇용 경로를 열어 둘지. **인터넷에 열 때는 `false`** |
 
 예전 `patrol_ros_domain_id`·`patrol_use_sim_time`은 지웠다(서버가 순찰 노드를 띄우지 않으므로). 설정 파일에 남아 있으면 서버가 시작하지 않으니 지운다. 같은 역할은 Bridge 프로세스의 `ROS_DOMAIN_ID`와 `bridge.yaml`의 `patrol_launch.use_sim_time`이 한다.
 
-`map_yaml`·`waypoints_yaml`은 절대경로이거나 **저장소 루트 기준** 상대경로다. 지도는 8비트 P5 PGM만 읽으며 서버 시작 때 한 번만 읽는다. 읽기에 실패하면 서버는 그대로 뜨고 로그에 `map not loaded`를 남기며, 화면에는 「서버에 지도가 설정되지 않았습니다」가 보인다. 지도를 읽을 때 자동 약도(SVG)도 같이 만들며, 관제 화면 지도 카드의 **원본 / 약도** 버튼으로 바꿔 본다(기본은 약도, 고른 것은 브라우저에 기억). 약도를 못 만들어도 원본 지도는 그대로 쓴다(`docs/CONTROL_SCREEN.md` B). 지도나 waypoint를 바꾸면 서버를 다시 실행한다.
+`map_yaml`·`waypoints_yaml`·`guide_yaml`은 절대경로이거나 **저장소 루트 기준** 상대경로다. 지도는 8비트 P5 PGM만 읽으며 서버 시작 때 한 번만 읽는다. 읽기에 실패하면 서버는 그대로 뜨고 로그에 `map not loaded`를 남기며, 화면에는 「서버에 지도가 설정되지 않았습니다」가 보인다. 지도를 읽을 때 자동 약도(SVG)도 같이 만들며, 관제 화면 지도 카드의 **원본 / 약도** 버튼으로 바꿔 본다(기본은 약도, 고른 것은 브라우저에 기억). 약도를 못 만들어도 원본 지도는 그대로 쓴다(`docs/CONTROL_SCREEN.md` B). 지도나 waypoint를 바꾸면 서버를 다시 실행한다.
 
 적용 설정은 서버 스냅샷으로 UI에 전달된다. 토픽별 기준은 실제 발행 주기를 측정한 뒤 조정한다. motion freshness는 odom 지연 기준을 motion 자체 age에 적용한다. ROS 헤더는 freshness 판정에 사용하지 않는다. 현재 세션의 마지막 유효 속도는 별도로 보존하고 현재 값이 없으면 `마지막 수신 값`으로만 표시한다.
 
@@ -308,6 +309,9 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 | `POST /api/v1/commands/{request_id}/result` | Bridge의 결과 보고(`accepted`·`rejected`·`no_response`·`service_unavailable`·`expired`). 끝난 명령의 늦은 보고는 결과를 바꾸지 않는다 |
 | `GET /api/v1/map` | `?robot_id=`. 그 로봇의 지도 메타데이터(`image`·`sketch`에 `?robot_id=`가 붙음)(해상도·원점·크기·waypoint). 지도 미설정 시 404 `map_not_configured` |
 | `GET /api/v1/map.png` | `?robot_id=`. SLAM PGM을 변환한 회색조 PNG |
+| `GET /api/v1/guide` | 방문자 안내 약도 `{revision, exists, file, guide, map, map_matches, map_bounds}`. 파일이 없으면 `exists: false`, `revision: ""`와 빈 약도(기본 구역 종류, 지도보다 사방 10 m 넓은 `bounds`). `map_matches`가 `false`면 다른 지도 좌표로 그린 약도. 파일이 깨졌으면 503 `guide_unavailable` |
+| `PUT /api/v1/guide` | `{"revision", "guide"}`로 문서 전체 저장(본문 256 KiB까지). 처음은 `revision: ""`. 다른 화면이 먼저 저장했으면 409 `revision_conflict`, 검사 실패는 422 `invalid_guide`(이름 1~32자·제어 문자 없음, 종류는 `categories`에 있는 것, 색 `#RRGGBB`, 아이콘은 내장 이름, 다각형 3~64점·변이 엇갈리지 않음, 좌표는 `bounds` 안, 구역 300·표시점 200·종류 50 이하). 순찰 중에도 저장된다(로봇과 무관). 형식은 `server/guide.py` 맨 위 |
+| `GET /api/v1/guide/file` | 저장된 약도 파일 그대로 내려받기(`Content-Disposition: attachment`). 아직 저장 전이면 404 `guide_not_saved` |
 | `GET /api/v1/map_sketch.svg` | `?robot_id=`. 서버가 지도를 읽을 때 만든 자동 약도(원본과 영역·크기 같음). 못 만들었으면 404 `map_sketch_unavailable`이고 `GET /api/v1/map`의 `sketch`가 `null` |
 | `GET /healthz` | `{"status":"ok"}`, 서버 생존 확인만 의미 |
 | `POST /api/v1/auth/login` | `{"username","password"}` → 200과 `limbo_session` 쿠키, 틀리면 401 `invalid_credentials`(없는 아이디와 틀린 비밀번호를 구분하지 않음), 너무 많이 틀리면 429 `too_many_attempts` |

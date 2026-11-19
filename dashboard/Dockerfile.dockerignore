@@ -15,4 +15,5 @@ dashboard/deploy/local_https_bridge.sh
 !limbo/src/limbo_navigation/maps/*.yaml
 !limbo/src/limbo_navigation/maps/*.pgm
 !limbo/src/limbo_patrol/config
+!dashboard/guides
 **/__pycache__

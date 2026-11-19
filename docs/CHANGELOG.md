@@ -8,6 +8,25 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-19 (80) 방문자 안내 약도 파일(guide_yaml)과 읽기·쓰기 API. 화면은 다음 단계. Bridge 수정 없음
+
+**할 일**
+- 서버: `git pull` → `dashboard/`에서 `docker compose up -d --build`. 약도는 볼륨의 `/data/guide.yaml`에 저장된다(처음엔 파일 없음). 처음 약도를 넣으려면 `.env`에 `INITIAL_GUIDE=<dashboard/guides/의 파일>`(선택)
+- 로컬 개발: `config.json`에 `guide_yaml`(`dashboard/guides/human_test_map_guide.yaml`)을 넣었다. 다른 지도를 쓰면 `<지도 이름>_guide.yaml`로 바꾼다
+
+**변경**
+- 설정: `guide_yaml`. 기본 로봇의 지도 좌표(m)로 그린 약도 하나(지도 하나에 약도 하나). waypoint처럼 화면이 쓰는 파일이라 쓸 수 있는 곳에 둔다(로컬 `dashboard/guides/`, Docker `/data/guide.yaml`). 지도 폴더 옆은 Docker에서 root 소유·읽기 전용이라 쓰지 않는다
+- 형식(`server/guide.py`): `version`, `map`(그린 지도 이름), `bounds`(그릴 수 있는 영역, 처음엔 지도보다 사방 10 m 넓게), `categories`(구역 종류: 이름·색·아이콘, 기본 8개 강의실·행사장·화장실·입구·복도·계단·엘리베이터·출입 금지·기타, 추가·수정 가능), `areas`(다각형), `markers`(점)
+- API: `GET /api/v1/guide`, `PUT /api/v1/guide`(문서 전체, revision 검사, 원자적 교체, 감사 로그), `GET /api/v1/guide/file`(내려받기). 로그인 필요. 순찰 중에도 저장(로봇과 무관). 방문자 API에는 아직 내보내지 않는다
+- 배포: `deploy/config.json`에 `/data/guide.yaml`, `INITIAL_GUIDE`(`.env`·`docker-compose.yml`·`entrypoint.sh`), 이미지에 `dashboard/guides/`를 `/srv/defaults/guides/`로
+- 정리: waypoint 저장의 원자적 교체를 `server/files.py`로 빼서 약도와 같이 쓴다
+- 시험: 서버 31개(빈 약도·넓은 영역, 저장·revision 충돌·내려받기, 잘못된 약도 23가지는 422이고 파일 그대로, Infinity 좌표, 큰 약도 300구역·256 KiB 상한, 깨진 파일 503 후 덮어쓰기, 다른 지도 경고, 미설정 404, 설정 경로) + 로그인 필요 4개. 서버 193 통과. Docker에서 `/data/guide.yaml` 저장·`INITIAL_GUIDE` 오류 확인
+
+**원인과 근거**
+- 방문자 화면에 구역 이름이 있는 약도를 보여 주려면 사람이 구역을 그려야 한다. 지도와 같은 미터 좌표로 그리면 기준점 맞추기 없이 로봇 위치를 약도 위에 바로 그릴 수 있다
+- 로봇이 가지 않는 방도 그리도록 그릴 수 있는 영역을 지도보다 넓게 둔다
+- 색·이름은 로그인 없는 방문자 화면에 나가므로 서버가 형식을 묶는다(색은 `#RRGGBB`만, 이름에 제어 문자 금지, 아이콘은 내장 이름만)
+
 ## 2026-11-19 (79) 관제 화면 지도에 자동 약도와 원본 / 약도 전환. 서버가 지도를 읽을 때 약도(SVG)를 만든다. Bridge 수정 없음
 
 **할 일**

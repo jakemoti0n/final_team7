@@ -266,6 +266,10 @@ class Settings(StrictModel):
     allow_no_login: bool = False
     session_idle_s: Annotated[float, Field(gt=0)] = 12 * 3600     # 마지막 활동 후 이 시간이 지나면 다시 로그인
     session_max_s: Annotated[float, Field(gt=0)] = 7 * 24 * 3600  # 로그인 후 이 시간이 지나면 다시 로그인
+    # 방문자 안내 약도 파일 (저장소 루트 기준 상대경로 또는 절대경로). 기본 로봇의 지도 좌표로 그린다.
+    # 관제 화면 '약도 편집'이 읽고 쓰므로 쓸 수 있는 곳(로컬: dashboard/guides/, Docker: /data/guide.yaml).
+    # 파일이 없으면 빈 약도로 시작해 처음 저장할 때 만든다. 비우면 약도 API가 404
+    guide_yaml: str | None = None
     # 방문자 안내 화면(/visitor)과 그 API. 로그인 없이 누구나 읽으므로 기본은 꺼짐.
     # 켜면 로봇 이름·쉬운 상태·대략 위치(0.5 m 단위)만 내보내고 명령은 받지 않는다
     visitor_enabled: bool = False

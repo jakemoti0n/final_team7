@@ -174,7 +174,8 @@ BROWSER_PATHS = [
     ('get', '/api/v1/waypoints'), ('put', '/api/v1/waypoints'), ('post', '/api/v1/commands'),
     ('post', '/api/v1/stream-ticket'), ('get', '/api/v1/users'), ('post', '/api/v1/users'),
     ('patch', '/api/v1/users/1'), ('delete', '/api/v1/users/1'), ('put', '/api/v1/auth/password'),
-    ('get', '/api/v1/auth/me'),
+    ('get', '/api/v1/auth/me'), ('get', '/api/v1/map_sketch.svg'), ('get', '/api/v1/guide'), ('put', '/api/v1/guide'),
+    ('get', '/api/v1/guide/file'),
 ]
 
 

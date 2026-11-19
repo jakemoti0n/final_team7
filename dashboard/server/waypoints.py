@@ -1,11 +1,11 @@
 """설정된 순찰 경로를 revision 검사와 원자적 교체로 저장한다."""
 import hashlib
 import math
-import os
 from pathlib import Path
-import tempfile
 
 import yaml
+
+from .files import atomic_write
 
 
 MAX_WAYPOINTS = 200   # 순찰 시작 명령에 실어 보내므로 크기를 묶는다 (Bridge 명령 응답 64 KiB 안)
@@ -99,19 +99,7 @@ class WaypointFile:
         else:
             raise WaypointError('invalid_payload', 'action must be add, move, delete, rename or reorder')
         self._validate(points)
-        rendered = yaml.safe_dump(data, allow_unicode=True, sort_keys=False).encode('utf-8')
-        temp = None
-        try:
-            with tempfile.NamedTemporaryFile(dir=self.path.parent, prefix='.waypoints-', suffix='.yaml', delete=False) as output:
-                temp = Path(output.name)
-                output.write(rendered)
-                output.flush()
-                os.fsync(output.fileno())
-            os.chmod(temp, self.path.stat().st_mode & 0o777)
-            os.replace(temp, self.path)
-        finally:
-            if temp is not None:
-                temp.unlink(missing_ok=True)
+        atomic_write(self.path, yaml.safe_dump(data, allow_unicode=True, sort_keys=False).encode('utf-8'))
         return self.document()
 
     def _validate(self, points):
