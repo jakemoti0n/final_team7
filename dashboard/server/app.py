@@ -175,7 +175,7 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
     login_failures = {}   # (IP, 아이디) → 최근 실패 시각들(monotonic)
     base_store = store or Store(settings)
     robots = {}           # robot_id → Robot. 넣은 순서 = 화면 목록 순서 (기본 로봇, 설정, 자동 등록 순)
-    maps = {}             # (map_yaml, waypoints_yaml) → (메타, PNG) 또는 None. 같은 파일은 한 번만 읽는다
+    maps = {}             # (map_yaml, waypoints_yaml) → (메타, PNG, 자동 약도 SVG) 또는 None. 같은 파일은 한 번만 읽는다
     waypoint_files = {}   # (waypoint 실제 경로, map_yaml) → (WaypointFile, Lock). 같은 파일을 쓰는 로봇끼리 공유
 
     class Robot:
@@ -187,11 +187,12 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
             override = settings.robots.get(robot_id)
             map_yaml = (override and override.map_yaml) or settings.map_yaml
             waypoints_yaml = (override and override.waypoints_yaml) or settings.waypoints_yaml
-            self.map_meta, self.map_png = load_map(map_yaml, waypoints_yaml)
+            self.map_meta, self.map_png, self.map_sketch = load_map(map_yaml, waypoints_yaml)
             self.map_key = map_yaml if self.map_meta is not None else None   # 같은 지도인지 비교용
             if self.map_meta is not None:
                 # 지도 그림 주소에 로봇을 붙인다 (로봇마다 지도가 다를 수 있음)
-                self.map_meta = {**self.map_meta, "image": f"/api/v1/map.png?robot_id={robot_id}"}
+                self.map_meta = {**self.map_meta, "image": f"/api/v1/map.png?robot_id={robot_id}",
+                                 "sketch": f"/api/v1/map_sketch.svg?robot_id={robot_id}" if self.map_sketch else None}
             robot_store.map_available = self.map_meta is not None
             self.waypoint_file, self.lock = None, asyncio.Lock()
             if waypoints_yaml and self.map_meta is not None:
@@ -209,7 +210,7 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
 
     def load_map(map_yaml, waypoints_yaml):
         if not map_yaml:
-            return None, None
+            return None, None, None
         key = (map_yaml, waypoints_yaml)
         if key not in maps:
             try:
@@ -217,7 +218,7 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
             except (OSError, ValueError, KeyError, TypeError) as exc:
                 logging.error("map not loaded: %s", exc)
                 maps[key] = None
-        return maps[key] or (None, None)
+        return maps[key] or (None, None, None)
 
     def register(robot_id, robot_store=None):
         robots[robot_id] = Robot(robot_id, robot_store or Store(
@@ -506,6 +507,19 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
         if robot.map_png is None:
             return error(404, "map_not_configured", "Set map_yaml in the server config")
         return Response(robot.map_png, media_type="image/png", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/api/v1/map_sketch.svg")
+    async def map_sketch(request: Request, robot_id: str = ""):
+        """서버가 지도를 읽을 때 만든 자동 약도. 원본 지도와 영역·크기가 같다"""
+        if (denied := require_user(request)[1]):
+            return denied
+        if (robot := find(robot_id)) is None:
+            return unknown_robot()
+        if robot.map_sketch is None:
+            return error(404, "map_sketch_unavailable", "Map sketch is not available; use the original map")
+        # 서버가 만든 SVG지만, 주소로 직접 열어도 스크립트·외부 자원이 돌지 않게 막는다
+        return Response(robot.map_sketch, media_type="image/svg+xml",
+                        headers={"Cache-Control": "no-cache", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"})
 
     @app.get("/api/v1/state")
     async def state(request: Request, robot_id: str = ""):

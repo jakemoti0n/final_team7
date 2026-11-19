@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { LiveControl, driveControl, fromServer, lockReason, pauseReason, resumeReason, stageShapes, startReason, stopReason, waypointLocked } from './control'
-import { headingDeg, isMapInfo, toPixel, uncertaintyPx } from './map'
+import { headingDeg, isMapInfo, mapBackground, readMapLayer, saveMapLayer, toPixel, uncertaintyPx } from './map'
 import { MockProvider } from './demo'
 import { overall, patrolLabel } from './status'
 import type { ServerCommand, ServerStage, Snapshot, View } from './types'
@@ -78,6 +78,20 @@ it('map pixels: origin is bottom-left, y grows up; heading and uncertainty', () 
   expect(uncertaintyPx(map, .1)).toBeCloseTo(4)
   expect(uncertaintyPx(map, null)).toBe(0)
   expect(isMapInfo(map)).toBe(true); expect(isMapInfo({ resolution: 0 })).toBe(false)
+})
+it('map background: sketch when the server made one, otherwise the original; choice is remembered', () => {
+  const map = { resolution: .05, origin: [0, 0, 0], width: 10, height: 10, image: '/api/v1/map.png', sketch: '/api/v1/map_sketch.svg', waypoints: [] }
+  expect(mapBackground(map, 'sketch')).toEqual({ href: '/api/v1/map_sketch.svg', layer: 'sketch' })
+  expect(mapBackground(map, 'original')).toEqual({ href: '/api/v1/map.png', layer: 'original' })
+  expect(mapBackground({ ...map, sketch: null }, 'sketch')).toEqual({ href: '/api/v1/map.png', layer: 'original' })
+  expect(mapBackground({ ...map, sketch: undefined }, 'sketch').layer).toBe('original')
+  const store = new Map<string, string>()
+  vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v) } })
+  expect(readMapLayer()).toBe('sketch')
+  saveMapLayer('original'); expect(readMapLayer()).toBe('original')
+  vi.stubGlobal('localStorage', { getItem: () => { throw new Error('blocked') }, setItem: () => { throw new Error('blocked') } })
+  expect(readMapLayer()).toBe('sketch'); expect(() => saveMapLayer('original')).not.toThrow()
+  vi.unstubAllGlobals()
 })
 it('one-line summary: normal / check needed with the reason / disconnected', () => {
   expect(overall(view()).label).toBe('정상')

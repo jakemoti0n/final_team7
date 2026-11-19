@@ -144,6 +144,12 @@ button.link{background:none;border:0;padding:0;color:var(--color-accent);font-si
 .movement .speed{min-height:0;margin-left:auto;flex-wrap:wrap}
 .movement .speed strong{font-size:40px}
 .map-toggle{font-size:13px;padding:6px 12px;min-height:34px}
+.map-layer{display:inline-flex}
+.map-layer .map-toggle{border-radius:0}
+.map-layer .map-toggle:first-child{border-radius:var(--radius-sm) 0 0 var(--radius-sm)}
+.map-layer .map-toggle:last-child{border-radius:0 var(--radius-sm) var(--radius-sm) 0;margin-left:-1px}
+.map-layer .map-toggle[aria-pressed=true],.map-layer .map-toggle[aria-pressed=true]:hover:not(:disabled){background:var(--color-primary);color:var(--color-on-primary);border-color:var(--color-primary)}
+.map-sketch{image-rendering:auto}
 .map-frame svg{overflow:hidden}
 @media(max-width:1200px){
   .connection{margin-left:0}

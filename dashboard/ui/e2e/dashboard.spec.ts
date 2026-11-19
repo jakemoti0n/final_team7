@@ -168,6 +168,25 @@ test('silent stream becomes a browser problem and tab return fetches a fresh sna
   await expect(page.getByTestId('connection')).toContainText('연결됨')
 })
 
+test('map card switches between the auto sketch and the original map and remembers the choice', async ({ page }) => {
+  await page.goto('/')
+  const background = page.getByTestId('map-background')
+  const layers = page.getByRole('group', { name: '지도 바탕' })
+  await expect(background).toHaveAttribute('data-layer', 'sketch')            // 기본은 약도
+  await expect(background).toHaveAttribute('href', /\/api\/v1\/map_sketch\.svg\?robot_id=/)
+  await expect(layers.getByRole('button', { name: '약도' })).toHaveAttribute('aria-pressed', 'true')
+  const sketch = await page.request.get((await background.getAttribute('href'))!)
+  expect(sketch.headers()['content-type']).toBe('image/svg+xml')
+  await layers.getByRole('button', { name: '원본' }).click()
+  await expect(background).toHaveAttribute('data-layer', 'original')
+  await expect(background).toHaveAttribute('href', /\/api\/v1\/map\.png\?robot_id=/)
+  await expect(page.getByTestId('map-waypoint').first()).toBeVisible()      // 바탕만 바뀌고 지점은 그대로
+  await page.reload()
+  await expect(page.getByTestId('map-background')).toHaveAttribute('data-layer', 'original')
+  await page.getByRole('group', { name: '지도 바탕' }).getByRole('button', { name: '약도' }).click()
+  await expect(page.getByTestId('map-background')).toHaveAttribute('data-layer', 'sketch')
+})
+
 test('demo waypoints can be added, moved on the map, and deleted without API calls', async ({ page }) => {
   const apiRequests: string[] = []
   page.on('request', request => { if (request.url().includes('/api/')) apiRequests.push(request.url()) })

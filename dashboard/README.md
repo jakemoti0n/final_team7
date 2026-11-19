@@ -243,7 +243,7 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 
 예전 `patrol_ros_domain_id`·`patrol_use_sim_time`은 지웠다(서버가 순찰 노드를 띄우지 않으므로). 설정 파일에 남아 있으면 서버가 시작하지 않으니 지운다. 같은 역할은 Bridge 프로세스의 `ROS_DOMAIN_ID`와 `bridge.yaml`의 `patrol_launch.use_sim_time`이 한다.
 
-`map_yaml`·`waypoints_yaml`은 절대경로이거나 **저장소 루트 기준** 상대경로다. 지도는 8비트 P5 PGM만 읽으며 서버 시작 때 한 번만 읽는다. 읽기에 실패하면 서버는 그대로 뜨고 로그에 `map not loaded`를 남기며, 화면에는 「서버에 지도가 설정되지 않았습니다」가 보인다. 지도나 waypoint를 바꾸면 서버를 다시 실행한다.
+`map_yaml`·`waypoints_yaml`은 절대경로이거나 **저장소 루트 기준** 상대경로다. 지도는 8비트 P5 PGM만 읽으며 서버 시작 때 한 번만 읽는다. 읽기에 실패하면 서버는 그대로 뜨고 로그에 `map not loaded`를 남기며, 화면에는 「서버에 지도가 설정되지 않았습니다」가 보인다. 지도를 읽을 때 자동 약도(SVG)도 같이 만들며, 관제 화면 지도 카드의 **원본 / 약도** 버튼으로 바꿔 본다(기본은 약도, 고른 것은 브라우저에 기억). 약도를 못 만들어도 원본 지도는 그대로 쓴다(`docs/CONTROL_SCREEN.md` B). 지도나 waypoint를 바꾸면 서버를 다시 실행한다.
 
 적용 설정은 서버 스냅샷으로 UI에 전달된다. 토픽별 기준은 실제 발행 주기를 측정한 뒤 조정한다. motion freshness는 odom 지연 기준을 motion 자체 age에 적용한다. ROS 헤더는 freshness 판정에 사용하지 않는다. 현재 세션의 마지막 유효 속도는 별도로 보존하고 현재 값이 없으면 `마지막 수신 값`으로만 표시한다.
 
@@ -306,8 +306,9 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 | `GET /api/v1/commands/next` | Bridge → 서버. `robot_id`, `bridge_session_id`, `wait_s`(최대 10초 long poll). 명령이 있으면 `request_id`·`command`·`ttl_ms`(start는 `route`도: `revision`·`bounds`·`waypoints`), 없으면 204(아직 텔레메트리를 보내지 않은 로봇도 204). 현재 세션에 한 번만 내준다 |
 | `POST /api/v1/commands/{request_id}/claim` | Bridge가 서비스를 부르기 직전 아직 유효한지 확인. 허락되면 응답 제한을 이 시각부터 다시 센다. 끝난 명령이거나 다른 로봇의 명령이면 409 `command_closed`·`unknown_robot` |
 | `POST /api/v1/commands/{request_id}/result` | Bridge의 결과 보고(`accepted`·`rejected`·`no_response`·`service_unavailable`·`expired`). 끝난 명령의 늦은 보고는 결과를 바꾸지 않는다 |
-| `GET /api/v1/map` | `?robot_id=`. 그 로봇의 지도 메타데이터(`image`에 `?robot_id=`가 붙음)(해상도·원점·크기·waypoint). 지도 미설정 시 404 `map_not_configured` |
+| `GET /api/v1/map` | `?robot_id=`. 그 로봇의 지도 메타데이터(`image`·`sketch`에 `?robot_id=`가 붙음)(해상도·원점·크기·waypoint). 지도 미설정 시 404 `map_not_configured` |
 | `GET /api/v1/map.png` | `?robot_id=`. SLAM PGM을 변환한 회색조 PNG |
+| `GET /api/v1/map_sketch.svg` | `?robot_id=`. 서버가 지도를 읽을 때 만든 자동 약도(원본과 영역·크기 같음). 못 만들었으면 404 `map_sketch_unavailable`이고 `GET /api/v1/map`의 `sketch`가 `null` |
 | `GET /healthz` | `{"status":"ok"}`, 서버 생존 확인만 의미 |
 | `POST /api/v1/auth/login` | `{"username","password"}` → 200과 `limbo_session` 쿠키, 틀리면 401 `invalid_credentials`(없는 아이디와 틀린 비밀번호를 구분하지 않음), 너무 많이 틀리면 429 `too_many_attempts` |
 | `POST /api/v1/auth/logout` | 세션을 지우고 쿠키 삭제 |

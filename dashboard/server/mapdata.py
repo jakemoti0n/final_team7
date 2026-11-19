@@ -1,9 +1,12 @@
 """지도(SLAM pgm)와 순찰 waypoint를 화면용으로 읽는다. 서버 시작 때 한 번만 (docs/CONTROL_API_DRAFT.md §4)."""
 from pathlib import Path
+import logging
 import struct
 import zlib
 
 import yaml
+
+from . import sketch
 
 
 def read_pgm(path):
@@ -40,7 +43,8 @@ def png_gray(width, height, pixels):
 
 
 def load(map_yaml, waypoints_yaml=None, base=None):
-    """(메타데이터, PNG 바이트). 경로가 상대경로면 base(저장소 루트) 기준."""
+    """(메타데이터, PNG 바이트, 자동 약도 SVG 바이트 또는 None). 경로가 상대경로면 base(저장소 루트) 기준.
+    약도를 못 만들어도 지도는 쓴다 (화면은 원본만 보여 줌)."""
     def resolve(value):
         path = Path(value)
         return path if path.is_absolute() or base is None else Path(base) / path
@@ -55,5 +59,13 @@ def load(map_yaml, waypoints_yaml=None, base=None):
             waypoints.append(dict(name=str(w["name"]), type=str(w["type"]),
                                   x=float(w["x"]), y=float(w["y"])))
     origin = [float(v) for v in meta["origin"]]
-    return dict(resolution=float(meta["resolution"]), origin=origin, width=width, height=height,
-                image="/api/v1/map.png", waypoints=waypoints), png_gray(width, height, pixels)
+    resolution = float(meta["resolution"])
+    try:
+        drawing = sketch.svg(width, height, pixels, resolution, origin, float(meta.get("free_thresh", 0.196)),
+                             bool(meta.get("negate", 0)), [(w["x"], w["y"]) for w in waypoints])
+    except (ValueError, TypeError, MemoryError) as exc:
+        logging.warning("map sketch not made (original map only): %s", exc)
+        drawing = None
+    return (dict(resolution=resolution, origin=origin, width=width, height=height,
+                 image="/api/v1/map.png", sketch="/api/v1/map_sketch.svg" if drawing else None, waypoints=waypoints),
+            png_gray(width, height, pixels), drawing)
