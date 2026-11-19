@@ -23,7 +23,8 @@ def test_disabled_by_default_everything_is_404(tmp_path):
     assert Settings().visitor_enabled is False
     _, client = make(tmp_path, enabled=False)
     with client:
-        for path in ('/visitor', '/api/v1/visitor/state', '/api/v1/visitor/map.png'):
+        for path in ('/visitor', '/api/v1/visitor/state', '/api/v1/visitor/map.png', '/api/v1/visitor/map_sketch.svg',
+                     '/api/v1/visitor/guide', '/api/v1/visitor/guide/image/image-0123456789abcdef.png'):
             response = client.get(path)
             assert response.status_code == 404 and response.json()['error']['code'] == 'visitor_disabled', path
 
@@ -35,8 +36,10 @@ def test_only_public_fields_and_rounded_position(tmp_path):
         response = client.get('/api/v1/visitor/state')
         assert response.status_code == 200 and response.headers['cache-control'] == 'no-store'
         body = response.json()
-        assert set(body) == {'server_utc', 'robots', 'operating', 'map'}
-        assert body['map'] == dict(resolution=1., origin=[0., 0., 0.], width=10, height=10, image='/api/v1/visitor/map.png')
+        assert set(body) == {'server_utc', 'robots', 'operating', 'map', 'guide'}
+        assert body['map'] == dict(resolution=1., origin=[0., 0., 0.], width=10, height=10, image='/api/v1/visitor/map.png',
+                                   sketch='/api/v1/visitor/map_sketch.svg')
+        assert body['guide'] is None                     # 약도 파일을 정하지 않음
         assert body['operating'] == 1
         [robot] = body['robots']
         assert robot == dict(robot_id='LIMBO-01', status='patrolling', position=dict(x=2.5, y=3.5, stale=False, age_s=0))
@@ -93,3 +96,86 @@ def test_visitor_needs_no_login_but_operator_api_still_does(tmp_path):
             assert client.post('/api/v1/visitor/state').status_code == 405   # 명령을 받는 경로가 없다
     finally:
         users.close()
+
+
+# ---- 안내 약도 (관제 화면 '약도 편집'에서 그린 것) ----
+
+def guided(tmp_path, users=None):
+    settings = Settings(map_yaml=write_map(tmp_path), waypoints_yaml=write_route(tmp_path / 'route.yaml'),
+                        guide_yaml=str(tmp_path / 'guide.yaml'), visitor_enabled=True)
+    store = Store(settings, Clock(), lambda: '2026-10-13T00:00:00Z')
+    return TestClient(create_app(settings, store, users=users))
+
+
+def draw(client, **change):
+    doc = client.get('/api/v1/guide').json()
+    guide = doc['guide']
+    guide['areas'] = [{'name': '행사장', 'category': 'event', 'polygon': [[1, 1], [5, 1], [5, 4], [1, 4]]}]
+    guide.update(change)
+    response = client.put('/api/v1/guide', json={'revision': doc['revision'], 'guide': guide})
+    assert response.status_code == 200, response.json()
+    return response.json()
+
+
+def test_visitor_gets_the_drawn_guide_only_when_there_is_one(tmp_path):
+    with guided(tmp_path) as client:
+        assert client.get('/api/v1/visitor/state').json()['guide'] is None          # 아직 저장 전
+        assert client.get('/api/v1/visitor/guide').json()['error']['code'] == 'guide_not_available'
+        saved = draw(client)
+        state = client.get('/api/v1/visitor/state').json()
+        assert state['guide'] == saved['revision']                                  # 바뀌면 다시 받으라는 표시
+        guide = client.get('/api/v1/visitor/guide').json()
+        assert set(guide) == {'revision', 'bounds', 'categories', 'areas', 'markers', 'image'}
+        assert guide['areas'][0]['name'] == '행사장' and guide['image'] is None
+        assert 'map' not in guide and 'waypoints' not in client.get('/api/v1/visitor/guide').text
+        # 빈 약도(구역·표시점·그림 없음)는 없는 것과 같다
+        draw(client, areas=[])
+        assert client.get('/api/v1/visitor/state').json()['guide'] is None
+
+
+def test_guide_drawn_for_another_map_is_not_shown_to_visitors(tmp_path):
+    """좌표가 맞지 않으니 엉뚱한 곳을 가리키지 않게 숨긴다 (관제 화면은 경고)"""
+    with guided(tmp_path) as client:
+        draw(client, map='other_map.yaml')
+        assert client.get('/api/v1/visitor/state').json()['guide'] is None
+        assert client.get('/api/v1/visitor/guide').status_code == 404
+
+
+def test_only_the_image_in_use_is_public(tmp_path):
+    from tests.test_guide import png
+    with guided(tmp_path) as client:
+        used = client.put('/api/v1/guide/image', content=png(), headers={'content-type': 'image/png'}).json()
+        other = client.put('/api/v1/guide/image', content=png(12, 12), headers={'content-type': 'image/png'}).json()
+        assert client.get(f"/api/v1/visitor/guide/image/{used['file']}").status_code == 404      # 저장 전
+        draw(client, image={'file': used['file'], 'width': used['width'], 'height': used['height'],
+                            'transform': [0.1, 0, 0, 0, -0.1, 5], 'points': [{'image': [0, 0], 'map': [0, 5]}], 'show_areas': True})
+        guide = client.get('/api/v1/visitor/guide').json()
+        assert guide['image'] == {'file': used['file'], 'width': 40, 'height': 30, 'transform': [0.1, 0, 0, 0, -0.1, 5],
+                                  'show_areas': True, 'url': f"/api/v1/visitor/guide/image/{used['file']}"}   # 기준점은 빼고
+        image = client.get(guide['image']['url'])
+        assert image.status_code == 200 and image.content == png() and image.headers['x-content-type-options'] == 'nosniff'
+        assert client.get(f"/api/v1/visitor/guide/image/{other['file']}").status_code == 404
+        sketch = client.get('/api/v1/visitor/map_sketch.svg')
+        assert sketch.status_code == 200 and sketch.headers['content-type'] == 'image/svg+xml'
+
+
+def test_guide_changes_are_picked_up_without_restart(tmp_path):
+    with guided(tmp_path) as client:
+        first = draw(client)['revision']
+        assert client.get('/api/v1/visitor/state').json()['guide'] == first
+        doc = client.get('/api/v1/guide').json()
+        guide = doc['guide']
+        guide['areas'][0]['name'] = '본 행사장'
+        second = client.put('/api/v1/guide', json={'revision': doc['revision'], 'guide': guide}).json()['revision']
+        assert client.get('/api/v1/visitor/state').json()['guide'] == second != first
+        assert client.get('/api/v1/visitor/guide').json()['areas'][0]['name'] == '본 행사장'
+
+
+def test_visitor_guide_needs_no_login_but_editing_does(tmp_path):
+    users = UserStore(str(tmp_path / 'users.db'))
+    with guided(tmp_path, users) as client:
+        assert client.get('/api/v1/guide').status_code == 401
+        assert client.put('/api/v1/guide/image', content=b'x', headers={'content-type': 'image/png'}).status_code == 401
+        assert client.get('/api/v1/visitor/state').status_code == 200
+        assert client.get('/api/v1/visitor/guide').status_code == 404               # 열려 있지만 아직 약도 없음
+    users.close()

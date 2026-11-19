@@ -5,7 +5,7 @@ import { mapInfo, visitorStatus, type VisitorMap as MapData, type VisitorRobot }
  * 방문자 지도: 행사장 지도 위에 LIMBO 위치만 큰 점으로. 방향·순찰 경로·목표 지점은 그리지 않는다.
  * 오래된 위치(stale)나 서버에서 받지 못하는 동안은 회색 점선 원으로 그려 "지금 여기 있다"로 읽히지 않게 한다.
  */
-export function VisitorMap({ map, robots, stale }: { map: MapData; robots: VisitorRobot[]; stale: boolean }) {
+export function VisitorMap({ map, robots, stale, fit = true }: { map: MapData; robots: VisitorRobot[]; stale: boolean; fit?: boolean }) {
   const info = mapInfo(map)
   const unit = Math.max(map.width, map.height) / 100
   const shown = robots.filter(r => r.position)
@@ -13,8 +13,10 @@ export function VisitorMap({ map, robots, stale }: { map: MapData; robots: Visit
   function old(r: VisitorRobot) { return stale || r.position!.stale }
   // 지도 비율 그대로, 화면 높이의 70%를 넘지 않게 (넘치면 좁혀서 가운데)
   const width = `min(100%, calc(70vh * ${map.width / map.height}))`
-  return <div className="visitor-map"><svg viewBox={`0 0 ${map.width} ${map.height}`} style={{ width }} role="img" aria-label={label}>
-    {map.image ? <image href={map.image} width={map.width} height={map.height} className="map-image" /> : <rect width={map.width} height={map.height} className="map-blank" />}
+  // 바탕은 자동 약도(있으면). 레이저 줄무늬가 없어 방문자가 읽기 쉽다
+  const background = map.sketch ?? map.image
+  return <div className="visitor-map"><svg viewBox={`0 0 ${map.width} ${map.height}`} style={fit ? { width } : undefined} role="img" aria-label={label}>
+    {background ? <image href={background} width={map.width} height={map.height} className={map.sketch ? 'map-sketch' : 'map-image'} data-testid="visitor-map-background" /> : <rect width={map.width} height={map.height} className="map-blank" />}
     {/* 오래된 위치를 먼저 그려 지금 위치가 위에 오게 한다 */}
     {[...shown].sort((a, b) => Number(old(b)) - Number(old(a))).map(r => {
       const [x, y] = toPixel(info, r.position!.x, r.position!.y)

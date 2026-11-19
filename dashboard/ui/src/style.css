@@ -520,3 +520,17 @@ button.danger:hover:not(:disabled){background:var(--color-bad-bg)}
   .guide-pairs li{grid-template-columns:26px 1fr 30px}
   .guide-pairs li>span:nth-child(3),.guide-pairs li>span:nth-child(4){grid-column:2}
 }
+/* 방문자 안내 약도 (features/visitor/GuideVisitorMap.tsx) */
+.visitor-guide{padding:14px 14px 0}
+.visitor-guide-frame{position:relative}
+.visitor-guide-frame>svg{display:block;height:auto;margin:0 auto;border-radius:var(--radius-lg);border:1px solid var(--color-border)}
+.visitor-inset{position:absolute;left:8px;bottom:8px;width:min(30%,200px);background:var(--color-surface);border:1px solid var(--color-border-strong);border-radius:var(--radius-lg);box-shadow:var(--shadow-menu);overflow:hidden}
+.visitor-inset .visitor-map{padding:0}
+.visitor-inset .visitor-map svg{width:100%;border-radius:0}
+.visitor-inset-toggle{display:block;width:100%;border:0;border-bottom:1px solid var(--color-border);border-radius:0;padding:5px 8px;font-size:12px;text-align:left;background:var(--color-surface)}
+.visitor-inset-toggle::after{content:" ⤢";color:var(--color-text-muted)}
+.inset-open .visitor-inset{left:0;right:0;bottom:0;top:0;width:auto;display:flex;flex-direction:column}
+.inset-open .visitor-inset .visitor-map{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+.inset-open .visitor-inset .visitor-map svg{max-height:100%;width:auto;max-width:100%}
+.inset-open .visitor-inset-toggle::after{content:" ✕"}
+.visitor-outside{margin:10px 4px 0;font-size:14px;color:var(--color-warn-fg)}

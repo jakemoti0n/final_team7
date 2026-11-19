@@ -319,6 +319,7 @@ class GuideFile:
         self.map = map_meta
         self.map_name = map_name
         self.files = self.path.parent / f"{self.path.stem}_files"   # 약도 그림 (guide.yaml → guide_files/)
+        self._public = (None, None)   # (파일 상태, 방문자용 약도) — 방문자 화면이 3초마다 물으므로 파일이 바뀔 때만 다시 읽는다
 
     def read(self):
         """(약도, revision, 파일 있음). 파일이 없으면 revision은 빈 문자열"""
@@ -386,6 +387,30 @@ class GuideFile:
         for item in self.files.iterdir():
             if IMAGE_NAME.fullmatch(item.name) and item.name != keep and time.time() - item.stat().st_mtime > 3600:
                 item.unlink(missing_ok=True)
+
+    def public(self):
+        """방문자 화면에 보일 약도: {revision, bounds, categories, areas, markers, image}. 보일 것이 없으면 None.
+        파일이 없거나·깨졌거나·다른 지도로 그렸거나(위치가 어긋남)·비어 있으면 None. 기준점·지도 이름은 내보내지 않는다"""
+        try:
+            stat = self.path.stat()
+            key = (stat.st_mtime_ns, stat.st_size)
+        except FileNotFoundError:
+            return None
+        if self._public[0] == key:
+            return self._public[1]
+        try:
+            guide, revision, _ = self.read()
+        except (OSError, GuideError):
+            guide = None
+        view = None
+        if guide is not None and guide["map"] in (None, self.map_name) and (guide["areas"] or guide["markers"] or guide["image"]):
+            image = guide["image"]
+            view = dict(revision=revision, bounds=guide["bounds"], categories=guide["categories"], areas=guide["areas"],
+                        markers=guide["markers"],
+                        image=None if image is None else dict(file=image["file"], width=image["width"], height=image["height"],
+                                                              transform=image["transform"], show_areas=image["show_areas"]))
+        self._public = (key, view)
+        return view
 
     def raw(self):
         """내려받기용 파일 내용. 파일이 없으면 None"""

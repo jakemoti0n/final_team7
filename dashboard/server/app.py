@@ -870,11 +870,15 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
         home = find("")
         meta = home.map_meta
         items = [visitor_robot(robot, home) for robot in robots.values()]
+        public_guide = guide_file.public() if guide_file is not None else None
         body = dict(server_utc=base_store.utc(), robots=items,
                     operating=sum(item["status"] in ("patrolling", "paused", "idle") for item in items),
                     map=None if meta is None else dict(resolution=meta["resolution"], origin=meta["origin"],
                                                        width=meta["width"], height=meta["height"],
-                                                       image="/api/v1/visitor/map.png"))
+                                                       image="/api/v1/visitor/map.png",
+                                                       sketch="/api/v1/visitor/map_sketch.svg" if home.map_sketch else None),
+                    # 안내 약도는 바뀔 때만 따로 받게 판만 알려 준다 (없으면 null → 자동 약도가 메인)
+                    guide=public_guide["revision"] if public_guide else None)
         return JSONResponse(body, headers={"Cache-Control": "no-store"})
 
     @app.get("/api/v1/visitor/map.png")
@@ -885,6 +889,38 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
         if home.map_png is None:
             return error(404, "map_not_configured", "Set map_yaml in the server config")
         return Response(home.map_png, media_type="image/png", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/api/v1/visitor/map_sketch.svg")
+    async def visitor_map_sketch():
+        if not settings.visitor_enabled:
+            return visitor_closed()
+        home = find("")
+        if home.map_sketch is None:
+            return error(404, "map_sketch_unavailable", "Map sketch is not available")
+        return Response(home.map_sketch, media_type="image/svg+xml",
+                        headers={"Cache-Control": "no-cache", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"})
+
+    @app.get("/api/v1/visitor/guide")
+    async def visitor_guide():
+        """방문자 안내 약도. 구역·이름·종류·그림만 (기준점·지도 이름·순찰 지점 없음)"""
+        if not settings.visitor_enabled:
+            return visitor_closed()
+        view = guide_file.public() if guide_file is not None else None
+        if view is None:
+            return error(404, "guide_not_available", "No visitor guide has been drawn")
+        image = view["image"]
+        body = {**view, "image": None if image is None else {**image, "url": f"/api/v1/visitor/guide/image/{image['file']}"}}
+        return JSONResponse(body, headers={"Cache-Control": "no-cache"})
+
+    @app.get("/api/v1/visitor/guide/image/{name}")
+    async def visitor_guide_image(name: str):
+        # 지금 약도가 쓰는 그림 하나만 공개한다 (올렸지만 저장하지 않은 그림은 보이지 않게)
+        if not settings.visitor_enabled:
+            return visitor_closed()
+        view = guide_file.public() if guide_file is not None else None
+        if view is None or view["image"] is None or view["image"]["file"] != name:
+            return error(404, "image_not_found", "No such guide image")
+        return guide_image_response(name)
 
     dist = ROOT / "ui" / "dist"
     if (dist / "assets").is_dir():

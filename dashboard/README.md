@@ -286,14 +286,18 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 - 위치: 기본 로봇(`robot_id`)의 지도에 그린다. 지도가 다른 로봇은 위치 없이 이름·상태만. 오래된 위치(odom 지연 기준 이상·연결 불확실)는 회색 점선 원과 「마지막 위치 · n초 전」, **1분이 넘은 위치는 보내지 않는다**(방문객을 엉뚱한 곳으로 보내지 않게)
 - 화면은 3초마다 받는다. 받지 못하면 「정보를 새로 받을 수 없습니다」와 함께 모든 위치를 마지막 위치로, 운행 대수는 「확인할 수 없습니다」로 바꾼다. 서버가 꺼지면(404) 「지금은 안내를 하지 않습니다」
 - 방문자 요청은 운영자 화면의 알림·revision을 바꾸지 않는다
-- 데모: `/visitor?demo`(서버를 부르지 않는 가상 로봇 3대). 서버 설정과 관계없이 열린다
-- 넣지 않은 것: 적재량(센서 없음), 내 위치·거리(실내 측위 없음), 수거 호출(로그인 없는 명령은 위험), 만족도 같은 근거 없는 숫자, 행사장 구역 이름
+- **안내 약도**: 관제 화면 「약도 편집」에서 그린 약도(구역·이름 또는 그림)가 있으면 그것을 가운데에 크게 그리고 위치를 그 위에 바로 표시한다(약도가 지도와 같은 m 좌표). 왼쪽 아래 작은 창은 실제 지도(자동 약도)와 위치이고, 누르면 크게 열린다. 약도 범위 밖의 로봇은 「안내 약도 밖에 있습니다」. 약도가 없거나 비었거나 **다른 지도로 그린 것**이면 자동 약도가 메인. 약도는 판(`guide`)이 바뀔 때만 다시 받는다
+- 데모: `/visitor?demo`(서버를 부르지 않는 가상 로봇 3대, 예시 안내 약도). 서버 설정과 관계없이 열린다
+- 넣지 않은 것: 적재량(센서 없음), 내 위치·거리(실내 측위 없음), 수거 호출(로그인 없는 명령은 위험), 만족도 같은 근거 없는 숫자, 순찰 지점
 
 | 경로 | 역할 |
 |---|---|
 | `GET /visitor` | 방문자 화면(`ui/dist/index.html`) |
-| `GET /api/v1/visitor/state` | `{"server_utc", "operating", "robots": [{"robot_id", "status", "position": {"x","y","stale","age_s"} \| null}], "map": {"resolution","origin","width","height","image"} \| null}`. `Cache-Control: no-store` |
+| `GET /api/v1/visitor/state` | `{"server_utc", "operating", "robots": [{"robot_id", "status", "position": {"x","y","stale","age_s"} \| null}], "map": {"resolution","origin","width","height","image","sketch"} \| null, "guide": "<판>" \| null}`. `guide`는 안내 약도의 revision(없으면 `null`). `Cache-Control: no-store` |
 | `GET /api/v1/visitor/map.png` | 기본 로봇 지도 PNG |
+| `GET /api/v1/visitor/map_sketch.svg` | 기본 로봇 지도의 자동 약도 |
+| `GET /api/v1/visitor/guide` | 안내 약도 `{revision, bounds, categories, areas, markers, image: {file, width, height, transform, show_areas, url} \| null}`. 기준점·지도 이름·순찰 지점은 없다. 없으면 404 `guide_not_available` |
+| `GET /api/v1/visitor/guide/image/{file}` | 지금 약도가 쓰는 그림 하나만(올렸지만 저장하지 않은 그림은 404) |
 
 ## 인터페이스와 구조
 

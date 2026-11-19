@@ -2,6 +2,7 @@ import { Badge } from '../components/Badge'
 import { ageText, timeText } from '../format'
 import { useVisitorData } from '../features/visitor/useVisitorData'
 import { VisitorMap } from '../features/visitor/VisitorMap'
+import { GuideVisitorMap } from '../features/visitor/GuideVisitorMap'
 import { operatingText, positionAge, visitorStatus, type VisitorRobot } from '../features/visitor/visitor'
 
 /**
@@ -9,7 +10,7 @@ import { operatingText, positionAge, visitorStatus, type VisitorRobot } from '..
  * 적재량·내 위치·호출은 데이터가 없거나 위험해서 넣지 않았다 (ui/DESIGN.md 「방문자 안내」).
  */
 export function VisitorPage({ demo }: { demo: boolean }) {
-  const { state, receivedAt, problem, closed, now } = useVisitorData(demo)
+  const { state, receivedAt, problem, closed, now, guide } = useVisitorData(demo)
   const since = receivedAt === null ? 0 : (now - receivedAt) / 1000
   const where = (r: VisitorRobot) => {
     if (!r.position) return '위치 정보 없음'
@@ -27,9 +28,10 @@ export function VisitorPage({ demo }: { demo: boolean }) {
       {problem && <div className="banner disconnected visitor-problem" role="alert" data-testid="visitor-problem">
         {state ? `정보를 새로 받을 수 없습니다. 아래는 ${ageText(since)}에 받은 정보입니다.` : '정보를 받을 수 없습니다. 3초마다 다시 시도합니다.'}</div>}
       <p className="visitor-count" role="status" data-testid="visitor-count">{operatingText(state, problem)}</p>
-      {state?.map && <section className="card visitor-card" aria-label="지금 LIMBO 위치">
+      {state && (guide || state.map) && <section className="card visitor-card" aria-label="지금 LIMBO 위치">
         <h2 className="card-heading">지금 LIMBO 위치</h2>
-        <VisitorMap map={state.map} robots={state.robots} stale={problem} />
+        {/* 안내 약도가 있으면 그것이 메인(왼쪽 아래에 실제 지도), 없으면 자동 약도 */}
+        {guide ? <GuideVisitorMap guide={guide} map={state.map} robots={state.robots} stale={problem} /> : <VisitorMap map={state.map!} robots={state.robots} stale={problem} />}
         <p className="visitor-legend" data-testid="visitor-legend"><span><i className="key now" />지금 위치</span><span><i className="key old" />마지막으로 확인한 위치</span></p>
       </section>}
       {state && <section className="card visitor-card" aria-label="로봇 목록">

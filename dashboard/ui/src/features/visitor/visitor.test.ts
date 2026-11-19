@@ -39,3 +39,25 @@ describe('visitor state', () => {
     for (const p of [a, b].map(s => s.robots[0].position!)) expect([p.x * 2 % 1, p.y * 2 % 1]).toEqual([0, 0])
   })
 })
+
+// ---- 안내 약도 ----
+import { asGuide, demoVisitorGuide, parseVisitorGuide } from './visitor'
+
+it('visitor guide: accepts the server shape, rejects anything odd', () => {
+  const ok = demoVisitorGuide()
+  expect(parseVisitorGuide(ok)).toBe(ok)
+  const withImage = { ...ok, image: { file: 'image-0123456789abcdef.png', width: 10, height: 10, transform: [1, 0, 0, 0, -1, 0], show_areas: false, url: '/api/v1/visitor/guide/image/image-0123456789abcdef.png' } }
+  expect(parseVisitorGuide(withImage)).not.toBeNull()
+  expect(parseVisitorGuide({ ...withImage, image: { ...withImage.image, url: 'https://elsewhere.example/x.png' } })).toBeNull()   // 다른 곳 그림
+  expect(parseVisitorGuide({ ...ok, categories: [{ ...ok.categories[0], color: 'red;background:url(x)' }] })).toBeNull()
+  expect(parseVisitorGuide({ ...ok, categories: [{ ...ok.categories[0], icon: 'rocket' }] })).toBeNull()
+  expect(parseVisitorGuide({ ...ok, areas: [{ name: 'x', category: 'event', polygon: [[0, 0], [1, 1]] }] })).toBeNull()
+  expect(parseVisitorGuide({ ...ok, markers: [{ name: 'x', category: 'event', x: 'a', y: 0 }] })).toBeNull()
+  expect(parseVisitorGuide(null)).toBeNull()
+})
+
+it('visitor guide is drawn with the editor drawing (no control points)', () => {
+  const g = asGuide({ ...demoVisitorGuide(), image: { file: 'image-0123456789abcdef.png', width: 10, height: 10, transform: [1, 0, 0, 0, -1, 0], show_areas: true, url: '/x' } })
+  expect(g.image).toEqual({ file: 'image-0123456789abcdef.png', width: 10, height: 10, transform: [1, 0, 0, 0, -1, 0], points: [], show_areas: true })
+  expect(g.areas.length).toBe(4)
+})
