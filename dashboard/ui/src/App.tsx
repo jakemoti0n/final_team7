@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RobotSummary } from './types'
 import { api, logout, me, onAuthLost, type Account, type AuthState } from './auth'
 import Login from './Login'
 import ChangePassword from './ChangePassword'
 import { RobotDashboard } from './pages/RobotDashboard'
-import { pageHref, readPage, type PageKey } from './navigation'
+import { mayLeave, pageHref, readPage, type PageKey } from './navigation'
 import { VisitorPage } from './pages/VisitorPage'
 
 const ROBOT_KEY = 'limbo.robot'
@@ -55,17 +55,24 @@ function RobotApp({ account, onAuth }: { account: Account | null; onAuth: (next:
   // 페이지는 로봇을 바꿔도 유지한다. 주소(?page=)에 남겨 새로 고침·뒤로 가기에도 맞춘다
   const [page, setPage] = useState<PageKey>(() => readPage())
   useEffect(() => {
-    const sync = () => setPage(readPage())
+    const sync = () => {
+      // 뒤로 가기는 막을 수 없으므로, 머물기로 하면 주소를 지금 페이지로 되돌린다
+      if (!mayLeave()) { history.pushState(null, '', pageHref(pageRef.current)); return }
+      setPage(readPage())
+    }
     addEventListener('popstate', sync)
     return () => removeEventListener('popstate', sync)
   }, [])
+  const pageRef = useRef(page)
+  pageRef.current = page
   const navigate = (next: PageKey) => {
-    if (next === readPage()) return
+    if (next === readPage() || !mayLeave()) return
     history.pushState(null, '', pageHref(next))
     setPage(next)
     scrollTo(0, 0)
   }
   const choose = (next: string) => {
+    if (next !== robotId && !mayLeave()) return
     setRobotId(next)
     const url = new URL(location.href)
     if (next) url.searchParams.set('robot', next); else url.searchParams.delete('robot')

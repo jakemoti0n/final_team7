@@ -12,6 +12,7 @@ import { Sidebar } from '../features/shell/Sidebar'
 import { ControlPage } from './ControlPage'
 import { FleetPage } from './FleetPage'
 import { RoutesPage } from './RoutesPage'
+import { GuidePage } from './GuidePage'
 
 /**
  * 관제 화면 틀: 사이드바 + 상단 연결 상태 + 페이지. 로봇 하나의 실시간 데이터(useRobotData)를 여기서 한 번만 열어
@@ -45,6 +46,7 @@ export function RobotDashboard({ robotId, onSelect, account, onAuth, page, onNav
           {page === 'control' && <ControlPage data={data} delta={delta} onSelect={onSelect} onNavigate={onNavigate} />}
           {page === 'fleet' && <FleetPage data={data} delta={delta} robotName={robotName} onSelect={onSelect} onNavigate={onNavigate} />}
           {page === 'routes' && <RoutesPage data={data} delta={delta} onNavigate={onNavigate} />}
+          {page === 'guide' && <GuidePage demo={!!demo} />}
           <footer data-testid="page-footer">{demo ? '데모의 상태 확인은 가상 이벤트에 기반합니다.' : `${robotName} · 수신 정보 기반 관제`}<span>표시 시각 Asia/Seoul</span></footer>
         </main>
       </div>
