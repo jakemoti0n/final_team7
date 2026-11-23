@@ -69,6 +69,14 @@
   --color-map-uncertainty-fill: rgba(22, 163, 74, .14);
   --color-map-uncertainty-stroke: rgba(22, 163, 74, .55);
 
+  /* 로봇 하단 디스플레이 (/display): 진녹(--color-primary) 카드 위의 글자·표시 */
+  --color-display-lime: #a3e635;                    /* 상태 점·진행 막대 (진녹 위에서 잘 보이게) */
+  --color-display-lime-halo: rgba(163, 230, 53, .25);
+  --color-display-on-ink-muted: #cfe3d6;            /* 진녹 카드 위 보조 글자 (대비 4.5:1 이상) */
+  --color-display-on-ink-track: rgba(255, 255, 255, .18);
+  --color-display-on-ink-pill: rgba(255, 255, 255, .14);
+  --color-display-letterbox: #000;                  /* 화면 비율이 16:9가 아닐 때 남는 곳 */
+
   /* 모서리: 입력·버튼 4px, 카드·지도·큰 버튼 8px, 배지 끝까지 둥글게 */
   --radius-sm: 4px;
   --radius-lg: 8px;

@@ -6,6 +6,7 @@ FastAPI 수신·관제 서버와 React/TypeScript 관제 화면(LIMBO 관제). �
 - `/`: 실제 수신 화면. 순찰 상태에 따라 주행 시작·정지·재개가 한 버튼에 나타나며 waypoint 편집을 지원한다.
 - `/?page=guide`: **약도 편집**. 방문자 화면에 보일 구역(강의실·행사장·화장실·입구 등)과 이름을 기본 로봇의 지도 좌표 위에 그려 `guide_yaml`에 저장한다. 사각형·다각형·표시점, 구역 종류(색·이름·아이콘) 추가, 되돌리기, 방문자 미리보기. 메인 약도를 **그림 파일**(PNG·JPG·WebP)로 바꿀 수 있다: 틀을 내려받아 그 위에 그린 그림은 크기로, 이미 있는 안내도는 기준점 3쌍 이상으로 지도에 맞춘다. 순찰 중에도 편집할 수 있다(`docs/CONTROL_SCREEN.md` E)
 - `/demo`: 독립 Mock 공급자. 실제 서버 API/WebSocket에 접속하지 않는다. 가상 데이터·알림·명령 결과는 이 페이지의 메모리에만 존재한다.
+- `/display`: **로봇 하단 디스플레이**(1920×1080 키오스크, 로그인 없음·조작 없음, `visitor_enabled`일 때만). 로봇 위치(약도 구역 이름)·상태·순찰 진행·행사 일정·`/visitor` QR과 팜플렛을 회전 규칙대로 돌린다. `?robot=LIMBO-02`로 붙은 로봇을 고르고(없으면 기본 로봇), `?demo`는 서버 없이 가상 데이터. 일정·팜플렛은 `display_dir` 폴더(`guides/README.md`). 설계는 `ui/DESIGN.md` 6절, 근거는 `signage/docs/PRD_로봇_하단_디스플레이_v0.3.md`
 - 서버 자체는 ROS2를 쓰지 않는다. 주행 시작·순찰 종료도 서버는 명령을 쌓기만 하고, **로봇 컴퓨터의 Bridge**가 그 컴퓨터에서 `patrol_node`를 띄우고 끈다. 그래서 서버를 ROS가 없는 다른 컴퓨터(예: AWS)에 두어도 된다. 로봇 쪽에는 ROS 2 Jazzy, 빌드된 `limbo_patrol`, Bridge가 필요하다. 한 로봇, 단일 프로세스, 메모리 최신 상태 및 최근 알림 100건을 지원한다. 서버 재시작 시 관제 상태가 초기화되며 브라우저 새로고침은 서버 이력을 지우지 않는다.
 
 - `/`: 실제 관제 화면. 맨 위 상태 한 줄 요약(정상 / 확인 필요 / 연결 끊김), 순찰·이동 카드, 지도(로봇 위치·방향, 순찰 경로, 다음 목표, 로봇 따라가기), **일시정지·순찰 재개** 버튼, 접어 둔 「센서 수신 상세」(토픽 4개), 알림으로 구성된다. 두 버튼은 서버 명령 API를 거쳐 Bridge가 순찰 노드의 `/patrol/pause`·`/patrol/resume` 서비스를 부르는 **실제 제어**다. 프로그램 재시작 버튼은 없다.
@@ -294,6 +295,7 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 | 경로 | 역할 |
 |---|---|
 | `GET /visitor` | 방문자 화면(`ui/dist/index.html`) |
+| `GET /display` | 로봇 하단 디스플레이 화면(`ui/dist/index.html`). 방문자 화면과 같은 조건으로 열린다 |
 | `GET /api/v1/visitor/state` | `{"server_utc", "operating", "robots": [{"robot_id", "status", "position": {"x","y","stale","age_s"} \| null, "area", "next_area", "progress": {"done","total"} \| null, "moving"}], "map": {"resolution","origin","width","height","image","sketch"} \| null, "guide": "<판>" \| null, "display": "<판>" \| null}`. `guide`는 안내 약도의, `display`는 하단 디스플레이 내용의 revision(없으면 `null`). `area`: 로봇이 들어 있는 약도 구역 이름(겹치면 가장 작은 구역, 위치를 숨기면 같이 `null`). `progress`: 순찰 중·일시정지 중일 때 `done`=다음 목표 번호(0부터), `total`=지점 수. `next_area`: 다음 목표가 들어 있는 구역 이름(서버 waypoint 파일이 로봇이 도는 경로와 같을 때만). waypoint 이름·좌표는 내보내지 않는다. `moving`: 순찰 중이면서 직진 속도 ≥ `linear_threshold_mps`(제자리 회전 아님), 속도 값이 오래됐으면 `null`. `Cache-Control: no-store` |
 | `GET /api/v1/visitor/map.png` | 기본 로봇 지도 PNG |
 | `GET /api/v1/visitor/map_sketch.svg` | 기본 로봇 지도의 자동 약도 |

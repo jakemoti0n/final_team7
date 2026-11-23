@@ -6,6 +6,7 @@ import ChangePassword from './ChangePassword'
 import { RobotDashboard } from './pages/RobotDashboard'
 import { mayLeave, pageHref, readPage, type PageKey } from './navigation'
 import { VisitorPage } from './pages/VisitorPage'
+import { DisplayPage } from './pages/DisplayPage'
 
 const ROBOT_KEY = 'limbo.robot'
 /** 처음 볼 로봇: 주소의 ?robot= → 이 브라우저에서 마지막으로 고른 로봇 → 비움(서버 기본 로봇) */
@@ -20,6 +21,12 @@ export default function App() {
   if (location.pathname === '/visitor') {
     document.title = 'LIMBO 실시간 안내'   // 방문객 휴대폰 탭·북마크에 보이는 이름 (index.html 기본값은 운영자용 'LIMBO 관제')
     return <VisitorPage demo={new URLSearchParams(location.search).has('demo')} />
+  }
+  if (location.pathname === '/display') {
+    // 로봇 하단 디스플레이(키오스크). 방문자 안내와 같이 로그인 없이 읽기만. ?robot=로 붙은 로봇을 고른다 (없으면 기본 로봇)
+    document.title = 'LIMBO 실시간 안내'
+    const query = new URLSearchParams(location.search)
+    return <DisplayPage demo={query.has('demo')} robotId={query.get('robot')} />
   }
   if (location.pathname === '/demo') return <RobotApp account={null} onAuth={() => {}} />
   return <AuthGate />

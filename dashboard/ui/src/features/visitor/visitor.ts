@@ -6,10 +6,17 @@ import { iconNames, type Area, type Bounds, type Category, type Guide, type Mark
 
 export type VisitorStatus = 'patrolling' | 'paused' | 'idle' | 'checking' | 'offline'
 export interface VisitorPosition { x: number; y: number; stale: boolean; age_s: number | null }
-export interface VisitorRobot { robot_id: string; status: VisitorStatus; position: VisitorPosition | null }
+/** area: 로봇이 있는 약도 구역 이름, next_area: 다음 목표가 있는 구역 이름, progress: 순찰 진행(done = 다음 목표 번호),
+ *  moving: 순찰 중이면서 앞으로 가는 중 (모르면 null). 예전 서버면 없을 수 있다 */
+export interface VisitorProgress { done: number; total: number }
+export interface VisitorRobot {
+  robot_id: string; status: VisitorStatus; position: VisitorPosition | null
+  area?: string | null; next_area?: string | null; progress?: VisitorProgress | null; moving?: boolean | null
+}
 export interface VisitorMap { resolution: number; origin: number[]; width: number; height: number; image: string | null; sketch?: string | null }
 /** guide: 안내 약도의 판(revision). 바뀌면 GET /api/v1/visitor/guide로 다시 받는다. 없으면 null (자동 약도가 메인) */
-export interface VisitorState { server_utc: string; robots: VisitorRobot[]; operating: number; map: VisitorMap | null; guide?: string | null }
+/** display: 하단 디스플레이 내용(일정·팜플렛)의 판. 바뀌면 GET /api/v1/display/content로 다시 받는다 */
+export interface VisitorState { server_utc: string; robots: VisitorRobot[]; operating: number; map: VisitorMap | null; guide?: string | null; display?: string | null }
 /** 방문자용 안내 약도 (관제 화면 '약도 편집'에서 그림). 기준점·지도 이름·순찰 지점은 없다 */
 export interface VisitorGuide {
   revision: string; bounds: Bounds; categories: Category[]; areas: Area[]; markers: Marker[]
@@ -27,6 +34,7 @@ export const visitorStatus: Record<VisitorStatus, { label: string; tone: Tone }>
 
 const statuses = Object.keys(visitorStatus)
 const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value)
+const optionalText = (value: unknown) => value == null || typeof value === 'string'
 
 /** 서버 응답 검사. 모양이 다르면 null (받지 못한 것으로 본다) */
 export function parseVisitorState(value: unknown): VisitorState | null {
@@ -36,6 +44,10 @@ export function parseVisitorState(value: unknown): VisitorState | null {
     if (!r || typeof r.robot_id !== 'string' || !statuses.includes(r.status)) return null
     const p = r.position
     if (p !== null && (!p || !finite(p.x) || !finite(p.y) || typeof p.stale !== 'boolean' || (p.age_s !== null && !finite(p.age_s)))) return null
+    if (!optionalText(r.area) || !optionalText(r.next_area)) return null
+    const g = r.progress
+    if (g != null && (!Number.isInteger(g.done) || !Number.isInteger(g.total) || g.done < 0 || g.total <= 0 || g.done > g.total)) return null
+    if (r.moving != null && typeof r.moving !== 'boolean') return null
   }
   const m = v.map
   if (m !== null && (!m || !(m.resolution > 0) || !Array.isArray(m.origin) || m.origin.length < 2 || !(m.width > 0) || !(m.height > 0))) return null
@@ -93,18 +105,41 @@ export function operatingText(state: VisitorState | null, problem: boolean) {
 // ---- 데모 (/visitor?demo): 서버 없이 가상 로봇 3대 ----
 const DEMO_MAP: VisitorMap = { resolution: .05, origin: [-7.546, -7.524, 0], width: 302, height: 302, image: null }
 
-/** t초 시점의 데모 상태. LIMBO-01은 사각형 경로를 돌고, LIMBO-02는 대기, LIMBO-03은 끊긴 지 48초 */
+/** (x, y)가 들어 있는 구역 이름. 겹치면 가장 작은 구역 (서버 guide.py의 area_at과 같은 규칙) */
+export function areaAt(areas: Area[], x: number, y: number): string | null {
+  let best: { size: number; name: string } | null = null
+  for (const a of areas) {
+    const p = a.polygon
+    let inside = false, twice = 0
+    for (let i = 0; i < p.length; i++) {
+      const [x0, y0] = p[i], [x1, y1] = p[(i + 1) % p.length]
+      if ((y0 > y) !== (y1 > y) && x < x0 + (y - y0) * (x1 - x0) / (y1 - y0)) inside = !inside
+      twice += x0 * y1 - x1 * y0
+    }
+    const size = Math.abs(twice) / 2
+    if (inside && (!best || size < best.size || (size === best.size && a.name < best.name))) best = { size, name: a.name }
+  }
+  return best?.name ?? null
+}
+
+/** t초 시점의 데모 상태. LIMBO-01은 사각형 경로(모서리 4곳이 순찰 지점)를 돌고, LIMBO-02는 대기, LIMBO-03은 끊긴 지 48초.
+ *  구역 이름은 데모 약도(demoGuide)로 계산한다. 모서리마다 3초 멈췄다 출발한다(하단 디스플레이의 「지나갑니다」 데모) */
 export function demoVisitorState(t: number, now = new Date()): VisitorState {
   const corners: [number, number][] = [[5, 5], [-5, 5], [-5, -5], [5, -5]]
-  const leg = Math.floor(t / 10) % 4, f = (t % 10) / 10
+  const leg = Math.floor(t / 13) % 4, local = t % 13, f = Math.max(0, local - 3) / 10
   const [ax, ay] = corners[leg], [bx, by] = corners[(leg + 1) % 4]
   const half = (n: number) => Math.round(n * 2) / 2
+  const x = ax + (bx - ax) * f, y = ay + (by - ay) * f
+  const areas = demoGuide().areas
   return {
-    server_utc: now.toISOString(), operating: 2, map: DEMO_MAP, guide: 'demo',
+    server_utc: now.toISOString(), operating: 2, map: DEMO_MAP, guide: 'demo', display: 'demo',
     robots: [
-      { robot_id: 'LIMBO-01', status: 'patrolling', position: { x: half(ax + (bx - ax) * f), y: half(ay + (by - ay) * f), stale: false, age_s: 0 } },
-      { robot_id: 'LIMBO-02', status: 'idle', position: { x: 3, y: -4, stale: false, age_s: 0 } },
-      { robot_id: 'LIMBO-03', status: 'offline', position: { x: -4.5, y: 1, stale: true, age_s: 48 } },
+      { robot_id: 'LIMBO-01', status: 'patrolling', position: { x: half(x), y: half(y), stale: false, age_s: 0 },
+        area: areaAt(areas, x, y), next_area: areaAt(areas, bx, by), progress: { done: (leg + 1) % 4, total: 4 }, moving: local >= 3 },
+      { robot_id: 'LIMBO-02', status: 'idle', position: { x: 3, y: -4, stale: false, age_s: 0 },
+        area: areaAt(areas, 3, -4), next_area: null, progress: null, moving: false },
+      { robot_id: 'LIMBO-03', status: 'offline', position: { x: -4.5, y: 1, stale: true, age_s: 48 },
+        area: areaAt(areas, -4.5, 1), next_area: null, progress: null, moving: false },
     ],
   }
 }

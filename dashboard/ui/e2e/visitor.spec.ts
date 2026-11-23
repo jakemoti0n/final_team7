@@ -55,8 +55,10 @@ test('visitor page shows a live robot without login and marks lost updates', asy
   const bridge = setInterval(() => { void send().catch(() => {}) }, 1000)
   try {
     const body = await (await request.get('/api/v1/visitor/state')).json()
+    // 시험 서버에는 약도가 없어 구역 이름은 없다. 진행은 번호만(지점 이름은 나가지 않음)
     expect(body.robots.find((r: { robot_id: string }) => r.robot_id === 'LIMBO-01')).toEqual(
-      { robot_id: 'LIMBO-01', status: 'patrolling', position: { x: 1, y: -1, stale: false, age_s: 0 } })
+      { robot_id: 'LIMBO-01', status: 'patrolling', position: { x: 1, y: -1, stale: false, age_s: 0 },
+        area: null, next_area: null, progress: { done: 0, total: 2 }, moving: true })
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto('/visitor')
     await expect(robot(page)).toContainText('순찰 중')

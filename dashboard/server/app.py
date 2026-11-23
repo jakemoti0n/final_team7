@@ -1004,6 +1004,7 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
     async def ui():
         return index_html()
 
+    @app.get("/display")   # 로봇 하단 디스플레이(키오스크). 방문자 안내와 같은 조건으로 연다
     @app.get("/visitor")
     async def visitor_ui(demo: str | None = None):
         # 데모(?demo)는 서버 데이터를 쓰지 않으므로 꺼져 있어도 연다

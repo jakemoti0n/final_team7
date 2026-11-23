@@ -23,7 +23,7 @@ def test_disabled_by_default_everything_is_404(tmp_path):
     assert Settings().visitor_enabled is False
     _, client = make(tmp_path, enabled=False)
     with client:
-        for path in ('/visitor', '/api/v1/visitor/state', '/api/v1/visitor/map.png', '/api/v1/visitor/map_sketch.svg',
+        for path in ('/visitor', '/display', '/api/v1/visitor/state', '/api/v1/visitor/map.png', '/api/v1/visitor/map_sketch.svg',
                      '/api/v1/visitor/guide', '/api/v1/visitor/guide/image/image-0123456789abcdef.png'):
             response = client.get(path)
             assert response.status_code == 404 and response.json()['error']['code'] == 'visitor_disabled', path
