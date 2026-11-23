@@ -147,6 +147,25 @@ def image_corners(image):
     return [(a * u + b * v + c, d * u + e * v + f) for u, v in ((0, 0), (w, 0), (w, h), (0, h))]
 
 
+def _polygon_area(points):
+    return abs(sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(points, points[1:] + points[:1]))) / 2
+
+
+def _contains(points, x, y):
+    """점이 다각형 안에 있는가 (반직선 교차 수). 변 위의 점은 어느 쪽이든 될 수 있다"""
+    inside = False
+    for (x0, y0), (x1, y1) in zip(points, points[1:] + points[:1]):
+        if (y0 > y) != (y1 > y) and x < x0 + (y - y0) * (x1 - x0) / (y1 - y0):
+            inside = not inside
+    return inside
+
+
+def area_at(areas, x, y):
+    """(x, y)가 들어 있는 구역의 이름. 겹치면 가장 작은 구역(행사장 안의 부스처럼 더 구체적인 곳), 없으면 None"""
+    found = [(_polygon_area(a["polygon"]), a["name"]) for a in areas if _contains(a["polygon"], x, y)]
+    return min(found)[1] if found else None
+
+
 def _number(value, what):
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         raise GuideError("invalid_guide", f"{what} must be a finite number")

@@ -21,6 +21,23 @@ class WaypointFile:
     def __init__(self, path, map_meta):
         self.path = Path(path).resolve()  # 교체해도 설치본·소스의 심볼릭 링크가 끊기지 않게 실제 경로로
         self.map = map_meta
+        self._targets = (None, None)      # (파일 수정시각·크기, [(이름, x, y)]) — 방문자 화면이 자주 물어서 바뀔 때만 다시 읽는다
+
+    def targets(self):
+        """순찰 순서대로 [(이름, x, y)]. 파일이 없거나 깨졌으면 None (방문자 화면용이라 오류를 내지 않는다)"""
+        try:
+            stat = self.path.stat()
+        except OSError:
+            return None
+        key = (stat.st_mtime_ns, stat.st_size)
+        if self._targets[0] != key:
+            try:
+                data, _ = self.read()
+                value = [(str(p['name']), float(p['x']), float(p['y'])) for p in data['waypoints']]
+            except (OSError, yaml.YAMLError, WaypointError, KeyError, TypeError, ValueError):
+                value = None
+            self._targets = (key, value)
+        return self._targets[1]
 
     def read(self):
         raw = self.path.read_bytes()

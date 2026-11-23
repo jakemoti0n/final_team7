@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "message": "쓰레기는 LIMBO에게 주세요.",
+  "schedule": [
+    {"date": null, "start": "14:00", "end": "14:30", "title": "개회", "place": null},
+    {"date": null, "start": "14:30", "end": "15:10", "title": "LIMBO 데모", "place": null},
+    {"date": null, "start": "15:10", "end": "15:40", "title": "Q&A", "place": null}
+  ],
+  "slides": [],
+  "timing": {"location_s": 40, "slides_s": 30, "count_s": 10, "trash_alert_s": 10, "passing_s": 8, "passing_cooldown_s": 60}
+}

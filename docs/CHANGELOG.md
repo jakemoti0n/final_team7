@@ -8,6 +8,29 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-23 (85) 로봇 하단 디스플레이(PRD v0.3) 1단계 서버: 방문자 상태에 구역 이름·다음 구역·순찰 진행·움직이는 중, 디스플레이 내용 폴더(display.json + 팜플렛)와 API. 화면은 다음 단계. Bridge 수정 없음
+
+**할 일**
+- 서버: `git pull` → `dashboard/`에서 `docker compose up -d --build`. 처음 시작 때 `/data/display/`가 만들어진다(저장소 `dashboard/guides/display/` 복사). 일정·팜플렛은 `docker compose cp`로 바꾼다(`docs/AWS_DEPLOY.md` 11절)
+- 로컬 개발: `config.json`에 `display_dir`(`dashboard/guides/display`)을 넣었다
+
+**변경**
+- 근거 문서: `signage/docs/PRD_로봇_하단_디스플레이_v0.3.md`(장면 ① 「LIMBO-01은 지금 복도에 있어요 · 201 강의실 쪽으로 · 3/10 지점」, ④ 「지나갑니다」)
+- 서버(`app.py`의 `visitor_robot`): `GET /api/v1/visitor/state`의 로봇마다 `area`(약도 구역 이름), `next_area`(다음 목표가 있는 구역 이름), `progress`(`{done, total}`), `moving`(순찰 중이면서 앞으로 가는 중)
+  - `area`: 반올림 전 위치가 들어 있는 구역, 겹치면 가장 작은 구역(`guide.py`의 `area_at`). 위치를 숨길 때(1분 넘음·다른 지도)는 같이 `null`. 방문자에게 보이는 약도가 없으면 `null`
+  - `progress`·`next_area`: 순찰 중·일시정지 중일 때만. `waypoint_index`는 다음 목표(0부터, `PatrolState.msg`). 다음 구역은 서버 waypoint 파일의 그 번호 지점 이름이 로봇이 보낸 `waypoint_name`과 같을 때만 계산(순찰 시작 뒤 편집했으면 `null`). waypoint 이름·좌표는 내보내지 않는다
+  - `moving`: 직진 속도 ≥ `linear_threshold_mps`(0.05 m/s). 제자리 회전은 아님. 속도 값이 오래됐으면 `null`, 순찰 중이 아니면 `false`(`state.py`의 `moving`)
+  - waypoint 파일은 바뀔 때만 다시 읽는다(`waypoints.py`의 `targets`)
+- 서버(`display.py`): 설정 `display_dir` 폴더의 `display.json`(일정·한 줄 문구·팜플렛 목록·장면 길이)과 팜플렛 그림. `GET /api/v1/display/content`, `GET /api/v1/display/slides/{file}`(목록에 적은 그림만, `?v=`는 내용 해시, nosniff·CSP). `visitor/state`에 `display`(내용 판). 로그인 없음, `visitor_enabled`일 때만
+  - 로그인 없이 읽으므로 서버가 검사한다: 형식·글자 수·제어 문자·시각(`HH:MM`, 끝 > 시작)·장면 길이(1–600 s)·그림 이름·실제 형식(확장자와 다르면 거절)·크기(장당 10 MB, 합 50 MB)
+  - 잘못 고치면 마지막 정상본을 계속 쓰고 로그에 한 번 남긴다(파일이 바뀔 때만 다시 읽음). 처음부터 없거나 잘못됐으면 503 `display_unavailable`(서버 경로는 응답에 넣지 않음)
+- 배포: `deploy/config.json`에 `/data/display`, `entrypoint.sh`가 처음에만 기본 폴더 복사
+- 기본 내용: `dashboard/guides/display/display.json`(목업의 예시 일정 3개, 날짜 없음 = 매일, 팜플렛 없음)
+- 시험: 서버 25개 추가(구역 2·진행 2·움직임 1, 디스플레이 내용 검사 14·API 5, 저장소 기본 파일 1), 기존 1개 고침(응답 필드). 서버 231 통과. Docker에서 `/data/display` 복사는 아직 확인하지 않았다
+
+**다음 단계**
+- 화면 `/display`(HUD·장면 ①②·회전 규칙 R·`?demo`). 그때 `/display` 주소를 연다(지금 열면 관제 화면이 뜨므로 아직 열지 않음)
+
 ## 2026-11-19 (84) 방문자 화면: iPhone에서 「마지막으로 확인한 위치」 점선 원이 반쪽만 보이던 것 고침. Bridge 수정 없음
 
 **할 일**

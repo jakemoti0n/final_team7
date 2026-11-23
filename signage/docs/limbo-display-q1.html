@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>Q1 목업</title>
+<style>
+:root{--ink:#14532d;--bg:#f7f8f3;--card:#fff;--line:#d7dbd2;--mute:#5b6470;--acc:#16a34a;--lime:#a3e635}
+html,body{margin:0;height:100%;background:#000;font-family:Pretendard,"Noto Sans KR",sans-serif;color:#111}
+.screen{position:fixed;inset:0;margin:auto;width:1920px;height:1080px;background:var(--bg);transform-origin:center;display:grid;grid-template-rows:72px 1fr 40px;overflow:hidden}
+.hud{background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 48px;font-size:28px}
+.hud b{font-weight:800;letter-spacing:.02em} .hud .l{display:flex;align-items:center;gap:16px} .hud .mark{width:40px;height:40px;background:#fff;color:var(--ink);border-radius:10px;display:grid;place-items:center;font-weight:900;font-size:26px}
+.hud .st{display:flex;align-items:center;gap:14px} .hud .st i{width:14px;height:14px;border-radius:50%;background:var(--lime);box-shadow:0 0 0 6px rgba(163,230,53,.25)}
+.body{display:grid;grid-template-columns:1fr 2fr;gap:32px;padding:32px 48px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:40px}
+.qr{display:grid;grid-template-rows:auto 1fr auto;align-items:center;justify-items:center;text-align:center}
+.qr svg{width:440px;height:440px} .qr h2{margin:0 0 8px;font-size:40px;font-weight:800} .qr p{margin:0;font-size:26px;color:var(--mute)}
+.right{display:grid;grid-template-rows:1fr auto;gap:32px}
+.ink{background:var(--ink);color:#fff;border-color:var(--ink);display:grid;align-content:center;gap:12px}
+.ink .k{font-size:32px;color:#cfe3d6} .ink h1{margin:0;font-size:120px;font-weight:900;line-height:1.05;letter-spacing:-.02em}
+.ink .sub{font-size:38px;display:flex;align-items:center;gap:18px;margin-top:8px} .ink .sub .pill{background:rgba(255,255,255,.14);border-radius:999px;padding:4px 20px;font-weight:700}
+.bar{margin-top:28px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:24px;font-size:28px;color:#cfe3d6}
+.bar .track{height:16px;background:rgba(255,255,255,.18);border-radius:8px;overflow:hidden} .bar .track i{display:block;height:100%;width:30%;background:var(--lime);border-radius:8px}
+.sched h3{margin:0 0 16px;font-size:30px;font-weight:800}
+.sched ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.sched li{border:1px solid var(--line);border-radius:14px;padding:16px 20px;font-size:28px;color:var(--mute)} .sched li b{display:block;font-size:34px;color:#111}
+.sched li.now{border-color:var(--acc);background:#ecfdf5} .sched li.now b{color:#166534} .sched li.now small{display:inline-block;margin-left:8px;font-size:20px;color:#166534;background:#bbf7d0;border-radius:999px;padding:0 10px;vertical-align:middle}
+.sched p{margin:16px 0 0;font-size:28px}
+.dots{display:flex;justify-content:center;align-items:center;gap:10px} .dots i{width:40px;height:8px;border-radius:4px;background:#cbd5e1} .dots i.on{background:var(--acc)}
+</style></head><body>
+<div class="screen" id="s">
+  <div class="hud"><div class="l"><span class="mark">L</span><b>LIMBO 실시간 안내</b></div><div class="st"><i></i>LIMBO-01 순찰 중 · <span id="clk">14:32</span></div></div>
+  <div class="body">
+    <div class="card qr"><h2>폰으로 지도 보기</h2><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29" shape-rendering="crispEdges"><path fill="#ffffff" d="M0 0h29v29H0z"/><path stroke="#111111" d="M0 0.5h7m2 0h3m2 0h1m4 0h1m2 0h7M0 1.5h1m5 0h1m1 0h1m1 0h1m1 0h2m4 0h3m1 0h1m5 0h1M0 2.5h1m1 0h3m1 0h1m2 0h1m5 0h1m2 0h2m2 0h1m1 0h3m1 0h1M0 3.5h1m1 0h3m1 0h1m2 0h2m2 0h1m2 0h1m1 0h1m3 0h1m1 0h3m1 0h1M0 4.5h1m1 0h3m1 0h1m1 0h1m2 0h1m1 0h1m2 0h5m1 0h1m1 0h3m1 0h1M0 5.5h1m5 0h1m2 0h1m1 0h1m2 0h4m1 0h2m1 0h1m5 0h1M0 6.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M15 7.5h1m1 0h4M0 8.5h1m1 0h1m1 0h1m1 0h1m3 0h1m1 0h1m3 0h2m2 0h1m3 0h1m2 0h1M4 9.5h1m2 0h1m1 0h2m1 0h2m1 0h4m1 0h3m2 0h1m2 0h1M0 10.5h1m4 0h3m1 0h4m1 0h5m1 0h2m4 0h3M0 11.5h2m1 0h1m1 0h1m1 0h1m1 0h1m3 0h2m1 0h5m1 0h2m3 0h1M0 12.5h1m1 0h5m2 0h2m3 0h2m1 0h1m1 0h2m1 0h1m2 0h1m1 0h2M2 13.5h1m2 0h1m2 0h2m4 0h2m4 0h3m2 0h1m2 0h1M1 14.5h2m1 0h1m1 0h1m3 0h4m4 0h1m1 0h2m1 0h3m1 0h2M0 15.5h4m1 0h1m3 0h2m1 0h1m2 0h1m1 0h3m1 0h2m1 0h2m1 0h1M0 16.5h1m5 0h1m2 0h1m1 0h1m4 0h2m3 0h2m2 0h1m1 0h2M2 17.5h3m2 0h3m1 0h1m1 0h1m1 0h4m1 0h3m2 0h2m1 0h1M0 18.5h1m1 0h1m1 0h1m1 0h2m1 0h1m4 0h3m4 0h4m2 0h2M1 19.5h1m1 0h1m6 0h1m2 0h2m1 0h2m1 0h2m2 0h3m1 0h1M0 20.5h1m1 0h5m3 0h1m3 0h2m1 0h1m1 0h6M8 21.5h3m3 0h2m3 0h2m3 0h1m1 0h3M0 22.5h7m4 0h1m1 0h1m3 0h1m1 0h2m1 0h1m1 0h2m1 0h2M0 23.5h1m5 0h1m2 0h2m1 0h1m2 0h1m1 0h2m1 0h1m3 0h2M0 24.5h1m1 0h3m1 0h1m1 0h1m2 0h1m4 0h2m2 0h5m2 0h1M0 25.5h1m1 0h3m1 0h1m3 0h2m1 0h1m1 0h4m4 0h2m1 0h1M0 26.5h1m1 0h3m1 0h1m1 0h1m1 0h1m1 0h1m1 0h5m1 0h2m1 0h3m2 0h1M0 27.5h1m5 0h1m4 0h4m1 0h2m1 0h5m3 0h1M0 28.5h7m1 0h1m3 0h1m1 0h3m1 0h3m1 0h2m3 0h2"/></svg><p>카메라로 찍으면 지금 LIMBO 위치가 보여요</p></div>
+    <div class="right">
+      <div class="card ink"><div class="k">LIMBO-01은 지금</div><h1>복도에 있어요</h1>
+        <div class="sub"><span class="pill">순찰 중</span><span>201 강의실 쪽으로 가는 중</span></div>
+        <div class="bar"><div class="track"><i></i></div><span>3 / 10 지점</span></div></div>
+      <div class="card sched"><h3>행사 안내</h3><ul><li><b>14:00</b>개회</li><li class="now"><b>14:30<small>지금</small></b>LIMBO 데모</li><li><b>15:10</b>Q&amp;A</li></ul><p>🙂 쓰레기는 LIMBO에게 주세요. 오늘 <b>27번</b> 받았어요.</p></div>
+    </div>
+  </div>
+  <div class="dots"><i class="on"></i><i></i><i></i></div>
+</div>
+<script>
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);document.getElementById('s').style.transform='scale('+s+')'}
+addEventListener('resize',fit);fit();
+setInterval(()=>{const d=new Date();document.getElementById('clk').textContent=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')},1000);
+</script></body></html>

@@ -28,6 +28,12 @@ if [ -n "$INITIAL_GUIDE" ] && [ ! -f /data/guide.yaml ]; then
   if [ -d "$files" ]; then cp -r "$files" /data/guide_files; fi
   echo "guide: first start, copied $INITIAL_GUIDE to /data/guide.yaml"
 fi
+# 하단 디스플레이 내용(display.json + 팜플렛 그림)도 볼륨에 둔다. 처음에만 이미지의 기본 폴더를 복사하고,
+# 그 뒤에는 운영자가 고친 것을 그대로 쓴다 (docker compose cp로 넣고 뺀다)
+if [ ! -d /data/display ] && [ -d /srv/defaults/guides/display ]; then
+  cp -r /srv/defaults/guides/display /data/display
+  echo "display: first start, copied the default display content to /data/display"
+fi
 if [ ! -f "/srv/$MAP_YAML" ]; then
   echo "MAP_YAML not found: $MAP_YAML (choose one of: $(cd /srv && ls limbo/src/limbo_navigation/maps/*.yaml))" >&2
   exit 1

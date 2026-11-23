@@ -301,6 +301,17 @@ class Store:
         stale = connection in ("delayed", "disconnected") or age is None or age >= self.settings.topic_delay_s.odom
         return dict(x=pose["x"], y=pose["y"], yaw=pose["yaw"], age_s=age, stale=stale)
 
+    def moving(self):
+        """앞으로 가고 있는가 (직진 속도 기준, 제자리 회전은 아님). 연결·속도 값이 오래돼 모르면 None.
+        pose_view처럼 알림·revision을 건드리지 않는다 (방문자 화면용)"""
+        connection, elapsed = self.connection()
+        motion = (self.payload or {}).get("motion")
+        if connection != "connected" or not motion or motion["age_ms"] is None:
+            return None
+        if motion["age_ms"] / 1000 + elapsed >= self.settings.topic_delay_s.odom:
+            return None
+        return motion["linear_speed_mps"] >= self.settings.linear_threshold_mps
+
     def snapshot(self):
         now = self.monotonic()
         cfg = self.settings

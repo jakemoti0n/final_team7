@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>메인 디스플레이 후보</title>
+<style>
+  :root { --ink:#14532d; --bg:#f7f8f3; --card:#fff; --line:#d7dbd2; --mute:#6b7280; --acc:#16a34a; --warn:#d97706; --bad:#dc2626; --dim:#e9ece4; }
+  body { margin:0; background:var(--bg); color:#111; font: 15px/1.5 Pretendard, "Noto Sans KR", sans-serif; padding:24px 32px 80px; }
+  h1 { margin:0 0 4px; font-size:26px; } h1 + p { margin:0 0 28px; color:var(--mute); }
+  h2 { margin:40px 0 6px; font-size:20px; } h2 small { color:var(--mute); font-weight:400; font-size:14px; margin-left:8px; }
+  .row { display:grid; grid-template-columns: 1fr 1fr; gap:28px; align-items:start; }
+  .row.one { grid-template-columns: 1fr; max-width:1100px; }
+  .cand { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px 16px; }
+  .cand h3 { margin:0 0 8px; font-size:16px; } .cand h3 b { color:var(--acc); margin-right:6px; }
+  .tv { aspect-ratio:16/9; background:#eef0ea; border:3px solid #333; border-radius:8px; padding:8px; display:grid; gap:6px; position:relative; font-size:11px; }
+  .tv > * { box-sizing:border-box; }
+  .box { background:#fff; border:1.5px solid #9aa08f; border-radius:6px; padding:6px 8px; position:relative; min-height:0; overflow:hidden; }
+  .box.dim { background:var(--dim); border-style:dashed; }
+  .box.ink { background:var(--ink); color:#fff; border-color:var(--ink); }
+  .box.good { background:#dcfce7; border-color:var(--acc); } .box.bad { background:#fee2e2; border-color:var(--bad); }
+  .box .t { font-weight:700; font-size:12px; } .box .s { color:var(--mute); font-size:10px; }
+  .box.ink .s { color:#cfe3d6; }
+  .n { position:absolute; top:4px; right:6px; width:16px; height:16px; border-radius:50%; background:var(--ink); color:#fff; font-size:10px; display:grid; place-items:center; font-weight:700; }
+  .big { font-size:28px; font-weight:800; line-height:1.1; }
+  .huge { font-size:40px; font-weight:900; line-height:1; }
+  .hud { background:#1f2937; color:#fff; border-color:#1f2937; display:flex; justify-content:space-between; align-items:center; font-size:10px; padding:4px 8px; }
+  .dots { display:flex; gap:4px; justify-content:center; } .dots i { width:14px; height:4px; background:#cbd5e1; border-radius:2px; } .dots i.on { background:var(--acc); }
+  ul.why { margin:10px 0 0; padding-left:18px; font-size:13.5px; } ul.why li { margin:2px 0; }
+  .tag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:99px; background:#e5e7eb; margin-right:4px; }
+  .tag.ok { background:#dcfce7; color:#166534; } .tag.no { background:#fee2e2; color:#991b1b; } .tag.half { background:#fef3c7; color:#92400e; }
+  table { border-collapse:collapse; font-size:13.5px; width:100%; } th,td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; } th { background:#eef0ea; }
+  .flow { display:flex; gap:10px; align-items:center; flex-wrap:wrap; font-size:13px; margin:8px 0; }
+  .flow span { border:1.5px solid #333; border-radius:8px; padding:6px 12px; background:#fff; } .flow em { font-style:normal; color:var(--mute); }
+  .flow span.sig { border-color:var(--warn); background:#fffbeb; } .flow span.snd { border-color:var(--bad); background:#fef2f2; }
+  .map { background: repeating-linear-gradient(0deg,#fff 0 10px,#f3f4f0 10px 11px), repeating-linear-gradient(90deg,transparent 0 10px,#f3f4f0 10px 11px); }
+  .zone { position:absolute; border:1.5px solid #8a93a0; background:rgba(219,234,254,.7); border-radius:3px; font-size:9px; padding:1px 3px; }
+  .robot { position:absolute; width:14px; height:14px; border-radius:50%; background:var(--acc); box-shadow:0 0 0 6px rgba(22,163,74,.25); }
+  .robot::after { content:"LIMBO-01"; position:absolute; left:18px; top:-2px; font-size:9px; font-weight:700; white-space:nowrap; }
+  .pick { margin-top:48px; background:#fff; border:2px solid var(--ink); border-radius:10px; padding:14px 18px; }
+</style>
+</head>
+<body>
+<h1>메인 디스플레이(행사장 대형 화면) 후보</h1>
+<p>참가자용 · 실물 LIMBO-01 중심 · 조작 없음 · 4장면이 시간·신호에 맞춰 돈다. 각 장면은 16:9, 3 m 밖에서 읽히는 글자 크기 기준(본문 ≥ 32 px, 제목 ≥ 64 px). 데이터는 itkwon 방문자 API(<code>/api/v1/visitor/state</code>, 로그인 없음) 그대로.</p>
+
+<h2>0. 공통 틀 <small>모든 장면에 깔리는 것</small></h2>
+<div class="row">
+  <div class="cand">
+    <h3><b>틀</b> 상단 HUD + 하단 진행 점</h3>
+    <div class="tv" style="grid-template-rows:auto 1fr auto">
+      <div class="box hud"><span>▣ LIMBO 실시간 안내</span><span>● 순찰 중 · 다음 목표 C · 14:32</span></div>
+      <div class="box dim" style="display:grid;place-items:center"><span class="s">장면 ①~④가 여기서 바뀜</span></div>
+      <div class="dots"><i class="on"></i><i></i><i></i></div>
+    </div>
+    <ul class="why">
+      <li>HUD는 장면이 바뀌어도 로봇 상태(순찰 중/잠시 멈춤/연결 끊김)와 시각을 항상 보여 준다 → 팜플렛 장면에서도 "지금 로봇이 돌고 있다"는 사실이 유지됨.</li>
+      <li>하단 점은 "몇 번째 장면, 곧 바뀜"을 알려 참가자가 기다릴지 판단하게 함(토스식 진행 표시).</li>
+      <li>장면 전환은 0.6 s 페이드. 깜빡이는 전환·애니메이션 과다는 피함(멀리서 피로).</li>
+    </ul>
+  </div>
+  <div class="cand">
+    <h3><b>신호</b> 데이터 가능 여부 (jetson 72b248f · itkwon b804c3b 기준)</h3>
+    <table>
+      <tr><th>장면</th><th>필요한 것</th><th>지금</th></tr>
+      <tr><td>① 약도+위치</td><td>약도 YAML, amcl_pose, 순찰 상태</td><td><span class="tag ok">있음</span> 방문자 API</td></tr>
+      <tr><td>② 팜플렛</td><td>이미지 몇 장 + 문구</td><td><span class="tag ok">파일만</span> <code>dashboard/guides/</code>에 두면 됨</td></tr>
+      <tr><td>③ 쓰레기 받음 알림</td><td>감지 1건 신호(시각·구역)</td><td><span class="tag no">없음</span> 로봇 YOLO는 사람만. "받았다" 신호 토픽→Bridge→서버 필드 신설 필요(분류 없음, 불리언 1개). 화면은 데모 데이터로 먼저</td></tr>
+      <tr><td>④ 지나갑니다 소리</td><td>이동 시작/사람 앞 대기 신호</td><td><span class="tag half">절반</span> 순찰 상태·속도·위치는 있음 → 서버가 판단 가능. 로봇엔 소리 없음. 브라우저 자동재생 제한: 켤 때 1번 터치</td></tr>
+    </table>
+  </div>
+</div>
+
+<h2>1. 장면 ① 행사장 정보 + 로봇 위치(글) + QR <small>약도는 폰에서 · 큰 화면엔 안 그림</small></h2>
+<p style="margin:0 0 12px;color:var(--mute);font-size:13.5px">QR 크기 기준: 찍히는 거리 ≈ QR 폭 × 10. 55″(폭 122 cm)에서 3 m 밖 → QR 폭 30 cm = <b>화면 폭의 1/4</b>. 위치 기준: TV가 눈높이보다 높이 걸리면 <b>아래쪽</b>이 폰을 들기 편하고, 스탠드(눈높이)면 <b>가운데</b>가 편함. 로봇 위치는 약도 대신 서버가 "어느 구역에 있는지"를 글로 줌(약도 YAML의 구역 ↔ amcl_pose).</p>
+<div class="row" style="grid-template-columns:1fr 1fr 1fr">
+  <div class="cand">
+    <h3><b>①-Q1</b> QR 주인공(왼쪽 1/3) + 오른쪽 정보 <span class="tag ok">추천</span></h3>
+    <div class="tv" style="grid-template-rows:auto 1fr auto; grid-template-columns:1fr 2fr">
+      <div class="box hud" style="grid-column:1/3"><span>▣ LIMBO 실시간 안내</span><span>14:32</span></div>
+      <div class="box" style="display:grid;place-items:center;text-align:center"><span class="n">3</span><div><div style="width:64px;height:64px;margin:0 auto 4px;background:repeating-conic-gradient(#111 0 25%,#fff 0 50%) 0 0/8px 8px;border:3px solid #fff;outline:1.5px solid #111"></div><div class="t">폰으로 지도 보기</div><div class="s">카메라로 찍으세요</div></div></div>
+      <div style="display:grid;gap:6px;grid-template-rows:1fr auto">
+        <div class="box ink"><span class="n">1</span><div class="t">LIMBO-01은 지금</div><div class="huge" style="font-size:26px">복도에 있어요</div><div class="s">순찰 중 · 201 강의실 쪽으로 · 3/10 지점</div></div>
+        <div class="box"><span class="n">2</span><div class="t">행사 안내</div><div class="s">14:00 개회 · <b>14:30 데모(지금)</b> · 15:10 Q&amp;A<br>쓰레기는 LIMBO에게 주세요 🙂</div></div>
+      </div>
+      <div class="dots" style="grid-column:1/3"><i class="on"></i><i></i><i></i></div>
+    </div>
+    <ul class="why">
+      <li>읽는 순서: 로봇 어디(①, 가장 큰 글) → 행사 일정(②) → 더 보려면 QR(③). QR이 왼쪽 세로 전체라 폭 1/4 확보 + 세로 중앙이라 높이에 덜 민감.</li>
+      <li>QR 칸에 흰 여백(quiet zone)이 저절로 생김. 로봇 상태는 진녹 카드 하나로 눈이 먼저 감.</li>
+      <li>단점: 왼쪽이 정적(QR)이라 화면의 '움직임'은 오른쪽 상태 글뿐 → 상태 카드에 구역 아이콘·진행 막대 정도는 넣어야 살아 있어 보임.</li>
+    </ul>
+  </div>
+  <div class="cand">
+    <h3><b>①-Q2</b> 상태 전면 + QR 오른쪽 아래 고정(모든 장면)</h3>
+    <div class="tv" style="grid-template-rows:auto 1fr auto">
+      <div class="box hud"><span>▣ LIMBO 실시간 안내</span><span>14:32</span></div>
+      <div class="box ink" style="position:relative;display:grid;align-content:center;padding-left:14px"><span class="n" style="background:#fff;color:var(--ink)">1</span><div class="t">LIMBO-01은 지금</div><div class="huge">복도에 있어요</div><div class="s">순찰 중 · 201 강의실 쪽으로</div>
+        <div class="box" style="position:absolute;right:8px;bottom:8px;width:28%;text-align:center;padding:4px"><span class="n">3</span><div style="width:44px;height:44px;margin:0 auto 2px;background:repeating-conic-gradient(#111 0 25%,#fff 0 50%) 0 0/6px 6px;outline:1.5px solid #111"></div><div class="s" style="color:#111">폰으로 지도</div></div>
+        <div class="box" style="position:absolute;left:8px;bottom:8px;width:52%;padding:4px 8px"><span class="n">2</span><div class="s" style="color:#111"><b>14:30 데모(지금)</b> · 15:10 Q&amp;A</div></div>
+      </div>
+      <div class="dots"><i class="on"></i><i></i><i></i></div>
+    </div>
+    <ul class="why">
+      <li>QR이 <b>장면 ②③④에도 같은 자리</b>에 남음(HUD처럼) → 언제 와도 찍을 수 있음. 참가자는 장면 순서를 기다리지 않음.</li>
+      <li>오른쪽 아래 = TV가 높이 걸렸을 때 폰 들기 가장 편한 자리.</li>
+      <li>단점: 작음(폭 28 %, 1.5 m 안에서만 찍힘). 팜플렛 장면에서 그림을 일부 가림 → 팜플렛 만들 때 그 모서리를 비워 둬야 함.</li>
+    </ul>
+  </div>
+  <div class="cand">
+    <h3><b>①-Q3</b> 위 상태 + 아래 띠(일정 ⅔ · QR ⅓)</h3>
+    <div class="tv" style="grid-template-rows:auto 1.3fr 1fr auto">
+      <div class="box hud"><span>▣ LIMBO 실시간 안내</span><span>14:32</span></div>
+      <div class="box ink" style="display:grid;align-content:center;padding-left:14px"><span class="n" style="background:#fff;color:var(--ink)">1</span><div class="t">LIMBO-01은 지금</div><div class="huge" style="font-size:30px">복도에 있어요</div><div class="s">순찰 중 · 201 강의실 쪽으로 · 3/10</div></div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:6px">
+        <div class="box"><span class="n">2</span><div class="t">행사 안내</div><div class="s">14:00 개회 · <b>14:30 데모(지금)</b> · 15:10 Q&amp;A<br>쓰레기는 LIMBO에게 주세요 🙂</div></div>
+        <div class="box" style="display:flex;gap:6px;align-items:center"><span class="n">3</span><div style="width:40px;height:40px;flex:none;background:repeating-conic-gradient(#111 0 25%,#fff 0 50%) 0 0/6px 6px;outline:1.5px solid #111"></div><div class="s">폰으로<br>지도 보기</div></div>
+      </div>
+      <div class="dots"><i class="on"></i><i></i><i></i></div>
+    </div>
+    <ul class="why">
+      <li>위→아래 한 방향 읽기, 줄 리듬이 "큰 하나 → 둘로 나뉨"으로 단순. 아래쪽이라 높이 걸린 TV에 유리.</li>
+      <li>단점: QR 폭이 화면 1/3 칸 안에서 높이에 묶여 실제 QR은 폭의 약 15 % → 1.5~2 m 안에서만. 멀리서 찍게 하려면 Q1.</li>
+    </ul>
+  </div>
+</div>
+<div class="cand" style="margin-top:16px">
+  <h3><b>조합 제안</b> Q1 + Q2의 좋은 점 합치기</h3>
+  <ul class="why" style="margin-top:0">
+    <li><b>장면 ①</b>은 Q1(큰 QR, 멀리서도) · <b>장면 ②③④</b>에는 Q2의 작은 QR을 오른쪽 아래 고정 → 언제 와도 찍을 수 있고, ①이 돌아올 때는 크게.</li>
+    <li>QR 내용: <code>https://서버주소/visitor</code> 하나로 고정(장면마다 다른 QR 안 씀 — 찍는 순간 바뀌면 실패).</li>
+    <li>QR 옆 문구는 "폰으로 지도 보기" 한 줄. "스캔하세요" 같은 명령형보다 뭘 얻는지(지도)를 적음.</li>
+  </ul>
+</div>
+
+<h2>2. 장면 ② 행사장 팜플렛 <small>정적, 슬라이드 몇 장</small></h2>
+<div class="row">
+  <div class="cand">
+    <h3><b>②-A</b> 전면 이미지 + HUD만 <span class="tag ok">추천</span></h3>
+    <div class="tv" style="grid-template-rows:auto 1fr auto">
+      <div class="box hud"><span>▣ LIMBO 실시간 안내</span><span>● 순찰 중 · 복도 · 14:33</span></div>
+      <div class="box dim" style="display:grid;place-items:center"><div style="text-align:center"><div class="big" style="font-size:20px">팜플렛 이미지 1/3</div><div class="s">1920×1080 PNG 그대로, 여백 없음</div></div></div>
+      <div class="dots"><i></i><i class="on"></i><i></i></div>
+    </div>
+    <ul class="why">
+      <li>팜플렛은 디자인 팀이 만든 그림을 그대로 보여 주는 게 목적 → 화면이 틀을 강요하지 않음. 파일만 바꾸면 내용 교체.</li>
+      <li>HUD에 로봇 상태가 남아 있어 "지금 로봇은?"에 답이 끊기지 않음.</li>
+      <li>단점: 팜플렛이 세로형이면 좌우가 빔 → 세로형은 2장 나란히 또는 배경 흐림 처리.</li>
+    </ul>
+  </div>
+  <div class="cand">
+    <h3><b>②-B</b> 팜플렛 8 + 로봇 미니 지도 4</h3>
+    <div class="tv" style="grid-template-rows:auto 1fr auto; grid-template-columns:2fr 1fr">
+      <div class="box hud" style="grid-column:1/3"><span>▣ LIMBO 실시간 안내</span><span>14:33</span></div>
+      <div class="box dim" style="display:grid;place-items:center"><span class="s">팜플렛 이미지</span></div>
+      <div class="box map"><span class="n">2</span><div class="robot" style="left:40%;top:50%"></div><div class="s" style="position:absolute;bottom:6px;left:8px">LIMBO-01 · 복도</div></div>
+      <div class="dots" style="grid-column:1/3"><i></i><i class="on"></i><i></i></div>
+    </div>
+    <ul class="why">
+      <li>팜플렛 중에도 로봇 위치가 계속 보임 → 장면 ①과 ②의 차이가 "크기만 바뀜"이라 전환이 부드러움.</li>
+      <li>단점: 팜플렛이 2/3로 줄어 글자가 작아짐. 팜플렛 자체 글자가 크지 않으면 못 읽음.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>3. 장면 ③ 쓰레기 받음 알림 <small>분류 결과 없음 · 감지 신호 오면 끼어듦 · 데이터는 데모부터</small></h2>
+<div class="row">
+  <div class="cand">
+    <h3><b>③-A</b> 전면 알림 한 장 <span class="tag ok">추천</span></h3>
+    <div class="tv" style="grid-template-rows:auto 1fr auto">
+      <div class="box hud"><span>▣ LIMBO 실시간 안내</span><span>● 잠시 멈춤 · 손님 응대 · 14:34</span></div>
+      <div class="box good" style="display:grid;place-items:center;text-align:center"><span class="n">1</span><div><div class="huge">🗑️ 쓰레기를 받았어요</div><div class="big" style="font-size:16px">고마워요! LIMBO가 가져갈게요</div><div class="s" style="margin-top:6px">복도 · 14:34 · 오늘 28번째</div></div></div>
+      <div class="dots"><i></i><i></i><i class="on"></i></div>
+    </div>
+    <ul class="why">
+      <li>메시지 하나(①) → 10 m 밖에서도 읽힘. 감지 1건 = 알림 1회, 10 s 뒤 복귀.</li>
+      <li>"받았어요·고마워요"로 끝냄. 종류·맞고 틀림 언급 없음, 손 넣기 유도 문구 없음.</li>
+      <li>작은 줄에 구역·시각·오늘 누적 횟수만 — 쇼케이스에서 "오늘 몇 번 썼다"가 성과 숫자가 됨.</li>
+    </ul>
+  </div>
+  <div class="cand">
+    <h3><b>③-B</b> 장면 ① 위 토스트(오른쪽 위 카드)</h3>
+    <div class="tv" style="grid-template-rows:auto 1fr auto; grid-template-columns:1fr 2fr">
+      <div class="box hud" style="grid-column:1/3"><span>▣ LIMBO 실시간 안내</span><span>14:34</span></div>
+      <div class="box dim" style="display:grid;place-items:center"><span class="s">QR</span></div>
+      <div class="box ink" style="position:relative"><div class="t">LIMBO-01은 지금</div><div class="big">복도에 있어요</div>
+        <div class="box good" style="position:absolute;right:8px;top:8px;width:46%"><span class="n">1</span><div class="t">🗑️ 쓰레기를 받았어요</div><div class="s">고마워요 · 오늘 28번째</div></div></div>
+      <div class="dots" style="grid-column:1/3"><i class="on"></i><i></i><i></i></div>
+    </div>
+    <ul class="why">
+      <li>장면을 바꾸지 않고 위에 얹음 → QR·위치가 계속 보임. 알림이 잦아도 화면이 덜 요동침.</li>
+      <li>단점: 작아서 멀리서는 못 읽음. 감지가 드물면(행사 중 몇 번) 전면(A)이 낫고, 잦으면 B.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>4. 장면 ④ "지나갑니다, 비켜 주세요" <small>오버레이 + 소리 · 8 s 뒤 복귀</small></h2>
+<div class="row">
+  <div class="cand">
+    <h3><b>④-A</b> 반투명 오버레이 + 방향 <span class="tag ok">추천</span></h3>
+    <div class="tv" style="grid-template-rows:auto 1fr auto">
+      <div class="box hud"><span>▣ LIMBO 실시간 안내</span><span>● 이동 중 · 14:35</span></div>
+      <div class="box dim" style="position:relative">
+        <div class="box ink" style="position:absolute;inset:14% 12%;display:grid;place-items:center;text-align:center;opacity:.94"><div><div class="huge" style="font-size:30px">🔊 LIMBO가 지나갑니다</div><div class="big" style="font-size:16px">복도 → 201 강의실 쪽으로 · 길을 조금 비켜 주세요</div></div></div>
+      </div>
+      <div class="dots"><i class="on"></i><i></i><i></i></div>
+    </div>
+    <ul class="why">
+      <li>장면 ①(상태 글) 위에 띄움. "어디로 가는지"는 다음 waypoint의 구역명으로. 방향 문구는 다음 waypoint 이름(약도 구역명으로 변환)에서 자동.</li>
+      <li>소리는 디스플레이 스피커에서 같은 문장 1회. 같은 신호 60 s 안엔 다시 안 울림(쿨다운) → 시끄럽지 않게.</li>
+      <li>소리 켜기: 브라우저는 사용자 터치 전엔 소리를 못 냄 → 키오스크 켤 때 "화면 터치해서 시작" 1회. 그 뒤엔 자동.</li>
+    </ul>
+  </div>
+  <div class="cand">
+    <h3><b>④-B</b> 전면 교체 (노란 경고판)</h3>
+    <div class="tv" style="grid-template-rows:auto 1fr auto">
+      <div class="box hud"><span>▣ LIMBO 실시간 안내</span><span>14:35</span></div>
+      <div class="box" style="background:#fde68a;border-color:#b45309;display:grid;place-items:center;text-align:center"><div><div class="huge">⚠ 로봇 이동 중</div><div class="big" style="font-size:16px">잠시 길을 비켜 주세요</div></div></div>
+      <div class="dots"><i class="on"></i><i></i><i></i></div>
+    </div>
+    <ul class="why">
+      <li>가장 눈에 띔. 공장식 안전 표지 느낌.</li>
+      <li>단점: 친환경·친절한 톤과 어긋남, 방향 정보 없음. 자주 뜨면 공포감.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>5. 회전 규칙 <small>시간 순환 + 신호 끼어들기</small></h2>
+<div class="row one">
+  <div class="cand">
+    <h3><b>R</b> 기본 순환은 ①→②→①→③, 신호는 즉시 끼어들고 끝나면 원래 자리로</h3>
+    <div class="flow"><em>시간 순환</em> <span>① 약도 40 s</span>→<span>② 팜플렛 30 s</span>→<span>① 약도 40 s</span>→<span>③ 오늘 받은 횟수 10 s</span>→<em>(반복)</em></div>
+    <div class="flow"><em>신호</em> <span class="sig">쓰레기 받음 신호</span>→<span>③ 알림 10 s</span>→<em>복귀</em></div>
+    <div class="flow"><em>신호</em> <span class="sig">순찰 중 + 속도 &gt; 0.05 m/s로 바뀜<br>(또는 사람 앞 대기 → 재출발)</span>→<span class="snd">④ 오버레이 8 s + 소리 1회</span>→<em>복귀 · 쿨다운 60 s</em></div>
+    <div class="flow"><em>상태</em> <span class="sig">연결 끊김 / 대기 중</span>→<span>① 고정 (마지막 위치 ◌, 소리 없음)</span>→<em>복구되면 순환 재개</em></div>
+    <ul class="why">
+      <li>①이 두 번 나오는 이유: 참가자가 가장 자주 묻는 건 "로봇 어디 있어?"라서 전체 시간의 2/3를 ①에 둠.</li>
+      <li>신호 장면은 고정 길이로 끝남(계속 떠 있지 않음). 같은 신호가 연달아 오면 뒤의 것은 무시(③) 또는 쿨다운(④).</li>
+      <li>우선순위: ④(안전) &gt; ③(알림) &gt; 시간 순환. ④ 중에 ③이 오면 ④ 끝나고 ③.</li>
+      <li>시간 값(40/30/10/20/8/60 s)은 설정 파일(<code>display.json</code>)에 두고 현장에서 조정 — 코드에 박지 않음.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>6. 구현 위치 <small>itkwon 구조 위</small></h2>
+<div class="row one">
+  <div class="cand">
+    <table>
+      <tr><th>부분</th><th>어디</th><th>비고</th></tr>
+      <tr><td>주소</td><td><code>/display</code> (로그인 없음, <code>?demo</code> 지원)</td><td><code>/visitor</code>와 나란히 <code>App.tsx</code>에 분기</td></tr>
+      <tr><td>페이지</td><td><code>pages/DisplayPage.tsx</code> + <code>features/display/</code> (Scene①~④, useRotation, sound)</td><td>약도는 안 그림. 구역명은 서버가 visitor state에 <code>area</code>로 넣어 줌(약도 YAML 구역 ↔ 위치)</td></tr>
+      <tr><td>데이터</td><td><code>/api/v1/visitor/state</code> 폴링(지금 방문자 화면과 같음)</td><td>③은 나중에 <code>trash_received</code>(시각·횟수) 필드 추가 — 로봇 팀 작업 뒤</td></tr>
+      <tr><td>팜플렛·일정</td><td><code>dashboard/guides/display/</code>에 PNG + <code>display.json</code>(일정 문구·시간 값)</td><td>서버가 정적으로 서빙</td></tr>
+      <tr><td>소리</td><td>mp3 1개(녹음 또는 TTS 생성) + Web Audio, 첫 터치로 잠금 해제</td><td>디스플레이 스피커</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="pick">
+  <b>고를 것:</b> 장면① Q1/Q2/Q3(또는 조합) · 장면② A/B · 장면③ A/B · 장면④ A/B · 회전 규칙 R(시간 값) · 배색(지난번 9종 중). 제 추천 묶음: <b>①-Q1+Q2 조합 · ②-A · ③-A · ④-A · R</b>, 배색은 itkwon 기존 토큰(#14532D 진녹)에 맞춤.
+</div>
+</body>
+</html>

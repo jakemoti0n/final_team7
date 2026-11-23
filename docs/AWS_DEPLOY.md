@@ -276,6 +276,14 @@ docker compose exec dashboard rm -r /data/guide.yaml /data/guide_files
 docker compose up -d --force-recreate    # INITIAL_GUIDE를 정했으면 다시 복사, 아니면 빈 약도
 ```
 
+로봇 하단 디스플레이 내용(`/data/display/`: `display.json` + 팜플렛 그림)도 같은 볼륨에 있다. 처음 시작 때만 저장소의 `dashboard/guides/display/`가 복사되고, 그 뒤에는 볼륨의 것을 고친다(지도와 상관없음). 파일을 바꾸면 서버를 다시 켜지 않아도 반영된다:
+
+```bash
+docker compose cp display.json dashboard:/data/display/display.json   # 일정·문구·장면 길이
+docker compose cp pamphlet-1.png dashboard:/data/display/             # 팜플렛 그림 (display.json의 slides에 이름을 적는다)
+curl -s https://<DOMAIN>/api/v1/display/content | head -c 300          # 반영 확인 (방문자 안내가 켜져 있을 때)
+```
+
 새 지도 파일은 저장소의 `limbo/src/limbo_navigation/maps/`에 커밋된 것만 이미지에 들어간다(새 지도를 추가했으면 `git pull` 후 `--build`).
 
 ## 12. 로봇(Bridge) 연결

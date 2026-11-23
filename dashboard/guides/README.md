@@ -11,3 +11,13 @@
 클라우드에서는 그림이 `/data/guide_files/`에 있으므로 `docker compose cp dashboard:/data/guide_files ./`로 받는다.
 
 형식은 `dashboard/server/guide.py` 맨 위 설명을 본다.
+
+## 하단 디스플레이 내용 (`display/`)
+
+로봇 하단 디스플레이(`/display`)에 보일 행사 일정·문구·팜플렛을 `display/`에 둔다(`display_dir`).
+`display.json` 하나와 팜플렛 그림(PNG·JPEG·WebP, 1920×1080 권장)을 넣고, 보여 줄 그림 이름을 `display.json`의 `slides`에 적는다.
+형식은 `dashboard/server/display.py` 맨 위 설명을 본다. 파일을 바꾸면 서버를 다시 켜지 않아도 반영된다. 잘못 고치면 마지막 정상본을 계속 쓰고 서버 로그에 이유를 남긴다.
+
+- 로컬 개발: `dashboard/config.json`의 `display_dir`이 이 폴더를 가리킨다
+- 클라우드(Docker): 볼륨의 `/data/display/`를 쓴다. 처음 시작 때만 이 폴더가 복사된다. 바꿀 때는
+  `docker compose cp display.json dashboard:/data/display/display.json`처럼 넣는다(그림도 같은 방법)

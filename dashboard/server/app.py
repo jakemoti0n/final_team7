@@ -17,8 +17,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from . import mapdata
+from .display import DisplayFolder, DisplayError
 from .waypoints import WaypointFile, WaypointError
-from .guide import GuideFile, GuideError, MAX_BYTES as GUIDE_MAX_BYTES, MAX_IMAGE_BYTES, IMAGE_TYPES
+from .guide import GuideFile, GuideError, MAX_BYTES as GUIDE_MAX_BYTES, MAX_IMAGE_BYTES, IMAGE_TYPES, area_at
 from .models import CommandClaim, CommandRequest, CommandResult, Settings, Telemetry, uuid_string
 from .state import Store, FINAL
 from .users import UserError, UserStore, token_hash
@@ -239,6 +240,12 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
         guide_path = Path(settings.guide_yaml).expanduser()
         guide_path = guide_path if guide_path.is_absolute() else ROOT.parent / guide_path
         guide_file = GuideFile(guide_path, home_robot.map_meta, Path(home_robot.map_yaml).name)
+
+    # 로봇 하단 디스플레이 내용 (display.json + 팜플렛). 지도와 상관없다
+    display_folder = None
+    if settings.display_dir:
+        display_path = Path(settings.display_dir).expanduser()
+        display_folder = DisplayFolder(display_path if display_path.is_absolute() else ROOT.parent / display_path)
 
     def find(robot_id):
         """화면 요청의 로봇. 비우면 기본 로봇, 모르는 로봇이면 None"""
@@ -841,10 +848,13 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
     def visitor_closed():
         return error(404, "visitor_disabled", "Visitor page is not enabled")
 
-    def visitor_robot(robot, home):
-        """방문자에게 보여도 되는 것만: 이름, 쉬운 상태, 대략 위치. snapshot()을 부르지 않아 알림·revision을 건드리지 않는다"""
+    def visitor_robot(robot, home, areas):
+        """방문자에게 보여도 되는 것만: 이름, 쉬운 상태, 대략 위치, 약도 구역 이름, 순찰 진행, 움직이는 중.
+        waypoint 이름·좌표는 내보내지 않는다(다음 지점도 구역 이름으로만). areas는 방문자에게 보이는 약도의 구역 (없으면 [])
+        snapshot()을 부르지 않아 알림·revision을 건드리지 않는다"""
         connection, _ = robot.store.connection()
-        patrol_state = ((robot.store.payload or {}).get("patrol") or {}).get("state")
+        patrol = (robot.store.payload or {}).get("patrol") or {}
+        patrol_state = patrol.get("state")
         if connection == "disconnected":
             status = "offline"
         elif connection != "connected":
@@ -855,13 +865,37 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
             status = "patrolling"
         else:
             status = "idle"
-        position = None
+        position = area = None
+        # 약도는 기본 로봇의 지도 좌표라서, 지도가 다른 로봇은 위치·구역을 낼 수 없다
         same_map = home.map_key is not None and robot.map_key == home.map_key
         pose = robot.store.pose_view() if same_map else None
         if pose is not None and (pose["age_s"] is None or pose["age_s"] <= VISITOR_POSITION_MAX_AGE_S):
             position = dict(x=round(pose["x"] * 2) / 2, y=round(pose["y"] * 2) / 2, stale=pose["stale"],
                             age_s=None if pose["age_s"] is None else round(pose["age_s"]))
-        return dict(robot_id=robot.id, status=status, position=position)
+            # 구역은 반올림 전 위치로 (경계 근처에서 0.5 m 반올림 때문에 옆 구역으로 튀지 않게)
+            area = area_at(areas, pose["x"], pose["y"])
+        # 순찰 진행: waypoint_index는 다음 목표 (0부터, 끝나면 waypoint_count와 같음)
+        progress = next_area = None
+        index, count = patrol.get("waypoint_index"), patrol.get("waypoint_count")
+        if (status in ("patrolling", "paused") and patrol_state in ("patrolling", "pausing", "paused")
+                and index is not None and count and index < count):
+            progress = dict(done=index, total=count)
+            targets = robot.waypoint_file.targets() if same_map and robot.waypoint_file is not None else None
+            # 서버 파일이 로봇이 도는 경로와 같을 때만 (순찰 시작 뒤 편집했으면 번호가 어긋날 수 있다)
+            if targets is not None and len(targets) == count and targets[index][0] == patrol.get("waypoint_name"):
+                next_area = area_at(areas, targets[index][1], targets[index][2])
+        # 로봇 근처에 "지나갑니다"를 띄울 근거: 순찰 중이면서 앞으로 가는 중. 속도 값이 오래됐으면 None(모름)
+        moving = robot.store.moving() if status == "patrolling" else False
+        return dict(robot_id=robot.id, status=status, position=position, area=area,
+                    next_area=next_area, progress=progress, moving=moving)
+
+    def display_revision():
+        if display_folder is None:
+            return None
+        try:
+            return display_folder.view()["revision"]
+        except DisplayError:
+            return None
 
     @app.get("/api/v1/visitor/state")
     async def visitor_state():
@@ -869,8 +903,9 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
             return visitor_closed()
         home = find("")
         meta = home.map_meta
-        items = [visitor_robot(robot, home) for robot in robots.values()]
         public_guide = guide_file.public() if guide_file is not None else None
+        areas = public_guide["areas"] if public_guide else []
+        items = [visitor_robot(robot, home, areas) for robot in robots.values()]
         body = dict(server_utc=base_store.utc(), robots=items,
                     operating=sum(item["status"] in ("patrolling", "paused", "idle") for item in items),
                     map=None if meta is None else dict(resolution=meta["resolution"], origin=meta["origin"],
@@ -878,7 +913,9 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
                                                        image="/api/v1/visitor/map.png",
                                                        sketch="/api/v1/visitor/map_sketch.svg" if home.map_sketch else None),
                     # 안내 약도는 바뀔 때만 따로 받게 판만 알려 준다 (없으면 null → 자동 약도가 메인)
-                    guide=public_guide["revision"] if public_guide else None)
+                    guide=public_guide["revision"] if public_guide else None,
+                    # 하단 디스플레이 내용(일정·팜플렛)도 같은 방식. 폴더가 없거나 읽을 수 없으면 null
+                    display=display_revision())
         return JSONResponse(body, headers={"Cache-Control": "no-store"})
 
     @app.get("/api/v1/visitor/map.png")
@@ -921,6 +958,37 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
         if view is None or view["image"] is None or view["image"]["file"] != name:
             return error(404, "image_not_found", "No such guide image")
         return guide_image_response(name)
+
+    # ---- 로봇 하단 디스플레이 (/display). 방문자 화면과 같이 로그인 없이 읽기만, visitor_enabled일 때만 ----
+
+    @app.get("/api/v1/display/content")
+    async def display_content():
+        """일정·문구·팜플렛 목록·장면 길이. 바뀌면 visitor/state의 display 값이 바뀐다"""
+        if not settings.visitor_enabled:
+            return visitor_closed()
+        if display_folder is None:
+            return error(404, "display_not_configured", "Set display_dir in the server config")
+        try:
+            view = display_folder.view()
+        except DisplayError as exc:
+            # 운영자가 고칠 내용은 로그에 (서버 경로를 방문자에게 보이지 않게)
+            return error(503, "display_unavailable", "Display content is missing or invalid; see the server log"
+                         if exc.code == "invalid_display" else "Display content has not been set up")
+        return JSONResponse(view, headers={"Cache-Control": "no-cache"})
+
+    @app.get("/api/v1/display/slides/{name}")
+    async def display_slide(name: str):
+        # display.json에 적은 그림만 (폴더에 있어도 목록에 없으면 내주지 않는다)
+        if not settings.visitor_enabled:
+            return visitor_closed()
+        found = display_folder.slide(name) if display_folder is not None else None
+        if found is None:
+            return error(404, "slide_not_found", "No such slide")
+        data, media = found
+        # 주소에 내용 해시(?v=)가 붙으므로 오래 캐시해도 된다. 그림을 문서로 열어도 스크립트가 돌지 않게
+        return Response(data, media_type=media, headers={
+            "Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'"})
 
     dist = ROOT / "ui" / "dist"
     if (dist / "assets").is_dir():

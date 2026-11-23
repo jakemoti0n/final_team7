@@ -240,6 +240,7 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 | `map_yaml` | `limbo/src/limbo_navigation/maps/human_test_map.yaml`. 생략하면 지도 API가 404 |
 | `waypoints_yaml` | `limbo/src/limbo_patrol/config/test_waypoints.yaml`. 순찰 경로의 원본. 주행 시작 명령에 실려 로봇으로 간다 |
 | `guide_yaml` | `dashboard/guides/human_test_map_guide.yaml`(컨테이너는 `/data/guide.yaml`). 방문자 안내 약도 파일. 기본 로봇의 지도 좌표(m)로 그리고, 관제 화면이 읽고 쓰므로 **쓸 수 있는 곳**에 둔다. 파일이 없으면 빈 약도로 시작해 처음 저장할 때 만든다. 약도 그림은 옆 폴더 `<이름>_files/`(컨테이너는 `/data/guide_files/`). 생략하면 약도 API가 404 `guide_not_configured` |
+| `display_dir` | `dashboard/guides/display`(컨테이너는 `/data/display`, 처음 시작 때 이미지의 기본 폴더를 복사). 로봇 하단 디스플레이 내용 폴더: `display.json`(일정·문구·팜플렛 목록·장면 길이) + 팜플렛 그림(PNG·JPEG·WebP). 파일을 바꾸면 다음 요청에 반영된다. 방문자 화면처럼 `visitor_enabled`일 때만 열린다. 생략하면 디스플레이 API가 404 |
 | `robot_token_file` | `null`. 로봇용 경로 토큰 파일. 환경 변수 `ROBOT_TOKEN`이 우선 (「로봇 토큰과 인터넷 공개」) |
 | `allow_no_robot_token` | 기본 `config.json`은 `true`(로컬 개발), 설정에서 빼면 `false`. 토큰이 없을 때 로봇용 경로를 열어 둘지. **인터넷에 열 때는 `false`** |
 
@@ -293,11 +294,13 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 | 경로 | 역할 |
 |---|---|
 | `GET /visitor` | 방문자 화면(`ui/dist/index.html`) |
-| `GET /api/v1/visitor/state` | `{"server_utc", "operating", "robots": [{"robot_id", "status", "position": {"x","y","stale","age_s"} \| null}], "map": {"resolution","origin","width","height","image","sketch"} \| null, "guide": "<판>" \| null}`. `guide`는 안내 약도의 revision(없으면 `null`). `Cache-Control: no-store` |
+| `GET /api/v1/visitor/state` | `{"server_utc", "operating", "robots": [{"robot_id", "status", "position": {"x","y","stale","age_s"} \| null, "area", "next_area", "progress": {"done","total"} \| null, "moving"}], "map": {"resolution","origin","width","height","image","sketch"} \| null, "guide": "<판>" \| null, "display": "<판>" \| null}`. `guide`는 안내 약도의, `display`는 하단 디스플레이 내용의 revision(없으면 `null`). `area`: 로봇이 들어 있는 약도 구역 이름(겹치면 가장 작은 구역, 위치를 숨기면 같이 `null`). `progress`: 순찰 중·일시정지 중일 때 `done`=다음 목표 번호(0부터), `total`=지점 수. `next_area`: 다음 목표가 들어 있는 구역 이름(서버 waypoint 파일이 로봇이 도는 경로와 같을 때만). waypoint 이름·좌표는 내보내지 않는다. `moving`: 순찰 중이면서 직진 속도 ≥ `linear_threshold_mps`(제자리 회전 아님), 속도 값이 오래됐으면 `null`. `Cache-Control: no-store` |
 | `GET /api/v1/visitor/map.png` | 기본 로봇 지도 PNG |
 | `GET /api/v1/visitor/map_sketch.svg` | 기본 로봇 지도의 자동 약도 |
 | `GET /api/v1/visitor/guide` | 안내 약도 `{revision, bounds, categories, areas, markers, image: {file, width, height, transform, show_areas, url} \| null}`. 기준점·지도 이름·순찰 지점은 없다. 없으면 404 `guide_not_available` |
 | `GET /api/v1/visitor/guide/image/{file}` | 지금 약도가 쓰는 그림 하나만(올렸지만 저장하지 않은 그림은 404) |
+| `GET /api/v1/display/content` | 로봇 하단 디스플레이(`/display`) 내용 `{revision, message, schedule: [{date, start, end, title, place}], slides: [{file, width, height, type, url}], timing}`. `display_dir`의 `display.json`(형식은 `server/display.py` 맨 위). 잘못 고치면 마지막 정상본(로그에 이유), 처음부터 없거나 잘못됐으면 503 `display_unavailable`, 설정이 없으면 404 `display_not_configured` |
+| `GET /api/v1/display/slides/{file}` | `display.json`의 `slides`에 적은 그림만(폴더에 있어도 목록에 없으면 404). 주소의 `?v=`가 내용 해시 |
 
 ## 인터페이스와 구조
 
