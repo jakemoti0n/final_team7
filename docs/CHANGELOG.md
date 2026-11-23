@@ -8,6 +8,24 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-23 (87) 로봇 하단 디스플레이(PRD v0.3) 3단계: 장면 ④ 「LIMBO가 지나갑니다」 오버레이와 소리(TTS 파일). Bridge 수정 없음
+
+**할 일**
+- 서버: `git pull` → `dashboard/`에서 `docker compose up -d --build`
+- 소리: 기본 내용에 `dashboard/guides/display/passing.mp3`(TTS, 4.1 s, 「림보가 지나갑니다. 길을 조금 비켜 주세요.」)를 넣고 `display.json`에 `"sound": "passing.mp3"`. **이미 돌고 있는 Docker는 `/data/display`가 처음 시작 때만 복사되므로** `docker compose cp dashboard/guides/display/passing.mp3 dashboard:/data/display/`로 넣고 볼륨의 `display.json`에도 `"sound": "passing.mp3"`를 적는다(`docs/AWS_DEPLOY.md` 11절). 다른 목소리로 바꾸려면 같은 이름으로 덮어쓴다
+- 브라우저는 화면을 누르기 전에는 소리를 막는다: 화면 오른쪽 위 안내가 보이면 한 번 누른다. 키오스크는 다음 단계에서 `--autoplay-policy=no-user-gesture-required`로 켤 예정
+
+**변경**
+- 화면: 순찰 중 멈춰 있다 출발하면(`visitor/state`의 `moving` false → true) 지금 장면 위에 「LIMBO가 지나갑니다 / 복도 → 201 강의실 쪽으로 · 길을 조금 비켜 주세요」 8 s, 소리 한 번. 같은 일은 60 s 안에 다시 띄우지 않는다(사람 앞에서 섰다 갔다 할 때). 화면을 켤 때 이미 움직이던 것·속도를 모르다(`null`) 움직인 것은 출발로 보지 않는다. 서버와 끊기거나 순찰 중이 아니면 바로 내린다(`display.ts`의 `passingStep`, 순수 함수)
+  - 방향은 아는 만큼만: 구역 둘 다 알면 「A → B 쪽으로」, 다음 구역만 알면 「B 쪽으로 가요」, 같은 구역 안이면 생략
+  - 떠 있는 동안 회전 규칙 R의 시계를 멈췄다가 이어 간다(PRD 「끝나면 원래 자리로」)
+  - 보기: 뒤 장면을 어둡게 덮고 불투명 진녹 카드 + 라임 테두리(처음엔 반투명이라 뒤의 진녹 상태 카드와 섞여 고침). 토큰 `--color-display-scrim`
+- 소리(`useDisplaySound`): `display.json`의 `sound` 파일 → 없으면 브라우저의 한국어 음성(`림보가 지나갑니다…`) → 없으면 소리 없이. 켤 때 무음을 틀어 보아 막혀 있으면 「화면을 한 번 누르면 안내 소리가 켜져요」, 누르면 사라짐
+- 서버: `display.json`에 `sound`(선택, MP3·WAV·OGG 2 MB 이하, 머리 부분으로 실제 형식 확인), 내용에 `sound: {file, type, url}`, `GET /api/v1/display/sound/{file}`(적은 파일만)
+- 소리 파일 만든 방법: Google 번역 TTS(`translate.google.com/translate_tts`, ko, 공식 API 아님)에서 문장 하나만 받았다. Chrome으로 디코드해 길이 4.08 s, 소리 3.3 s, 두 문장 사이 쉼을 확인. 정식 서비스가 필요하면 클라우드 TTS로 다시 만들어 같은 이름으로 바꾼다
+- 데모: 데모 로봇이 모서리마다 3초 멈췄다 출발 → 「지나갑니다」 5 s, 쿨다운 20 s
+- 시험: 서버 3(소리 받기·형식·이름) + 저장소 기본 소리 파일 확인, UI 단위 4(출발 판정·쿨다운·순찰 중만·방향 문구), e2e 2(실제 흐름: 막힌 소리 안내와 해제, 오버레이·재생 1회·쿨다운 / 데모) + 데모 e2e에 오버레이 동안 회전 멈춤 확인. 서버 234, UI 단위 82, e2e 49 통과(Chrome). Jetson 브라우저에서 실제 소리는 아직 확인하지 않았다
+
 ## 2026-11-23 (86) 로봇 하단 디스플레이(PRD v0.3) 2단계 화면: `/display` 키오스크(HUD, 장면 ① 위치·일정·큰 QR, ② 팜플렛·작은 QR, 회전 규칙 R, `?demo`). Bridge 수정 없음
 
 **할 일**

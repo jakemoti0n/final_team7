@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_TIMING, advance, demoDisplayContent, locationText, locksRotation, parseDisplayContent, pickEvents, pickRobot,
-  rotationPlan, titleSize, topic, type DisplayEvent, type Rotation,
+  DEFAULT_TIMING, NO_PASSING, advance, demoDisplayContent, locationText, locksRotation, parseDisplayContent, passingStep, passingText,
+  pickEvents, pickRobot, rotationPlan, titleSize, topic, type DisplayEvent, type Passing, type Rotation,
 } from './display'
 import { qrModules, qrPath } from './qr'
 import { areaAt, demoVisitorState, parseVisitorState, type VisitorRobot, type VisitorState } from '../visitor/visitor'
@@ -133,6 +133,9 @@ describe('server shapes', () => {
     expect(parseDisplayContent({ ...content, schedule: [{ ...content.schedule[0], start: '9:00' }] })).toBeNull()
     expect(parseDisplayContent({ ...content, timing: { ...DEFAULT_TIMING, location_s: 0 } })).toBeNull()
     expect(parseDisplayContent(null)).toBeNull()
+    const sound = { file: 'passing.mp3', type: 'audio/mpeg', url: '/api/v1/display/sound/passing.mp3?v=1' }
+    expect(parseDisplayContent({ ...content, sound })).not.toBeNull()
+    expect(parseDisplayContent({ ...content, sound: { ...sound, url: 'https://elsewhere.example/a.mp3' } })).toBeNull()
   })
 
   it('visitor state accepts the new robot fields and rejects broken ones', () => {
@@ -182,5 +185,42 @@ describe('QR code', () => {
     expect(qrPath([[true, true, false, true]], 4)).toBe('M4 4h2v1h-2zM7 4h1v1h-1z')
     // 같은 주소는 늘 같은 그림 (화면이 다시 그려도 바뀌지 않음)
     expect(qrModules('https://a.example/visitor')).toEqual(qrModules('https://a.example/visitor'))
+  })
+})
+
+describe('scene ④ passing', () => {
+  const s = 1000
+  // (초, 로봇 상태) 순서대로 넣고 그때마다 오버레이가 떠 있는지
+  const run = (steps: [number, Partial<VisitorRobot> | null, boolean?][]) => {
+    let p: Passing = NO_PASSING
+    return steps.map(([t, change, problem]) => {
+      p = passingStep(p, change === null ? null : robot(change), problem ?? false, t * s, DEFAULT_TIMING)
+      return p.until !== null
+    })
+  }
+
+  it('shows for 8 s when a patrolling robot starts moving, not when the page opens mid-move', () => {
+    expect(run([[0, { moving: true }], [3, { moving: true }]])).toEqual([false, false])       // 켜자마자 이미 움직이던 중
+    expect(run([[0, { moving: false }], [3, { moving: true }], [10, { moving: true }], [11, { moving: true }]]))
+      .toEqual([false, true, true, false])                                                          // 3 s에 출발 → 11 s에 내림
+    expect(run([[0, { moving: null }], [3, { moving: true }]])).toEqual([false, false])      // 모름 → 움직임은 출발로 보지 않음
+  })
+
+  it('waits 60 s before showing again (stop-and-go in a crowd)', () => {
+    expect(run([[0, { moving: false }], [1, { moving: true }], [20, { moving: false }], [30, { moving: true }],
+      [50, { moving: false }], [62, { moving: true }]])).toEqual([false, true, false, false, false, true])
+  })
+
+  it('only while patrolling and connected', () => {
+    expect(run([[0, { moving: false, status: 'paused' }], [3, { moving: true, status: 'paused' }]])).toEqual([false, false])
+    expect(run([[0, { moving: false }], [3, { moving: true }], [4, { moving: true }, true]])).toEqual([false, true, false])   // 서버와 끊김 → 내림
+    expect(run([[0, { moving: false }], [3, null]])).toEqual([false, false])
+  })
+
+  it('says where it goes only as far as it knows', () => {
+    expect(passingText(robot())).toEqual({ title: 'LIMBO가 지나갑니다', detail: '복도 → 201 강의실 쪽으로 · 길을 조금 비켜 주세요' })
+    expect(passingText(robot({ area: null })).detail).toBe('201 강의실 쪽으로 가요 · 길을 조금 비켜 주세요')
+    expect(passingText(robot({ next_area: '복도' })).detail).toBe('길을 조금 비켜 주세요')
+    expect(passingText(null).detail).toBe('길을 조금 비켜 주세요')
   })
 })

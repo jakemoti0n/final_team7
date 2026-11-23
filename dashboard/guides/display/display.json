@@ -7,5 +7,6 @@
     {"date": null, "start": "15:10", "end": "15:40", "title": "Q&A", "place": null}
   ],
   "slides": [],
+  "sound": "passing.mp3",
   "timing": {"location_s": 40, "slides_s": 30, "count_s": 10, "trash_alert_s": 10, "passing_s": 8, "passing_cooldown_s": 60}
 }

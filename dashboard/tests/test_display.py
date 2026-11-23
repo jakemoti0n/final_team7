@@ -43,7 +43,7 @@ def make(tmp_path, enabled=True, folder="display"):
 
 def test_validate_fills_defaults_and_sorts():
     view = validate(GOOD)
-    assert view["timing"] == TIMING_DEFAULTS and view["slides"] == []
+    assert view["timing"] == TIMING_DEFAULTS and view["slides"] == [] and view["sound"] is None
     # 날짜 없는(매일) 일정이 앞, 그다음 날짜·시작 순. 이름 앞뒤 공백은 지운다
     assert [e["title"] for e in view["schedule"]] == ["Q&A", "개회"]
     assert view["schedule"][0] == dict(date=None, start="15:10", end=None, title="Q&A", place=None)
@@ -61,6 +61,8 @@ def test_validate_fills_defaults_and_sorts():
     ({"message": "가" * 81}, "message must be"),
     ({"slides": ["../users.db"]}, "Slide names"),
     ({"slides": ["a.png", "a.png"]}, "listed twice"),
+    ({"sound": "../passing.mp3"}, "sound name"),
+    ({"sound": "passing.flac"}, "sound name"),
     ({"timing": {"location_s": 0}}, "location_s"),
     ({"timing": {"location_s": True}}, "location_s"),
     ({"timing": {"fade_s": 1}}, "timing may have"),
@@ -77,7 +79,7 @@ def test_content_and_slides(tmp_path):
         response = client.get("/api/v1/display/content")
         assert response.status_code == 200 and response.headers["cache-control"] == "no-cache"
         body = response.json()
-        assert set(body) == {"revision", "message", "schedule", "slides", "timing"}
+        assert set(body) == {"revision", "message", "schedule", "slides", "sound", "timing"} and body["sound"] is None
         assert [(s["file"], s["width"], s["height"], s["type"]) for s in body["slides"]] == [
             ("b.png", 1920, 1080, "image/png"), ("a.jpg", 1080, 1920, "image/jpeg")]
         assert client.get("/api/v1/visitor/state").json()["display"] == body["revision"]
@@ -148,3 +150,34 @@ def test_default_content_in_the_repository_is_valid():
     folder = Path(__file__).resolve().parents[1] / "guides" / "display"
     view = validate(json.loads((folder / "display.json").read_text(encoding="utf-8")))
     assert view["schedule"] and all((folder / name).is_file() for name in view["slides"])
+    # 「지나갑니다」 소리: TTS로 만든 MP3 (림보가 지나갑니다. 길을 조금 비켜 주세요.)
+    from server.display import sound_kind
+    assert view["sound"] == "passing.mp3" and sound_kind((folder / "passing.mp3").read_bytes()) == "mp3"
+
+
+WAV = b"RIFF\x24\x00\x00\x00WAVEfmt " + bytes(28)
+MP3 = b"ID3\x04\x00\x00\x00\x00\x00\x00" + bytes(100)
+
+
+def test_passing_sound(tmp_path):
+    folder = tmp_path / "display"
+    write(folder, {**GOOD, "sound": "passing.mp3"}, **{"passing.mp3": MP3, "other.wav": WAV})
+    with make(tmp_path) as client:
+        body = client.get("/api/v1/display/content").json()
+        assert body["sound"]["file"] == "passing.mp3" and body["sound"]["type"] == "audio/mpeg"
+        response = client.get(body["sound"]["url"])
+        assert response.status_code == 200 and response.content == MP3
+        assert response.headers["content-type"] == "audio/mpeg" and response.headers["x-content-type-options"] == "nosniff"
+        # 적지 않은 소리·그림 경로로 소리 받기는 안 된다
+        for path in ("/api/v1/display/sound/other.wav", "/api/v1/display/sound/display.json", "/api/v1/display/slides/passing.mp3"):
+            assert client.get(path).status_code == 404, path
+        # 확장자와 실제 형식이 다르거나 파일이 없으면 잘못된 내용 (정상본 유지)
+        write(folder, {**GOOD, "sound": "fake.mp3"}, **{"fake.mp3": WAV})
+        assert client.get("/api/v1/display/content").json() == body
+        write(folder, {**GOOD, "sound": "gone.wav"})
+        assert client.get("/api/v1/display/content").json() == body
+        write(folder, {**GOOD, "sound": "other.wav"})
+        changed = client.get("/api/v1/display/content").json()
+        assert changed["sound"]["type"] == "audio/wav" and changed["revision"] != body["revision"]
+    with make(tmp_path, enabled=False) as client:
+        assert client.get("/api/v1/display/sound/other.wav").status_code == 404

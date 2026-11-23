@@ -1,6 +1,6 @@
 """로봇 하단 디스플레이(/display)의 내용 폴더(display_dir). 운영자가 파일을 바꾸면 다음 요청에 반영된다.
 
-폴더에 display.json 하나와 팜플렛 그림(PNG·JPEG·WebP)을 둔다. 로그인 없이 누구나 읽으므로 서버가 검사한다.
+폴더에 display.json 하나와 팜플렛 그림(PNG·JPEG·WebP), 「지나갑니다」 소리 파일(MP3·WAV·OGG, 선택)을 둔다. 로그인 없이 누구나 읽으므로 서버가 검사한다.
 잘못 고친 파일이면 마지막 정상본을 계속 쓰고(로그에 이유), 처음부터 잘못됐으면 오류를 낸다.
 
 {
@@ -10,6 +10,7 @@
     {"date": "2026-11-27", "start": "14:00", "end": "14:30", "title": "개회", "place": "주행사장"}
   ],                                                  # date·end·place는 null 가능 (date가 null이면 매일)
   "slides": ["pamphlet-1.png"],                       # (선택) 장면 ② 팜플렛. 이 폴더의 그림 파일 이름, 보여 줄 순서
+  "sound": "passing.mp3",                             # (선택) 장면 ④ 「LIMBO가 지나갑니다」 때 한 번 틀 소리 (TTS로 만든 파일)
   "timing": {"location_s": 40, ...}                   # (선택) 장면 길이(초). 빠진 것은 기본값 (TIMING_DEFAULTS)
 }
 """
@@ -31,6 +32,9 @@ MAX_TOTAL_SLIDE_BYTES = 50 * 1024 * 1024   # 정상본 그림을 메모리에 �
 MAX_TITLE = 40
 MAX_MESSAGE = 80
 SLIDE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.(png|jpg|jpeg|webp)")
+SOUND_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.(mp3|wav|ogg)")
+SOUND_TYPES = {"mp3": "audio/mpeg", "wav": "audio/wav", "ogg": "audio/ogg"}
+MAX_SOUND_BYTES = 2 * 1024 * 1024    # 한 문장이면 수십 KB
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 TIME = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
 
@@ -72,9 +76,9 @@ def validate(config):
     """display.json을 검사해 정리된 사본(빠진 선택 항목 채움, 일정은 날짜·시작 순)을 돌려준다"""
     if not isinstance(config, dict):
         raise _bad("display.json must be an object")
-    unknown = set(config) - {"version", "message", "schedule", "slides", "timing"}
+    unknown = set(config) - {"version", "message", "schedule", "slides", "sound", "timing"}
     if unknown or not {"version", "schedule"} <= set(config):
-        raise _bad("display.json needs version and schedule; optional: message, slides, timing")
+        raise _bad("display.json needs version and schedule; optional: message, slides, sound, timing")
     if config["version"] != VERSION:
         raise _bad(f"version must be {VERSION}")
     message = _text(config.get("message"), "message", MAX_MESSAGE, optional=True)
@@ -104,6 +108,10 @@ def validate(config):
     if len(set(slides)) != len(slides):
         raise _bad("A slide is listed twice")
 
+    sound = config.get("sound")
+    if sound is not None and (not isinstance(sound, str) or not SOUND_NAME.fullmatch(sound)):
+        raise _bad("The sound name uses letters, digits, '.', '_', '-' and ends in .mp3, .wav or .ogg")
+
     timing = config.get("timing", {})
     if not isinstance(timing, dict) or set(timing) - set(TIMING_DEFAULTS):
         raise _bad(f"timing may have: {', '.join(TIMING_DEFAULTS)}")
@@ -112,7 +120,18 @@ def validate(config):
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 1 <= value <= TIMING_MAX_S:
             raise _bad(f"timing.{key} must be 1–{TIMING_MAX_S} seconds")
         merged[key] = value
-    return dict(message=message, schedule=schedule, slides=list(slides), timing=merged)
+    return dict(message=message, schedule=schedule, slides=list(slides), sound=sound, timing=merged)
+
+
+def sound_kind(data):
+    """소리 파일의 실제 형식 (머리 부분으로). 모르는 형식이면 None"""
+    if data[:4] == b"RIFF" and data[8:12] == b"WAVE":
+        return "wav"
+    if data[:4] == b"OggS":
+        return "ogg"
+    if data[:3] == b"ID3" or (len(data) > 1 and data[0] == 0xFF and data[1] & 0xE0 == 0xE0):
+        return "mp3"
+    return None
 
 
 class DisplayFolder:
@@ -128,7 +147,7 @@ class DisplayFolder:
         items = []
         try:
             for item in sorted(self.path.iterdir()):
-                if item.name == CONFIG_NAME or SLIDE_NAME.fullmatch(item.name):
+                if item.name == CONFIG_NAME or SLIDE_NAME.fullmatch(item.name) or SOUND_NAME.fullmatch(item.name):
                     stat = item.stat()
                     items.append((item.name, stat.st_mtime_ns, stat.st_size))
         except OSError:
@@ -172,8 +191,24 @@ class DisplayFolder:
             files[name] = data
             slides.append(dict(file=name, width=width, height=height, type=IMAGE_TYPES[ext],
                                url=f"/api/v1/display/slides/{name}?v={version}"))
+        sound = None
+        if config["sound"] is not None:
+            name = config["sound"]
+            try:
+                data = (self.path / name).read_bytes()
+            except FileNotFoundError as exc:
+                raise _bad(f"Sound {name} is named but the file is missing") from exc
+            if len(data) > MAX_SOUND_BYTES:
+                raise _bad(f"Sound {name} must be at most {MAX_SOUND_BYTES // (1024 * 1024)} MB")
+            kind = sound_kind(data)
+            if kind != name.rsplit(".", 1)[1]:
+                raise _bad(f"Sound {name}: file is not a {name.rsplit('.', 1)[1].upper()} file" + (f" (it is {kind.upper()})" if kind else ""))
+            version = hashlib.sha256(data).hexdigest()[:16]
+            digest.update(b"sound\0" + name.encode() + b"\0" + version.encode())
+            files[name] = data
+            sound = dict(file=name, type=SOUND_TYPES[kind], url=f"/api/v1/display/sound/{name}?v={version}")
         view = dict(revision=digest.hexdigest(), message=config["message"], schedule=config["schedule"],
-                    slides=slides, timing=config["timing"])
+                    slides=slides, sound=sound, timing=config["timing"])
         return view, files
 
     def view(self):
@@ -196,12 +231,22 @@ class DisplayFolder:
 
     def slide(self, name):
         """(바이트, 형식) 또는 None. 지금 정상본에 들어 있는 그림만"""
-        try:
-            self.view()
-        except DisplayError:
-            return None
-        data = self._files.get(name)
+        data = self._current(name) if SLIDE_NAME.fullmatch(name) else None
         if data is None:
             return None
         ext = name.rsplit(".", 1)[1]
         return data, IMAGE_TYPES[{"jpeg": "jpg"}.get(ext, ext)]
+
+    def sound(self, name):
+        """(바이트, 형식) 또는 None. 지금 정상본이 쓰는 소리만"""
+        data = self._current(name) if SOUND_NAME.fullmatch(name) else None
+        if data is None:
+            return None
+        return data, SOUND_TYPES[name.rsplit(".", 1)[1]]
+
+    def _current(self, name):
+        try:
+            self.view()
+        except DisplayError:
+            return None
+        return self._files.get(name)

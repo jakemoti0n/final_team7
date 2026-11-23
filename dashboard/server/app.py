@@ -990,6 +990,19 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
             "Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff",
             "Content-Security-Policy": "default-src 'none'"})
 
+    @app.get("/api/v1/display/sound/{name}")
+    async def display_sound(name: str):
+        # display.json의 sound에 적은 파일만 (「LIMBO가 지나갑니다」 때 한 번)
+        if not settings.visitor_enabled:
+            return visitor_closed()
+        found = display_folder.sound(name) if display_folder is not None else None
+        if found is None:
+            return error(404, "sound_not_found", "No such sound")
+        data, media = found
+        return Response(data, media_type=media, headers={
+            "Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'"})
+
     dist = ROOT / "ui" / "dist"
     if (dist / "assets").is_dir():
         app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")

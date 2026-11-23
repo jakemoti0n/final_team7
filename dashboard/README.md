@@ -301,8 +301,9 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 | `GET /api/v1/visitor/map_sketch.svg` | 기본 로봇 지도의 자동 약도 |
 | `GET /api/v1/visitor/guide` | 안내 약도 `{revision, bounds, categories, areas, markers, image: {file, width, height, transform, show_areas, url} \| null}`. 기준점·지도 이름·순찰 지점은 없다. 없으면 404 `guide_not_available` |
 | `GET /api/v1/visitor/guide/image/{file}` | 지금 약도가 쓰는 그림 하나만(올렸지만 저장하지 않은 그림은 404) |
-| `GET /api/v1/display/content` | 로봇 하단 디스플레이(`/display`) 내용 `{revision, message, schedule: [{date, start, end, title, place}], slides: [{file, width, height, type, url}], timing}`. `display_dir`의 `display.json`(형식은 `server/display.py` 맨 위). 잘못 고치면 마지막 정상본(로그에 이유), 처음부터 없거나 잘못됐으면 503 `display_unavailable`, 설정이 없으면 404 `display_not_configured` |
+| `GET /api/v1/display/content` | 로봇 하단 디스플레이(`/display`) 내용 `{revision, message, schedule: [{date, start, end, title, place}], slides: [{file, width, height, type, url}], sound: {file, type, url} | null, timing}`. `display_dir`의 `display.json`(형식은 `server/display.py` 맨 위). 잘못 고치면 마지막 정상본(로그에 이유), 처음부터 없거나 잘못됐으면 503 `display_unavailable`, 설정이 없으면 404 `display_not_configured` |
 | `GET /api/v1/display/slides/{file}` | `display.json`의 `slides`에 적은 그림만(폴더에 있어도 목록에 없으면 404). 주소의 `?v=`가 내용 해시 |
+| `GET /api/v1/display/sound/{file}` | `display.json`의 `sound`에 적은 소리 파일만(MP3·WAV·OGG, 확장자와 실제 형식이 같아야 함). 「LIMBO가 지나갑니다」 때 한 번 |
 
 ## 인터페이스와 구조
 

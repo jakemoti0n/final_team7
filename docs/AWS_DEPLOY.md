@@ -281,6 +281,7 @@ docker compose up -d --force-recreate    # INITIAL_GUIDE를 정했으면 다시 
 ```bash
 docker compose cp display.json dashboard:/data/display/display.json   # 일정·문구·장면 길이
 docker compose cp pamphlet-1.png dashboard:/data/display/             # 팜플렛 그림 (display.json의 slides에 이름을 적는다)
+docker compose cp passing.mp3 dashboard:/data/display/                # 「지나갑니다」 소리 (display.json의 sound에 이름을 적는다)
 curl -s https://<DOMAIN>/api/v1/display/content | head -c 300          # 반영 확인 (방문자 안내가 켜져 있을 때)
 ```
 

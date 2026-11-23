@@ -76,6 +76,7 @@
   --color-display-on-ink-track: rgba(255, 255, 255, .18);
   --color-display-on-ink-pill: rgba(255, 255, 255, .14);
   --color-display-letterbox: #000;                  /* 화면 비율이 16:9가 아닐 때 남는 곳 */
+  --color-display-scrim: rgba(17, 24, 39, .6);     /* 「지나갑니다」 뒤 장면을 어둡게 (오버레이가 뒤 카드와 섞이지 않게) */
 
   /* 모서리: 입력·버튼 4px, 카드·지도·큰 버튼 8px, 배지 끝까지 둥글게 */
   --radius-sm: 4px;

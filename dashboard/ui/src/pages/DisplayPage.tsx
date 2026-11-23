@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { visitorStatus, type VisitorRobot } from '../features/visitor/visitor'
 import { useDisplayData } from '../features/display/useDisplayData'
 import { QrCode } from '../features/display/QrCode'
+import { useDisplaySound } from '../features/display/useDisplaySound'
 import {
-  DEFAULT_TIMING, advance, localTime, locationText, locksRotation, pickEvents, pickRobot, rotationPlan, titleSize, topic,
-  type DisplayContent, type DisplaySlide, type Rotation,
+  DEFAULT_TIMING, NO_PASSING, advance, localTime, locationText, locksRotation, passingStep, passingText, pickEvents, pickRobot,
+  rotationPlan, titleSize, topic, type DisplayContent, type DisplaySlide, type Passing, type Rotation,
 } from '../features/display/display'
 
 const WIDTH = 1920, HEIGHT = 1080
@@ -24,7 +25,7 @@ function useFit() {
 /**
  * 로봇 하단 디스플레이 (/display): 로그인 없이 읽기만, 조작 없음. 근거 signage/docs/PRD_로봇_하단_디스플레이_v0.3.md
  * 장면 ① 로봇 위치 + 행사 안내 + 큰 QR, ② 팜플렛 + 작은 QR. 회전 규칙 R(①→②→①)은 display.ts의 advance.
- * ③ 쓰레기 받음·④ 지나갑니다는 다음 단계.
+ * ④ 「LIMBO가 지나갑니다」는 출발할 때 지금 장면 위에 띄우고 소리 한 번(passingStep). ③ 쓰레기 받음은 로봇 신호가 생긴 뒤.
  */
 export function DisplayPage({ demo, robotId }: { demo: boolean; robotId: string | null }) {
   const { state, problem, closed, content } = useDisplayData(demo)
@@ -37,10 +38,32 @@ export function DisplayPage({ demo, robotId }: { demo: boolean; robotId: string 
 
   const robot = pickRobot(state, robotId)
   const slides = content?.slides ?? []
-  const plan = useMemo(() => rotationPlan(content?.timing ?? DEFAULT_TIMING, slides.length, false), [content?.timing, slides.length])
+  const timing = content?.timing ?? DEFAULT_TIMING
+  const plan = useMemo(() => rotationPlan(timing, slides.length, false), [timing, slides.length])
+
+  // ④ 지나갑니다: 상태를 받거나 1초가 지날 때마다 판단. 새로 띄우면 소리 한 번
+  const [passing, setPassing] = useState<Passing>(NO_PASSING)
+  useEffect(() => { setPassing(p => passingStep(p, closed ? null : robot, problem, Date.now(), timing)) }, [now, robot, problem, closed, timing])
+  const sound = useDisplaySound(content?.sound?.url ?? null)
+  const played = useRef<number | null>(null)
+  useEffect(() => {
+    if (passing.lastAt === null || passing.until === null || played.current === passing.lastAt) return
+    played.current = passing.lastAt
+    sound.play()
+  }, [passing.lastAt, passing.until, sound])
+  const passingShown = passing.until !== null
+
+  // 회전: 오버레이가 떠 있는 동안은 시계를 멈췄다가, 내려가면 멈춘 만큼 미뤄 원래 자리에서 이어 간다 (PRD v0.3 R)
   const [rotation, setRotation] = useState<Rotation>(() => ({ slot: 0, startedAt: Date.now(), round: 0 }))
   const locked = !closed && !problem && locksRotation(robot)
-  useEffect(() => { setRotation(r => advance(r, plan, now.getTime(), locked)) }, [now, plan, locked])
+  const heldSince = useRef<number | null>(null)
+  useEffect(() => {
+    const t = now.getTime()
+    if (passingShown) { heldSince.current ??= t; return }
+    const held = heldSince.current === null ? 0 : t - heldSince.current
+    heldSince.current = null
+    setRotation(r => advance(held ? { ...r, startedAt: r.startedAt + held } : r, plan, t, locked))
+  }, [now, plan, locked, passingShown])
 
   const scene = closed ? 'closed' : plan[rotation.slot]?.scene ?? 'location'
   const slide = slides.length ? slides[rotation.round % slides.length] : null
@@ -59,6 +82,8 @@ export function DisplayPage({ demo, robotId }: { demo: boolean; robotId: string 
           {scene === 'slides' && slide && <SlideScene slide={slide} index={slides.indexOf(slide)} total={slides.length} visitorUrl={visitorUrl} />}
         </div>
       </main>
+      {passingShown && !closed && <PassingOverlay robot={robot} />}
+      {sound.blocked && !closed && <div className="display-sound-hint" data-testid="display-sound-hint">화면을 한 번 누르면 안내 소리가 켜져요</div>}
       {!closed && plan.length > 1 && <footer className="display-dots" aria-hidden="true" data-testid="display-dots">
         {plan.map((_, i) => <i key={i} className={i === rotation.slot ? 'on' : undefined} />)}</footer>}
       {demo && <div className="display-demo" data-testid="display-demo">DEMO · 가상 데이터</div>}
@@ -130,5 +155,18 @@ function SlideScene({ slide, index, total, visitorUrl }: { slide: DisplaySlide; 
       <QrCode value={visitorUrl} className="display-qr" label="방문자 안내 화면 주소 QR 코드" />
       <p>폰으로 지도 보기</p>
     </aside>
+  </div>
+}
+
+function PassingOverlay({ robot }: { robot: VisitorRobot | null }) {
+  const text = passingText(robot)
+  return <div className="display-passing" role="status" data-testid="display-passing">
+    <div className="display-passing-card">
+      <svg className="display-passing-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 9v6h4l5 4V5L8 9H4z" /><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" />
+      </svg>
+      <h1>{text.title}</h1>
+      <p data-testid="display-passing-detail">{text.detail}</p>
+    </div>
   </div>
 }

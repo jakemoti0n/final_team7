@@ -29,6 +29,7 @@ async function shortContent(page: Page) {
 }
 
 test('display demo: robot place, schedule, QR, then the pamphlet with a small QR', async ({ page }) => {
+  test.setTimeout(60000)
   mkdirSync('../artifacts', { recursive: true })
   await page.setViewportSize({ width: 1920, height: 1080 })
   await page.goto('/display?demo')
@@ -50,9 +51,15 @@ test('display demo: robot place, schedule, QR, then the pamphlet with a small QR
   // 조작 없는 화면: 단추·링크·사이드바가 없다
   await expect(page.getByRole('button')).toHaveCount(0)
   await expect(page.getByRole('link')).toHaveCount(0)
+  // 데모 로봇은 3 s에 출발해 「지나갑니다」가 5 s 뜬다. 그동안 회전은 멈췄다가 이어 간다
+  await expect(page.getByTestId('display-passing')).toBeVisible({ timeout: 8000 })
+  await expect(page.getByTestId('display-passing')).toHaveCount(0, { timeout: 8000 })
+  // 멈추지 않았다면 출발 뒤 12 s(오버레이가 내려가고 약 4 s)에 ②로 넘어갔을 것: 6 s 뒤에도 ①이어야 한다
+  await page.waitForTimeout(6000)
+  await expect(screen(page)).toHaveAttribute('data-scene', 'location')
   await page.waitForTimeout(800)                                                     // 0.6 s 페이드가 끝난 뒤 찍는다
   await page.screenshot({ path: '../artifacts/display-demo-location.png' })
-  // 데모는 ① 12 s 뒤 ② 팜플렛 (작은 QR은 오른쪽 아래)
+  // 데모는 ① 12 s(+ 오버레이로 멈춘 5 s) 뒤 ② 팜플렛 (작은 QR은 오른쪽 아래)
   await expect(screen(page)).toHaveAttribute('data-scene', 'slides', { timeout: 16000 })
   await expect(page.getByRole('img', { name: '행사장 팜플렛 1/2' })).toBeVisible()
   const mini = page.locator('.display-mini-qr')
@@ -139,4 +146,76 @@ test('display is off unless the visitor guide is enabled', async ({ request }) =
   for (const path of ['/display', '/api/v1/display/content'])
     expect((await request.get(`http://127.0.0.1:8018${path}`)).status(), path).toBe(404)
   expect((await request.get('http://127.0.0.1:8018/display?demo')).status()).toBe(200)
+})
+
+// ---- 장면 ④ 「LIMBO가 지나갑니다」 ----
+
+const WAV = Buffer.concat([Buffer.from('RIFF'), Buffer.from([36, 0, 0, 0]), Buffer.from('WAVEfmt '), Buffer.alloc(28)])
+
+/** 로봇 상태를 시험이 정한다: moving만 바꿔 가며 출발을 흉내 낸다 */
+async function fakeRobot(page: Page) {
+  const robot = { moving: false }
+  await page.route('**/api/v1/visitor/state', route => route.fulfill({ json: {
+    server_utc: new Date().toISOString(), operating: 1, map: null, guide: null, display: 'e2e-sound',
+    robots: [{ robot_id: 'LIMBO-01', status: 'patrolling', position: { x: 1, y: 1, stale: false, age_s: 0 },
+      area: '복도', next_area: '201 강의실', progress: { done: 3, total: 10 }, moving: robot.moving }] } }))
+  await page.route('**/api/v1/display/content', route => route.fulfill({ json: {
+    revision: 'e2e-sound', message: null, schedule: [], slides: [],
+    sound: { file: 'passing.wav', type: 'audio/wav', url: '/api/v1/display/sound/passing.wav?v=1' },
+    timing: { location_s: 40, slides_s: 30, count_s: 10, trash_alert_s: 10, passing_s: 4, passing_cooldown_s: 30 } } }))
+  await page.route('**/api/v1/display/sound/**', route => route.fulfill({ contentType: 'audio/wav', body: WAV }))
+  return robot
+}
+
+/** 재생 요청을 기록하고, 화면을 누르기 전에는 브라우저처럼 소리를 막는다 */
+async function recordPlays(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as { plays: string[]; touched: boolean }
+    w.plays = []
+    w.touched = false
+    addEventListener('pointerdown', () => { w.touched = true }, true)
+    HTMLMediaElement.prototype.play = function () {
+      if (!w.touched) return Promise.reject(new DOMException('blocked', 'NotAllowedError'))
+      if (!this.src.startsWith('data:')) w.plays.push(new URL(this.src).pathname)
+      return Promise.resolve()
+    }
+  })
+}
+const plays = (page: Page) => page.evaluate(() => (window as unknown as { plays: string[] }).plays)
+
+test('passing: overlay and one sound when the robot sets off, then a cooldown', async ({ page }) => {
+  await recordPlays(page)
+  const robot = await fakeRobot(page)
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await page.goto('/display')
+  await expect(page.getByTestId('display-title')).toHaveText('복도에 있어요')
+  // 소리가 막혀 있으면 안내, 한 번 누르면 풀린다
+  await expect(page.getByTestId('display-sound-hint')).toHaveText('화면을 한 번 누르면 안내 소리가 켜져요')
+  await page.mouse.click(960, 540)
+  await expect(page.getByTestId('display-sound-hint')).toHaveCount(0)
+  await expect(page.getByTestId('display-passing')).toHaveCount(0)                      // 멈춰 있으면 없음
+  robot.moving = true                                                                    // 출발
+  await expect(page.getByTestId('display-passing')).toBeVisible({ timeout: 6000 })
+  await expect(page.getByTestId('display-passing')).toContainText('LIMBO가 지나갑니다')
+  await expect(page.getByTestId('display-passing-detail')).toHaveText('복도 → 201 강의실 쪽으로 · 길을 조금 비켜 주세요')
+  await expect(page.getByTestId('display-hud')).toBeVisible()                           // HUD는 그대로
+  await expect.poll(() => plays(page)).toEqual(['/api/v1/display/sound/passing.wav'])
+  await page.waitForTimeout(800)
+  await page.screenshot({ path: '../artifacts/display-passing.png' })
+  await expect(page.getByTestId('display-passing')).toHaveCount(0, { timeout: 6000 })   // 4 s 뒤 내림
+  // 쿨다운(30 s) 안에 다시 멈췄다 출발해도 띄우지 않는다
+  robot.moving = false
+  await page.waitForTimeout(3500)
+  robot.moving = true
+  await page.waitForTimeout(4000)
+  await expect(page.getByTestId('display-passing')).toHaveCount(0)
+  expect(await plays(page)).toHaveLength(1)
+})
+
+test('passing in the demo: the demo robot stops at corners and sets off again', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto('/display?demo')
+  await expect(page.getByTestId('display-passing')).toBeVisible({ timeout: 8000 })
+  await expect(page.getByTestId('display-passing-detail')).toContainText('길을 조금 비켜 주세요')
+  await expect(page.getByTestId('display-passing')).toHaveCount(0, { timeout: 8000 })
 })

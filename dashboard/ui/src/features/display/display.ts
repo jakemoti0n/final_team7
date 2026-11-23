@@ -8,7 +8,11 @@ export interface DisplaySlide { file: string; width: number; height: number; typ
 export interface DisplayTiming {
   location_s: number; slides_s: number; count_s: number; trash_alert_s: number; passing_s: number; passing_cooldown_s: number
 }
-export interface DisplayContent { revision: string; message: string | null; schedule: DisplayEvent[]; slides: DisplaySlide[]; timing: DisplayTiming }
+/** 「LIMBO가 지나갑니다」 때 한 번 트는 소리 (운영자가 TTS로 만들어 넣은 파일). 없으면 null */
+export interface DisplaySound { file: string; type: string; url: string }
+export interface DisplayContent {
+  revision: string; message: string | null; schedule: DisplayEvent[]; slides: DisplaySlide[]; sound?: DisplaySound | null; timing: DisplayTiming
+}
 
 /** 서버가 내용을 정하지 않았을 때(폴더 없음·처음부터 잘못됨)의 장면 길이. 서버 TIMING_DEFAULTS와 같다 */
 export const DEFAULT_TIMING: DisplayTiming = { location_s: 40, slides_s: 30, count_s: 10, trash_alert_s: 10, passing_s: 8, passing_cooldown_s: 60 }
@@ -24,6 +28,8 @@ export function parseDisplayContent(value: unknown): DisplayContent | null {
   if (!c.schedule.every(e => e && text(e.title) && hhmm(e.start) && (e.end === null || hhmm(e.end)) && nullableText(e.date) && nullableText(e.place))) return null
   // 그림 주소는 이 서버의 슬라이드 경로만 (다른 곳의 그림을 띄우지 않게)
   if (!c.slides.every(s => s && text(s.file) && text(s.url) && s.url.startsWith('/api/v1/display/slides/') && s.width > 0 && s.height > 0)) return null
+  const sound = c.sound
+  if (sound != null && (!text(sound.url) || !sound.url.startsWith('/api/v1/display/sound/') || !text(sound.type))) return null
   if (!(Object.keys(DEFAULT_TIMING) as (keyof DisplayTiming)[]).every(k => typeof c.timing[k] === 'number' && c.timing[k] > 0)) return null
   return c
 }
@@ -167,6 +173,45 @@ export function advance(r: Rotation, plan: Slot[], now: number, locked: boolean)
 /** 로봇 상태가 ① 고정 조건인가 */
 export const locksRotation = (robot: VisitorRobot | null) => robot !== null && (robot.status === 'offline' || robot.status === 'idle')
 
+// ---- 장면 ④ 「LIMBO가 지나갑니다」 ----
+/**
+ * lastMoving: 지난번에 본 움직임 (처음·모름은 null), until: 오버레이를 내릴 시각(ms), lastAt: 마지막으로 띄운 시각(ms)
+ */
+export interface Passing { lastMoving: boolean | null; until: number | null; lastAt: number | null }
+export const NO_PASSING: Passing = { lastMoving: null, until: null, lastAt: null }
+
+/**
+ * 순찰 중에 멈춰 있다가 움직이기 시작하면(false → true) passing_s 동안 띄운다. 띄운 뒤 passing_cooldown_s 안에는 다시 띄우지 않는다.
+ * 화면을 켰을 때 이미 움직이던 것(처음 본 값)이나 모름(null)에서 바뀐 것은 출발로 보지 않는다.
+ * 서버와 끊기거나 순찰 중이 아니면 바로 내린다 (지금 움직이는지 모르므로).
+ */
+export function passingStep(p: Passing, robot: VisitorRobot | null, problem: boolean, now: number, timing: DisplayTiming): Passing {
+  if (problem || !robot || robot.status !== 'patrolling') {
+    const next = { lastMoving: null, until: null, lastAt: p.lastAt }
+    return p.lastMoving === null && p.until === null ? p : next
+  }
+  const moving = robot.moving ?? null
+  let { until, lastAt } = p
+  const cooled = lastAt === null || now - lastAt >= timing.passing_cooldown_s * 1000
+  if (moving === true && p.lastMoving === false && cooled) {
+    until = now + timing.passing_s * 1000
+    lastAt = now
+  }
+  if (until !== null && now >= until) until = null
+  return moving === p.lastMoving && until === p.until && lastAt === p.lastAt ? p : { lastMoving: moving, until, lastAt }
+}
+
+/** 오버레이 문구. 어디서 어디로 가는지는 아는 만큼만 */
+export function passingText(robot: VisitorRobot | null) {
+  const area = robot?.area ?? null, next = robot?.next_area ?? null
+  // 같은 구역 안에서 움직이면 방향은 말하지 않는다 (「복도에서 복도 쪽으로」가 되지 않게)
+  const way = !next || next === area ? null : area ? `${area} → ${next} 쪽으로` : `${next} 쪽으로 가요`
+  return { title: 'LIMBO가 지나갑니다', detail: way ? `${way} · 길을 조금 비켜 주세요` : '길을 조금 비켜 주세요' }
+}
+
+/** 소리 파일이 없을 때 브라우저 음성으로 읽을 문장 (LIMBO를 영어 철자로 읽지 않게 한글로) */
+export const PASSING_SPEECH = '림보가 지나갑니다. 길을 조금 비켜 주세요.'
+
 // ---- 데모 (/display?demo): 서버 없이 ----
 const minutes = (d: Date, delta: number) => localTime(new Date(d.getTime() + delta * 60000))
 
@@ -190,6 +235,7 @@ export function demoDisplayContent(now = new Date()): DisplayContent {
       { date: null, start: minutes(start, 20), end: minutes(start, 40), title: 'Q&A', place: null },
     ],
     slides: [slide(1, '#dcfce7'), slide(2, '#fef3c7')],
-    timing: { ...DEFAULT_TIMING, location_s: 12, slides_s: 8 },   // 데모는 짧게 돌아 금방 볼 수 있게
+    sound: null,                                                   // 데모는 소리 파일 없음 (브라우저에 한국어 음성이 있으면 그것으로)
+    timing: { ...DEFAULT_TIMING, location_s: 12, slides_s: 8, passing_s: 5, passing_cooldown_s: 20 },   // 데모는 짧게 돌아 금방 볼 수 있게
   }
 }
