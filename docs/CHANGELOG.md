@@ -8,6 +8,22 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-23 (88) 로봇 하단 디스플레이(PRD v0.3) 4단계: Jetson 브라우저 키오스크(`signage/deploy/display-kiosk.*`)와 부하 측정 스크립트. 서버·화면·Bridge 수정 없음
+
+**할 일 (Jetson)**
+- `signage/README.md` 0절대로: `sudo snap install chromium` → `signage/deploy/setup-screen.sh` → 서비스 링크·`systemctl --user enable --now display-kiosk.service` → 자동 로그인 켜기
+- 서버에서 `VISITOR_ENABLED=true`(아니면 `/display`가 404라 키오스크가 계속 기다린다)
+- 로봇 스택을 띄운 채 `measure_load.py`로 키오스크 켠 것·끈 것을 10분씩 재어 공유
+
+**변경**
+- `display-kiosk.env`: 띄울 주소 `https://52-79-216-109.sslip.io/display`(공개 주소라 QR의 `/visitor`가 폰에서 열림), 브라우저, 더 넘길 옵션
+- `display-kiosk.sh`: 서버가 화면을 내줄 때까지 기다렸다가(30초마다 로그 한 줄) Chromium 키오스크. 소리 자동 재생 허용, 복원·번역·확대·키링 창 끔, Wayland/X11 자동. 이 화면 전용 프로필(snap이면 `~/snap/chromium/common/limbo-display`: snap은 홈의 숨김 폴더에 못 씀. `/snap/bin/chromium`이 `/usr/bin/snap` 링크인 것까지 판별). 전원이 그냥 꺼졌다 켜져도 복원 창이 뜨지 않게 프로필의 종료 상태를 고친다. `--print`로 명령만
+- `display-kiosk.service`: systemd 사용자 서비스(그래픽 로그인 뒤, 죽으면 5초 뒤 다시)
+- `setup-screen.sh`: GNOME 화면 끄기·잠금·절전·어둡게·알림 배너 끔(없는 키는 건너뜀), `--undo`
+- `measure_load.py`(표준 라이브러리만): 서비스의 브라우저와 그 자손 전체의 CPU(코어 하나 = 100 %)·PSS 메모리, 시스템 CPU·load·남은 메모리를 구간마다, 끝에 평균·최대·최소, CSV. `--no-browser`로 비교 기준
+- `signage/README.md`: 맨 위에 v0.3부터는 `/display` 키오스크라는 안내와 0절(설치·운영·부하 재기). PySide6 프로그램은 v0.2 구현으로 그대로(없앨지는 PRD 열린 질문)
+- 시험(PC): 실행 스크립트 — 닫힌 포트에서 기다림, 임시 서버가 뜨면 가짜 브라우저에 옵션·주소 전달, 복원 창 방지, snap 판별 3가지. 화면 설정 — 가짜 gsettings로 설정·건너뜀·되돌림. 측정 — 바쁜 손자 프로세스가 100 %로 잡힘, `--no-browser`, 서비스 없음 오류. **Jetson 실기는 아직**
+
 ## 2026-11-23 (87) 로봇 하단 디스플레이(PRD v0.3) 3단계: 장면 ④ 「LIMBO가 지나갑니다」 오버레이와 소리(TTS 파일). Bridge 수정 없음
 
 **할 일**

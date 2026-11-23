@@ -1,5 +1,62 @@
 # Automaton 로봇 하단 디스플레이 (signage)
 
+> **PRD v0.3(2026-11-23)부터 로봇 하단 화면은 대시보드 웹앱의 `/display`를 Jetson 브라우저 키오스크로 띄운다** ([PRD v0.3](docs/PRD_로봇_하단_디스플레이_v0.3.md)).
+> 화면 코드는 `dashboard/ui`에 있고, 이 폴더는 **키오스크 설치·측정**(아래 0절, `deploy/display-kiosk.*`)과 근거 문서(`docs/`)를 맡는다.
+> 1절부터의 Python/PySide6 프로그램은 v0.2 구현이다. 완전히 없앨지는 PRD v0.3 열린 질문으로 남아 있어 그대로 둔다(두 화면을 동시에 켜지 않는다).
+
+## 0. 로봇 하단 화면 키오스크 (PRD v0.3, Jetson)
+
+로봇에 붙은 Jetson(Ubuntu 24.04, GNOME)이 부팅해 로그인하면 `/display`를 전체 화면으로 띄운다. 터치·키보드 없이 돈다.
+
+| 파일 | 하는 일 |
+|---|---|
+| `deploy/display-kiosk.env` | 띄울 주소(`DISPLAY_URL`, 기본 `https://52-79-216-109.sslip.io/display`), 브라우저, 더 넘길 옵션. **QR이 폰에서 열리게 공개 서버 주소로** 연다(화면이 연 주소의 `/visitor`가 QR에 들어감) |
+| `deploy/display-kiosk.sh` | 서버가 화면을 내줄 때까지 기다렸다가(부팅 직후 네트워크 전에 띄우면 오류 페이지에 멈추므로) Chromium을 키오스크로 띄운다. 소리 자동 재생 허용, 번역·복원 창·확대 끔, 이 화면 전용 프로필 |
+| `deploy/display-kiosk.service` | systemd 사용자 서비스. 그래픽 로그인 뒤 실행, 브라우저가 죽거나 닫히면 5초 뒤 다시 |
+| `deploy/setup-screen.sh` | 화면 끄기·잠금·절전·알림 배너를 끈다(GNOME, 한 번). `--undo`로 되돌림 |
+| `deploy/measure_load.py` | 키오스크 브라우저(자식 프로세스 포함)의 CPU·메모리(PSS)와 시스템 CPU·load·남은 메모리를 잰다 |
+
+**설치 (Jetson에서, 로봇을 쓰는 사용자로)**
+
+```bash
+sudo snap install chromium                       # Ubuntu 24.04 arm64에는 Google Chrome이 없다. 이미 있으면 건너뜀
+cd ~/limbo && git pull                           # 저장소가 ~/limbo가 아니면 display-kiosk.service의 ExecStart를 고친다
+nano signage/deploy/display-kiosk.env            # 주소가 바뀌었거나 이 로봇이 기본 로봇이 아니면(?robot=LIMBO-02)
+signage/deploy/setup-screen.sh                   # 화면이 꺼지거나 잠기지 않게
+signage/deploy/display-kiosk.sh --print          # 띄울 명령 확인 (브라우저 경로·프로필·주소)
+mkdir -p ~/.config/systemd/user
+ln -sf ~/limbo/signage/deploy/display-kiosk.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user disable --now signage.service 2>/dev/null || true   # v0.2 PySide6 화면을 켜 뒀다면 끈다
+systemctl --user enable --now display-kiosk.service
+```
+
+- 부팅하면 바로 뜨게 하려면 **자동 로그인**을 켠다: 설정 → 시스템 → 사용자 → 자동 로그인(관리자 암호 필요). 로그인 화면에서 멈추면 키오스크가 뜨지 않는다
+- 서버에서 방문자 안내가 켜져 있어야 한다(`dashboard/.env`의 `VISITOR_ENABLED=true`). 꺼져 있으면 `/display`가 404라 실행 스크립트가 계속 기다린다
+- 상태·로그: `systemctl --user status display-kiosk`, `journalctl --user -u display-kiosk -f` (기다리는 중이면 30초마다 「서버를 기다리는 중」)
+- 잠깐 끄기: `systemctl --user stop display-kiosk` (Alt+F4로 닫으면 5초 뒤 다시 뜬다). 다시: `start`
+- 서버를 새로 배포한 뒤에는 화면이 예전 코드를 들고 있으므로 `systemctl --user restart display-kiosk`
+- 화면이 깨지거나 검게 나오면 `display-kiosk.env`의 `EXTRA_FLAGS=--disable-gpu`로 시험한다
+- 소리: 브라우저가 화면을 누르지 않아도 소리를 내도록 띄운다(`--autoplay-policy=no-user-gesture-required`). 소리가 안 나면 Jetson의 출력 장치·음량부터 본다(`pactl info`, 설정 → 소리)
+
+**부하 재기** (PRD v0.3 열린 질문: Jetson이 로봇 작업과 함께 `/display`를 8시간 돌릴 수 있는가). 로봇 스택(Nav2 등)을 평소처럼 띄운 채 같은 시간씩 두 번 잰다:
+
+```bash
+cd ~/limbo/signage/deploy
+python3 measure_load.py --seconds 600 --csv kiosk-on.csv          # 키오스크 켠 상태 10분
+systemctl --user stop display-kiosk
+python3 measure_load.py --no-browser --seconds 600 --csv kiosk-off.csv
+systemctl --user start display-kiosk
+```
+
+두 결과의 시스템 CPU·load·남은 메모리 차이가 키오스크의 몫이다. 브라우저 CPU는 코어 하나를 100 %로 센다(Orin Nano는 6코어). 장면 전환(0.6 s 페이드)과 「지나갑니다」 때 잠깐 오른다.
+
+> **아직 확인하지 않은 것**: Jetson 실기에서 키오스크 실행·자동 로그인 뒤 자동 시작·소리·부하. PC에서는 실행 스크립트(기다림·브라우저 찾기·snap 프로필·복원 창 방지·옵션), 화면 설정 스크립트(가짜 gsettings), 측정 스크립트(바쁜 자식 프로세스 100 %)를 시험했다.
+
+---
+
+## v0.2 PySide6 프로그램
+
 로봇 하단 디스플레이(1920×1080 가로)에 세 화면을 차례로 띄우는 Python/PySide6 프로그램이다.
 
 1. **시간·일정** (`clock_schedule`): 날짜, 시각, Excel에 등록한 행사 1건

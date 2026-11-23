@@ -1,0 +1,16 @@
+# 로봇 하단 디스플레이 키오스크: 그래픽 로그인 세션이 뜨면 /display를 전체 화면으로 (systemd 사용자 유닛). PRD v0.3
+# 설치: signage/README.md 「로봇 하단 화면 키오스크」. 저장소가 ~/limbo가 아니면 ExecStart 경로를 고친다
+[Unit]
+Description=LIMBO 로봇 하단 디스플레이 (/display 키오스크)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/limbo/signage/deploy/display-kiosk.sh
+# 브라우저가 죽거나 닫혀도 5초 뒤 다시 띄운다
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
