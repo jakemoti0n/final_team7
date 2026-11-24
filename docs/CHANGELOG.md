@@ -8,6 +8,38 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-24 (77) 실물에서 person_wait 첫 가동 → 쓰레기통 오인식으로 영구 대기 발견, 확신도 0.5·팽창 비용 70 %(PM 지시), 순찰 노드 종료·위치 재탐색 막힘 해결, 라즈베리파이 분류 모듈 접속
+
+**할 일**
+- 빌드 필요 없음(yaml 두 개만). NX 부팅 유닛은 재시작해야 적용(오늘은 지역·전역 팽창을 `ros2 param set`으로 실시간 적용, 확신도는 센서 유닛 재시작)
+- 다음 실물 주행: 확신도 0.5에서 코앞(1.5 m 안) 손님 검출이 줄지 않는지 확인. 0.3은 1.5 m 안 사람 검출을 위해 낮춘 값이었음
+- `person_wait` 출구 설계(사람이 아닌 물체면 포기하고 Nav2에 맡기기) — 설계 승인 뒤 구현. `roboclaw_drive` 게이트에 `/person_wait` 신선도 타임아웃. 실물 BT(`real_*.xml`)에 `IsWaitingForPerson`(지금은 시뮬 BT에만). 셋 다 `docs/KNOWN_ISSUES.md` 2026-11-24
+- 분류 테스트 재개(오늘 2바퀴 중단, 3바퀴 전 PM 지시로 종료). 젯슨이 정지/주행을 파이에 알려 주는 연결(설계안 B)이 필요한지는 아래 조건별 결과로 판단
+
+  | 조건 | 로봇 | 사람 |
+  |---|---|---|
+  | ① | 정지 | 넣기 |
+  | ② | 길 막고 세움(person_wait 대기) | 넣기 |
+  | ③ | 주행 중 | 살짝 넣기 |
+  | ④ | 주행 중 | 던지기 |
+
+**변경**
+- `limbo_perception/config/person_detector.yaml`: `yolo.confidence` 0.3 → 0.5(PM 지시). 0.3에서 하반신 모델이 흰 봉투 씌운 회색 쓰레기통을 사람으로 봄(신뢰도 약 0.37) → `person_wait` 영구 대기. 대가: 코앞 손님 검출이 줄 수 있음(위 할 일)
+- `limbo_navigation/config/nav2_real.yaml`: 팽창 비용 70 %(PM 지시). `cost_scaling_factor` 지역 5.0 → 8.5, 전역 4.0 → 7.5(치명 띠 밖 0.1 m 비용 153 → 108, 170 → 120). `inflation_radius` 0.45는 유지: 로봇 발판 0.50×0.59의 모서리 반지름 0.387보다 커야 해서
+- `docs/KNOWN_ISSUES.md`: person_wait 영구 대기(물체 오인식, 출구 없음), `roboclaw_drive` 게이트 신선도 없음, 하반신 모델의 쓰레기통 오인식 — 3개
+- `docs/TROUBLESHOOTING.md` 실물 절: `ros2 run` 껍데기에 SIGINT를 보내면 순찰 노드가 안 끝남, 센서 유닛 재시작 뒤 위치 재탐색이 막힘 — 2개
+- `docs/REAL_PATROL_RUN.md` "막히면": 위 두 가지 한 줄씩
+
+**확인**(2026-11-24 저녁 Orin NX, 부팅 유닛 5개)
+- 코스트맵 PNG 점검: 전역·지역 잡티 없음. 지역 지도에서 사람·작은 물체는 지름 0.3 m 덩어리. 지금까지 실물에서 사람 앞에 선 것은 장애물 회피였음(`start_real.launch.py` 기본 `person_wait: 'false'`)
+- 팽창 70 %로 순찰 1바퀴 완주(20:00:28 출발, MID·HOME 도착, mission completed). 벽 스침 없음(관찰)
+- `person_wait`를 `ros2 launch limbo_bringup start_person_wait_real.launch.py publish_mount_tf:=false`로 따로 띄운 2바퀴(20:27:58 출발): 20:30:35 `WAITING ← DRIVING: blocked_in_zone, tracks 1, nearest x 0.44 y −0.18 v (0,0)` → 30 s마다 `WAITING alarm: no_pull_over_spot_…s, stationary 135 s`. 카메라 주석 영상에서 종이 상자와 봉투 씌운 쓰레기통이 사람(ID 75, 0.53 m)으로 잡힘. W2 옆에 서 있던 사람은 설계 2-7대로 장애물로 지나감
+- 라즈베리파이 5(`automaton-pi`, 192.168.21.73, Tailscale은 다른 팀원 계정 망) SSH 접속 확인. 역할: 쓰레기 분류 모듈(IMX500 카메라, ONNX efficientnet_lite0 분류, HX711 무게 150 g 촉발, Nextion UART), 로봇 상태와 무관하게 동작. 코드는 git 미관리
+
+**넣지 않은 것**
+- 젯슨·파이에서 쓴 임시 스크립트. 기록 원본은 젯슨 `~/limbo_bags/lap_20261124_200028/`(35 MB)·`lap_20261124_202758/`(11 MB)·`logs/odom_speed_*.csv`, 파이 판정 로그 `~/pipe/7_trigger/events.jsonl`(시작 시점 138줄)
+- NX YOLO GPU 확인은 75번에 있음
+
 ## 2026-11-24 (76) 모방 학습 2일 차: 데이터셋(build_dataset)·모델(MLP 앙상블 3개)·학습(train_policy, early stopping·불일치 문턱)·정책 노드(policy_node), 합성 bag end-to-end
 
 **할 일**

@@ -272,6 +272,19 @@
 
 ## 실물(Jetson·RoboClaw·센서)
 
+### `nohup ros2 run limbo_patrol patrol_node`를 끝내려고 PID에 SIGINT를 보내도 안 끝남 — `ros2 run` 껍데기 PID였음 — 2026-11-24
+- **증상**: 순찰 노드를 `nohup ros2 run limbo_patrol patrol_node …`로 띄운 뒤 그 PID에 `kill -INT`를 보내도 노드가 계속 살아 있고 `/patrol/state` 발행자가 남음
+- **원인**: 그 PID는 `ros2 run` 껍데기(파이썬 CLI)이고 실제 노드는 자식 프로세스다. 껍데기는 `do_wait`로 자식을 기다릴 뿐이라 껍데기에 보낸 SIGINT가 노드까지 가지 않는다. 남은 발행자는 아래 "위치 재탐색이 막힘"의 원인이 됨
+- **해결**: 자식 파이썬 PID를 찾아 그쪽에 SIGINT: `C=$(pgrep -P <껍데기 PID>); kill -INT $C`. 패턴 kill(`pkill -f`)은 쓰지 않는다
+- **확인**: 5 s 안에 종료, `ros2 topic info /patrol/state`의 발행자 0
+
+### 센서 유닛 재시작 뒤 AMCL 초기 위치가 다시 안 잡힘 — 죽지 않은 순찰 노드가 `/patrol/state` 발행자로 남아 재탐색을 막음 — 2026-11-24
+- **증상**: 확신도 변경(변경 기록 77)으로 NX 센서 유닛을 재시작한 뒤 `corridor_pose.py`(`tools/nx_boot/boot/`)가 위치를 다시 잡지 않아 TF `map→base`가 없음
+- **원인**: `corridor_pose.py`는 순찰 중 오판을 막으려고 `/patrol/state` 발행자가 있거나 Nav2 활성 목표가 있으면 전역 재탐색을 하지 않는다(`n.count_publishers('/patrol/state') or any(active_goals.values())`). 위 항목처럼 껍데기만 끊겨 순찰 노드가 발행자로 남아 있었음
+- **해결**: 순찰 노드(자식 PID)를 SIGINT로 끝냄 → 재탐색이 돌아 20:42:04 전역 매칭 성공(fit 0.85, HOME 근처 (0.63, −0.02)), TF `map→base` 복구
+- **주의**: 같은 함수가 복도 중간(앞뒤가 대칭인 구간)에서는 `No unique global scan match; waiting for another scan`을 반복한다. 재탐색은 HOME 테이프·코너처럼 고유한 자리에서 한다
+- **확인**: 위 시각 매칭 뒤 TF `map→base` 수신
+
 ### 부팅 서비스가 OAK를 열다 꺼지면서 젯슨 내장 USB 허브의 2.0 쪽이 통째로 끊김 — 2026-11-15
 - **증상**: 로봇 전원과 함께 켜진 젯슨에서 RoboClaw·OAK가 `lsusb`에 없음(내장 허브 0bda:0489와 블루투스만). 커널 로그는 부팅 5.6 s에 `usb 1-2.4: Movidius MyriadX` 인식 → 30 s(또는 54 s)에 `usb 1-2.4: USB disconnect` 직후 `usb 1-2: USB disconnect`(허브의 USB 2.0 쪽 자체). 과전류 메시지 없음. 재부팅 2회 모두 같은 시각대에 재현
 - **원인**: 11-12에 설치된 `limbo-real.service`(systemd, `run_real.sh --full`, `Restart=always` 10 s)가 부팅마다 떠서 `lidar_cloud_guard.py: ImportError: numpy.core.multiarray failed to import`로 실패하고(16회 재시작), 런치가 종료될 때 펌웨어 로드 중인 OAK 컨테이너를 SIGINT→SIGTERM→SIGKILL로 끊는다. 그 순간(17:23:58~59) 허브 2.0 쪽이 떨어진다. 전기적 기전(허브 5 V 순간 강하로 추정)은 확인 못 했고, 서비스 없이 부팅하면 재현되지 않는다

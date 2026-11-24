@@ -194,5 +194,7 @@ sudo shutdown -h now
 - **위치 탐색이 80 % 안팎에서 안 올라감**: 로봇 2 m 안에 사람·물건이 있거나, 로봇이 테이프 자리에서 벗어나 탐색 창(±20 cm) 가장자리에 걸린 것. `CX CY R=0.3`으로 창을 옮긴다.
 - **순찰 노드가 9 s 만에 "completed"**: 경유점 파일의 마지막 stop이 출발점과 같을 때 생긴다(TROUBLESHOOTING 11-10). `real_loop_waypoints.yaml`은 MID·HOME 두 stop 구조를 유지한다.
 - **Nav2가 `active: 0`이고 nav2.log에 `Failed to activate global_costmap because transform from base_link to map did not become available` → `Failed to bring up all requested nodes. Aborting bringup`**: AMCL에 초기 위치를 안 줘서(`set_initial_pose: false`) `map→odom`이 없는 채로 Nav2를 띄운 것(11-11, 새로 부팅한 날). Nav2 런치 PID에 SIGINT(`ps -eo pid,args | grep "[r]os2 launch .*start_nav2_real"`) → 2절 ③ → ⑤. 생명주기 관리자는 한 번 중단하면 스스로 다시 올리지 않는다.
+- **`ros2 run`으로 띄운 순찰 노드가 SIGINT로 안 끝남**: 그 PID는 `ros2 run` 껍데기라 자식을 기다리기만 한다. 자식 PID에 보낸다: `kill -INT $(pgrep -P <껍데기 PID>)`. 안 끝난 노드가 `/patrol/state` 발행자로 남으면 NX `corridor_pose.py`가 위치 재탐색을 하지 않는다(TROUBLESHOOTING 11-24).
+- **위치 재탐색이 `No unique global scan match`만 반복**: 복도 중간처럼 앞뒤가 대칭인 자리다. 로봇을 HOME 테이프나 코너처럼 고유한 자리에 세우고 기다린다(11-24).
 - **젯슨 ssh가 끊김**: 로봇이 W1 코너(복도 끝)에 있을 때 와이파이가 약하다. 돌아올 때까지 기다리면 된다. 순찰은 젯슨 안에서 계속 돈다.
 - **`fastrtps_port … open_and_lock_file failed`가 찍힘**: `timeout`으로 끊은 `ros2 topic …` 명령이 남긴 공유 메모리 찌꺼기. 주행 중 CLI 확인을 줄이고, 5절처럼 ROS가 다 내려간 뒤 `/dev/shm/fastrtps_*`를 지운다.

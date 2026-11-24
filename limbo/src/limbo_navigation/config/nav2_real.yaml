@@ -204,7 +204,7 @@ local_costmap:
       - inflation_layer
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        cost_scaling_factor: 5.0
+        cost_scaling_factor: 8.5  # 11-24 PM 지시: 팽창 비용 70 %(5.0→8.5, 치명 띠 밖 0.1 m에서 153→108). 반경 0.45는 모서리 반지름 0.387 때문에 유지
         inflation_radius: 0.45
       human_layer:
         plugin: limbo_navigation::HumanLayer
@@ -382,7 +382,7 @@ global_costmap:
         plugin: nav2_costmap_2d::InflationLayer
         enabled: true
         inflation_radius: 0.45
-        cost_scaling_factor: 4.0
+        cost_scaling_factor: 7.5  # 11-24 PM 지시: 팽창 비용 70 %(4.0→7.5). 반경은 유지
 map_saver:
   ros__parameters:
     save_map_timeout: 5.0
