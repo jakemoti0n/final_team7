@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Requires real sensors/odom and exactly one SLAM or AMCL map->odom source.
 # Default output is /limbo/nav2_preview/cmd_vel. Does not start a motor driver.
+# 모방 학습 중재기를 쓸 때: cmd_vel_out:=/cmd_vel cmd_vel_in:=/cmd_vel_arbiter (collision_monitor 입력만 바뀜, 기본은 지금 그대로)
 set -eo pipefail
 export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-97}
 export ROS_AUTOMATIC_DISCOVERY_RANGE=${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}

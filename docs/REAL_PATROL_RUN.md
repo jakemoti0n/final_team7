@@ -14,6 +14,30 @@
 >   ```
 >   유닛은 enabled 상태라 재부팅하면 다시 뜬다. NX에서 수동 절차를 그대로 해 본 기록은 아직 없다(확인 필요).
 
+### 모방 학습 런치(수동 운전 기록) — NX
+
+사람이 패드로 운전한 바퀴를 기록한다. 패드 명령은 중재기(`drive_arbiter`) → collision_monitor → `/cmd_vel` → 바퀴로 가므로 안전 정지는 그대로 남는다. 패드는 **LB(왼쪽 어깨)를 누르는 동안만** 바퀴로 간다.
+
+1. 빌드(처음 한 번, pull 뒤마다): `cd ~/limbo/limbo && colcon build --symlink-install --packages-select limbo_imitation limbo_bringup`. `ros-jazzy-joy`·`ros-jazzy-teleop-twist-joy`가 없으면 설치가 필요하다(sudo, PM 승인).
+2. Nav2의 collision_monitor 입력을 중재기 출력으로 바꿔 다시 띄운다. 부팅 유닛의 `start navigation`이 환경 변수 `LIMBO_CMD_VEL_IN`(없으면 기본 `cmd_vel_smoothed` = 지금 동작)을 읽는다:
+   ```bash
+   systemctl --user set-environment LIMBO_CMD_VEL_IN=/cmd_vel_arbiter
+   systemctl --user restart limbo-nx-navigation
+   ```
+   수동으로 띄울 때는 `bash tools/drive/run_nav2_real.sh cmd_vel_out:=/cmd_vel cmd_vel_in:=/cmd_vel_arbiter`.
+3. 기록 런치:
+   ```bash
+   ros2 launch limbo_imitation imitation_real.launch.py mode:=manual driver:=<이름> note:=<메모>
+   ```
+   → `/patrol/state`가 patrolling이 되면 기록을 시작하고 completed·failed에서 끝낸다. 순찰 노드 없이 달릴 때는 `manual_start:=true`(런치를 띄우자마자 시작, Ctrl+C로 끝).
+   - 패드가 없으면 키보드: 런치에 `require_deadman:=false`를 붙이고 다른 터미널에서 `bash tools/drive/teleop_keyboard.sh /cmd_vel_teleop`. 키를 떼면 0.5 s 안에 멈춘다.
+4. 기록 위치: `~/limbo_bags/imitation/<날짜_시각>_<번호>_<모드>/`(`bag/`, `meta.json`, `metrics.csv`). 바퀴 지표 표 한 장:
+   ```bash
+   ros2 run limbo_imitation collect_metrics ~/limbo_bags/imitation/* > ~/limbo_bags/imitation/all.csv
+   ```
+   열: 충돌 수, 움직이는 중 사람 최소 거리, 완주, 걸린 시간, 거리, 갇힘 시간, 비틀거림, 끼어들기, 합격 여부와 이유.
+5. 끝나면 Nav2를 원래대로: `systemctl --user unset-environment LIMBO_CMD_VEL_IN && systemctl --user restart limbo-nx-navigation`(재부팅해도 기본값으로 돌아온다).
+
 ## 0. 로봇 놓기
 
 - 로봇을 **원점 바닥 테이프 자리**에 **+x(긴 복도 쪽)** 를 보게 놓는다.

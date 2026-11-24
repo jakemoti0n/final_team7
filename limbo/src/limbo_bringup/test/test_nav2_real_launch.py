@@ -10,12 +10,12 @@ ROOT = Path(__file__).resolve().parents[4]
 LAUNCH = ROOT / 'limbo/src/limbo_bringup/launch/start_nav2_real.launch.py'
 
 
-def nodes(topic):
+def nodes(topic, **extra):
     spec = importlib.util.spec_from_file_location('real_nav_test', LAUNCH)
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     context = LaunchContext()
     context.launch_configurations.update(cmd_vel_out=topic, composition='false',
-        params_file=str(ROOT / 'limbo/src/limbo_navigation/config/nav2_real.yaml'))
+        params_file=str(ROOT / 'limbo/src/limbo_navigation/config/nav2_real.yaml'), **extra)
     with patch.object(module, 'Node', Mock()) as node:
         module._nodes(context)
     calls={call.kwargs['name']: call.kwargs for call in node.call_args_list}
@@ -46,6 +46,11 @@ def test_explicit_real_output_still_has_collision_monitor_last():
     assert calls['collision_monitor']['effective_params']['cmd_vel_out_topic']=='/cmd_vel'
     assert dict(calls['controller_server']['remappings'])['cmd_vel']=='/cmd_vel_nav'
     assert dict(calls['velocity_smoother']['remappings'])['cmd_vel_smoothed']=='/cmd_vel_smoothed'
+
+
+def test_cmd_vel_in_switches_collision_monitor_input_to_arbiter():
+    monitor = nodes('/cmd_vel', cmd_vel_in='/cmd_vel_arbiter')['collision_monitor']
+    assert monitor['effective_params']['cmd_vel_in_topic'] == '/cmd_vel_arbiter'
 
 
 @pytest.mark.parametrize('name',['','relative','/','/cmd_vel_nav','/cmd_vel_smoothed',

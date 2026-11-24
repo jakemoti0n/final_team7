@@ -15,7 +15,7 @@ case "$1" in
     ;;
  navigation)
     python3 "$HOME/.config/limbo/boot/ready.py"
-    exec bash tools/drive/run_nav2_real.sh cmd_vel_out:=/cmd_vel
+    exec bash tools/drive/run_nav2_real.sh cmd_vel_out:=/cmd_vel cmd_vel_in:="${LIMBO_CMD_VEL_IN:-cmd_vel_smoothed}"
     ;;
  dashboard)
     source relay_prog/install/local_setup.bash

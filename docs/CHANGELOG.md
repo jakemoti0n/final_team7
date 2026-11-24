@@ -8,6 +8,30 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-24 (75) 모방 학습 1일 차: limbo_imitation 패키지(입력 특징·바퀴 지표·운전 중재기·바퀴 기록기·조이스틱 런치), Nav2 collision_monitor 입력 인자
+
+**할 일**
+- `build_limbo`(새 패키지 `limbo_imitation`). 실물에서 쓰려면 `ros-jazzy-joy`·`ros-jazzy-teleop-twist-joy` 필요. 쓰는 법은 `docs/REAL_PATROL_RUN.md` "모방 학습 런치(수동 운전 기록) — NX"
+- 2일 차: 정책 노드(`policy_node`)·bag → 데이터셋 변환·학습 스크립트, 시뮬에서 기록 → 학습 → 정책 주행 흐름 1회. 3일 차: 패드로 예비 2바퀴 기록
+
+**변경**
+- `limbo/src/limbo_imitation/`(새 패키지): `features.py`(정책 입력 한 프레임 93칸 = 스캔 72구간 + 목표 4 + 속도 2 + 사람 3명×5, 3프레임 쌓아 279칸. 학습·실행이 같은 코드를 씀), `metrics.py`(바퀴 지표·합격 판정·학습에서 뺄 구간), `arbiter_logic.py`+`drive_arbiter.py`(teleop·정책·MPPI 중 하나를 `/cmd_vel_arbiter`로, 데드맨 우선, 후진 0, `/drive_mode` 변경 시+1 Hz), `run_recorder.py`(`/patrol/state` patrolling → completed·failed를 한 바퀴로 bag·`meta.json`·`metrics.csv`를 `~/limbo_bags/imitation/`에), `collect_metrics.py`(바퀴 폴더들 → CSV 표 한 장), `launch/imitation_real.launch.py`(joy_node + teleop_twist_joy → `/cmd_vel_teleop` + 중재기 + 기록기), `config/imitation.yaml`·`joy_xbox.yaml`(LB 데드맨, 0.5 m/s·0.8 rad/s)
+- `start_nav2_real.launch.py`: 런치 인자 `cmd_vel_in`(collision_monitor 입력, 기본 `cmd_vel_smoothed` = 동작 불변). 중재기를 쓸 때 `/cmd_vel_arbiter`. `run_nav2_real.sh`는 사용법 주석만
+- `tools/nx_boot/boot/start`: navigation 분기가 환경 변수 `LIMBO_CMD_VEL_IN`(없으면 기본값)을 `cmd_vel_in`으로 넘김. `tools/drive/teleop_keyboard.sh`: 첫 인자가 `/`로 시작하면 출력 토픽(기본 `/cmd_vel`)
+
+**결정**
+- 개인 공간(0.5 m) 침범은 로봇이 움직일 때(odom > 0.05 m/s)만 지표·합격 판정·학습 제외에 셈. 멈춘 로봇에 다가온 사람은 손님 응대(설계 2-1). `limbo_evaluation`의 사람 탓/로봇 탓 구분과 같은 기준. 전체 최소 거리는 참고 열로 남김
+- 키보드 운전: 중재기 `require_deadman:=false`면 manual에서 teleop 명령이 신선한 동안(0.5 s) 데드맨 없이 통과. 조이스틱이 없을 때의 대안이고 안전 정지는 collision_monitor가 맡음
+- 정책 → nav 복귀: 넘긴 뒤 새로 온 status ok=true가 있어야 함. 갇힘으로 넘긴 경우는 nav가 다시 움직이게 한 뒤에만(안 그러면 3 s마다 정책·nav를 오감). status를 한 번도 못 받으면 nav
+- 갇힘 지표는 1.0 s 넘게 이어진 것만(`stuck_min_duration`). 출발할 때마다 모터 응답·odom 지연만큼 명령과 실제가 어긋나 "갇힘 0" 판정을 통과할 수 없어서
+- 사람 특징은 5 m(`max_dist`) 밖 사람을 넣지 않음(나누면 1을 넘어 가까운 사람과 섞임). 속도 특징은 -1~1로 자름
+- bag은 기록기의 자식 프로세스로 SIGINT를 기본 동작으로 되돌려 띄움(TROUBLESHOOTING 11-10, SIGINT 무시 상속). 안 닫히면 SIGTERM 없이 경고만
+
+**확인**
+- 메인 PC: `limbo_imitation` colcon test 46개(실패 0, copyright skip 1), 패키지 폴더 `python3 -m pytest -q test` → 45 passed, 1 skipped. `test_nav2_real_launch.py` 11 passed. `tools/nx_boot/test_install.sh` 29개 통과
+- 메인 PC 실행(ROS_DOMAIN_ID 93): `/drive_mode` 0.98 Hz, `/cmd_vel_arbiter` 20.0 Hz. 가짜 `/joy`(LB) + teleop(-0.3, 0.5) → teleop으로 전환, 출력 (0, 0.5). `require_deadman:=false`로 teleop 0.1 m/s 통과, 발행을 끊자 0.5 s 안에 none. 기록기 `manual_start`로 bag이 SIGINT로 닫힘(`metadata.yaml` 생성), `meta.json`·`metrics.csv` 생성
+- 확인: NX에서 YOLO는 GPU로 동작 중(yolo.device "0", torch 2.12.0+cu132, 하반신 모델 640 추론 GPU 22 ms / CPU 400 ms per 프레임, 0.1 s 간격 GPU 사용률 15~23 % 펄스). 인식 노드 CPU 131 %는 파이썬 전후처리·추적. torch 빌드가 sm_87 미포함(sm_80 호환 경고 1줄, 동작 정상)
+
 ## 2026-11-24 (74) Orin NX(대여 보드) 세팅 기록 문서화, 부팅 자동 기동 구성을 저장소 `tools/nx_boot/`로(설치 스크립트), ModemManager 끔·Tailscale 설치, RoboClaw 미인식은 Nano 보드 쪽으로 판단
 
 **할 일**

@@ -1,0 +1,43 @@
+# 모방 학습 1일 차: 명령 중재기와 바퀴 기록기. mode·driver·note는 런치 인자가 덮어쓴다.
+drive_arbiter:
+  ros__parameters:
+    mode: nav                  # manual | policy_assist | policy | nav. nav = 중재기 넣기 전과 같은 동작이라 기본
+    teleop_topic: /cmd_vel_teleop
+    policy_topic: /cmd_vel_policy
+    nav_topic: /cmd_vel_smoothed       # velocity_smoother 출력(실물 배선 그대로)
+    joy_topic: /joy
+    policy_status_topic: /policy/status
+    odom_topic: /odom
+    cmd_vel_out_topic: /cmd_vel_arbiter   # collision_monitor 입력. 바퀴로 가는 길에 안전 정지가 늘 남게
+    drive_mode_topic: /drive_mode
+    deadman_button: 4          # LB. joy_xbox.yaml의 enable_button과 같은 버튼
+    require_deadman: true      # manual에서 데드맨 필요. 키보드 운전(데드맨 없음) 때만 false: teleop 명령이 신선한 동안 통과.
+                               #   조이스틱이 없을 때의 대안이고 안전 정지는 collision_monitor가 그대로 맡는다
+    command_timeout: 0.5       # s. roboclaw_drive 보드 명령 timeout과 같다. 이보다 오래된 명령으로 계속 달리지 않게
+    stuck_speed: 0.05          # m/s. odom 속도가 이보다 느리면 "안 움직임"
+    stuck_timeout: 3.0         # s. 갇힘 판정 안전망. Nav2 진전 검사(10 s)보다 먼저, 사람 기다리기 판정(2 s)보다 늦게
+    publish_rate: 20.0         # Hz. MPPI 제어 주기와 같게 해 nav 명령을 한 틱도 늦추지 않게
+
+run_recorder:
+  ros__parameters:
+    mode: manual               # 폴더 이름·meta.json에 남는 모드. 런치가 중재기와 같은 값을 준다
+    driver: ''                 # 운전자 이름. 사람마다 운전 버릇이 달라 학습 데이터를 거를 때 쓴다
+    note: ''
+    waypoints_file: ''         # 경유점 yaml. meta.json에 sha256을 남겨 어느 판으로 달렸는지 안다
+    map_yaml: ''
+    model_file: ''             # 정책 모델 파일. manual·nav는 비워 둔다(meta에 null)
+    manual_start: false        # true면 /patrol/state 없이 노드 시작 즉시 기록(patrol_node 없이 달릴 때)
+    output_root: ~/limbo_bags/imitation
+    bag_stop_timeout: 10.0     # s. SIGINT 뒤 bag이 닫히기를 기다리는 상한. 넘으면 경고만(SIGTERM 안 씀)
+    topics: ['/scan', '/odom', '/tf', '/tf_static', '/patrol/state', '/person_detector/predictions',
+             '/cmd_vel_teleop', '/cmd_vel_policy', '/cmd_vel_smoothed', '/cmd_vel_arbiter', '/cmd_vel',
+             '/drive_mode', '/collision_monitor_state', '/joy', '/policy/status']
+    # 지표 기준(metrics.py)
+    collision_distance: 0.25   # m. 라이다 최근접점(/scan 원점에서)이 이보다 가까우면 충돌로 셈
+    personal_space: 0.5        # m. 사람 트랙 중심까지. 로봇이 움직이는 중(odom > stop_speed)의 침범만 센다.
+                               #    멈춘 로봇에 사람이 다가온 것은 손님 응대라 로봇 잘못이 아니다(설계 2-1)
+    stop_speed: 0.05           # m/s. 갇힘 지표와 개인 공간 판정의 "안 움직임" 기준. 중재기 stuck_speed와 같게
+    jerk_w: 0.5                # rad/s. 이웃 명령 샘플(20 Hz) 사이 각속도 변화가 이보다 크면 비틀거림
+    collision_margin: 5.0      # s. 학습에서 뺄 충돌 앞뒤 구간
+    stuck_min_duration: 1.0    # s. 출발할 때 모터 응답·odom 지연(수백 ms)을 갇힘으로 세지 않게
+    clip_tolerance: 0.01       # m/s·rad/s. collision_monitor 입력과 출력이 이보다 다르면 깎은 것

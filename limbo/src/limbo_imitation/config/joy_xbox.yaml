@@ -1,0 +1,15 @@
+# 조이스틱(Xbox 패드) → /cmd_vel_teleop. teleop_twist_joy 기본 xbox 설정에서 축만 가져오고 배율·버튼은 우리 값.
+teleop_twist_joy_node:
+  ros__parameters:
+    axis_linear:
+      x: 1             # 왼 스틱 상하
+    scale_linear:
+      x: 0.5           # 끝까지 밀어 0.5 m/s. 정격 0.65·Nav2 vx_max 0.6보다 낮게 둬 기록 운전이 MPPI보다 빠르지 않게(설계 2-4)
+    scale_linear_turbo:
+      x: 0.5           # 터보 없음. 상한을 넘는 운전을 신경망이 배우지 않게
+    axis_angular:
+      yaw: 0           # 왼 스틱 좌우
+    scale_angular:
+      yaw: 0.8         # rad/s. 제자리 회전이 탈출 수단이라(설계 2-3) 기본 0.4보다 넉넉히
+    enable_button: 4   # LB. drive_arbiter의 deadman_button과 같아야 한다(누르는 동안만 사람 명령이 바퀴로 감)
+    require_enable_button: true   # 손을 떼면 0. 패드를 내려놓은 사이 스틱 쏠림으로 움직이지 않게

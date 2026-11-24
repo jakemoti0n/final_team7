@@ -8,6 +8,8 @@ from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode, ParameterFile
 from nav2_common.launch import RewrittenYaml
 
+CMD_VEL_IN_DEFAULT = 'cmd_vel_smoothed'
+
 
 def _nodes(context):
     output = LaunchConfiguration('cmd_vel_out').perform(context)
@@ -18,6 +20,12 @@ def _nodes(context):
     nav, smoothed = prefix + '/cmd_vel_nav', prefix + '/cmd_vel_smoothed'
     if output in (nav, smoothed):
         raise ValueError('Output must not loop back into an intermediate velocity topic')
+    # collision_monitor 입력. 기본은 velocity_smoother 출력(지금 동작). 모방 학습 때는 /cmd_vel_arbiter.
+    # 상대 이름은 smoother와 같은 접두어(미리보기면 /limbo/nav2_preview) 밑으로 붙인다.
+    cmd_in = LaunchConfiguration('cmd_vel_in', default=CMD_VEL_IN_DEFAULT).perform(context)
+    monitor_in = cmd_in if cmd_in.startswith('/') else prefix + '/' + cmd_in
+    if monitor_in == output:
+        raise ValueError('cmd_vel_in must differ from cmd_vel_out')
     path = LaunchConfiguration('params_file').perform(context)
     if not os.path.isfile(path):
         raise ValueError('Missing real Nav2 parameter file: ' + path)
@@ -48,7 +56,7 @@ def _nodes(context):
         if name == 'velocity_smoother':
             remappings.append(('cmd_vel_smoothed', smoothed))
         if name == 'collision_monitor':
-            overrides.update(cmd_vel_in_topic=smoothed, cmd_vel_out_topic=output)
+            overrides.update(cmd_vel_in_topic=monitor_in, cmd_vel_out_topic=output)
         # Rewrite the node-specific entries: a second wildcard parameter file can
         # lose to node-specific YAML values on the installed ROS version.
         parameters = ParameterFile(RewrittenYaml(source_file=path, convert_types=True,
@@ -84,6 +92,8 @@ def generate_launch_description():
         DeclareLaunchArgument('params_file', default_value=os.path.join(share, 'config', 'nav2_real.yaml')),
         DeclareLaunchArgument('cmd_vel_out', default_value='/limbo/nav2_preview/cmd_vel',
                               description='Default is a preview topic with no motor consumer.'),
+        DeclareLaunchArgument('cmd_vel_in', default_value=CMD_VEL_IN_DEFAULT,
+                              description='collision_monitor 입력. 모방 학습 중재기를 쓸 때 /cmd_vel_arbiter'),
         DeclareLaunchArgument('composition', default_value='false',
                               description='true: Nav2 노드 8개를 한 프로세스에 싣는다(점군 복사 1벌). CPU 측정 뒤 기본값 결정'),
         OpaqueFunction(function=_nodes),
