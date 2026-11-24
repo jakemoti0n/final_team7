@@ -5,7 +5,8 @@
 - 센서: Livox MID-360 (3D LiDAR + 내장 IMU), RGB-D 카메라
 - 사람 인식: YOLO 하반신 모델(`limbo_perception/models/leg_512.pt`, 가까워 다리만 보이는 사람도 잡음) + depth로 사람 위치 추정(몸 중심 보정), 칼만 필터로 추적, 2초 앞 경로 예측
 - 사람 앞에서 기다리기: `person_wait` 상태 기계가 사람 트랙만 보고 "다가오는 손님이면 멈춤, 떠나면 출발"을 정하고 `/person_wait` 하나로 냄. BT는 이것만 본다 (설계 PROJECT.md 2-7)
-- 주행: Nav2 (AMCL 위치 추정, MPPI 컨트롤러, 사람 예측 경로에 cost를 주는 `human_layer`)
+- 기준선 주행: Nav2 (AMCL 위치 추정, MPPI 컨트롤러, 사람 예측 경로에 cost를 주는 `human_layer`)
+- 주행 판단(AI): 사람의 조이스틱 운전을 모방 학습한 정책(`limbo_imitation`, MLP 앙상블 3개)이 속도 명령을 내고, Nav2는 위치 추정·경유점·비상 정지를 맡는다. MPPI는 기준선·대체 운전자 (설계 PROJECT.md 2-10)
 
 | 문서 | 언제 보나 |
 |---|---|

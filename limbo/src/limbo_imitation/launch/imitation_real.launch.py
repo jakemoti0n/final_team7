@@ -5,7 +5,9 @@
   tools/drive/run_nav2_real.sh cmd_vel_out:=/cmd_vel cmd_vel_in:=/cmd_vel_arbiter
 인자: mode(manual|policy_assist|policy|nav, 기본 manual), driver(운전자 이름), note(메모),
       joy_dev(조이스틱 장치 번호), manual_start(/patrol/state 없이 바로 기록),
-      require_deadman(false = 키보드 운전: tools/drive/teleop_keyboard.sh /cmd_vel_teleop).
+      require_deadman(false = 키보드 운전: tools/drive/teleop_keyboard.sh /cmd_vel_teleop),
+      model_path(정책 .pt, mode가 policy·policy_assist일 때만 policy_node를 띄움),
+      waypoints(경유점 yaml 전체 경로. patrol_node와 같은 파일을 넘긴다. 기록기 meta.json에도 남음).
 """
 
 import os
@@ -13,7 +15,8 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -22,7 +25,12 @@ def generate_launch_description():
     share = get_package_share_directory('limbo_imitation')
     params = os.path.join(share, 'config', 'imitation.yaml')
     joy_params = os.path.join(share, 'config', 'joy_xbox.yaml')
+    default_waypoints = os.path.join(get_package_share_directory('limbo_patrol'), 'config',
+                                     'real_loop_waypoints.yaml')
     mode = LaunchConfiguration('mode')
+    waypoints = ParameterValue(LaunchConfiguration('waypoints'), value_type=str)
+    model_path = ParameterValue(LaunchConfiguration('model_path'), value_type=str)
+    policy_mode = PythonExpression(["'", mode, "' in ('policy', 'policy_assist')"])
     return LaunchDescription([
         DeclareLaunchArgument('mode', default_value='manual'),
         DeclareLaunchArgument('driver', default_value=''),
@@ -31,6 +39,8 @@ def generate_launch_description():
                               description='joy_node device_id (/dev/input/js<번호>)'),
         DeclareLaunchArgument('manual_start', default_value='false'),
         DeclareLaunchArgument('require_deadman', default_value='true'),
+        DeclareLaunchArgument('model_path', default_value=''),
+        DeclareLaunchArgument('waypoints', default_value=default_waypoints),
         Node(package='joy', executable='joy_node', name='joy_node', output='screen',
              parameters=[{'device_id': ParameterValue(LaunchConfiguration('joy_dev'),
                                                       value_type=int)}]),
@@ -51,5 +61,10 @@ def generate_launch_description():
                  'driver': ParameterValue(LaunchConfiguration('driver'), value_type=str),
                  'note': ParameterValue(LaunchConfiguration('note'), value_type=str),
                  'manual_start': ParameterValue(LaunchConfiguration('manual_start'),
-                                                value_type=bool)}]),
+                                                value_type=bool),
+                 'waypoints_file': waypoints,
+                 'model_file': model_path}]),
+        Node(package='limbo_imitation', executable='policy_node', name='policy_node',
+             output='screen', condition=IfCondition(policy_mode),
+             parameters=[params, {'model_path': model_path, 'waypoints_file': waypoints}]),
     ])

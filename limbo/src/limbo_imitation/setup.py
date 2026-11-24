@@ -31,6 +31,9 @@ setup(
             'drive_arbiter = limbo_imitation.drive_arbiter:main',
             'run_recorder = limbo_imitation.run_recorder:main',
             'collect_metrics = limbo_imitation.collect_metrics:main',
+            'build_dataset = limbo_imitation.dataset:main',
+            'train_policy = limbo_imitation.train:main',
+            'policy_node = limbo_imitation.policy_node:main',
         ],
     },
 )

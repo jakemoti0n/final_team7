@@ -8,6 +8,42 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-24 (76) 모방 학습 2일 차: 데이터셋(build_dataset)·모델(MLP 앙상블 3개)·학습(train_policy, early stopping·불일치 문턱)·정책 노드(policy_node), 합성 bag end-to-end
+
+**할 일**
+- `build_limbo`(`limbo_imitation`, 런치 기본 경유점 때문에 `limbo_patrol`도 설치돼 있어야 함). 쓰는 법은 `docs/REAL_PATROL_RUN.md` "모방 학습 런치" 5·6
+- 노트북 학습용 venv(저장소 밖, CPU torch 2.15): `python3 -m venv --system-site-packages ~/limbo_venvs/imitation && ~/limbo_venvs/imitation/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu`
+- 3일 차: 패드로 예비 2바퀴 기록(카메라 켠 채로). 4일 차: 수동 20~30바퀴
+
+**변경**
+- `limbo_imitation/frame_builder.py`(새 파일): 입력 한 프레임 조립(TF 합성·사람 좌표 변환·경유점·입력 부족 판정·3프레임 쌓기). 데이터셋과 정책 노드가 같은 함수를 씀
+- `limbo_imitation/dataset.py`(새 파일, 콘솔 `build_dataset`): 바퀴 폴더들 → `.npz`(X 279칸, y=(v, w), weight, lap_id, stamp, is_val, 설명 json), 끝에 바퀴별 표
+- `limbo_imitation/model.py`(새 파일): `PolicyMLP`(279-256-128-2, 정규화 버퍼 포함), `to_command`, `Ensemble`(평균·불일치), `limit_acceleration`, `.pt` 저장·로드, torch 없는 `numpy_forward`
+- `limbo_imitation/train.py`(새 파일, 콘솔 `train_policy`): seed만 바꾼 모델 3개, Huber(v)+2·Huber(w), early stopping(patience 10), 검증 불일치 95 % 분위수를 문턱으로. 결과는 `~/limbo_bags/imitation/models/`
+- `limbo_imitation/policy_node.py`(새 파일, 노드 `policy_node`): 스캔마다 추론 → 가속 제한 → `/cmd_vel_policy`, `/policy/status` JSON, 처리 시간 10 s마다 INFO
+- `limbo_imitation/config_file.py`(새 파일): 콘솔 스크립트가 imitation.yaml에서 기본값을 읽음(명령줄 > yaml > 코드)
+- `config/imitation.yaml`: `build_dataset`·`train_policy`·`policy_node` 절(값마다 이유). `launch/imitation_real.launch.py`: 인자 `model_path`·`waypoints`, mode가 policy·policy_assist일 때만 policy_node, 기록기에도 같은 경유점·모델 경로를 넘김. `setup.py`·`package.xml`: 콘솔 스크립트 3개·의존성
+- 테스트: `test/test_{dataset,frame_builder,model,train}.py`, `test/make_synthetic_bag.py`(가짜 30 s 바퀴), `test/e2e_synthetic.sh`(합성 bag → 데이터셋 → 학습 → bag 재생으로 정책 노드, ROS_DOMAIN_ID 93, PID로만 종료)
+- `docs/REAL_PATROL_RUN.md` "모방 학습 런치": 학습 흐름·정책 주행 띄우는 법 두 항목
+- `docs/PROJECT.md`: 설계 전제 2-10 "주행 판단은 사람의 운전을 모방 학습한 정책이 한다"(결정·소거한 길·업계 대응·운용 범위·한계·선별 원칙·구조·채택 기준·보관), 1절 패키지 표에 `limbo_imitation`, 8절에 "2026-11-24 모방 학습 진행 상태"(3~11일 차 순서)
+- `README.md`: 머리말에 주행 판단(AI) 한 줄, 기존 Nav2 줄은 "기준선 주행"으로
+
+**결정**
+- 입력 조립 상수(스캔 범위·max_dist·v_max·w_max)는 데이터셋 → `.pt`(`frame_settings`) → 정책 노드로 실어 나름. 노드 yaml에 따로 두면 학습 때와 어긋날 수 있어서
+- `/policy/status` reason에 `no_odom`·`no_people` 추가. 사람 예측이 끊기면 ok=false·표본 제외: person_detector는 매 프레임(빈 목록이라도) 내므로 끊김은 "카메라·인식이 죽음"이고 그때는 MPPI가 맞음. 그래서 기록은 카메라를 켠 채로
+- `/patrol/state`는 신선도를 보지 않음(상태가 바뀔 때만 오는 래치 토픽). source policy 표본은 정답이 정책 자신의 명령이라 제외
+- 정답은 창 안 평균이 아니라 가장 최근 teleop 명령(평균은 막 바꾼 명령을 늦게 따라감). 후진은 0으로 자름(중재기가 후진을 0으로 바꿔 실제로 나간 적이 없고 모델도 못 냄)
+- bag 역직렬화에만 `rclpy.serialization`을 `read_bag` 안에서 import(노드는 안 만듦). 나머지 계산은 손으로 만든 메시지 시퀀스로 시험 가능
+- backend numpy도 `.pt`를 읽는 데는 torch가 필요. torch가 없으면 노드는 죽지 않고 no_model을 냄(중재기가 이유를 알게)
+- 런치가 경유점·모델 경로를 기록기 `meta.json`에도 남김. 데이터셋이 그 경로와 sha256으로 경유점을 찾고, 다르면 멈춤(다른 판 경유점으로 목표를 계산하면 입력과 정답이 조용히 어긋남). 기록한 보드의 경로가 없으면 `--waypoints`
+- 학습/검증은 바퀴 단위로 나누고 한 바퀴만이면 학습 거부. 0.1 s 이웃 표본은 거의 같은 장면이라 섞으면 검증이 부풀려짐
+- 가속 제한은 처음·끊겼다 다시 시작할 때 odom 속도에서 스캔 한 간격만큼만 바꿈(고정 시간값 대신). ax_max 0.502·aw_max 1.894는 nav2_real.yaml과 같게
+
+**확인**(2026-11-24 메인 PC)
+- 패키지 폴더 `python3 -m pytest -q test`: venv(torch) 76 passed 1 skipped, 시스템 python3 68 passed 9 skipped(torch 필요분). flake8·pep257 위반 0
+- `test/e2e_synthetic.sh`: 합성 3바퀴 표본 900(학습 2·검증 1바퀴), 학습 1.1 s(CPU), 문턱 0.0614. `/cmd_vel_policy`·`/policy/status` ok=true 수신. 처리 시간(입력 조립+추론) torch 중앙값 1.5~1.75 ms·최대 2.98 ms, numpy 1.49/2.49 ms. 끝난 뒤 남은 프로세스 0
+- 모델 파일 없음·torch 없음에서 status `{"ok": false, "reason": "no_model"}` 확인
+
 ## 2026-11-24 (75) 모방 학습 1일 차: limbo_imitation 패키지(입력 특징·바퀴 지표·운전 중재기·바퀴 기록기·조이스틱 런치), Nav2 collision_monitor 입력 인자
 
 **할 일**

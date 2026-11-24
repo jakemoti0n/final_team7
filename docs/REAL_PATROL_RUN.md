@@ -36,7 +36,9 @@
    ros2 run limbo_imitation collect_metrics ~/limbo_bags/imitation/* > ~/limbo_bags/imitation/all.csv
    ```
    열: 충돌 수, 움직이는 중 사람 최소 거리, 완주, 걸린 시간, 거리, 갇힘 시간, 비틀거림, 끼어들기, 합격 여부와 이유.
-5. 끝나면 Nav2를 원래대로: `systemctl --user unset-environment LIMBO_CMD_VEL_IN && systemctl --user restart limbo-nx-navigation`(재부팅해도 기본값으로 돌아온다).
+5. 학습(노트북, torch 있는 파이썬): `ros2 run limbo_imitation build_dataset ~/limbo_bags/imitation/<폴더들> -o data.npz` → `~/limbo_venvs/imitation/bin/python -m limbo_imitation.train data.npz`. 결과 `.pt`는 `~/limbo_bags/imitation/models/policy_<시각>.pt`. 저장소에 커밋할지는 PM이 정한다.
+6. 정책 주행: `ros2 launch limbo_imitation imitation_real.launch.py mode:=policy_assist model_path:=<.pt> waypoints:=<patrol_node와 같은 경유점 yaml>` → `policy_node`가 `/cmd_vel_policy`를 내고, 정책이 자신 없거나 입력이 끊기면(`/policy/status` ok=false) 중재기가 MPPI로 넘긴다. LB를 누르면 사람이 끼어든다(끼어든 구간은 학습에서 가중 2).
+7. 끝나면 Nav2를 원래대로: `systemctl --user unset-environment LIMBO_CMD_VEL_IN && systemctl --user restart limbo-nx-navigation`(재부팅해도 기본값으로 돌아온다).
 
 ## 0. 로봇 놓기
 
