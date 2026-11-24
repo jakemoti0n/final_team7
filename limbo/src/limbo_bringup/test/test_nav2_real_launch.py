@@ -14,7 +14,7 @@ def nodes(topic):
     spec = importlib.util.spec_from_file_location('real_nav_test', LAUNCH)
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     context = LaunchContext()
-    context.launch_configurations.update(cmd_vel_out=topic,
+    context.launch_configurations.update(cmd_vel_out=topic, composition='false',
         params_file=str(ROOT / 'limbo/src/limbo_navigation/config/nav2_real.yaml'))
     with patch.object(module, 'Node', Mock()) as node:
         module._nodes(context)

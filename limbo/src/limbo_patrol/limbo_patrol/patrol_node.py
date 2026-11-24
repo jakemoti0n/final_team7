@@ -277,7 +277,7 @@ def wait_before_retry(control, delay_sec, stop_requested=None):
     return False
 
 
-def patrol(navigator, control, waypoint_configs, loop=False, retries=2, retry_delay_sec=3.0, stop_requested=None):
+def patrol(navigator, control, waypoint_configs, loop=False, retries=2, retry_delay_sec=3.0, stop_requested=None, checkpoint=None):
     """위치 추정·Nav2 준비를 기다린 뒤 waypoint를 끝까지 돈다. loop면 계속 반복한다.
 
     이동이 실패하면 retry_delay_sec 기다렸다 남은 지점으로 retries번까지 다시 보낸다.
@@ -329,6 +329,7 @@ def patrol(navigator, control, waypoint_configs, loop=False, retries=2, retry_de
     failure_reason = ''
     count = len(waypoint_configs)
 
+    first_index = checkpoint.resume if checkpoint else 0
     for lap, segment in segment_order(segments, loop):
         if stop_requested.is_set():
             mission_succeeded = False
@@ -343,7 +344,9 @@ def patrol(navigator, control, waypoint_configs, loop=False, retries=2, retry_de
             reason = f'lap {lap} started'
 
         # 이번 구간에서 아직 지나지 않은 waypoint 번호
-        remaining = list(segment)
+        remaining = [i for i in segment if i >= first_index]
+        if not remaining:
+            continue
         stop_config = waypoint_configs[segment[-1]]
         failures = 0
 
@@ -369,6 +372,8 @@ def patrol(navigator, control, waypoint_configs, loop=False, retries=2, retry_de
                 for i in remaining
             ]
 
+            if checkpoint:
+                checkpoint.save(remaining[0])
             accepted = navigator.goThroughPoses(route)
 
             if not accepted:
@@ -400,6 +405,8 @@ def patrol(navigator, control, waypoint_configs, loop=False, retries=2, retry_de
 
                 if feedback is not None and 0 < feedback.number_of_poses_remaining <= len(remaining):
                     poses_left = feedback.number_of_poses_remaining
+                    if checkpoint:
+                        checkpoint.save(remaining[-poses_left])
                     if not pausing:
                         control.set(PatrolState.PATROLLING, 'navigating',
                                     index=remaining[-poses_left])
@@ -419,6 +426,8 @@ def patrol(navigator, control, waypoint_configs, loop=False, retries=2, retry_de
             if result == TaskResult.SUCCEEDED:
 
                 print(f"Arrived at {stop_config['name']}")
+                if checkpoint:
+                    checkpoint.save(after)
                 remaining = []
                 failures = 0
 
@@ -549,8 +558,10 @@ def main(args=None):
 
     ready = True
     try:
+        from limbo_patrol.corridor_checkpoint import dashboard_checkpoint
+        checkpoint = dashboard_checkpoint(waypoints_name, waypoint_configs, navigator.get_parameter("use_sim_time").value, loop)
         ready = patrol(navigator, control, waypoint_configs,
-                       loop, retries, retry_delay_sec, stop_requested) is not False
+                       loop, retries, retry_delay_sec, stop_requested, checkpoint) is not False
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:

@@ -18,7 +18,7 @@ from tf2_ros import Buffer, TransformException, TransformListener
 from urllib.parse import urlsplit
 from .config import load_config, resolve_patrol_launch, resolve_token
 from .launcher import LaunchError, PatrolLauncher
-from .state import State
+from .state import State, no_launcher
 from .transport import Sender
 
 # 위치는 TF(map → base)로 읽는다. /amcl_pose는 로봇이 움직일 때만 나와서 멈춰 있으면 끊기기 때문
@@ -33,13 +33,13 @@ def yaw_of(q):
 
 
 class BridgeNode(Node):
-    def __init__(self, config, patrol_launch, token=None):
+    def __init__(self, config, patrol_launch, token=None, telemetry_only=False):
         super().__init__('limbo_telemetry_bridge', parameter_overrides=[
             Parameter('use_sim_time', value=config['source_clock'] == 'ros_sim')])
         self.launcher = PatrolLauncher(patrol_launch)
         self.launcher.refresh()
-        self.state = State(config['robot_id'], config['source_clock'], launcher_status=self.launcher.status)
-        self.sender = Sender(self.state, config, controller=self, token=token)
+        self.state = State(config['robot_id'], config['source_clock'], launcher_status=no_launcher if telemetry_only else self.launcher.status)
+        self.sender = Sender(self.state, config, controller=None if telemetry_only else self, token=token)
         types = {'odom': Odometry, 'lidar_raw': PointCloud2,
                  'lidar_filtered': PointCloud2, 'camera_raw': Image}
         self.topic_subscriptions = []
@@ -149,6 +149,7 @@ class BridgeNode(Node):
 def main(args=None):
     parser = argparse.ArgumentParser(description='LIMBO metadata telemetry bridge')
     parser.add_argument('--config', type=Path, required=True)
+    parser.add_argument('--telemetry-only', action='store_true', help='Send status without polling dashboard commands')
     parsed, ros_args = parser.parse_known_args(args)
     config = load_config(parsed.config)
     patrol_launch = resolve_patrol_launch(config)   # 잘못된 경로면 ROS를 켜기 전에 바로 알림
@@ -162,7 +163,7 @@ def main(args=None):
     rclpy.init(args=ros_args)
     node = None
     try:
-        node = BridgeNode(config, patrol_launch, token)
+        node = BridgeNode(config, patrol_launch, token, telemetry_only=parsed.telemetry_only)
         rclpy.spin(node)
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
