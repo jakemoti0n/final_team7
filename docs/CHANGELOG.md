@@ -8,6 +8,30 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-24 (74) Orin NX(대여 보드) 세팅 기록 문서화, 부팅 자동 기동 구성을 저장소 `tools/nx_boot/`로(설치 스크립트), ModemManager 끔·Tailscale 설치, RoboClaw 미인식은 Nano 보드 쪽으로 판단
+
+**할 일**
+- 없음(빌드 필요 없음). NX 보드에서 수동 절차를 하려면 먼저 `systemctl --user stop limbo-nx-navigation limbo-nx-sensors limbo-nx-drive limbo-nx-pose limbo-nx-dashboard`
+- 팀원이 NX 작업 트리에 남긴 미커밋 변경은 PM 지시로 새 브랜치 `jetson_nx`(f94f9c1)에 그대로 올렸음(아래 "따로 올린 것")
+- NX 보드에서 부팅 구성을 저장소 링크로 바꾸려면: `cd ~/limbo && bash tools/nx_boot/install.sh`(기존 일반 파일은 `*.bak_<날짜-시각>`으로 옮겨짐) → `bash tools/nx_boot/install.sh --check` → 떠 있는 유닛 `systemctl --user restart …`. 자세한 건 `docs/REAL_ROBOT_BRINGUP.md` "설치·확인·제거"
+
+**변경**
+- `docs/REAL_ROBOT_BRINGUP.md`: "Orin NX(Seeed J401) 보드 세팅 기록" 절 추가. 보드·OS(JetPack 7.2, Ubuntu 24.04.5), apt·셸 이력으로 재구성한 설치 순서(ROS apt source → `ros-jazzy-desktop` → Nav2 묶음 → `limbo_yolo` venv의 `torch==2.12.0+cu132` 재설치 → Livox `2144554` → OAK udev → ssh → relay → Docker는 실제로는 11-19에 먼저), 네트워크, J401에서 MAXN SUPER 금지, 저장장치 여유 26 GB. 소절 "부팅 자동 기동(사용자 systemd 유닛 5개)": 유닛별 역할·기다리는 조건·순서(`ready.py`가 `corridor-pose.json` 5초 이내 + TF 신선도를 기다린 뒤 Nav2), 상태 파일, 보고·멈추고·다시 켜는 법, 원본은 `tools/nx_boot/`이고 설치·확인(`--check`)·제거(`--uninstall`) 절차, pull 뒤에는 유닛을 재시작해야 적용. 1~2절은 Nano(원래 보드) 기준이라고 표시
+- `docs/REAL_PATROL_RUN.md`: 맨 위에 NX 보드 안내(접속 `192.168.20.18`, 런치 3개·Nav2가 부팅 때 떠 있음, 초기 위치는 `corridor_pose.py`가 자동, 수동 절차 전에 유닛 stop). 기존 절차는 Nano용으로 표시만
+- `docs/KNOWN_ISSUES.md` RoboClaw USB 미인식: NX에서는 같은 RoboClaw·케이블이 정상 인식 → Nano 보드 쪽(내장 USB 허브) 문제로 판단, Nano로 돌아갈 때 재확인
+- `tools/nx_boot/`(새 폴더, PM 승인): NX 보드의 부팅 구성을 원본 그대로 복사 — `boot/`(`start`·`ready.py`·`corridor_pose.py`·`map_search.py`), `systemd/`(`limbo-nx-{drive,sensors,pose,navigation,dashboard}.service`), `bridge-nx.example.yaml`(맨 위 안내 주석 한 줄만 추가, 토큰은 `token_file` 경로만). `install.sh`: 홈 아래 실행 위치에 심볼릭 링크 9개, `bridge-nx.yaml`은 없을 때만 복사, daemon-reload·enable(start 안 함), linger는 sudo 없이 시도하고 실패하면 안내만. `--check`(상태 표), `--uninstall`(disable·링크 제거, 설정·토큰은 남김). sudo 안 씀. `test_install.sh`: 임시 HOME과 가짜 `systemctl`·`loginctl`로 설치·재설치·`--check`·`--uninstall`을 검사
+- 젯슨(NX) 설정: `sudo systemctl disable --now ModemManager`(PM 승인). RoboClaw(`ID_MM_CANDIDATE=1`)를 모뎀인지 열어 보는 동작이 포트 점유·잡음 위험이라서
+- 젯슨(NX) Tailscale 1.104.7 설치(PM 승인), 로그인은 PM 계정
+
+**따로 올린 것 / 넣지 않은 것**
+- 브랜치 `jetson_nx`(f94f9c1, 2026-11-24): 젯슨 NX `~/limbo`의 미커밋 변경 6개 파일을 수정 없이 복사(SHA256 대조) — `limbo_patrol/corridor_checkpoint.py`(새 파일), `patrol_node.py` 체크포인트 연결, `relay_prog` `bridge.yaml`·`node.py`의 `telemetry_only`, `test_nav2_real_launch.py` 1줄, 지도 `real_open_space_20261111.pgm`
+- 부팅 스크립트(`~/.config/limbo/boot/`, `~/.config/systemd/user/limbo-nx-*.service`): `tools/nx_boot/`에 반영(install.sh·test_install.sh)
+- 넣지 않은 것: 이전판 스크립트(`start.bak_1120`, `corridor_pose.pre_global.py`, `corridor_pose.before_idle_relocation.py`), `bridge.yaml.bak_1120`, 실제 `bridge-nx.yaml`과 `robot_token`
+
+**확인**(2026-11-24 NX, SSH로 읽기만)
+- 유닛 5개 active, 11-20 17:52 부팅 로그에 5개 모두 Started. RoboClaw `03eb:2404`→`ttyACM0`, 커널 USB 오류 0, OAK `03e7:f63b` 인식. ModemManager 끈 뒤 RoboClaw 포트·네트워크 변화 없음
+- `bash tools/nx_boot/test_install.sh`(메인 PC, 임시 HOME): 검사 29개 통과. 젯슨에서 `install.sh`는 아직 실행하지 않음
+
 ## 2026-11-15 (73) 실물 순찰 9 시도 실패 기록: 부팅 서비스가 젯슨 USB 허브를 끊는 문제(해결), RoboClaw USB 미인식(미해결)
 
 **할 일**

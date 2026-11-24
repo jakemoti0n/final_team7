@@ -1,0 +1,14 @@
+[Unit]
+Description=Limbo NX dashboard
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=%h/.config/limbo/boot/start dashboard
+Restart=on-failure
+RestartSec=8
+KillSignal=SIGINT
+TimeoutStopSec=25
+
+[Install]
+WantedBy=default.target

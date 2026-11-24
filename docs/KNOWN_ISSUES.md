@@ -3,7 +3,7 @@
 시뮬레이션과 코드 점검 중에 발견했지만 아직 고치지 않은 문제를 모은다.
 고치면 이 표에서 지우고 커밋 메시지에 남긴다.
 
-마지막 갱신: 2026-11-15 (RoboClaw USB 미인식 추가)
+마지막 갱신: 2026-11-24 (RoboClaw USB 미인식: Orin NX에서는 정상 인식, 상태 갱신)
 
 ## 지금 주행을 막는 것 (PROJECT.md "다음"에 올라가 있음)
 
@@ -98,6 +98,7 @@
 - 10-16 27회 중 2회 → 10-20 5회 중 3회(멈춘 노드는 controller·behavior·planner로 매번 다름). 시험 도구가 재시도해 결과에는 영향 없음. 같은 시각에 다른 빌드가 돌던 회차도 있어 부하 탓인지 설정 탓인지 미확정. 기존 항목 "시작할 때 Nav2 lifecycle이 시간 초과로 안 뜸" 참고
 
 ## RoboClaw USB가 젯슨에서 인식되지 않음 (2026-11-15)
+- **상태(2026-11-24 갱신): Nano 보드 쪽 문제로 판단, NX에서는 해당 없음.** 대여한 Jetson Orin NX(Seeed J401, 2026-11-20~)에 같은 RoboClaw·같은 케이블을 꽂으면 정상 인식된다: `03eb:2404`, `/dev/serial/by-id/usb-Basicmicro_Inc._USB_Roboclaw_2x15A-if00 -> ttyACM0`, 드라이버 `cdc_acm`, 커널 USB 오류 0. 따라서 아래 11-15의 "RoboClaw 쪽 USB 단자/회로" 추정과 달리 Nano 보드 쪽(내장 USB 허브) 문제로 본다. 11-16 미인식 기록과 일치(그 기록은 저장소 문서에 없음, 확인 필요). **Nano로 돌아갈 때 다시 확인한다.** 아래 11-15 내용은 당시 기록으로 남긴다
 - 11-11 순찰 8까지 쓰던 RoboClaw 2x15A가 11-15에는 어느 USB-A 포트에서도 `/dev/serial/by-id/usb-Basicmicro_…`로 안 뜸. 보드 LED는 켜져 있음. 커널에 한 번만 `usb 1-2.3: new high-speed USB device` → `device descriptor read/64, error -71` → `device not accepting address, error -71`(4회 재시도 뒤 포기)이 찍혔고, 그 뒤로는 어느 포트에 꽂아도 사건 자체가 없음
 - 변수 제거: 정상 확인된 케이블(OAK 것)·정상 확인된 포트(OAK 자리)로도 미감지 → RoboClaw 쪽 USB 단자/회로로 좁혀짐. 젯슨 USB-C는 장치 모드(tegra-xudc)라 거기 꽂으면 당연히 안 잡힘
 - 다음: 다른 PC에서 `lsusb`로 RoboClaw 단독 확인(노트북에 꽂으면 바로 알 수 있음) → 안 뜨면 보드 USB 단자 재납땜/교체 또는 TTL 시리얼(S1/S2) 연결로 전환(저장소에 아직 없는 작업). 이것이 풀릴 때까지 실물 자율 주행 불가

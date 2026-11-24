@@ -1,0 +1,11 @@
+[Unit]
+Description=Restore last validated Limbo corridor pose
+[Service]
+Type=simple
+WorkingDirectory=%h/limbo
+Environment=ROS_DOMAIN_ID=97 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+ExecStart=/bin/bash -c 'source tools/oak/ros_input_env.sh && exec python3 "$HOME/.config/limbo/boot/corridor_pose.py"'
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=default.target

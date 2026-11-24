@@ -1,0 +1,42 @@
+# 예시. 실제 파일은 ~/.config/limbo/bridge-nx.yaml, 토큰은 ~/.config/limbo/robot_token(git 제외)
+robot_id: LIMBO-01
+server_url: https://52-79-216-109.sslip.io
+send_interval_s: 1.0
+request_timeout_s: 1.0
+source_clock: ros_system
+token_file: /home/automaton/.config/limbo/robot_token
+topics:
+  odom:
+    name: /odom
+    reliability: best_effort
+    durability: volatile
+    depth: 1
+  lidar_raw:
+    name: /mid360/points
+    reliability: best_effort
+    durability: volatile
+    depth: 1
+  lidar_filtered:
+    name: /mid360/points_filtered
+    reliability: best_effort
+    durability: volatile
+    depth: 1
+  camera_raw:
+    name: /rgbd_camera/image
+    reliability: best_effort
+    durability: volatile
+    depth: 1
+control:
+  patrol_state_topic: /patrol/state
+  pose_topic: /amcl_pose
+  map_frame: map
+  base_frame: base_footprint
+  pause_service: /patrol/pause
+  resume_service: /patrol/resume
+  command_wait_s: 10
+  service_timeout_s: 3
+patrol_launch:
+  ros_setup: /opt/ros/jazzy/setup.bash
+  workspace: limbo
+  waypoint_dir: relay_prog/state/waypoints
+  use_sim_time: false

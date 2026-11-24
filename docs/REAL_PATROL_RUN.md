@@ -3,6 +3,17 @@
 젯슨에서 그대로 치면 로봇이 원점 테이프 자리에서 출발해 ㅁ자 복도를 한 바퀴 돌고 원점에 선다.
 오늘(11-10) 기준 설정: 지도 `real_open_space_20261110`, 지나가기 순찰 `real_loop_waypoints.yaml`, 카메라는 비용 지도에서 뺀 측정용 Nav2 설정.
 
+> **NX 보드 안내(2026-11-24 추가).** 아래 0~5절은 **Nano(원래 보드, `192.168.20.210`)** 에서 쓰던 수동 절차다. 2026-11-20부터 로봇에 달린 **NX(대여 보드, Jetson Orin NX 16 GB + Seeed J401)** 에서는 다르게 한다.
+> - 접속: `ssh automaton@192.168.20.18` (비밀번호는 팀 내 구두 전달, 파일에 적지 않는다).
+> - NX에서는 2절의 런치 3개(구동·센서+AMCL+지도·Nav2)가 **부팅 때 사용자 systemd 유닛으로 자동으로 떠 있다**(지도 `real_open_space_20261111`, Nav2는 저장소 `nav2_real.yaml` 그대로, YOLO 켜짐). 관제 다리(dashboard)도 같이 뜬다. 자세한 내용은 `docs/REAL_ROBOT_BRINGUP.md` "부팅 자동 기동(사용자 systemd 유닛 5개)".
+> - 초기 위치는 `corridor_pose.py`(유닛 `limbo-nx-pose`)가 로봇이 멈춰 있을 때 지도 전체 탐색으로 자동으로 잡는다. 2절 ③의 `setpose.sh`는 필요 없다.
+> - 아래 수동 절차를 따르려면 먼저 자동 기동을 내리고 한다(같은 노드가 두 벌 뜨지 않게):
+>   ```bash
+>   systemctl --user stop limbo-nx-navigation limbo-nx-sensors limbo-nx-drive limbo-nx-pose limbo-nx-dashboard
+>   systemctl --user status 'limbo-nx-*'     # 모두 inactive인지 확인
+>   ```
+>   유닛은 enabled 상태라 재부팅하면 다시 뜬다. NX에서 수동 절차를 그대로 해 본 기록은 아직 없다(확인 필요).
+
 ## 0. 로봇 놓기
 
 - 로봇을 **원점 바닥 테이프 자리**에 **+x(긴 복도 쪽)** 를 보게 놓는다.
@@ -10,6 +21,8 @@
 - 카메라는 비용 지도에서 빠져 있으므로 **0.75 m 아래 낮은 물건은 못 본다.** 복도에 새 물건을 두지 않는다. 계단 문 근처로는 보내지 않는다.
 
 ## 1. 젯슨 접속과 환경
+
+(Nano 기준. NX는 위 "NX 보드 안내")
 
 노트북에서 `ssh automaton@192.168.20.210` (비밀번호는 팀 내 구두 전달, 파일에 적지 않는다). 아래는 전부 젯슨 안에서 친다.
 

@@ -1,0 +1,25 @@
+#!/bin/bash
+set -eo pipefail
+cd "$HOME/limbo"
+export ROS_DOMAIN_ID=97 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+source tools/oak/ros_input_env.sh
+case "$1" in
+ drive)
+    port=/dev/serial/by-id/usb-Basicmicro_Inc._USB_Roboclaw_2x15A-if00
+    until [[ -r "$port" && -w "$port" ]]; do sleep 2; done
+    exec bash tools/drive/run_teleop.sh
+    ;;
+ sensors)
+    until ip -4 -o addr show dev enP8p1s0 | grep -q '192\.168\.1\.50/' && lsusb -d 03e7: | grep -q .; do sleep 2; done
+    exec bash tools/drive/run_real.sh encoder_source:=external localization:=amcl map:="$PWD/limbo/src/limbo_navigation/maps/real_open_space_20261111.yaml"
+    ;;
+ navigation)
+    python3 "$HOME/.config/limbo/boot/ready.py"
+    exec bash tools/drive/run_nav2_real.sh cmd_vel_out:=/cmd_vel
+    ;;
+ dashboard)
+    source relay_prog/install/local_setup.bash
+    exec venvs/limbo_relay/bin/python -m limbo_telemetry_bridge.node --config "$HOME/.config/limbo/bridge-nx.yaml"
+    ;;
+ *) exit 2 ;;
+esac

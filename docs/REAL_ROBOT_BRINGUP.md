@@ -4,6 +4,8 @@
 
 이 문서는 시뮬레이션에서 주행한 Limbo를 **Jetson Orin Nano Super 개발자 키트 + Livox MID-360S + Luxonis OAK-D Lite FF + RoboClaw 기반 2WD**로 옮기는 순서다. 실제 TF의 프레임 배치는 Gazebo와 동일하다는 전제를 사용한다. ToF 센서는 첫 주행에서 제외한다. 케이블의 핀 연결과 전원 분배는 하드웨어 담당자가 실물 부품의 정격과 커넥터를 확인해 확정한다.
 
+> **보드 구분(2026-11-24 추가):** 이 문서의 1~2절과 참고 자료는 **Nano(원래 보드, Jetson Orin Nano Super 개발자 키트)** 기준으로 쓴 것이다. 2026-11-20부터 로봇에는 **NX(대여 보드, Jetson Orin NX 16 GB + Seeed reComputer J401 캐리어)**가 달려 있고, 실제로 세팅된 내용은 아래 "Orin NX(Seeed J401) 보드 세팅 기록" 절에 있다. Nano로 돌아가면 1~2절을 따른다.
+
 > **현재 저장소에는 실물 RoboClaw 구동/엔코더 드라이버와 실물 전용 통합 launch가 없다.** 아래 명령을 모두 실행한다고 바로 주행하는 상태는 아니다. 7단계의 구현이 완료되어야 한다.
 
 ## 전체 순서와 통과 기준
@@ -40,6 +42,8 @@
 Gazebo의 TF 프레임 구조가 같아도 **실제 장착 위치·바퀴 치수·엔코더 분해능이 같은지는 별도 확인**한다. TF의 수치가 다르면 URDF를 실측값으로 갱신한다.
 
 ## 1. Jetson 펌웨어와 OS 설치
+
+> Nano(원래 보드) 기준 절차다. NX(대여 보드, 2026-11-20~)는 2절 뒤 "Orin NX(Seeed J401) 보드 세팅 기록"을 본다.
 
 1. 보드와 저장장치 모델을 확인한다. NVIDIA 공식 [Orin Nano 개발자 키트 빠른 시작](https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/quick_start.html)의 해당 절차를 따른다. 현재 공식 절차는 **JetPack 7.2.1의 Ubuntu 24.04 기반 이미지**와 USB 설치 매체를 설명한다. ISO 파일을 목표 microSD에 그대로 굽는 절차가 아니다. 이미지 버전은 설치 당일 공식 페이지에서 다시 확인한다.
 2. 새 보드의 UEFI/QSPI 펌웨어가 해당 이미지의 최소 버전을 만족하는지 확인한다. 구형 펌웨어라면 공식 [펌웨어 갱신 절차](https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/update_firmware.html)를 먼저 따른다. 설치 과정은 목표 저장장치의 데이터를 지우므로 저장장치를 정확히 식별한다.
@@ -95,6 +99,184 @@ ros2 pkg list | grep '^limbo_'
 4. 사람 검출용 PyTorch/torchvision/Ultralytics는 별도 검증한다. 저장소 최상위 `requirements.txt`는 CPU PyTorch 인덱스를 사용하고, `limbo/requirements.txt`는 PC 전체 환경을 담은 긴 freeze 파일이므로 Jetson에 그대로 설치하지 않는다. 설치한 JetPack 버전에 맞는 [NVIDIA Jetson PyTorch 설치 안내](https://docs.nvidia.com/deeplearning/frameworks/install-pytorch-jetson-platform/index.html)와 [호환성 표](https://docs.nvidia.com/deeplearning/frameworks/install-pytorch-jetson-platform-release-notes/pytorch-jetson-rel.html)를 확인한다. 해당 버전에서 제공되는 패키지/컨테이너 경로를 선택한 뒤 **`import torch`, `torch.cuda.is_available()`, 실제 YOLO 모델의 이미지 1장 추론**을 확인한다. GPU 설치가 바로 되지 않더라도 모터·LiDAR·카메라 기본 통합은 독립적으로 진행할 수 있다.
 
 **왜:** 시뮬레이션 알고리즘은 ROS 메시지 인터페이스에 의존하지만, 드라이버와 Python/C++ 바이너리는 Jetson CPU 아키텍처·JetPack 버전에 의존한다.
+
+## Orin NX(Seeed J401) 보드 세팅 기록 — 2026-11-20 팀원 세팅, 11-24 확인
+
+팀원이 2026-11-19~20에 세팅하고 기록을 남기지 않아, 2026-11-24에 SSH로 보드 상태(apt 이력, 셸 이력, 설정 파일, systemd 유닛)를 읽어 재구성했다. 이력에 없는 것은 "(확인 필요)"로 둔다.
+
+### 보드와 OS
+
+| 항목 | 값 |
+| --- | --- |
+| 모듈 | `/proc/device-tree/model` = `NVIDIA Jetson Orin NX Engineering Reference Developer Kit Super`, 메모리 15 GB, CPU 8코어 |
+| 캐리어 | Seeed reComputer J401 (팀 확인) |
+| OS | `/etc/nv_tegra_release` R39 REVISION 2.0 (JetPack 7.2), Ubuntu 24.04.5, 커널 `6.8.12-1021-tegra` |
+| 호스트명·사용자 | `automaton-jetson`, `automaton` (비밀번호는 팀 내 구두 전달) |
+| 저장장치 | NVMe 128 GB (FORESEE XP1000F128G). 루트 79 GB 중 50 GB 사용, 26 GB 여유(11-24). rosbag을 오래 쌓으면 금방 찬다 |
+| 전원 모드 | 현재 `nvpmodel` 40W. **J401에서는 MAXN SUPER 금지**(Seeed 안내: 캐리어 방열 부족) |
+
+### 실제 수행된 설치 순서
+
+apt 이력(`/var/log/apt/history.log`, 11-16 이후)과 팀원 셸 이력에서 재구성했다. 시각은 apt 이력 기준이다.
+
+1. **11-19 17:36~17:44** `curl`, `docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin` 설치, `apt upgrade`. Docker를 어디에 쓰는지는 기록이 없다(확인 필요). 11-24에 돌고 있는 컨테이너는 없었다.
+2. 저장소 받기: `git clone https://github.com/jakemoti0n/final_team7.git ~/limbo` (브랜치 jetson).
+3. **ROS apt source**: 로케일 `en_US.UTF-8` 설정 → `software-properties-common`, `add-apt-repository universe` → `ros2-apt-source` deb(최신 릴리스)를 받아 `dpkg -i` → `apt full-upgrade`. ROS 2 Jazzy 공식 설치 지침과 같은 절차.
+4. **11-20 09:47** `ros-dev-tools`, **09:49** `ros-jazzy-desktop`.
+5. **11-20 09:56 Nav2 묶음**: `ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-ros-gz ros-jazzy-cv-bridge ros-jazzy-pcl-ros ros-jazzy-pointcloud-to-laserscan ros-jazzy-spatio-temporal-voxel-layer ros-jazzy-slam-toolbox ros-jazzy-robot-localization ros-jazzy-vision-msgs ros-dev-tools python3-venv`. `ros-jazzy-nav2-mppi-controller`도 설치돼 있음(11-24 확인).
+6. **venv `limbo_yolo`**(YOLO용):
+   ```bash
+   python3 -m venv --system-site-packages ~/limbo/venvs/limbo_yolo
+   source ~/limbo/venvs/limbo_yolo/bin/activate
+   # 최상위 requirements.txt의 CPU torch 인덱스 줄(--extra-index-url)만 빼고 설치
+   grep -v -- '--extra-index-url' ~/limbo/requirements.txt > /tmp/limbo_req_gpu.txt && pip install -r /tmp/limbo_req_gpu.txt
+   # JetPack 7.2(CUDA 13.2)용 GPU torch로 다시 설치
+   python -m pip install --force-reinstall "torch==2.12.0+cu132" "torchvision==0.27.0+cu132" --index-url https://download.pytorch.org/whl/cu132
+   python -m pip install cffi
+   python -m pip install "scipy==1.16.3"
+   ```
+   이력상 맨 처음에는 `pip install -r ~/limbo/requirements.txt`(CPU torch)로 한 번 설치했다가 위처럼 바꿨다. 그 뒤 `torch.cuda.is_available()`, GPU 행렬곱·Conv2d, `human-leg/runs/person_leg_stage1/weights/best.pt`로 `device="cuda:0"` YOLO 추론을 확인하는 명령이 이력에 있다(출력은 남아 있지 않음). 11-24 venv 패키지: `torch 2.12.0+cu132`, `torchvision 0.27.0+cu132`, `ultralytics 8.4.158`, `depthai 2.34.0.0`, `numpy 1.26.4`, `opencv-python 4.10.0.84`. 시스템 `python3`에는 depthai가 없다. 이 venv의 depthai가 실제로 쓰이는지는 확인 필요.
+   `~/.bashrc`의 `goyolo`·`limbo`·`build_limbo` 별칭으로 빌드했다(`build_limbo` = `python -m colcon build --symlink-install`, `~/limbo/limbo`에서). `~/limbo/limbo/install` 빌드 완료.
+7. **11-20 12:47** `ros-jazzy-camera-info-manager ros-jazzy-image-pipeline ros-jazzy-ffmpeg-image-transport-msgs`.
+8. **Livox 드라이버**: `~/livox_ws`에 `Livox-SDK/livox_ros_driver2` 커밋 `2144554`("Support Mid360L Lidar"). 빌드 명령은 이력에 없다(확인 필요). `~/livox_ws` 안 설정 JSON의 호스트 IP는 `192.168.1.5`지만, 실제 런치(`start_mid360.launch.py`)는 저장소의 `limbo_bringup/config/MID360s_limbo.json`(호스트 `192.168.1.50`)을 쓴다.
+9. **OAK udev**: `/etc/udev/rules.d/80-limbo-oak.rules`
+   ```
+   SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="03e7", GROUP="plugdev", MODE="0660"
+   ```
+   만든 명령은 이력에 없다. 부팅 스크립트가 쓰는 `~/limbo_oak_ros_compat`(DepthAI ROS v3 overlay)와 `~/limbo_stvl_compat`(STVL overlay)도 있어야 도는데, 만든 과정은 이력에 없다(확인 필요). 만드는 법은 `tools/oak/README_ROS_INPUT.md`, `tools/stvl/build_stvl_compat.sh`.
+10. **openssh-server**: `sudo apt install openssh-server` → `ssh-copy-id`. apt 이력(11-16 이후)에는 이 설치가 없다(이미 깔려 있었는지 확인 필요).
+11. **relay(관제 다리) venv·빌드**: 이력에는 `venvs/bridge` venv를 만들고 `relay_prog`에서 `colcon build --symlink-install --base-paths src`를 한 기록이 있다. 실제 부팅 스크립트는 `~/limbo/venvs/limbo_relay`를 쓴다. 두 venv의 관계는 확인 필요. 로봇 토큰은 `~/.config/limbo/robot_token`(권한 600)에 저장(값은 문서에 적지 않음). **11-20 15:43** `nano`.
+
+`/etc/sysctl.d/60-limbo-dds.conf`는 없다.
+
+### 네트워크
+
+| 인터페이스 | 주소 | 용도 |
+| --- | --- | --- |
+| `wlP1p1s0` (Wi-Fi) | `192.168.20.18/23`, SSID `aischool class02(5Ghz)` | SSH 접속(`ssh automaton@192.168.20.18`), 관제 서버 |
+| `enP8p1s0` (유선) | `192.168.1.50/24` | MID-360S 전용 |
+| `l4tbr0` | `192.168.55.1` | USB 장치 모드, 안 씀 |
+| `docker0` | — | Docker 기본 브리지 |
+
+Nano(원래 보드)의 Wi-Fi 주소는 `192.168.20.210`이었다(`docs/REAL_PATROL_RUN.md`).
+
+### USB 장치 (11-24 확인)
+
+- RoboClaw 2x15A: `03eb:2404`, `/dev/serial/by-id/usb-Basicmicro_Inc._USB_Roboclaw_2x15A-if00 -> ttyACM0`, 드라이버 `cdc_acm`, 커널 USB 오류 없음. 부팅 서비스의 `roboclaw_drive` 노드가 포트를 잡고 있다.
+- OAK: `03e7:f63b`. VIA Labs USB 2.0/3.1 허브가 보드에 내장.
+
+### ModemManager 끔 (2026-11-24, PM 승인)
+
+```bash
+sudo systemctl disable --now ModemManager
+```
+
+ModemManager는 USB 시리얼 장치(RoboClaw는 `ID_MM_CANDIDATE=1`)를 모뎀인지 열어 본다. 이 동작이 RoboClaw 포트를 잠깐 점유하거나 잡음을 넣을 위험이 있어 껐다. 끈 뒤 RoboClaw 포트와 네트워크에 변화가 없음을 확인했다. 보드를 다시 만들면 이 명령을 다시 친다.
+
+### 부팅 자동 기동(사용자 systemd 유닛 5개)
+
+> **이 파일들의 원본은 저장소 `tools/nx_boot/`에 있고(2026-11-24, PM 승인), 설치는 `bash tools/nx_boot/install.sh`로 한다**(아래 "설치·확인·제거"). 실행 위치는 그대로 홈 아래이고, 설치 스크립트가 그 자리에 저장소 파일을 가리키는 심볼릭 링크를 만든다.
+> - 유닛: `~/.config/systemd/user/limbo-nx-{drive,sensors,pose,navigation,dashboard}.service` → 저장소 `tools/nx_boot/systemd/`
+> - 스크립트: `~/.config/limbo/boot/start`, `ready.py`, `corridor_pose.py`, `map_search.py` → 저장소 `tools/nx_boot/boot/`. 이전판(`start.bak_1120`, `corridor_pose.pre_global.py`, `corridor_pose.before_idle_relocation.py`)은 저장소에 넣지 않았고 NX 보드에만 있다
+> - 관제 설정: `~/.config/limbo/bridge-nx.yaml`(예시 `tools/nx_boot/bridge-nx.example.yaml`에서 복사해 보드마다 고치는 파일), 토큰 `~/.config/limbo/robot_token`(git에 넣지 않음)
+> - 상태 파일: `~/.local/state/limbo/`(저장소에 넣지 않음)
+>
+> `start`와 pose 유닛은 저장소가 `~/limbo`에 있다고 가정한다(`cd "$HOME/limbo"`, `WorkingDirectory=%h/limbo`).
+
+사용자 단위(`systemctl --user`)이고 `loginctl` Linger=yes라 아무도 로그인하지 않아도 부팅 때 뜬다(11-20 17:52 부팅 로그에 5개 모두 Started). Nano에서 쓰던 시스템 단위 `limbo-real.service`는 NX에 없다. 모든 유닛은 `WantedBy=default.target`이고 **유닛끼리 `After=`/`Requires=` 의존은 없다.** 순서는 각 스크립트가 조건을 기다리는 방식으로 맞춘다. `start`는 공통으로 `cd ~/limbo`, `ROS_DOMAIN_ID=97 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`, `source tools/oak/ros_input_env.sh`(ROS·Limbo·OAK overlay를 source하고 Fast DDS 프로파일 지정)를 한 뒤 인자별로 갈린다.
+
+| 유닛 | 하는 일 | 시작 전에 기다리는 조건(스크립트 그대로) |
+| --- | --- | --- |
+| `limbo-nx-drive` | `start drive` → `tools/drive/run_teleop.sh`: `teleop_drive.launch.py`(`roboclaw_drive` /cmd_vel→모터, `wheel_odometry` /odom·TF) | `until [[ -r "$port" && -w "$port" ]]; do sleep 2; done` (`$port` = `/dev/serial/by-id/usb-Basicmicro_Inc._USB_Roboclaw_2x15A-if00`) |
+| `limbo-nx-sensors` | `start sensors` → `tools/drive/run_real.sh encoder_source:=external localization:=amcl map:=…/real_open_space_20261111.yaml`: `start_real.launch.py`(라이다·OAK·YOLO·AMCL·지도. 모터 출력 없음). `yolo`는 기본값(true) | `until ip -4 -o addr show dev enP8p1s0 \| grep -q '192\.168\.1\.50/' && lsusb -d 03e7: \| grep -q .; do sleep 2; done` (유선 IP + OAK USB) |
+| `limbo-nx-pose` | `corridor_pose.py`: 정지 상태에서 스캔을 지도 전체와 맞춰 `/initialpose`를 보내고, 위치가 잡힌 뒤에는 검증된 위치를 1초마다 `corridor-pose.json`에 씀 | 없음(`/map`·`/scan`·`/odom`이 올 때까지 안에서 기다림) |
+| `limbo-nx-navigation` | `start navigation` → `ready.py`로 기다린 뒤 `tools/drive/run_nav2_real.sh cmd_vel_out:=/cmd_vel`(`start_nav2_real.launch.py`, 기본 `nav2_real.yaml`) | `ready.py`: TF `map→base_footprint`의 나이가 −1.5~1.0 s **그리고** `corridor-pose.json`의 `time`이 지금부터 5초 이내이고 `boot`가 이번 부팅 id와 같을 때 |
+| `limbo-nx-dashboard` | `start dashboard` → `relay_prog/install/local_setup.bash` source 후 `venvs/limbo_relay/bin/python -m limbo_telemetry_bridge.node --config ~/.config/limbo/bridge-nx.yaml`(관제 서버로 상태 전송, 관제 명령 받기) | 없음 |
+
+이어지는 순서:
+
+1. 전원이 들어오면 drive(RoboClaw 포트가 생기면)와 sensors(유선 IP와 OAK가 보이면)가 뜬다. dashboard와 pose도 같이 뜬다.
+2. AMCL은 `/initialpose`를 받기 전에는 `map→odom`을 내지 않는다. pose(`corridor_pose.py`)가 지도·스캔·odom을 받은 뒤, **로봇이 3초 넘게 멈춰 있고** `/patrol/state` 발행자도 진행 중인 Nav2 목표도 없을 때 지도 전체 탐색(`map_search.py`)을 한다. 후보의 스캔 일치율이 0.85 이상이고 두 번째 후보보다 0.08 이상 높아야 하며, 이어지는 스캔 5개가 모두 0.85 이상이면 `/initialpose`를 보낸다. 실패하면 3초 뒤 다시 찾는다.
+3. AMCL이 위치를 잡으면 pose가 일치율 0.80 이상일 때 `corridor-pose.json`을 1초마다 쓴다.
+4. navigation의 `ready.py`가 이 파일(5초 이내, 같은 부팅)과 신선한 TF를 보고 빠지면 Nav2가 뜬다.
+5. 위치가 잡힌 뒤에도 멈춰 있는 동안 일치율 0.80 미만이 스캔 6번 이어지면 pose가 다시 전역 탐색해 `/initialpose`를 보낸다(현재판의 "멈춰 있을 때 재위치" 기능. 이전판 두 개에는 없음).
+
+상태 파일(`~/.local/state/limbo/`):
+- `corridor-pose.json`: `boot`(부팅 id), `map`(지도 해시), `pose`([x, y, yaw]), `fit`(일치율, 11-24에 0.848), `time`.
+- `patrol-progress.json`: 관제에서 시작한 순찰이 다음에 갈 경유점 번호. 저장소의 **미커밋** 변경(`limbo_patrol/corridor_checkpoint.py`, `patrol_node.py`)이 쓴다. 저장소에 반영할지는 PM 결정 대기.
+- `map-backups/`: `real_open_space_20261111-8c197ad0.pgm`(11-20 09:24). 누가 무엇으로 만들었는지 확인 필요.
+
+보는 법(젯슨 안에서):
+
+```bash
+systemctl --user status 'limbo-nx-*'            # 5개 상태
+journalctl --user -u limbo-nx-sensors -f        # 한 유닛 로그 따라 보기 (drive·pose·navigation·dashboard도 같은 방식)
+cat ~/.local/state/limbo/corridor-pose.json     # 마지막 검증 위치와 일치율
+```
+
+멈추는 법:
+
+```bash
+systemctl --user stop limbo-nx-navigation limbo-nx-sensors limbo-nx-drive limbo-nx-pose limbo-nx-dashboard
+```
+
+drive·sensors·navigation·dashboard는 `KillSignal=SIGINT`, `TimeoutStopSec=25`라 런치가 SIGINT로 정리된다. pose 유닛은 `KillSignal`을 정하지 않아 systemd 기본값(SIGTERM)으로 끝난다. 패턴 kill(`pkill -f` 등)은 쓰지 않는다. 다섯 개 모두 `Restart=on-failure`(pose 5초, 나머지 8초 뒤, drive·sensors·navigation·dashboard는 `StartLimitIntervalSec=0`이라 횟수 제한 없음)라 실패하면 다시 뜨지만, `stop`으로 내린 것은 다시 뜨지 않는다. 유닛은 enabled 상태라 **재부팅하면 다시 뜬다.**
+
+다시 켜는 법:
+
+```bash
+systemctl --user start limbo-nx-drive limbo-nx-sensors limbo-nx-pose limbo-nx-navigation limbo-nx-dashboard
+```
+
+켜는 순서는 상관없다(각자 조건을 기다림). 부팅 때 안 뜨게 하려면 `systemctl --user disable <유닛>`, 되돌리려면 `enable`.
+
+현재 `start`와 이전판 `start.bak_1120`의 차이: dashboard 줄에서 `--telemetry-only`가 빠졌다. 즉 지금 NX의 관제 다리는 상태 전송뿐 아니라 관제 화면의 명령(순찰 시작 등)도 받는다. `--telemetry-only` 옵션 자체가 저장소 미커밋 변경(`relay_prog` `node.py`)이다.
+
+#### 설치·확인·제거
+
+젯슨 안에서, 그 사용자로 로그인한 셸에서 실행한다. sudo는 쓰지 않는다.
+
+```bash
+cd ~/limbo
+bash tools/nx_boot/install.sh          # 링크 9개 + bridge-nx.yaml(없을 때만 복사) + daemon-reload + 유닛 5개 enable
+```
+
+설치 스크립트가 하는 일:
+1. `~/.config/limbo/boot/`에 `tools/nx_boot/boot/`의 파일 4개를, `~/.config/systemd/user/`에 유닛 5개를 **심볼릭 링크**로 연결한다. 그 자리에 일반 파일이 이미 있으면 `<이름>.bak_<날짜-시각>`으로 옮긴 뒤 링크한다(지금 NX 보드처럼 직접 둔 파일이 있는 경우).
+2. `~/.config/limbo/bridge-nx.yaml`이 없으면 예시를 **복사**한다(링크 아님). 이미 있으면 건드리지 않는다.
+3. `systemctl --user daemon-reload`, `systemctl --user enable` 유닛 5개. **유닛을 켜지는 않는다.**
+4. `loginctl enable-linger`를 시도한다. 권한이 없어 실패하면 관리자가 `sudo loginctl enable-linger <사용자>`를 해야 한다는 안내만 출력한다(linger가 없으면 로그인해야 유닛이 뜬다).
+
+설치 뒤 할 일:
+
+```bash
+# 1) 토큰 파일이 없으면 만든다(관제 담당에게 받은 값. 저장소·문서에 적지 않는다). 없으면 dashboard 유닛이 동작하지 않는다
+ls -l ~/.config/limbo/robot_token
+# 2) bridge-nx.yaml을 새로 복사했으면 server_url·token_file 경로가 이 보드에 맞는지 본다
+# 3) 유닛 켜기
+systemctl --user start limbo-nx-drive limbo-nx-sensors limbo-nx-pose limbo-nx-navigation limbo-nx-dashboard
+```
+
+확인(아무것도 바꾸지 않음): 링크 9개가 `링크 OK`인지, bridge·토큰 파일 유무, 유닛별 enabled/active, linger를 표로 보여 준다.
+
+```bash
+bash tools/nx_boot/install.sh --check
+```
+
+제거: 유닛 5개를 disable하고, 저장소를 가리키는 링크만 지운다. `bridge-nx.yaml`·`robot_token`·백업 파일은 남긴다. 떠 있는 유닛은 내리지 않으므로 필요하면 아래 "멈추는 법"을 먼저 한다.
+
+```bash
+bash tools/nx_boot/install.sh --uninstall
+```
+
+**고친 내용의 반영:** 링크라서 `git pull`만 하면 파일 내용은 바로 바뀐다. 하지만 **이미 떠 있는 유닛은 재시작해야 새 내용으로 돈다.** 유닛 파일(`*.service`)을 고쳤으면 `systemctl --user daemon-reload`도 먼저 한다.
+
+```bash
+systemctl --user daemon-reload                   # 유닛 파일이 바뀐 경우
+systemctl --user restart limbo-nx-pose           # 바뀐 것만 (예: corridor_pose.py·map_search.py → pose, ready.py → navigation, start → 해당 인자 유닛)
+```
+
+설치 스크립트 검사(임시 HOME과 가짜 `systemctl`·`loginctl`로 돌리므로 실제 설정은 건드리지 않음): `bash tools/nx_boot/test_install.sh`
 
 ## 3. 전원과 통신 물리 연결: 장치별로 하나씩
 
