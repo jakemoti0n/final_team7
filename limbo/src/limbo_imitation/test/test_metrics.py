@@ -1,6 +1,7 @@
 """한 바퀴 지표 단위 테스트. 가짜 궤적은 0.1 s 간격."""
 
 import math
+import time
 
 from limbo_imitation import metrics
 import pytest
@@ -126,3 +127,30 @@ def test_metrics_row_has_all_columns():
 def test_scan_min_range_ignores_invalid():
     assert metrics.scan_min_range([math.inf, 0.01, 2.0, math.nan, 1.5], 0.1, 10.0) == 1.5
     assert math.isinf(metrics.scan_min_range([math.inf], 0.1, 10.0))
+
+
+def test_manual_start_run_is_completed_by_driver():
+    log = straight_run()
+    log.patrol_states = []  # 수동 바퀴에는 /patrol/state가 없다
+    log.start_reason = metrics.START_MANUAL
+    m = metrics.compute_metrics(log)
+    assert m['completed'] == metrics.COMPLETED_MANUAL
+    assert metrics.passed(m, {'personal_space': 0.5}) == (True, [])
+
+
+def test_patrol_run_without_completed_state_fails():
+    log = straight_run()
+    log.patrol_states = [(0.0, 'patrolling')]
+    log.start_reason = 'patrolling'
+    m = metrics.compute_metrics(log)
+    assert m['completed'] is False
+    assert metrics.passed(m, {'personal_space': 0.5}) == (False, ['not completed'])
+
+
+def test_metrics_stay_fast_on_long_run():
+    """4~5분 바퀴(odom 30 Hz)의 지표가 1 s 안에. 종료가 지표 계산에 묶이지 않게."""
+    log = straight_run(seconds=300.0, speed=0.5)
+    start = time.monotonic()
+    metrics.compute_metrics(log)
+    metrics.bad_intervals(log)
+    assert time.monotonic() - start < 1.0

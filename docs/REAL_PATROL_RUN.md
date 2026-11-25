@@ -19,6 +19,21 @@
 사람이 패드로 운전한 바퀴를 기록한다. 패드 명령은 중재기(`drive_arbiter`) → collision_monitor → `/cmd_vel` → 바퀴로 가므로 안전 정지는 그대로 남는다. 패드는 **LB(왼쪽 어깨)를 누르는 동안만** 바퀴로 간다.
 
 1. 빌드(처음 한 번, pull 뒤마다): `cd ~/limbo/limbo && colcon build --symlink-install --packages-select limbo_imitation limbo_bringup`. `ros-jazzy-joy`·`ros-jazzy-teleop-twist-joy`가 없으면 설치가 필요하다(sudo, PM 승인).
+   - **조이스틱 연결(Acegamer T50, 블루투스)** — 처음 한 번, 그리고 패드를 껐다 켜서 안 붙을 때마다(전원을 끄면 페어링이 풀리는 경우가 있다):
+     1. 패드를 **Xbox 모드** 페어링 상태(불빛 빠른 깜빡임)로 둔다. Switch 모드("Pro Controller")는 이 커널에 `hid-nintendo`가 없어 입력 장치가 안 생긴다.
+     2. 젯슨에서(재부팅 뒤 한 번, 영구 적용 전까지):
+        ```bash
+        sudo modprobe uhid                   # 없으면 연결은 Success인데 /dev/input/js0이 안 생긴다
+        groups | grep -w input               # 없으면 sudo usermod -aG input automaton 뒤 다시 로그인(joy_node가 event 장치를 열려면 필요)
+        ```
+     3. 페어링(`<MAC>`은 `bluetoothctl --timeout 20 scan on`으로 찾는다). 기본 `bluetoothctl pair`는 에이전트가 없어 `AuthenticationCanceled`로 실패하니 에이전트를 지정한다:
+        ```bash
+        bluetoothctl --agent NoInputNoOutput --timeout 30 pair <MAC>
+        bluetoothctl trust <MAC>
+        bluetoothctl connect <MAC>
+        ```
+     4. 확인: `ls /dev/input/js0` → `ros2 run joy joy_node`에서 `/joy`의 축 0(좌우)·1(상하)이 ±1.0, LB가 버튼 4(`config/joy_xbox.yaml`의 데드맨). 확인 뒤 `joy_node`는 끈다(기록 런치가 다시 띄운다).
+     막히면 `docs/TROUBLESHOOTING.md` 2026-11-25(`uhid`, `bluetoothctl` 에이전트).
 2. Nav2의 collision_monitor 입력을 중재기 출력으로 바꿔 다시 띄운다. 부팅 유닛의 `start navigation`이 환경 변수 `LIMBO_CMD_VEL_IN`(없으면 기본 `cmd_vel_smoothed` = 지금 동작)을 읽는다:
    ```bash
    systemctl --user set-environment LIMBO_CMD_VEL_IN=/cmd_vel_arbiter
@@ -196,5 +211,6 @@ sudo shutdown -h now
 - **Nav2가 `active: 0`이고 nav2.log에 `Failed to activate global_costmap because transform from base_link to map did not become available` → `Failed to bring up all requested nodes. Aborting bringup`**: AMCL에 초기 위치를 안 줘서(`set_initial_pose: false`) `map→odom`이 없는 채로 Nav2를 띄운 것(11-11, 새로 부팅한 날). Nav2 런치 PID에 SIGINT(`ps -eo pid,args | grep "[r]os2 launch .*start_nav2_real"`) → 2절 ③ → ⑤. 생명주기 관리자는 한 번 중단하면 스스로 다시 올리지 않는다.
 - **`ros2 run`으로 띄운 순찰 노드가 SIGINT로 안 끝남**: 그 PID는 `ros2 run` 껍데기라 자식을 기다리기만 한다. 자식 PID에 보낸다: `kill -INT $(pgrep -P <껍데기 PID>)`. 안 끝난 노드가 `/patrol/state` 발행자로 남으면 NX `corridor_pose.py`가 위치 재탐색을 하지 않는다(TROUBLESHOOTING 11-24).
 - **위치 재탐색이 `No unique global scan match`만 반복**: 복도 중간처럼 앞뒤가 대칭인 자리다. 로봇을 HOME 테이프나 코너처럼 고유한 자리에 세우고 기다린다(11-24).
+- **NX 부팅 뒤 Nav2가 안 뜸(`ready.py`에서 대기), `/scan`이 수백 Hz에 점이 몇 개뿐**: 시계가 1970년에서 출발해 NTP로 점프하기 전에 센서 유닛이 뜬 것. `timedatectl`로 동기를 확인하고 `systemctl --user restart limbo-nx-sensors` → 위치 재탐색 뒤 Nav2가 스스로 뜬다(TROUBLESHOOTING 11-25).
 - **젯슨 ssh가 끊김**: 로봇이 W1 코너(복도 끝)에 있을 때 와이파이가 약하다. 돌아올 때까지 기다리면 된다. 순찰은 젯슨 안에서 계속 돈다.
 - **`fastrtps_port … open_and_lock_file failed`가 찍힘**: `timeout`으로 끊은 `ros2 topic …` 명령이 남긴 공유 메모리 찌꺼기. 주행 중 CLI 확인을 줄이고, 5절처럼 ROS가 다 내려간 뒤 `/dev/shm/fastrtps_*`를 지운다.

@@ -272,6 +272,33 @@
 
 ## 실물(Jetson·RoboClaw·센서)
 
+### NX 부팅 뒤 Nav2 유닛이 `ready.py`에서 끝없이 기다림, 라이다가 1초에 약 1,500번 쪼개진 점군을 냄 — RTC 없이 부팅해 시계가 1970년에서 출발했다가 NTP로 점프 — 2026-11-25
+- **증상**: Orin NX 부팅 뒤 Nav2가 안 뜸(`limbo-nx-navigation`이 `ready.py`에서 대기). `/mid360/points`가 1초에 약 1,500 메시지, 메시지마다 96점(정상은 10 Hz·약 2만 점). `pointcloud_to_laserscan`의 `/scan`은 560 Hz에 유효 점 8개. AMCL·`corridor_pose.py`가 쓸 만한 스캔을 못 받음. `~/.local/state/limbo/corridor-pose.json`의 `time`이 60.3(1970-01-01 기준 초)
+- **확인 명령**: `timedatectl`(부팅 직후 `System clock synchronized: no`), `journalctl --user -u limbo-nx-sensors | grep -i livox`의 드라이버 시각이 `[0000000040.6…]`처럼 작음, `/mid360/points` 메시지 수를 5 s 세기, `/scan` 한 장에서 유한한 range 개수 세기
+- **원인**: 젯슨에 RTC 배터리가 없어 시계가 epoch에서 시작하고 수십 초 뒤 NTP가 2026년으로 점프한다. 그 전에 뜬 Livox 드라이버는 점군을 프레임 단위로 묶지 못하고 패킷마다 내보냈다(점프 뒤에도 그대로). 또 `corridor_pose.py`가 시계 점프 전에 `corridor-pose.json`을 써서 `time`이 60.3으로 남았고, `ready.py`는 "`time.time() − time`이 0~5 s"를 요구해 영원히 실패했다
+- **해결**: 시각 동기를 확인(`timedatectl`의 synchronized yes)한 뒤 `systemctl --user restart limbo-nx-sensors`. 라이다가 10 Hz로 돌아오고 pose 유닛이 전역 재탐색(fit 0.96) → 새 `corridor-pose.json` → Nav2 유닛이 스스로 기동. 재부팅마다 생길 수 있어 근본 대책은 `KNOWN_ISSUES.md` 2026-11-25(미적용)
+- **확인**: 재시작 뒤 `/mid360/points` 10 Hz, Nav2 자동 기동, 같은 날 수동 운전 바퀴 272 s 주행(변경 기록 78)
+
+### 블루투스 패드를 페어링·연결했는데 `/dev/input/js0`이 안 생김 — `uhid` 모듈이 안 올라와 있음 — 2026-11-25
+- **증상**: Acegamer T50(Xbox 모드)을 `bluetoothctl`로 페어링·연결하면 bluetoothd 로그에 `input-hid … Success`가 찍히는데 `/dev/input/js0`·새 `event*`가 없음. `joy_node`는 장치를 못 찾음
+- **원인**: 이 패드는 bluez가 사용자 공간에서 `/dev/uhid`를 통해 입력 장치를 만든다. NX 커널(6.8.12-1021-tegra)에 `uhid`가 모듈로만 있고 부팅 때 올라오지 않아 장치를 만들 곳이 없었다. 처음엔 Switch 모드("Pro Controller", 057E:2009)로 붙여 `hid-nintendo`가 없는 것을 의심해 모듈을 `~/build/hid-nintendo/`에 빌드했으나, Xbox 모드면 일반 HID라 필요 없다
+- **해결**: `sudo modprobe uhid` 뒤 다시 연결 → `/dev/input/js0` 생김. 영구 적용(`/etc/modules-load.d/`에 `uhid` 한 줄)은 sudo라 아직 안 함(변경 기록 78 할 일). `joy_node`가 `/dev/input/event*`를 열도록 `sudo usermod -aG input automaton`(새 로그인부터 적용)
+- **확인**: `ros2 run joy joy_node` → 왼쪽 스틱 축 0(좌우)·1(상하) ±1.0, LB = 버튼 4(`config/joy_xbox.yaml`의 `enable_button`과 같음)
+
+### `bluetoothctl pair`가 `AuthenticationCanceled`로 실패 — 에이전트가 없음 — 2026-11-25
+- **증상**: ssh에서 `bluetoothctl pair <MAC>`이 `Failed to pair: org.bluez.Error.AuthenticationCanceled`. heredoc으로 `agent on`·`pair`를 한 번에 넣으면 `Failed to register agent object`
+- **원인**: 페어링에는 인증 요청을 받아 줄 에이전트가 필요한데, 명령 한 줄로 부른 `bluetoothctl`은 에이전트를 등록하지 않는다. heredoc은 대화형 세션이 아니라 에이전트 등록이 실패한다
+- **해결**: 에이전트를 명령줄에서 지정: `bluetoothctl --agent NoInputNoOutput --timeout 30 pair <MAC>` → `bluetoothctl trust <MAC>` → `bluetoothctl connect <MAC>`. 패드는 Xbox 모드 페어링 상태(빠른 깜빡임)여야 한다
+- **주의**: 패드 전원을 껐다 켜면 페어링이 풀리는 경우가 있어 위 세 줄을 다시 한다
+- **확인**: `Pairing successful` → `Connection successful` → `/dev/input/js0`(위 `uhid` 항목이 먼저 돼 있어야 함)
+
+### 기록 런치를 SIGINT로 끝냈는데 `run_recorder`가 1분 넘게 안 끝나고 bag 자식이 좀비로 남음 — 2026-11-25
+- **증상**: 첫 수동 바퀴(272 s) 뒤 `imitation_real.launch.py`에 SIGINT. bag 자식은 `Recording stopped`까지 가고 `Z`(좀비)로 남았고, `run_recorder`는 CPU 10 %로 1분 넘게 돌다가 두 번째 SIGINT에야 `run 1 ended (node shutdown)`을 찍고 `metrics.csv`를 씀. 이어서 `Failed to publish log message to rosout: publisher's context is invalid`
+- **원인**(코드에서 확인한 것): ① 지표 계산이 바퀴 길이의 제곱으로 느렸다. `metrics.latest_before`가 부를 때마다 시각 목록을 새로 만들어, 272 s 바퀴 크기의 가짜 기록으로 노트북에서 2.05 s(NX는 더 느림). ② 종료 단계가 bag을 기다린 뒤(최대 `bag_stop_timeout` 10 s)에야 결과 파일을 썼고, 기다리다 넘기면 그 뒤 끝난 bag을 아무도 거두지 않아 좀비가 됨. 터미널 Ctrl+C는 같은 프로세스 그룹의 bag에도 먼저 가서 bag이 노드보다 먼저 끝날 수 있다. ③ rclpy 기본 신호 처리기가 SIGINT를 받자마자 context를 닫아, 종료 단계 로그가 rosout으로 못 가고(위 오류) 종료 중 두 번째 신호가 결과 쓰기를 끊을 수 있었다. 실물의 1분을 노트북에서 그대로 재현하지는 못했다
+- **해결**(변경 기록 78): ① 시각 목록을 한 번 만들고 이분 탐색(같은 기록 0.01 s). ② 종료 단계를 `run_files.finish_run`으로 분리: bag에 SIGINT → `metrics.csv`·`meta.json` 쓰기 → bag 거두기 순서. 못 거둔 bag은 다음 바퀴 시작 때 다시 거둠. ③ `rclpy.init(signal_handler_options=NO)`에 SIGINT·SIGTERM을 KeyboardInterrupt로 받고 0.1 s 주기 `spin_once`, 종료 단계 중 두 번째 SIGINT는 무시
+- **주의**: 시험할 때 셸 스크립트에서 `&`로 띄운 `ros2 launch`는 SIGINT 무시 상태로 시작해 `kill -INT`가 아무 일도 안 한다(11-10 항목과 같은 원인). 시험은 SIGINT를 기본값으로 되돌려 띄우거나 노드 PID에 직접 보낸다
+- **확인**: 노트북(ROS_DOMAIN_ID 93, 가짜 `/odom` 30 Hz·`/scan` 10 Hz) — 노드 PID에 SIGINT 0.42 s, launch PID에 SIGINT 0.41 s, 프로세스 그룹 전체 SIGINT 0.42 s 안에 프로세스 종료. 셋 다 `meta.json` end_time·end_reason·`metrics.csv` 생성, 자식 0, rosout 오류 없음. pytest `test/test_run_finish.py`
+
 ### `nohup ros2 run limbo_patrol patrol_node`를 끝내려고 PID에 SIGINT를 보내도 안 끝남 — `ros2 run` 껍데기 PID였음 — 2026-11-24
 - **증상**: 순찰 노드를 `nohup ros2 run limbo_patrol patrol_node …`로 띄운 뒤 그 PID에 `kill -INT`를 보내도 노드가 계속 살아 있고 `/patrol/state` 발행자가 남음
 - **원인**: 그 PID는 `ros2 run` 껍데기(파이썬 CLI)이고 실제 노드는 자식 프로세스다. 껍데기는 `do_wait`로 자식을 기다릴 뿐이라 껍데기에 보낸 SIGINT가 노드까지 가지 않는다. 남은 발행자는 아래 "위치 재탐색이 막힘"의 원인이 됨

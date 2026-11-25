@@ -5,12 +5,18 @@
   bag/          ros2 bag record 결과
   meta.json     누가·어떤 모드·어떤 지도와 경유점으로 달렸는지
   metrics.csv   지표 한 줄(열 이름은 metrics.ROW_COLUMNS)
+
+한 바퀴를 닫는 단계(finish_run)도 여기 둔다. 노드 없이 가짜 bag 프로세스로 시험하려는 것이다.
 """
 
 import csv
 import hashlib
 import json
 import os
+import signal
+import subprocess
+
+from limbo_imitation import metrics
 
 META_FILE = 'meta.json'
 METRICS_FILE = 'metrics.csv'
@@ -73,3 +79,39 @@ def read_metrics_csv(folder):
         return []
     with open(path, newline='', encoding='utf-8') as f:
         return list(csv.DictReader(f))
+
+
+def signal_bag(bag):
+    """bag이 아직 돌면 SIGINT를 보낸다(기다리지 않음).
+
+    터미널 Ctrl+C는 같은 프로세스 그룹의 bag에도 직접 가서 bag이 먼저 끝나 있을 수 있다.
+    poll()이 그런 bag을 거둔다.
+    """
+    if bag.poll() is None:
+        bag.send_signal(signal.SIGINT)
+
+
+def wait_bag(bag, timeout):
+    """bag이 끝나기를 timeout초까지 기다려 거둔다. 거뒀으면 True.
+
+    안 끝나도 SIGTERM은 보내지 않는다. PM 승인 뒤에만 쓰기로 한 수단이다(TROUBLESHOOTING 2026-11-10).
+    """
+    try:
+        bag.wait(timeout=timeout)
+        return True
+    except subprocess.TimeoutExpired:
+        return False
+
+
+def finish_run(folder, meta, log, settings, bag, bag_timeout):
+    """한 바퀴를 닫는다: bag에 SIGINT → metrics.csv·meta.json 쓰기 → bag 거두기.
+
+    meta의 end_time·end_reason과 log.end_time은 부르는 쪽이 채운다.
+    결과 파일을 bag이 닫히기를 기다리기 전에 쓴다. bag 마무리가 늦거나 종료 중 두 번째 신호가
+    와도 지표와 끝난 시각은 남게 하려는 것이다. (지표 한 줄, bag을 거뒀는지)를 낸다.
+    """
+    signal_bag(bag)
+    row = metrics.metrics_row(metrics.compute_metrics(log, settings), settings)
+    write_metrics_csv(os.path.join(folder, METRICS_FILE), row, metrics.ROW_COLUMNS)
+    write_json(os.path.join(folder, META_FILE), meta)
+    return row, wait_bag(bag, bag_timeout)

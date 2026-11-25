@@ -8,6 +8,28 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-25 (78) 패드(Xbox 모드 BT) → 중재기 → 비상 정지 → 바퀴 첫 수동 운전 바퀴, 부팅 시계 점프로 라이다·위치 검증 깨짐 해결, 기록기 종료·수동 완주 판정 수정, ToF 보류
+
+**할 일**
+- `build_limbo`(`limbo_imitation`, 심볼릭 설치면 소스만 받아도 됨). 다음: 수동 20~30바퀴(`docs/PROJECT.md` 8절 4일 차)
+- 승인 필요: `uhid` 영구 로드(`/etc/modules-load.d/`에 `uhid` 한 줄, sudo), 부팅 유닛을 시각 동기 뒤에 띄우는 설계(`docs/KNOWN_ISSUES.md` 2026-11-25). 그때까지 재부팅 뒤 `sudo modprobe uhid`, Nav2가 안 뜨면 `timedatectl` 확인 뒤 `systemctl --user restart limbo-nx-sensors`
+
+**변경**
+- `limbo_imitation/metrics.py`: `latest_before`가 시각 목록을 매번 새로 만들던 것을 한 번 만들어 넘기게(272 s 바퀴 크기 기록의 지표 계산 2.05 s → 0.01 s, 노트북). `start_reason == manual_start` 바퀴는 `completed: manual`로 적고 합격 판정에서 완주 조건을 뺌(`/patrol/state`가 없어 끝은 운전자만 앎. False면 멀쩡한 수동 바퀴가 다 불합격, True면 순찰 노드가 확인한 완주와 구별 안 됨)
+- `limbo_imitation/run_files.py`: 종료 단계 `finish_run`(bag에 SIGINT → `metrics.csv`·`meta.json` → bag 거두기). 결과 파일을 bag 마무리보다 먼저 써서 bag이 늦어도 남게
+- `limbo_imitation/run_recorder.py`: rclpy 신호 처리기를 끄고(`SignalHandlerOptions.NO`) SIGINT·SIGTERM을 KeyboardInterrupt로 받아 0.1 s 주기 `spin_once`. context가 살아 있는 채로 종료 단계를 돌아 rosout 오류가 없어지고, 종료 중 두 번째 SIGINT는 무시. 기다리다 못 거둔 bag은 다음 바퀴 시작 때 다시 거둠(좀비 방지)
+- 테스트: `test/test_run_finish.py`(진짜 자식 프로세스 거두기·안 닫히는 가짜 bag·이미 끝난 bag), `test/test_metrics.py`(수동 완주·순찰 미완주·긴 바퀴 1 s 안)
+- `docs/TROUBLESHOOTING.md` 실물 절: 부팅 시계 점프, `uhid` 미로드로 `js0` 없음, `bluetoothctl` 에이전트, 기록기 종료 지연 — 4개. `docs/KNOWN_ISSUES.md`: 시각 동기 대기 미적용, ToF 접촉 불량 보류 — 2개. `docs/REAL_PATROL_RUN.md` "모방 학습 런치"에 조이스틱 연결 절차, "막히면"에 부팅 시계 한 줄. `docs/PROJECT.md` 8절 3일 차 상태
+
+**결정**
+- 비상 정지 1회가 충돌로 집계됨(설계대로 collision_monitor 정지 또는 라이다 최근접 0.25 m 미만을 충돌로 셈, CSV에는 `collision_monitor_stops`·`scan_collisions`로 따로 보임). 어디서 났는지는 bag으로 볼 것
+- ToF는 PM이 배선을 뽑아 보류. 다시 붙일 때 순서는 `docs/KNOWN_ISSUES.md` 2026-11-25
+
+**확인**(2026-11-25 Orin NX, 노트북)
+- 첫 수동 바퀴 `~/limbo_bags/imitation/20261125_194533_01_manual/`: 272 s·44.8 m·비상 정지 1·주행 중 사람 최소 거리 2.05 m·갇힘 0·비틀거림 0, bag 9.7 MB(30,015 메시지). 명령 경로 패드 → teleop_twist_joy → drive_arbiter(`deadman held → teleop`) → collision_monitor(`LIMBO_CMD_VEL_IN=/cmd_vel_arbiter`로 navigation 유닛 재시작) → `/cmd_vel`(발행자 collision_monitor 하나) → roboclaw_drive, odom 0.52 m/s
+- 부팅 시계: `sensors` 유닛 재시작 뒤 라이다 10 Hz, pose 유닛 전역 재탐색 fit 0.96, Nav2 자동 기동
+- 노트북(ROS_DOMAIN_ID 93): 기록기에 SIGINT — 노드 PID·launch PID·프로세스 그룹 전체 각각 0.41~0.42 s에 종료, `meta.json` end_time·end_reason·`metrics.csv`(`completed: manual`, passed True) 생성, 자식 0, rosout 오류 없음. 패키지 폴더 `python3 -m pytest -q test` 74 passed 9 skipped(torch·copyright), flake8 0
+
 ## 2026-11-24 (77) 실물에서 person_wait 첫 가동 → 쓰레기통 오인식으로 영구 대기 발견, 확신도 0.5·팽창 비용 70 %(PM 지시), 순찰 노드 종료·위치 재탐색 막힘 해결, 라즈베리파이 분류 모듈 접속
 
 **할 일**

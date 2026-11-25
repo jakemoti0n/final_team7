@@ -8,6 +8,10 @@
 멈춰 있는 로봇에 사람이 걸어 들어온 것은 손님 응대이지 로봇 잘못이 아니다.
 limbo_evaluation의 사람 탓/로봇 탓 구분(최소 거리 순간의 로봇 속도)과 같은 기준이다.
 min_person_dist는 참고용 전체 최소 거리, 합격 판정은 min_person_dist_moving으로 한다.
+
+한 시계열의 각 샘플마다 다른 시계열의 "그때 값"을 찾을 때는 시각 목록을 한 번만 만들고
+이분 탐색한다. 찾을 때마다 목록을 새로 만들면 바퀴 길이의 제곱으로 느려져, 4~5분 바퀴에서
+종료 때 지표 계산이 수 초~수십 초 걸렸다(2026-11-25, 기록기 종료가 늦어진 원인 중 하나).
 """
 
 import bisect
@@ -18,6 +22,10 @@ import math
 COLLISION_MONITOR_STOP = 1
 
 PATROL_COMPLETED = 'completed'
+# 기록기가 /patrol/state 없이 노드 시작 즉시 기록을 시작한 바퀴(run_recorder의 start_reason)
+START_MANUAL = 'manual_start'
+# 그런 바퀴의 completed 값. 끝을 아는 것은 운전자뿐이라 True/False 대신 이 글자를 남긴다
+COMPLETED_MANUAL = 'manual'
 SOURCE_TELEOP = 'teleop'
 SOURCE_NAV = 'nav'
 MODE_POLICY = 'policy'
@@ -49,6 +57,7 @@ class RunLog:
 
     start_time: float = 0.0
     end_time: float = 0.0
+    start_reason: str = ''                              # START_MANUAL이면 완주 판정을 운전자에게 맡김
     patrol_states: list = field(default_factory=list)   # (t, state 문자열)
     monitor_states: list = field(default_factory=list)  # (t, action_type)
     scan_min: list = field(default_factory=list)        # (t, 라이다 최근접 거리 m)
@@ -85,9 +94,15 @@ def total_time(intervals):
     return sum(end - start for start, end in intervals)
 
 
-def latest_before(samples, t):
-    """시각 t 이전(같은 시각 포함)의 마지막 샘플. 없으면 None. samples는 시각 순."""
-    times = [s[0] for s in samples]
+def sample_times(samples):
+    return [s[0] for s in samples]
+
+
+def latest_before(samples, times, t):
+    """시각 t 이전(같은 시각 포함)의 마지막 샘플. 없으면 None.
+
+    samples는 시각 순, times는 sample_times(samples)로 한 번 만들어 넘긴다.
+    """
     index = bisect.bisect_right(times, t) - 1
     return samples[index] if index >= 0 else None
 
@@ -99,9 +114,10 @@ def person_dist_while_moving(log, settings):
     지우면 앞의 '가까움'이 로봇이 멈춘 뒤까지 이어진 것으로 계산된다.
     """
     stop_speed = settings['stop_speed']
+    odom_times = sample_times(log.odom)
     result = []
     for t, dist in log.person_dist:
-        odom = latest_before(log.odom, t)
+        odom = latest_before(log.odom, odom_times, t)
         moving = odom is not None and abs(odom[3]) > stop_speed
         result.append((t, dist if moving else math.inf))
     return result
@@ -127,9 +143,10 @@ def stuck_intervals(log, settings):
     명령과 실제가 어긋나는데, 그건 갇힘이 아니다.
     """
     stop_speed = settings['stop_speed']
+    cmd_times = sample_times(log.cmd)
     flags = []
     for t, _, _, v, _ in log.odom:
-        command = latest_before(log.cmd, t)
+        command = latest_before(log.cmd, cmd_times, t)
         flags.append((t, command is not None and command[1] > stop_speed
                       and abs(v) < stop_speed))
     intervals = runs(flags, lambda s: s[1], log.end_time)
@@ -139,9 +156,10 @@ def stuck_intervals(log, settings):
 def clipped_intervals(log, settings):
     """collision_monitor가 명령을 깎은 구간: 출력 명령이 바로 앞 입력 명령과 다른 때."""
     tolerance = settings['clip_tolerance']
+    cmd_times = sample_times(log.cmd)
     flags = []
     for t, v_out, w_out in log.cmd_out:
-        command = latest_before(log.cmd, t)
+        command = latest_before(log.cmd, cmd_times, t)
         differs = command is not None and (abs(command[1] - v_out) > tolerance
                                            or abs(command[2] - w_out) > tolerance)
         flags.append((t, differs))
@@ -165,6 +183,18 @@ def mode_switch_intervals(drive_modes, source, modes, end_time):
     return runs(drive_modes, lambda s: s[1] == source and s[2] in modes, end_time)
 
 
+def run_completed(log):
+    """완주 여부. 수동 시작 바퀴는 COMPLETED_MANUAL.
+
+    수동 시작 바퀴에는 /patrol/state가 없어 완주를 기계가 알 수 없다. 운전자가 기록을 끝낸 것을
+    완주로 본다. False로 두면 멀쩡한 수동 바퀴가 전부 불합격이 되고, True로 두면 CSV만 보고
+    순찰 노드가 완주를 확인한 바퀴와 구별할 수 없다.
+    """
+    if log.start_reason == START_MANUAL:
+        return COMPLETED_MANUAL
+    return any(state == PATROL_COMPLETED for _, state in log.patrol_states)
+
+
 def compute_metrics(log, settings=None):
     """한 바퀴 지표를 METRIC_COLUMNS 순서의 dict 한 줄로 낸다."""
     settings = {**DEFAULT_SETTINGS, **(settings or {})}
@@ -176,7 +206,6 @@ def compute_metrics(log, settings=None):
     interventions = mode_switch_intervals(log.drive_modes, SOURCE_TELEOP, assist, log.end_time)
     fallbacks = mode_switch_intervals(log.drive_modes, SOURCE_NAV,
                                       (MODE_POLICY, MODE_POLICY_ASSIST), log.end_time)
-    completed = any(state == PATROL_COMPLETED for _, state in log.patrol_states)
     return {
         'collisions': len(stops) + len(close),
         'collision_monitor_stops': len(stops),
@@ -184,7 +213,7 @@ def compute_metrics(log, settings=None):
         'min_person_dist': min(person) if person else math.inf,
         'min_person_dist_moving': min(person_moving) if person_moving else math.inf,
         'personal_space_time': total_time(personal),
-        'completed': completed,
+        'completed': run_completed(log),
         'duration': log.end_time - log.start_time,
         'distance': odom_distance(log.odom),
         'stuck_time': total_time(stuck_intervals(log, settings)),
@@ -203,7 +232,7 @@ def passed(metrics, rules):
     if metrics['min_person_dist_moving'] < rules['personal_space']:
         reasons.append(f"min_person_dist_moving {metrics['min_person_dist_moving']:.2f} < "
                        f"{rules['personal_space']}")
-    if not metrics['completed']:
+    if metrics['completed'] is False:  # COMPLETED_MANUAL은 운전자가 끝낸 것이라 통과
         reasons.append('not completed')
     if metrics['stuck_time'] > 0:
         reasons.append(f"stuck {metrics['stuck_time']:.1f} s")

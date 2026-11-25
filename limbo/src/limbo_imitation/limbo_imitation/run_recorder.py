@@ -3,7 +3,7 @@
 
 - 시작: /patrol/state가 patrolling이 되면(manual_start면 노드 시작 즉시)
 - 끝: completed·failed가 되면(또는 노드 종료)
-- bag은 ros2 bag record를 자식 프로세스로 띄우고 SIGINT로 닫는다.
+- bag은 ros2 bag record를 자식 프로세스로 띄우고 SIGINT로 닫는다. 닫는 단계는 run_files.finish_run.
 - 지표는 bag을 다시 읽지 않고 기록 중 구독한 값으로 메모리에서 계산한다(metrics.py).
   바퀴가 끝나자마자 CSV가 나와 다음 바퀴 전에 결과를 볼 수 있게 하려는 것이다.
 폴더 이름·파일 쓰기는 run_files, 지표는 metrics(둘 다 ROS 없음)가 한다.
@@ -22,9 +22,10 @@ from limbo_interfaces.msg import PatrolState, PersonPredictionArray
 from nav2_msgs.msg import CollisionMonitorState
 from nav_msgs.msg import Odometry
 import rclpy
-from rclpy.executors import ExternalShutdownException
+from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, qos_profile_sensor_data, QoSProfile, ReliabilityPolicy
+from rclpy.signals import SignalHandlerOptions
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
 
@@ -34,6 +35,8 @@ DEFAULT_TOPICS = [
     '/cmd_vel_teleop', '/cmd_vel_policy', '/cmd_vel_smoothed', '/cmd_vel_arbiter', '/cmd_vel',
     '/drive_mode', '/collision_monitor_state', '/joy', '/policy/status',
 ]
+# s. spin_once가 C에서 기다리는 동안은 파이썬 신호 처리기가 돌지 않아, 종료 신호를 이 주기 안에 알아챈다
+SPIN_PERIOD = 0.1
 
 
 def sigint_default():
@@ -55,10 +58,11 @@ class RunRecorder(Node):
         self.folder = None
         self.meta = None
         self.run_number = 0
+        self.unclosed_bags = []
         self.robot_xy = None
         self._subscribe()
         if self.manual_start:
-            self.start_run('manual_start')
+            self.start_run(metrics.START_MANUAL)
 
     def _declare_parameters(self):
         p = self.declare_parameter
@@ -152,6 +156,7 @@ class RunRecorder(Node):
             self.log.monitor_states.append((self.now(), msg.action_type))
 
     def start_run(self, reason):
+        self.unclosed_bags = [bag for bag in self.unclosed_bags if bag.poll() is None]
         self.run_number += 1
         start = datetime.now()
         self.folder = os.path.join(self.output_root, run_files.run_folder_name(
@@ -163,7 +168,7 @@ class RunRecorder(Node):
         self.meta['start_reason'] = reason
         run_files.write_json(os.path.join(self.folder, run_files.META_FILE), self.meta)
         self.bag = self.start_bag(os.path.join(self.folder, run_files.BAG_DIR))
-        self.log = metrics.RunLog(start_time=self.now())
+        self.log = metrics.RunLog(start_time=self.now(), start_reason=reason)
         self.get_logger().info(f'run {self.run_number} started ({reason}): {self.folder}')
 
     def start_bag(self, bag_path):
@@ -174,46 +179,57 @@ class RunRecorder(Node):
         command = ['ros2', 'bag', 'record', '-o', bag_path, '--topics'] + self.topics
         return subprocess.Popen(command, start_new_session=False, preexec_fn=sigint_default)
 
-    def stop_bag(self):
-        """SIGINT로 닫고 기다린다. 안 닫히면 SIGTERM을 보내지 않고 경고만 남긴다.
-
-        SIGTERM은 PM 승인 뒤에만 쓰기로 한 수단이다(TROUBLESHOOTING 2026-11-10).
-        사람이 상황을 보고 판단하도록 PID를 남긴다.
-        """
-        if self.bag.poll() is not None:
-            return
-        self.bag.send_signal(signal.SIGINT)
-        try:
-            self.bag.wait(timeout=self.bag_stop_timeout)
-        except subprocess.TimeoutExpired:
+    def stop_run(self, end_reason):
+        self.log.end_time = self.now()
+        self.meta['end_time'] = datetime.now().isoformat(timespec='seconds')
+        self.meta['end_reason'] = end_reason
+        row, bag_closed = run_files.finish_run(self.folder, self.meta, self.log, self.settings,
+                                               self.bag, self.bag_stop_timeout)
+        self.get_logger().info(f'run {self.run_number} ended ({end_reason}): '
+                               f"passed={row['passed']} {row['fail_reasons']}")
+        if not bag_closed:
+            # 다음 바퀴 시작 때 다시 거둔다(좀비로 남지 않게). 사람이 판단하도록 PID를 남긴다
+            self.unclosed_bags.append(self.bag)
             self.get_logger().warning(
                 f'ros2 bag record (pid {self.bag.pid}) did not exit within '
                 f'{self.bag_stop_timeout} s after SIGINT; left running, bag may be unclosed')
-
-    def stop_run(self, end_reason):
-        self.stop_bag()
-        self.log.end_time = self.now()
-        row = metrics.metrics_row(metrics.compute_metrics(self.log, self.settings), self.settings)
-        run_files.write_metrics_csv(os.path.join(self.folder, run_files.METRICS_FILE),
-                                    row, metrics.ROW_COLUMNS)
-        self.meta['end_time'] = datetime.now().isoformat(timespec='seconds')
-        self.meta['end_reason'] = end_reason
-        run_files.write_json(os.path.join(self.folder, run_files.META_FILE), self.meta)
-        self.get_logger().info(f'run {self.run_number} ended ({end_reason}): '
-                               f"passed={row['passed']} {row['fail_reasons']}")
         self.log = None
         self.bag = None
 
 
+def raise_keyboard_interrupt(signum, frame):
+    raise KeyboardInterrupt
+
+
+def install_stop_signals():
+    """SIGINT·SIGTERM을 KeyboardInterrupt로 받는다. rclpy 신호 처리기는 쓰지 않는다.
+
+    rclpy 처리기는 신호를 받자마자 context를 닫아, 종료 단계의 로그가 rosout으로 못 가고
+    ("publisher's context is invalid") 종료 중 온 두 번째 신호가 결과 쓰기를 끊을 수 있었다.
+    SIGINT를 직접 거는 이유: 셸에서 뒤로 띄운 launch 아래면 SIGINT 무시 상태로 시작하고
+    파이썬은 그때 KeyboardInterrupt 처리기를 걸지 않는다.
+    """
+    signal.signal(signal.SIGINT, raise_keyboard_interrupt)
+    signal.signal(signal.SIGTERM, raise_keyboard_interrupt)
+
+
 def main(args=None):
-    rclpy.init(args=args)
+    rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
+    install_stop_signals()
     node = RunRecorder()
+    executor = SingleThreadedExecutor()
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
+        while rclpy.ok():
+            executor.spin_once(timeout_sec=SPIN_PERIOD)
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        # 결과 쓰기 중 두 번째 Ctrl+C는 무시. SIGTERM(launch가 5 s 뒤 보냄)은 기본 동작으로 죽게 둔다
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
         if node.log is not None:
             node.stop_run('node shutdown')
+        executor.shutdown()
         node.destroy_node()
         rclpy.try_shutdown()
