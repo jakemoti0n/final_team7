@@ -45,9 +45,9 @@ def test_real_profiles_do_not_wait_for_clock_or_tof():
     nav = config('limbo_navigation/config/nav2_real.yaml')
     for name in ['local_costmap', 'global_costmap']:
         layer = nav[name][name]['ros__parameters']['stvl_layer']
-        assert set(layer['observation_sources'].split()) == {'mid360_mark', 'mid360_clear', 'rgbd_mark', 'rgbd_clear'}
+        assert set(layer['observation_sources'].split()) == {'mid360_mark', 'mid360_clear'}
     monitor = nav['collision_monitor']['ros__parameters']
-    assert monitor['observation_sources'] == monitor['FootprintApproach']['sources_names'] == ['mid360_cloud', 'rgbd_cloud']
+    assert monitor['observation_sources'] == monitor['FootprintApproach']['sources_names'] == ['mid360_cloud']
 
 
 def test_profile_builder_preserves_the_simulation_input():
@@ -86,13 +86,26 @@ def test_costmap_lidar_voxel_keeps_every_height():
     assert dict(nodes['mid360_costmap_voxel']['remappings'])['output'] == '/mid360/points_costmap'
 
 
-def test_real_camera_marks_only_near_obstacles():
-    """실물 비용 지도의 카메라 표시 거리는 1 m: 유리에 비친 로봇 거울상(1.0~1.22 m)을 장애물로 찍지 않는다(11-09). 지우기는 그대로."""
+def test_real_obstacle_input_is_lidar_only():
+    """실물 비용 지도·충돌 감시에 카메라 깊이 점군이 없다(11-26): 렌즈 앞 0.35~0.45 m 가짜 점이 한 바퀴 100번 넘게 감속시켰다.
+
+    충돌 감시는 소스를 목록에서 빼야 한다. 목록에 남긴 채 데이터가 없으면 모든 명령을 막는다(변경 기록 63).
+    시뮬 설정에는 카메라 소스가 그대로 있다.
+    """
+    nav = yaml.safe_dump(config('limbo_navigation/config/nav2_real.yaml'))
+    assert '/rgbd_camera/points' not in nav and 'rgbd_' not in nav
+    sim = config('limbo_navigation/config/nav2_params.yaml')
+    assert 'rgbd_cloud' in sim['collision_monitor']['ros__parameters']['observation_sources']
+    assert 'rgbd_mark' in sim['local_costmap']['local_costmap']['ros__parameters']['stvl_layer']['observation_sources']
+
+
+def test_real_inflation_keeps_pm_cost_scaling():
+    """팽창 비용 70 %(11-24 PM, 변경 기록 77)는 생성 스크립트에서 넣는다. 손으로 고치면 다시 생성할 때 사라진다."""
     nav = config('limbo_navigation/config/nav2_real.yaml')
-    for key in ('local_costmap', 'global_costmap'):
-        layer = nav[key][key]['ros__parameters']['stvl_layer']
-        assert layer['rgbd_mark']['obstacle_range'] == 1.0
-        assert layer['rgbd_clear']['max_z'] > 1.0
+    local = nav['local_costmap']['local_costmap']['ros__parameters']['inflation_layer']
+    glob = nav['global_costmap']['global_costmap']['ros__parameters']['inflation_layer']
+    assert (local['cost_scaling_factor'], local['inflation_radius']) == (8.5, 0.45)
+    assert (glob['cost_scaling_factor'], glob['inflation_radius']) == (7.5, 0.45)
 
 
 def test_real_local_costmap_has_no_static_layer():

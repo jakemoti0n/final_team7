@@ -145,16 +145,14 @@ grep "Setting pose" ~/limbo_bags/logs/real.log | tail -1 | cut -c1-120
 → `위치 탐색: 일치 9x %`, `초기 위치 보냄: (…)`, 그리고 real.log에 `[amcl]: Setting pose … 0.8xx -0.0xx`가 찍혀야 한다. 85 % 미만이면 2 m 안을 비우고 다시(기준을 낮추지 않는다).
 
 ```bash
-# ④ 측정용 Nav2 설정 만들기(저장소의 nav2_real.yaml에서: 카메라 소스 제거, 팽창 0.35)
+# ④ 측정용 Nav2 설정 만들기(저장소의 nav2_real.yaml에서: 팽창 0.35)
+#    카메라 소스 제거는 2026-11-26부터 저장소 기본값이다(build_real_configs.py가 실물 설정에서 카메라 점군을 뺌). 여기서는 팽창만 바꾼다.
 #    되꺾임 처리(enforce_path_inversion)는 끄지 않는다: 순찰 7(11-10)에서 끄니 W3 머리핀 경로를 그대로 따라가 224 s 회전.
 python3 - <<'EOF'
 import yaml
 src='limbo/src/limbo_navigation/config/nav2_real.yaml'; d=yaml.safe_load(open(src))
 for k in ('local_costmap','global_costmap'):
-    p=d[k][k]['ros__parameters']
-    s=p['stvl_layer']; s['observation_sources']='mid360_mark mid360_clear'; s.pop('rgbd_mark'); s.pop('rgbd_clear')
-    p['inflation_layer']['inflation_radius']=0.35
-cm=d['collision_monitor']['ros__parameters']; cm['observation_sources']=['mid360_cloud']; cm['FootprintApproach']['sources_names']=['mid360_cloud']; cm.pop('rgbd_cloud')
+    d[k][k]['ros__parameters']['inflation_layer']['inflation_radius']=0.35
 open('/tmp/nav2_real_measure.yaml','w').write(yaml.safe_dump(d,sort_keys=False,allow_unicode=True,width=200))
 print('ok')
 EOF

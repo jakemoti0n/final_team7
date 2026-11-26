@@ -48,7 +48,18 @@ def real_time(tree):
 
 SIM_LIDAR_CLOUD = '/mid360/points_filtered'
 REAL_COSTMAP_CLOUD = '/mid360/points_costmap'
-REAL_CAMERA_MARK_RANGE = 1.0
+# 실물 장애물 입력은 라이다만. 카메라 깊이 점군(/rgbd_camera/points)은 비용 지도·충돌 감시에 넣지 않는다(2026-11-26 PM).
+# 스테레오가 렌즈 앞 0.35~0.45 m(시차 96 px의 최소 거리 0.38 m)에 가짜 점을 내서, 수동 운전 한 바퀴마다 충돌 감시
+# FootprintApproach가 101~110번 감속시켰다(11-26 19:36 바퀴: 감속 시작 101번 중 100번이 카메라 점, 라이다 0번).
+# 카메라는 사람 판단(영상·YOLO·person_detector)에만 쓴다. 다시 넣는 조건은 KNOWN_ISSUES 2026-11-26.
+REAL_EXCLUDED_SOURCES = ('tof', 'rgbd')
+# 11-24 PM 지시(변경 기록 77): 팽창 비용 70 %. 반경 0.45는 모서리 반지름 0.387 때문에 유지.
+# 로컬 5.0→8.5(치명 띠 밖 0.1 m에서 153→108), 글로벌 4.0→7.5
+REAL_INFLATION_COST_SCALING = {'local_costmap': 8.5, 'global_costmap': 7.5}
+
+
+def excluded(name):
+    return name.startswith(REAL_EXCLUDED_SOURCES)
 
 
 def nav2_profile(source, drive, geometry):
@@ -67,18 +78,15 @@ def nav2_profile(source, drive, geometry):
     # 실물 비용 지도·충돌 감시는 5 cm 복셀로 솎은 라이다 점군을 본다(start_mid360.launch.py mounted 프로필의 mid360_costmap_voxel).
     # 시뮬은 robot_self_filter가 내는 /mid360/points_filtered를 그대로 쓴다.
     for key in ('local_costmap', 'global_costmap'):
-        layer = data[key][key]['ros__parameters']['stvl_layer']
-        layer['observation_sources'] = ' '.join(x for x in layer['observation_sources'].split() if not x.startswith('tof'))
+        params = data[key][key]['ros__parameters']
+        layer = params['stvl_layer']
+        layer['observation_sources'] = ' '.join(x for x in layer['observation_sources'].split() if not excluded(x))
         for name in list(layer):
-            if name.startswith('tof'):
+            if excluded(name):
                 del layer[name]
             elif isinstance(layer[name], dict) and layer[name].get('topic') == SIM_LIDAR_CLOUD:
                 layer[name]['topic'] = REAL_COSTMAP_CLOUD
-            elif name == 'rgbd_mark':
-                # 실물 카메라 점은 가까운 낮은 장애물(라이다 사각: 높이 0.84·아래 −7° → 1 m 앞 0.7 m 아래)만 담당한다.
-                # 스테레오가 유리문에 비친 로봇 자신을 1.0~1.22 m 앞 가짜 벽으로 찍어(2026-11-09 bag) MPPI 후보가 전부 충돌했다.
-                # 거울상은 유리 거리의 2배라 팽창 반경(0.45)만 떨어져도 ≥1 m → 표시 거리를 1 m로. 지우기(rgbd_clear)·충돌 감시·YOLO 입력은 그대로.
-                layer[name]['obstacle_range'] = REAL_CAMERA_MARK_RANGE
+        params['inflation_layer']['cost_scaling_factor'] = REAL_INFLATION_COST_SCALING[key]
     # 실물 로컬 비용 지도에는 정적 지도 층을 넣지 않는다. 손으로 밀며 만든 지도의 벽이 실제와 20~30 cm 어긋난 곳이 있어(원점 뒤 벽:
     # 라이다 0.95 m, 지도 0.62 m) 폭 1.5 m 복도에서 로봇이 "지도 벽 안"에 놓이고 MPPI 후보가 전부 충돌로 실패했다(2026-11-09 위 복도 185 s).
     # 로컬 회피는 센서가 지금 보는 것(STVL·사람 층)만 믿고, 지도 벽은 글로벌 계획에서만 쓴다(Nav2 이동창 로컬 비용 지도의 표준 구성).
@@ -86,12 +94,14 @@ def nav2_profile(source, drive, geometry):
     local['plugins'] = [x for x in local['plugins'] if x != 'static_layer']
     local.pop('static_layer', None)
     collision = data['collision_monitor']['ros__parameters']
-    collision['observation_sources'] = [x for x in collision['observation_sources'] if not x.startswith('tof')]
+    # 충돌 감시는 observation_sources에 적힌 소스만 만든다. 목록에서 빼야 한다: 목록에 남긴 채 데이터가 안 오면
+    # source_timeout으로 모든 명령을 0으로 막는다(변경 기록 63, camera:=false 때)
+    collision['observation_sources'] = [x for x in collision['observation_sources'] if not excluded(x)]
     for key in list(collision):
-        if key.startswith('tof'):
+        if excluded(key):
             del collision[key]
         elif isinstance(collision[key], dict) and 'sources_names' in collision[key]:
-            collision[key]['sources_names'] = [x for x in collision[key]['sources_names'] if not x.startswith('tof')]
+            collision[key]['sources_names'] = [x for x in collision[key]['sources_names'] if not excluded(x)]
         elif isinstance(collision[key], dict) and collision[key].get('topic') == SIM_LIDAR_CLOUD:
             collision[key]['topic'] = REAL_COSTMAP_CLOUD
     # Keep future navigation requests within the existing real bridge limits.

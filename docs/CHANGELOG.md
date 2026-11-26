@@ -8,6 +8,28 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-26 (82) 실물 Nav2 장애물 입력을 라이다만으로: 카메라 깊이 점군을 비용 지도·충돌 감시에서 뺌(렌즈 앞 가짜 점이 수동 운전 한 바퀴 101~110번 감속), 팽창 비용 70 %를 생성 스크립트로
+
+**할 일**
+- 젯슨: `~/limbo` 갱신 뒤 `systemctl --user restart limbo-nx-navigation`(설정 파일만 바뀜, 빌드 불필요). 그 뒤 바퀴에서 충돌 감시 감속 횟수를 다시 센다
+- 11-25·11-26 수동 바퀴 5개(감속된 데이터)를 학습에 쓸지는 PM 결정(`docs/KNOWN_ISSUES.md` 2026-11-26)
+
+**변경**
+- `tools/drive/build_real_configs.py`: 실물 설정에서 카메라 소스를 뺌(로컬·글로벌 STVL `rgbd_mark`·`rgbd_clear`, collision_monitor `rgbd_cloud`·`FootprintApproach.sources_names`). ToF와 같은 방식(`REAL_EXCLUDED_SOURCES`). 카메라 표시 거리 1 m(`REAL_CAMERA_MARK_RANGE`)는 소스와 함께 없어짐. 시뮬 `nav2_params.yaml`은 그대로
+- 같은 스크립트: 팽창 비용 70 %(로컬 8.5·글로벌 7.5, 변경 기록 77 PM 지시)를 스크립트에서 넣음. 77에서 `nav2_real.yaml`을 손으로 고쳐 다시 생성하면 5.0·4.0으로 돌아가고 `test_profile_builder_preserves_the_simulation_input`이 실패하고 있었다. 값은 그대로, yaml 줄 끝 주석은 스크립트 주석으로 옮김
+- `nav2_real.yaml` 재생성: 바뀐 것은 카메라 소스 제거와 팽창 비용 두 줄의 끝 주석뿐. 다른 생성 파일(`amcl_real`·`slam_real`·`person_wait_real`·실물 BT 2개)은 그대로
+- `tools/drive/nav_preflight.py` 3번(카메라 근거리 점): 참고 항목으로(실패로 치지 않음, 번호 유지)
+- `limbo_bringup/test/test_real_integration.py`: 실물 소스는 라이다만, 시뮬에는 카메라 소스가 남음, 팽창 비용 8.5·7.5
+- 문서: `TROUBLESHOOTING.md` 실물 절 1건, `KNOWN_ISSUES.md`(가까운 낮은 물체 사각, 카메라를 다시 넣는 조건, 모방 학습 데이터 영향), `PROJECT.md` 2-7 센서 역할표·결정 이력, `REAL_PATROL_RUN.md` 측정용 설정(카메라 제거는 기본값, 팽창 0.35만), `REAL_ROBOT_BRINGUP.md` `/rgbd_camera/points` 설명
+
+**결정**
+- 실물 장애물 입력은 라이다만, 카메라는 사람 판단에만(PM 2026-11-26). 변경 기록 67의 "가짜 점 규칙이 들어간 뒤 카메라를 다시 켠다"는 유지하되, 카메라를 뺀 설정을 젯슨 `/tmp`가 아니라 저장소 기본값으로 둔다(`/tmp/nav2_real_nocam.yaml`이 재부팅 뒤 사라져 부팅 유닛이 카메라 포함으로 떠 왔음)
+
+**확인**(2026-11-26 노트북)
+- 원인 측정(11-26 19:36 바퀴): 감속 시작 101번 중 100번이 카메라 점(차선 6번째 점 앞 끝에서 0.33~0.62 m, 중앙값 0.38 m), 라이다 0번(1.03 m 이상). 점은 렌즈 앞 0.35~0.45 m. 정지 상태 343프레임 중 0개. 11-25 바퀴 속도 구간별 감속 비율 0.2 m/s 미만 2 % → 0.4~0.5 41 %
+- collision_monitor(실물 설정 블록 그대로, 도메인 94, 카메라 점군 없음): 옛 설정 `/cmd_vel` 10,843개 전부 0(`Robot to stop due to invalid source`), 새 설정 0.3 m/s 27,232/27,233개 통과, 정면 0.5 m 라이다 점이면 최대 0.150으로 감속
+- `limbo_bringup` 패키지 `python3 -m pytest -q test` 38 passed(`test_real_integration.py` 18, `test_nav2_real_launch.py` 포함)
+
 ## 2026-11-26 (81) 바퀴 기록 시작·끝 콘솔 문구를 한글로, 끝 줄에서 합격 여부 뺌
 
 **할 일**

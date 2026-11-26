@@ -204,7 +204,7 @@ local_costmap:
       - inflation_layer
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        cost_scaling_factor: 8.5  # 11-24 PM 지시: 팽창 비용 70 %(5.0→8.5, 치명 띠 밖 0.1 m에서 153→108). 반경 0.45는 모서리 반지름 0.387 때문에 유지
+        cost_scaling_factor: 8.5
         inflation_radius: 0.45
       human_layer:
         plugin: limbo_navigation::HumanLayer
@@ -234,7 +234,7 @@ local_costmap:
         transform_tolerance: 0.3
         mapping_mode: false
         map_save_duration: 60.0
-        observation_sources: mid360_mark mid360_clear rgbd_mark rgbd_clear
+        observation_sources: mid360_mark mid360_clear
         mid360_mark:
           data_type: PointCloud2
           topic: /mid360/points_costmap
@@ -262,32 +262,6 @@ local_costmap:
           horizontal_fov_angle: 6.283
           vertical_fov_padding: 0.05
           model_type: 1
-          decay_acceleration: 5.0
-        rgbd_mark:
-          data_type: PointCloud2
-          topic: /rgbd_camera/points
-          marking: true
-          clearing: false
-          obstacle_range: 1.0
-          min_obstacle_height: 0.02
-          max_obstacle_height: 1.0
-          expected_update_rate: 0.0
-          observation_persistence: 0.0
-          inf_is_valid: false
-          filter: voxel
-          voxel_min_points: 0
-          clear_after_reading: true
-        rgbd_clear:
-          enabled: true
-          data_type: PointCloud2
-          topic: /rgbd_camera/points
-          marking: false
-          clearing: true
-          min_z: 0.1
-          max_z: 5.0
-          horizontal_fov_angle: 1.25
-          vertical_fov_angle: 0.95
-          model_type: 0
           decay_acceleration: 5.0
       always_send_full_costmap: true
       use_sim_time: false
@@ -323,7 +297,7 @@ global_costmap:
         transform_tolerance: 0.3
         mapping_mode: false
         map_save_duration: 60.0
-        observation_sources: mid360_mark mid360_clear rgbd_mark rgbd_clear
+        observation_sources: mid360_mark mid360_clear
         mid360_mark:
           data_type: PointCloud2
           topic: /mid360/points_costmap
@@ -352,37 +326,11 @@ global_costmap:
           vertical_fov_padding: 0.05
           model_type: 1
           decay_acceleration: 5.0
-        rgbd_mark:
-          data_type: PointCloud2
-          topic: /rgbd_camera/points
-          marking: true
-          clearing: false
-          obstacle_range: 1.0
-          min_obstacle_height: 0.02
-          max_obstacle_height: 1.0
-          expected_update_rate: 0.0
-          observation_persistence: 0.0
-          inf_is_valid: false
-          filter: voxel
-          voxel_min_points: 0
-          clear_after_reading: true
-        rgbd_clear:
-          enabled: true
-          data_type: PointCloud2
-          topic: /rgbd_camera/points
-          marking: false
-          clearing: true
-          min_z: 0.1
-          max_z: 5.0
-          horizontal_fov_angle: 1.25
-          vertical_fov_angle: 0.95
-          model_type: 0
-          decay_acceleration: 5.0
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
         enabled: true
         inflation_radius: 0.45
-        cost_scaling_factor: 7.5  # 11-24 PM 지시: 팽창 비용 70 %(4.0→7.5). 반경은 유지
+        cost_scaling_factor: 7.5
 map_saver:
   ros__parameters:
     save_map_timeout: 5.0
@@ -530,24 +478,14 @@ collision_monitor:
       min_points: 6
       sources_names:
       - mid360_cloud
-      - rgbd_cloud
       visualize: true
       enabled: true
     observation_sources:
     - mid360_cloud
-    - rgbd_cloud
     mid360_cloud:
       type: pointcloud
       topic: /mid360/points_costmap
       min_height: 0.03
-      max_height: 1.0
-      min_range: 0.05
-      source_timeout: 2.0
-      enabled: true
-    rgbd_cloud:
-      type: pointcloud
-      topic: /rgbd_camera/points
-      min_height: 0.02
       max_height: 1.0
       min_range: 0.05
       source_timeout: 2.0

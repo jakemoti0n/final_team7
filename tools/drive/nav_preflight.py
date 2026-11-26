@@ -7,7 +7,8 @@
 점검 항목 (2026-11-07에 자율주행 실패 원인이 전부 이 층들에서 나왔다)
   1 바퀴 odom      /odom 주기 ≥ 15 Hz (주행 노드가 살아 있고 TF odom→base가 나온다)
   2 위치 추정      map→base_footprint TF가 있고, 라이다 스캔 점이 정적 지도 벽에 맞는 비율 ≥ 70 % (11-07: 맞을 때 80~90 %, 틀렸을 때 29~41 %)
-  3 카메라 입력    base_footprint 기준 정면 2 m·높이 0.3 m 아래에 카메라 점이 없다 (가짜 근거리 점이면 1 m 앞에 가상 벽이 생긴다)
+  3 카메라 입력    참고만(실패로 치지 않음). 정면 2 m·높이 0.3 m 아래 카메라 점 수. 2026-11-26부터 카메라 점군은 실물
+                  비용 지도·충돌 감시에 안 들어가 Nav2를 막지 않는다(장애물 입력은 라이다만, build_real_configs.py)
   4 로컬 비용 지도 로봇에서 목표 쪽(--goal 없으면 정면) 0.3~1.5 m 중심선 최대 비용 < 50 (팀원 11-06 로그의 "첫 0.75 m 비용 92"가 가상 벽이었다)
   5 정적 지도      --goal을 주면 로봇에서 목표 쪽으로 2 m까지 글로벌 비용 지도 중심선 최대 비용 < 50 (−x 복도는 지도에 없었다)
   6 Nav2           bt_navigator·controller_server 노드가 보인다
@@ -130,14 +131,15 @@ def main():
     except Exception as error:
         results.append(('위치 추정', False, 'map→base_footprint TF 없음 (초기 위치를 넣었는가): %s' % str(error).splitlines()[0]))
 
+    # 참고 항목: 카메라 점군은 Nav2 장애물 입력이 아니므로(11-26) 결과와 상관없이 통과로 둔다
     if 'rgbd' in node.msgs:
         try:
             low = low_camera_points(node, node.msgs['rgbd'])
-            results.append(('카메라 입력', low == 0, '정면 2 m·높이 0.3 m 아래 점 %d개 (기준 0. 앞을 비우고도 있으면 가짜 근거리 점 → filter_near_depth)' % low))
+            results.append(('카메라 입력', True, '참고: 정면 2 m·높이 0.3 m 아래 점 %d개 (Nav2 입력 아님)' % low))
         except Exception as error:
-            results.append(('카메라 입력', False, '카메라 TF 없음: %s' % str(error).splitlines()[0]))
+            results.append(('카메라 입력', True, '참고: 카메라 TF 없음: %s' % str(error).splitlines()[0]))
     else:
-        results.append(('카메라 입력', False, '/rgbd_camera/points 없음 (충돌 감시가 모든 명령을 막는다)'))
+        results.append(('카메라 입력', True, '참고: /rgbd_camera/points 없음 (Nav2 입력 아님)'))
 
     if 'local' in node.msgs:
         grid = node.msgs['local']

@@ -335,7 +335,7 @@ ros2 topic echo /mid360/points --once
 | `/rgbd_camera/image` | `sensor_msgs/Image`, 컬러 영상 |
 | `/rgbd_camera/depth_image` | `sensor_msgs/Image`, 컬러 영상과 정렬된 깊이 |
 | `/rgbd_camera/camera_info` | `sensor_msgs/CameraInfo`, 깊이 계산에 대응하는 내부 파라미터 |
-| `/rgbd_camera/points` | `sensor_msgs/PointCloud2`, Nav2 장애물·충돌 감시 입력 |
+| `/rgbd_camera/points` | `sensor_msgs/PointCloud2`. 시뮬에서는 Nav2 장애물·충돌 감시 입력. 실물(`nav2_real.yaml`)은 2026-11-26부터 넣지 않음(장애물 입력은 라이다만, `TROUBLESHOOTING.md` 2026-11-26) |
 | `rgbd_camera_optical_link` | 영상과 깊이의 광학 프레임. TF가 실제 카메라 설치 위치를 나타냄 |
 
 4. 깊이 이미지 `encoding`과 단위를 확인한다. 사람 위치 계산은 `16UC1`(mm)이면 m로 바꿔 쓴다(변경 기록 46). 그 밖의 encoding은 m로 본다. 저장소의 `oak_camera` 노드(`camera:=oak`)를 쓰면 이 계약대로 컬러·깊이·CameraInfo와 카메라 안 모델 결과(`/oak/detections`)가 나온다. 포인트클라우드는 아직 내지 않는다. 영상/깊이/CameraInfo의 `header.stamp` 차이도 확인한다. 현재 검출기 동기화 허용 폭은 약 **0.03초**다.
