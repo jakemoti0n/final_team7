@@ -6,6 +6,10 @@
   경유점, 사람 예측 → frame_builder.assemble_frame(정책 노드와 같은 함수) → 최근 3프레임 279칸.
 - 정답: t 직전 label_window 안의 운전자 원 명령(/cmd_vel_teleop). 그 시각 /drive_mode의 source가
   teleop일 때만 쓴다. nav(MPPI)는 스승이 아니라서(PM 결정), policy는 정책 자신의 명령이라서 뺀다.
+- 수동(manual) 바퀴에서 데드맨을 뗀 구간(source none, reason 'manual without deadman')은 정답 (0, 0).
+  중재기가 그때 실제로 0을 내 로봇이 서므로 사람의 "멈춤" 결정이다(손님 앞에서 기다리기, 설계 2-1).
+  그 바퀴의 첫 데드맨 누름 ~ 마지막 뗌 사이만 넣는다. 출발 전·도착 후 대기는 운전 결정이 아니다.
+  policy·policy_assist에서 데드맨 뗌은 "정책에 맡김"이라 넣지 않는다(PM 2026-11-26).
 - 거르기: metrics.bad_intervals(충돌 앞뒤·개인 공간 침범·갇힘·collision_monitor가 깎은 구간) 안의
   표본은 뺀다. 불합격 바퀴도 통째로 버리지 않고 그 구간만 뺀다(PM 결정).
 - 사람 예측이 input_timeout 넘게 끊긴 표본도 뺀다. person_detector는 처리한 프레임마다 빈 목록이라도
@@ -24,7 +28,7 @@ import math
 import os
 import sys
 
-from limbo_imitation import config_file, features, frame_builder, metrics, run_files
+from limbo_imitation import arbiter_logic, config_file, features, frame_builder, metrics, run_files
 import numpy as np
 
 SOURCE_TELEOP = metrics.SOURCE_TELEOP
@@ -83,7 +87,7 @@ class BagStreams:
     tf_static: dict = field(default_factory=dict)       # (부모, 자식) → (x, y, yaw)
     patrol: Series = field(default_factory=Series)      # (state, waypoint_index)
     predictions: Series = field(default_factory=Series)  # [(x, y, vx, vy)] odom 좌표
-    drive_modes: Series = field(default_factory=Series)  # (source, mode)
+    drive_modes: Series = field(default_factory=Series)  # (source, mode, reason)
     teleop: Series = field(default_factory=Series)      # (v, w)
     cmd: Series = field(default_factory=Series)         # (v, w) 중재기 출력
     cmd_out: Series = field(default_factory=Series)     # (v, w) collision_monitor 출력
@@ -135,18 +139,33 @@ def inputs_at(streams, t, waypoints, cfg):
             'people': streams.predictions.latest(t)[1]}
 
 
-def label_at(streams, t, window):
+def teleop_span(drive_modes):
+    """(첫, 마지막) source가 teleop인 /drive_mode 시각. 없으면 None. 데드맨 첫 누름 ~ 마지막 뗌의 범위."""
+    times = [t for t, value in zip(drive_modes.times, drive_modes.values)
+             if value[0] == SOURCE_TELEOP]
+    return (times[0], times[-1]) if times else None
+
+
+def label_at(streams, t, window, span=None):
     """(정답 (v, w) 또는 None, 뺀 이유).
 
     창 안에서 가장 최근 명령을 쓴다(평균은 운전자가 막 바꾼 명령을 늦게 따라가서).
     후진은 0으로 자른다. 중재기가 후진을 0으로 바꿔 실제로 나간 적이 없고(설계 2-3) 모델도 못 낸다.
+    span은 teleop_span(바퀴 전체). 수동 모드 데드맨 뗌이 그 안이면 (0, 0)이다(위 모듈 설명).
     """
     mode = streams.drive_modes.latest(t)
     if mode is None:
         return None, 'no_drive_mode'
-    source = mode[1][0]
+    source, drive_mode = mode[1][0], mode[1][1]
+    reason = mode[1][2] if len(mode[1]) > 2 else ''
     if source == SOURCE_NAV:
         return None, 'nav'
+    if (drive_mode == metrics.MODE_MANUAL and reason == arbiter_logic.REASON_NO_DEADMAN):
+        if span is None or t < span[0]:
+            return None, 'released_before_first_press'
+        if t > span[1]:
+            return None, 'released_after_last_press'
+        return (0.0, 0.0), None
     if source != SOURCE_TELEOP:
         return None, 'not_teleop'
     command = streams.teleop.latest(t)
@@ -196,6 +215,7 @@ def lap_samples(streams, waypoints, cfg, metric_settings):
     bad = metrics.bad_intervals(run_log_from_streams(streams), metric_settings)
     assist = metrics.mode_switch_intervals(streams.drive_modes.tuples(), SOURCE_TELEOP,
                                            (metrics.MODE_POLICY_ASSIST,), streams.end_time)
+    span = teleop_span(streams.drive_modes)
     history, xs, ys, weights, stamps, dropped = [], [], [], [], [], Counter()
     for t, scan in zip(streams.scans.times, streams.scans.values):
         inputs = inputs_at(streams, t, waypoints, cfg)
@@ -206,7 +226,7 @@ def lap_samples(streams, waypoints, cfg, metric_settings):
                                              inputs['goal'], inputs['velocity'],
                                              inputs['people'], settings)
         x = frame_builder.push_and_stack(history, frame)
-        label, reason = label_at(streams, t, cfg['label_window'])
+        label, reason = label_at(streams, t, cfg['label_window'], span)
         if label is None or in_intervals(t, bad):
             dropped[reason or 'bad_interval'] += 1
             continue
@@ -296,7 +316,7 @@ def add_tf_static(streams, t, msg):
 def add_drive_mode(streams, t, msg):
     try:
         data = json.loads(msg.data)
-        streams.drive_modes.add(t, (data['source'], data['mode']))
+        streams.drive_modes.add(t, (data['source'], data['mode'], data.get('reason', '')))
     except (ValueError, KeyError, TypeError):
         print(f'unreadable /drive_mode at {t:.2f}: {msg.data}', file=sys.stderr)
 

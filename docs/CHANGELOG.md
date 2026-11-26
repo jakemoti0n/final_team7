@@ -8,6 +8,26 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-26 (83) 수동 바퀴에서 데드맨을 뗀 구간을 정답 "정지"(0, 0)로, 카메라 점군 제거 젯슨 확인, 버튼 수동 바퀴가 데이터셋에서 전부 빠지는 문제 발견
+
+**할 일**
+- 없음(학습 데이터 코드만, 노드 동작 변화 없음). 젯슨 갱신은 다음 갱신 때 같이
+- PM 결정: 버튼 수동 바퀴의 목표 방향(경유점 없음), 손님 응대 중 가까운 점을 충돌로 빼는 것(`docs/KNOWN_ISSUES.md` 2026-11-26)
+
+**변경**
+- `limbo_imitation/dataset.py`: `/drive_mode`의 reason도 읽음. 수동 모드·reason `manual without deadman`인 프레임은 그 바퀴의 첫 데드맨 누름 ~ 마지막 뗌(`teleop_span`) 사이면 정답 (0, 0), 앞은 `released_before_first_press`, 뒤는 `released_after_last_press`로 뺌. policy·policy_assist의 데드맨 뗌, LB를 누른 채 teleop 명령이 끊긴 것(`teleop command lost`)은 종전대로 `not_teleop`. 새 숫자·가중치 없음(정지 정답 가중 1)
+- `limbo_imitation/arbiter_logic.py`: reason 글자를 `REASON_NO_DEADMAN` 상수로(중재기와 데이터셋이 같은 값을 씀). `metrics.py`: `MODE_MANUAL`
+- `test/test_dataset.py`: 누름→뗌→누름 사이만 (0, 0)·앞뒤 제외·가중 1, policy 모드 뗌 제외, 명령 끊김 제외
+- 문서: `PROJECT.md` 2-10(데드맨 뗌 = 정지 정답과 이유, 대본 없는 행인 투입, 수집 중 사람 감지 모델·문턱 고정), `KNOWN_ISSUES.md`(감속된 수동 바퀴 5개는 PM이 지움, 버튼 수동 바퀴 데이터셋 문제 새로), `TROUBLESHOOTING.md` 카메라 점군 항목에 젯슨 반영 결과
+
+**결정**
+- 수동 모드 데드맨 뗌 = 사람의 멈춤 결정(PM 2026-11-26). 근거: 수동 모드에서 데드맨이 없으면 중재기가 출처 none으로 (0, 0)을 내 로봇이 실제로 선다(`choose_manual` → `source_command`)
+
+**확인**(2026-11-26 노트북, 젯슨 bag 3개 읽기 전용 복사)
+- 정답 판정만(입력 문제와 별개), 수정 전 → 후: 4번(손님 정지) 정답 1,003 → 1,321, 그중 (0,0) 38 → 356, 정지 구간 286스캔 중 (0,0) 0 → 283. 5번 963 → 1,272, (0,0) 18 → 327, 정지 구간 264스캔 중 0 → 261. 2번(대조) 1,019 → 1,037, (0,0) 76 → 94. 뺀 이유 `not_teleop` 334·324·26 → `released_after_last_press` 16·15·8
+- 전체 `lap_samples`는 전후 모두 정답 0개: 버튼 수동 바퀴에 경유점이 없어 `no_waypoint`(KNOWN_ISSUES 2026-11-26)
+- `limbo_imitation` pytest 87 passed 9 skipped, torch 파이썬 95 passed 1 skipped(flake8 포함)
+
 ## 2026-11-26 (82) 실물 Nav2 장애물 입력을 라이다만으로: 카메라 깊이 점군을 비용 지도·충돌 감시에서 뺌(렌즈 앞 가짜 점이 수동 운전 한 바퀴 101~110번 감속), 팽창 비용 70 %를 생성 스크립트로
 
 **할 일**

@@ -3,7 +3,7 @@
 import json
 import math
 
-from limbo_imitation import dataset, features, metrics, run_files
+from limbo_imitation import arbiter_logic, dataset, features, metrics, run_files
 import numpy as np
 import pytest
 
@@ -73,6 +73,43 @@ def test_label_source_decides_nav_and_policy_excluded():
     assert dataset.label_at(s, 1.0, 0.2) == (None, 'nav')
     s = make_streams(modes=(('policy', 'policy_assist'),))
     assert dataset.label_at(s, 1.0, 0.2) == (None, 'not_teleop')
+
+
+RELEASED = ('none', 'manual', arbiter_logic.REASON_NO_DEADMAN)
+PRESSED = ('teleop', 'manual', 'deadman held')
+
+
+def test_manual_release_between_presses_is_a_stop_label():
+    # 0~1 s 출발 전 대기(뗌) → 1~2 s 운전(누름) → 2~3 s 손님 앞 정지(뗌) → 3~4 s 운전 → 4~5 s 도착 뒤(뗌)
+    s = make_streams(seconds=5.0, modes=(RELEASED, PRESSED, RELEASED, PRESSED, RELEASED),
+                     mode_times=(0.0, 1.0, 2.0, 3.0, 4.0))
+    xs, ys, weights, stamps, dropped, _ = dataset.lap_samples(s, WAYPOINTS, CFG,
+                                                              metrics.DEFAULT_SETTINGS)
+    stops = [t for t, y in zip(stamps, ys) if y == (0.0, 0.0)]
+    assert len(stops) == 10 and all(2.0 < t < 3.0 for t in stops)
+    assert all(y == (0.4, 0.1) for t, y in zip(stamps, ys) if 1.0 < t < 2.0 or 3.0 < t < 4.0)
+    assert dropped == {'released_before_first_press': 10, 'released_after_last_press': 10}
+    # 정지 정답에도 새 가중치를 두지 않는다(끼어들기 가중은 policy_assist에서만)
+    assert set(weights) == {1.0}
+
+
+def test_release_in_policy_modes_stays_excluded():
+    # policy·policy_assist에서 데드맨 뗌은 "정책에 맡김"이다. 중재기 reason도 다르다
+    for mode in ('policy', 'policy_assist'):
+        s = make_streams(seconds=3.0, modes=(('teleop', mode, 'deadman held'),
+                                             ('policy', mode, 'policy ok'),
+                                             ('teleop', mode, 'deadman held')),
+                         mode_times=(0.0, 1.0, 2.0))
+        span = dataset.teleop_span(s.drive_modes)
+        assert dataset.label_at(s, 1.5, 0.2, span) == (None, 'not_teleop')
+
+
+def test_only_deadman_release_counts_as_a_stop():
+    # 누르고 있는데 teleop 명령이 끊긴 것(고장)은 사람의 멈춤 결정이 아니다
+    lost = ('none', 'manual', 'teleop command lost')
+    s = make_streams(seconds=3.0, modes=(PRESSED, lost, PRESSED), mode_times=(0.0, 1.0, 2.0))
+    span = dataset.teleop_span(s.drive_modes)
+    assert dataset.label_at(s, 1.5, 0.2, span) == (None, 'not_teleop')
 
 
 def test_label_clips_reverse_to_zero():

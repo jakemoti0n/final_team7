@@ -32,6 +32,7 @@ START_BUTTON = 'button'
 DRIVER_ENDED_STARTS = (START_MANUAL, START_BUTTON)
 SOURCE_TELEOP = 'teleop'
 SOURCE_NAV = 'nav'
+MODE_MANUAL = 'manual'
 MODE_POLICY = 'policy'
 MODE_POLICY_ASSIST = 'policy_assist'
 

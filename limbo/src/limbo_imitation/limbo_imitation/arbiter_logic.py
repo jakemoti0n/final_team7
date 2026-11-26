@@ -141,6 +141,11 @@ def choose_policy_or_nav(state, inputs, settings):
     return 'policy', 'policy ok'
 
 
+# 수동 모드에서 데드맨을 뗐을 때의 /drive_mode reason. 이때 출처는 none이고 출력은 (0, 0)이다(source_command).
+# 데이터셋(dataset.label_at)이 이 글자로 "사람이 세운 정지"를 알아본다
+REASON_NO_DEADMAN = 'manual without deadman'
+
+
 def choose_manual(inputs, settings):
     """수동(manual) 모드에서 데드맨이 안 눌렸을 때.
 
@@ -150,7 +155,7 @@ def choose_manual(inputs, settings):
     if not settings.require_deadman and is_fresh(inputs.teleop_time, inputs.now,
                                                  settings.command_timeout):
         return 'teleop', 'teleop without deadman'
-    return 'none', 'manual without deadman'
+    return 'none', REASON_NO_DEADMAN
 
 
 def choose_source(state, inputs, settings):
