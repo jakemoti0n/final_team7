@@ -36,7 +36,8 @@ def test_only_public_fields_and_rounded_position(tmp_path):
         response = client.get('/api/v1/visitor/state')
         assert response.status_code == 200 and response.headers['cache-control'] == 'no-store'
         body = response.json()
-        assert set(body) == {'server_utc', 'robots', 'operating', 'map', 'guide', 'display'}
+        assert set(body) == {'server_utc', 'robots', 'operating', 'map', 'guide', 'display', 'eco'}
+        assert body['eco'] == {'state': 'initial'}   # 성공률을 받은 적 없으면 초기 나무, 숫자 없음
         assert body['display'] is None                   # 하단 디스플레이 폴더를 정하지 않음
         assert body['map'] == dict(resolution=1., origin=[0., 0., 0.], width=10, height=10, image='/api/v1/visitor/map.png',
                                    sketch='/api/v1/visitor/map_sketch.svg')

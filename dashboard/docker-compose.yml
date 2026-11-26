@@ -9,6 +9,8 @@ services:
     restart: unless-stopped
     environment:
       ROBOT_TOKEN: ${ROBOT_TOKEN:?ROBOT_TOKEN을 .env에 넣으세요}
+      # 분리수거 성공률(Raspberry Pi → POST /api/v1/eco) 전용 토큰. 비우면 성공률을 받지 않는다(하단 화면은 초기 나무)
+      ECO_TOKEN: ${ECO_TOKEN:-}
       MAP_YAML: ${MAP_YAML:-limbo/src/limbo_navigation/maps/human_test_map.yaml}
       INITIAL_WAYPOINTS: ${INITIAL_WAYPOINTS:-test_waypoints.yaml}
       # 처음 약도(선택). 비우면 빈 약도로 시작. dashboard/guides/에 커밋해 둔 파일 이름

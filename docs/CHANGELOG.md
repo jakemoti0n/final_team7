@@ -8,6 +8,23 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-26 (89) 로봇 하단 디스플레이(PRD v0.3.7) 장면 ⑤ 분리수거 나무 3상태와 성공률 받기(`POST /api/v1/eco`), 하단 화면 13.3인치에 맞춘 글자 40 px·작은 QR 300 px. Bridge 수정 없음
+
+**할 일**
+- 서버: `git pull` → `dashboard/`에서 `docker compose up -d --build`
+- (선택) Raspberry Pi가 성공률을 보내게 되면: `.env`에 `ECO_TOKEN`(16자 이상, `ROBOT_TOKEN`과 다른 값) → `docker compose up -d`. 없으면 나무는 초기 상태로만 보인다(의도된 동작)
+- 팜플렛을 만든다면 오른쪽 아래 비울 곳이 300 × 320 → **400 × 460 px**로 커졌다
+
+**변경**
+- 서버 `server/eco.py`: Pi가 보내는 묶음(v0.2 `eco_metrics` 형식) 검사·판정. `quality=ok`, 확인 방법 `ai_bin_inspection`(수거함에 들어간 뒤 AI 확인)·`verified_route_log`·`human_audit`·`sensor_verified`, 20건 이상이면 80 % 이상 `positive`·미만 `negative`, 아니면 `initial`(숫자 없음). 오래됨은 Pi 시각이 아니라 **서버가 받은 시각**으로 600초(Pi는 시간 동기화 보장 없음), Pi 시계가 600초 넘게 어긋나면 로그 경고 한 번. 형식이 틀리면 422이고 마지막 정상 값 유지
+- `POST /api/v1/eco`: 로봇 토큰과 다른 전용 토큰(`ECO_TOKEN` 또는 `eco_token_file`, 로봇 토큰과 같으면 시작 거부). 없으면 404 `eco_not_configured`(로컬 `allow_no_robot_token`이면 토큰 없이). 설정 `eco_positive_percent`·`eco_min_samples`·`eco_max_age_s`·`eco_clock_skew_warn_s`
+- `visitor/state`에 `eco: {state, rate_percent?, correct?, total?, method?}`. `display.json`에 `"eco": {"enabled": true}`, `timing.eco_s`(15초)
+- 화면 `/display` 장면 ⑤: 왼쪽 나무 그림(`signage/assets/images/tree_*.png`를 900 px WebP로, 80~140 KB), 오른쪽 문구 「분리수거 결과를 모으는 중이에요」/「분리수거를 잘하고 있어요!」/「분리수거가 잘 안 되고 있어요」, 판정됐을 때만 「수거함을 비운 뒤 · AI 확인 20건 중 18건 바르게」, 부정이면 「재활용할 수 있는 것은 재활용 칸, 나머지는 일반 칸에 넣어 주세요」. 서버와 끊기면 초기 나무. 순환 ① → ② → ① → ⑤. `?demo`는 바퀴마다 초기 → 긍정 → 부정
+- 글자: 화면의 본문 최소 32 → 40 px(HUD·QR 설명·상태 카드·일정·문구). 작은 QR 220 → 300 px(설명 40 px). 장면 ⑤가 1920 폭을 넘어 HUD 시계가 잘리던 것을 막으려 화면 열을 `minmax(0,1fr)`로
+- `dashboard/tools/send_eco.py`: Pi 대신 한 번(또는 `--every 60`) 보내는 시험 도구(표준 라이브러리만)
+- PRD v0.3.1~v0.3.7(장면 ⑤, 성공률 계약, 하단 화면 13.3인치·터치 없음, 글자·QR 크기), README·guides/README·DESIGN.md·AWS_DEPLOY·`.env.example`·docker-compose
+- 시험: 서버 31 추가·2 고침, UI 단위 4 추가·1 고침, e2e 2 추가(나무 데모·서버 판정, 본문 40 px 이상·1920 폭 넘침 확인)·1 고침
+
 ## 2026-11-23 (88) 로봇 하단 디스플레이(PRD v0.3) 4단계: Jetson 브라우저 키오스크(`signage/deploy/display-kiosk.*`)와 부하 측정 스크립트. 서버·화면·Bridge 수정 없음
 
 **할 일 (Jetson)**

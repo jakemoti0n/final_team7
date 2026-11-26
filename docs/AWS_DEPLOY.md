@@ -128,6 +128,7 @@ nano .env
 | `ADMIN_USERNAME` | 첫 관리자 아이디 (예: `admin`). 영문·숫자·`_.-` 3~32자 |
 | `ADMIN_PASSWORD` | 첫 관리자의 **임시** 비밀번호(5자 이상). 첫 로그인 때 새 비밀번호로 바꾸게 된다. **작은따옴표로 감싸** 넣는다(`$` 같은 글자가 바뀌지 않게) |
 | `ROBOT_TOKEN` | 로봇용 토큰. 아래 명령으로 만든다. **로봇 쪽에도 같은 값** |
+| `ECO_TOKEN` | (선택) 분리수거 성공률을 보내는 Raspberry Pi용 토큰. `ROBOT_TOKEN`과 **다른 값**으로 같은 명령으로 만든다. Pi에도 같은 값. 비우면 성공률을 받지 않고 하단 디스플레이의 나무는 초기 상태로만 보인다 |
 | `MAP_YAML`, `INITIAL_WAYPOINTS` | 지도와 처음 waypoint 파일. 서로 맞는 짝으로(`.env.example` 주석) |
 | `INITIAL_GUIDE` | (선택) 처음 방문자 안내 약도. `dashboard/guides/`에 커밋한 파일 이름. 비우면 빈 약도로 시작해 관제 화면 '약도 편집'에서 만든다 |
 | `VISITOR_ENABLED` | 방문자 안내 화면(`/visitor`). 평소 `false`, 행사 때만 `true` (아래 「방문자 안내 켜고 끄기」) |
@@ -146,6 +147,7 @@ DOMAIN=13-125-10-20.sslip.io
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD='temp-1234'
 ROBOT_TOKEN=qH3v...43자쯤...
+ECO_TOKEN=Zp8k...43자쯤...      # (선택) Pi가 성공률을 보낼 때
 MAP_YAML=limbo/src/limbo_navigation/maps/aischool_2f_map.yaml
 INITIAL_WAYPOINTS=aischool_waypoints.yaml
 VISITOR_ENABLED=false
@@ -167,6 +169,17 @@ curl -s -o /dev/null -w "%{http_code}\n" https://<DOMAIN>/api/v1/visitor/state  
 - 값은 `true`·`false`만. 다른 값이면 dashboard가 시작하지 않고 로그에 `VISITOR_ENABLED must be true or false`
 - 행사장에서는 `https://<DOMAIN>/visitor` 주소를 QR 코드로 붙여 두면 된다. 휴대폰 화면에 맞춰 만들었다
 - 미리 보기: `https://<DOMAIN>/visitor?demo`는 꺼져 있어도 가상 로봇으로 열린다
+
+### 분리수거 성공률 받기 (하단 디스플레이 나무)
+
+Raspberry Pi가 `https://<DOMAIN>/api/v1/eco`로 성공률을 보내면 하단 디스플레이(`/display`)의 나무가 바뀐다. `.env`에 `ECO_TOKEN`을 넣고 `docker compose up -d`. 확인:
+
+```bash
+# 서버에서 또는 내 PC에서. 「'state': 'positive'」가 나오면 정상 (값은 600초 뒤 초기 나무로 돌아간다)
+ECO_TOKEN=<.env의 값> python3 dashboard/tools/send_eco.py --url https://<DOMAIN> --correct 18 --total 20
+```
+
+형식과 판정은 `dashboard/README.md` 「분리수거 성공률」. Pi 프로그램은 아직 정해지지 않았다.
 
 ## 8. 실행
 

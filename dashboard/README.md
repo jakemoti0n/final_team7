@@ -6,7 +6,7 @@ FastAPI 수신·관제 서버와 React/TypeScript 관제 화면(LIMBO 관제). �
 - `/`: 실제 수신 화면. 순찰 상태에 따라 주행 시작·정지·재개가 한 버튼에 나타나며 waypoint 편집을 지원한다.
 - `/?page=guide`: **약도 편집**. 방문자 화면에 보일 구역(강의실·행사장·화장실·입구 등)과 이름을 기본 로봇의 지도 좌표 위에 그려 `guide_yaml`에 저장한다. 사각형·다각형·표시점, 구역 종류(색·이름·아이콘) 추가, 되돌리기, 방문자 미리보기. 메인 약도를 **그림 파일**(PNG·JPG·WebP)로 바꿀 수 있다: 틀을 내려받아 그 위에 그린 그림은 크기로, 이미 있는 안내도는 기준점 3쌍 이상으로 지도에 맞춘다. 순찰 중에도 편집할 수 있다(`docs/CONTROL_SCREEN.md` E)
 - `/demo`: 독립 Mock 공급자. 실제 서버 API/WebSocket에 접속하지 않는다. 가상 데이터·알림·명령 결과는 이 페이지의 메모리에만 존재한다.
-- `/display`: **로봇 하단 디스플레이**(1920×1080 키오스크, 로그인 없음·조작 없음, `visitor_enabled`일 때만). 로봇 위치(약도 구역 이름)·상태·순찰 진행·행사 일정·`/visitor` QR과 팜플렛을 회전 규칙대로 돌린다. `?robot=LIMBO-02`로 붙은 로봇을 고르고(없으면 기본 로봇), `?demo`는 서버 없이 가상 데이터. 일정·팜플렛은 `display_dir` 폴더(`guides/README.md`). 설계는 `ui/DESIGN.md` 6절, 근거는 `signage/docs/PRD_로봇_하단_디스플레이_v0.3.md`
+- `/display`: **로봇 하단 디스플레이**(1920×1080 키오스크, 로그인 없음·조작 없음, `visitor_enabled`일 때만). 로봇 위치(약도 구역 이름)·상태·순찰 진행·행사 일정·`/visitor` QR과 팜플렛을 회전 규칙대로 돌린다. `?robot=LIMBO-02`로 붙은 로봇을 고르고(없으면 기본 로봇), `?demo`는 서버 없이 가상 데이터. 일정·팜플렛은 `display_dir` 폴더(`guides/README.md`). 장면 ⑤ 나무는 `POST /api/v1/eco`로 받은 분리수거 성공률(아래 「분리수거 성공률」). 설계는 `ui/DESIGN.md` 6절, 근거는 `signage/docs/PRD_로봇_하단_디스플레이_v0.3.md`
 - 서버 자체는 ROS2를 쓰지 않는다. 주행 시작·순찰 종료도 서버는 명령을 쌓기만 하고, **로봇 컴퓨터의 Bridge**가 그 컴퓨터에서 `patrol_node`를 띄우고 끈다. 그래서 서버를 ROS가 없는 다른 컴퓨터(예: AWS)에 두어도 된다. 로봇 쪽에는 ROS 2 Jazzy, 빌드된 `limbo_patrol`, Bridge가 필요하다. 한 로봇, 단일 프로세스, 메모리 최신 상태 및 최근 알림 100건을 지원한다. 서버 재시작 시 관제 상태가 초기화되며 브라우저 새로고침은 서버 이력을 지우지 않는다.
 
 - `/`: 실제 관제 화면. 맨 위 상태 한 줄 요약(정상 / 확인 필요 / 연결 끊김), 순찰·이동 카드, 지도(로봇 위치·방향, 순찰 경로, 다음 목표, 로봇 따라가기), **일시정지·순찰 재개** 버튼, 접어 둔 「센서 수신 상세」(토픽 4개), 알림으로 구성된다. 두 버튼은 서버 명령 API를 거쳐 Bridge가 순찰 노드의 `/patrol/pause`·`/patrol/resume` 서비스를 부르는 **실제 제어**다. 프로그램 재시작 버튼은 없다.
@@ -103,6 +103,7 @@ corepack pnpm dev
 | 종류 | 경로 | 보호 |
 |---|---|---|
 | 로봇용 (Bridge가 부름) | `POST /api/v1/telemetry`, `GET /api/v1/commands/next`, `POST /api/v1/commands/{id}/claim`, `POST /api/v1/commands/{id}/result` | 서버가 **공유 토큰**으로 검사: `Authorization: Bearer <토큰>`. 없거나 틀리면 401 `unauthorized` |
+| 분리수거 성공률 (Raspberry Pi가 부름) | `POST /api/v1/eco` | 로봇 토큰과 **다른** 성공률 전용 토큰(`ECO_TOKEN` 또는 `eco_token_file`)으로 검사. 토큰을 정하지 않으면 404 `eco_not_configured`(로컬 `allow_no_robot_token`이면 토큰 없이 받음). 아래 「분리수거 성공률」 |
 | 브라우저용 | 나머지 `/api/v1/*`(명령 요청·상태·WebSocket·지도·waypoint·회원 관리) | 서버가 **로그인 세션**(쿠키)으로 검사. 아래 「화면 로그인·회원 관리」 |
 | 누구나 | 화면 파일(`/`, `/demo`, `/assets`), `/api/v1/auth/login`·`/auth/logout`, `/healthz` | 검사 없음. 화면은 열리지만 로그인 전에는 로그인 창만 보인다. 데모(`/demo`)는 서버 API를 쓰지 않는다 |
 
@@ -242,6 +243,8 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 | `waypoints_yaml` | `limbo/src/limbo_patrol/config/test_waypoints.yaml`. 순찰 경로의 원본. 주행 시작 명령에 실려 로봇으로 간다 |
 | `guide_yaml` | `dashboard/guides/human_test_map_guide.yaml`(컨테이너는 `/data/guide.yaml`). 방문자 안내 약도 파일. 기본 로봇의 지도 좌표(m)로 그리고, 관제 화면이 읽고 쓰므로 **쓸 수 있는 곳**에 둔다. 파일이 없으면 빈 약도로 시작해 처음 저장할 때 만든다. 약도 그림은 옆 폴더 `<이름>_files/`(컨테이너는 `/data/guide_files/`). 생략하면 약도 API가 404 `guide_not_configured` |
 | `display_dir` | `dashboard/guides/display`(컨테이너는 `/data/display`, 처음 시작 때 이미지의 기본 폴더를 복사). 로봇 하단 디스플레이 내용 폴더: `display.json`(일정·문구·팜플렛 목록·장면 길이) + 팜플렛 그림(PNG·JPEG·WebP). 파일을 바꾸면 다음 요청에 반영된다. 방문자 화면처럼 `visitor_enabled`일 때만 열린다. 생략하면 디스플레이 API가 404 |
+| `eco_token_file` | `null`. 분리수거 성공률(`POST /api/v1/eco`) 토큰 파일. 환경 변수 `ECO_TOKEN`이 우선. 로봇 토큰과 같으면 서버가 시작하지 않는다 |
+| `eco_positive_percent` · `eco_min_samples` · `eco_max_age_s` · `eco_clock_skew_warn_s` | `80` · `20` · `600` · `600`. 긍정 나무 기준(%), 판정에 필요한 최소 건수, 서버가 마지막으로 받은 뒤 초기 나무로 돌아가는 시간(초), 보낸 쪽 시계가 이만큼 어긋나면 로그 경고(초) |
 | `robot_token_file` | `null`. 로봇용 경로 토큰 파일. 환경 변수 `ROBOT_TOKEN`이 우선 (「로봇 토큰과 인터넷 공개」) |
 | `allow_no_robot_token` | 기본 `config.json`은 `true`(로컬 개발), 설정에서 빼면 `false`. 토큰이 없을 때 로봇용 경로를 열어 둘지. **인터넷에 열 때는 `false`** |
 
@@ -296,14 +299,25 @@ DASHBOARD_CONFIG=/absolute/path/config.json .venv/bin/python -m uvicorn server.a
 |---|---|
 | `GET /visitor` | 방문자 화면(`ui/dist/index.html`) |
 | `GET /display` | 로봇 하단 디스플레이 화면(`ui/dist/index.html`). 방문자 화면과 같은 조건으로 열린다 |
-| `GET /api/v1/visitor/state` | `{"server_utc", "operating", "robots": [{"robot_id", "status", "position": {"x","y","stale","age_s"} \| null, "area", "next_area", "progress": {"done","total"} \| null, "moving"}], "map": {"resolution","origin","width","height","image","sketch"} \| null, "guide": "<판>" \| null, "display": "<판>" \| null}`. `guide`는 안내 약도의, `display`는 하단 디스플레이 내용의 revision(없으면 `null`). `area`: 로봇이 들어 있는 약도 구역 이름(겹치면 가장 작은 구역, 위치를 숨기면 같이 `null`). `progress`: 순찰 중·일시정지 중일 때 `done`=다음 목표 번호(0부터), `total`=지점 수. `next_area`: 다음 목표가 들어 있는 구역 이름(서버 waypoint 파일이 로봇이 도는 경로와 같을 때만). waypoint 이름·좌표는 내보내지 않는다. `moving`: 순찰 중이면서 직진 속도 ≥ `linear_threshold_mps`(제자리 회전 아님), 속도 값이 오래됐으면 `null`. `Cache-Control: no-store` |
+| `GET /api/v1/visitor/state` | `{"server_utc", "operating", "robots": [{"robot_id", "status", "position": {"x","y","stale","age_s"} \| null, "area", "next_area", "progress": {"done","total"} \| null, "moving"}], "map": {"resolution","origin","width","height","image","sketch"} \| null, "guide": "<판>" \| null, "display": "<판>" \| null, "eco": {"state", "rate_percent", "correct", "total", "method"}}`. `guide`는 안내 약도의, `display`는 하단 디스플레이 내용의 revision(없으면 `null`). `area`: 로봇이 들어 있는 약도 구역 이름(겹치면 가장 작은 구역, 위치를 숨기면 같이 `null`). `progress`: 순찰 중·일시정지 중일 때 `done`=다음 목표 번호(0부터), `total`=지점 수. `next_area`: 다음 목표가 들어 있는 구역 이름(서버 waypoint 파일이 로봇이 도는 경로와 같을 때만). waypoint 이름·좌표는 내보내지 않는다. `moving`: 순찰 중이면서 직진 속도 ≥ `linear_threshold_mps`(제자리 회전 아님), 속도 값이 오래됐으면 `null`. `eco`: 분리수거 성공률 판정(`initial`·`positive`·`negative`), 숫자는 `positive`·`negative`일 때만(아래 「분리수거 성공률」). `Cache-Control: no-store` |
 | `GET /api/v1/visitor/map.png` | 기본 로봇 지도 PNG |
 | `GET /api/v1/visitor/map_sketch.svg` | 기본 로봇 지도의 자동 약도 |
 | `GET /api/v1/visitor/guide` | 안내 약도 `{revision, bounds, categories, areas, markers, image: {file, width, height, transform, show_areas, url} \| null}`. 기준점·지도 이름·순찰 지점은 없다. 없으면 404 `guide_not_available` |
 | `GET /api/v1/visitor/guide/image/{file}` | 지금 약도가 쓰는 그림 하나만(올렸지만 저장하지 않은 그림은 404) |
-| `GET /api/v1/display/content` | 로봇 하단 디스플레이(`/display`) 내용 `{revision, message, schedule: [{date, start, end, title, place}], slides: [{file, width, height, type, url}], sound: {file, type, url} | null, timing}`. `display_dir`의 `display.json`(형식은 `server/display.py` 맨 위). 잘못 고치면 마지막 정상본(로그에 이유), 처음부터 없거나 잘못됐으면 503 `display_unavailable`, 설정이 없으면 404 `display_not_configured` |
+| `GET /api/v1/display/content` | 로봇 하단 디스플레이(`/display`) 내용 `{revision, message, schedule: [{date, start, end, title, place}], slides: [{file, width, height, type, url}], sound: {file, type, url} | null, eco: {enabled}, timing}`. `display_dir`의 `display.json`(형식은 `server/display.py` 맨 위). 잘못 고치면 마지막 정상본(로그에 이유), 처음부터 없거나 잘못됐으면 503 `display_unavailable`, 설정이 없으면 404 `display_not_configured` |
 | `GET /api/v1/display/slides/{file}` | `display.json`의 `slides`에 적은 그림만(폴더에 있어도 목록에 없으면 404). 주소의 `?v=`가 내용 해시 |
 | `GET /api/v1/display/sound/{file}` | `display.json`의 `sound`에 적은 소리 파일만(MP3·WAV·OGG, 확장자와 실제 형식이 같아야 함). 「LIMBO가 지나갑니다」 때 한 번 |
+
+### 분리수거 성공률 (`POST /api/v1/eco`, 하단 디스플레이 장면 ⑤ 나무)
+
+Raspberry Pi(로봇 ROS 2 네트워크 밖)가 서버로 직접 HTTPS로 보낸다. 근거는 `signage/docs/PRD_로봇_하단_디스플레이_v0.3.md` 「분리수거 성공률 계약」, 검사는 `server/eco.py`.
+
+- 본문: `{"schema_version": 1, "observed_at", "window_start", "window_end", "source", "evaluation_method", "verified_correct_count", "verified_total_count", "quality"}`. 시각은 시간대를 적은 ISO 8601이고 `window_start ≤ window_end ≤ observed_at`. 집계 기간은 **수거함을 비운 뒤 누적**(`window_start` = 비운 시각, 비우면 건수를 0부터)
+- 판정(서버): `quality`가 `ok`이고, `evaluation_method`가 `ai_bin_inspection`(수거함에 들어간 뒤 AI 확인)·`verified_route_log`·`human_audit`·`sensor_verified` 중 하나이고, 확인한 건수가 `eco_min_samples`(20) 이상이면 성공률 ≥ `eco_positive_percent`(80 %)는 `positive`, 미만은 `negative`. 아니면 `initial`(숫자 없음). 보이는 %는 내림
+- **오래됨은 서버가 받은 시각으로** 잰다(Pi는 시간 동기화가 보장되지 않음). 마지막으로 받은 뒤 `eco_max_age_s`(600초)가 지나면 `initial`. 그래서 Pi는 값이 그대로여도 1분쯤마다 보낸다. Pi 시계가 `eco_clock_skew_warn_s` 넘게 어긋나면 로그에 한 번 경고
+- 응답: 정상이면 `{"accepted": true, "eco": <판정>}`. 형식이 틀리면 422 `invalid_payload`(이유가 메시지에)이고 마지막 정상 값은 그대로. 토큰이 틀리면 401
+- 서버를 다시 켜면 비어서 `initial`부터(Pi가 다음에 보내면 돌아온다)
+- 시험: `python3 dashboard/tools/send_eco.py --correct 18 --total 20` (클라우드는 `--url https://<도메인>`과 `ECO_TOKEN=...`)
 
 ## 인터페이스와 구조
 

@@ -540,9 +540,9 @@ button.danger:hover:not(:disabled){background:var(--color-bad-bg)}
    글자는 떨어져서 읽히게 본문 32 px 이상·제목 64 px 이상 (PRD v0.3 비기능). 장면 ①-Q1, ②-A ---- */
 .display-stage{position:fixed;inset:0;background:var(--color-display-letterbox);overflow:hidden;cursor:none}
 .display-screen{position:fixed;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;background:var(--color-bg);
-  display:grid;grid-template-rows:72px 1fr 40px;overflow:hidden;font-family:var(--font-body);color:var(--color-ink);word-break:keep-all}
+  display:grid;grid-template-rows:72px 1fr 40px;grid-template-columns:minmax(0,1fr);overflow:hidden;font-family:var(--font-body);color:var(--color-ink);word-break:keep-all}
 .display-hud{position:relative;z-index:2;background:var(--color-primary);color:var(--color-on-primary);display:flex;align-items:center;
-  justify-content:space-between;padding:0 48px;font-size:28px}
+  justify-content:space-between;padding:0 48px;font-size:40px}
 .display-hud-brand{display:flex;align-items:center;gap:16px}
 .display-hud-brand b{font-weight:800;letter-spacing:.02em}
 .display-mark{width:40px;height:40px;background:var(--color-on-primary);color:var(--color-primary);border-radius:10px;display:grid;place-items:center;font-weight:900;font-size:26px}
@@ -562,27 +562,27 @@ button.danger:hover:not(:disabled){background:var(--color-bad-bg)}
 .display-qr-card{display:grid;grid-template-rows:auto 1fr auto;align-items:center;justify-items:center;text-align:center;min-height:0}
 .display-qr-card h2{margin:0 0 8px;font-size:40px;font-weight:800;color:var(--color-ink)}
 .display-qr-card .display-qr{width:440px;height:440px}
-.display-qr-card p{margin:0;font-size:32px;line-height:1.35;color:var(--color-text-muted)}
+.display-qr-card p{margin:0;font-size:40px;line-height:1.35;color:var(--color-text-muted)}
 .display-right{display:grid;grid-template-rows:1fr auto;gap:32px;min-height:0}
 .display-status{background:var(--color-primary);color:var(--color-on-primary);border-color:var(--color-primary);display:grid;align-content:center;gap:12px;min-height:0;overflow:hidden}
-.display-kicker{font-size:32px;color:var(--color-display-on-ink-muted)}
+.display-kicker{font-size:40px;color:var(--color-display-on-ink-muted)}
 .display-status h1{margin:0;font-weight:900;line-height:1.08;letter-spacing:-.02em;color:var(--color-on-primary);overflow-wrap:anywhere}
-.display-sub{font-size:38px;display:flex;align-items:center;flex-wrap:wrap;gap:12px 18px;margin-top:8px}
+.display-sub{font-size:40px;display:flex;align-items:center;flex-wrap:wrap;gap:12px 18px;margin-top:8px}
 .display-pill{background:var(--color-display-on-ink-pill);border-radius:999px;padding:4px 20px;font-weight:700}
-.display-progress{margin-top:28px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:24px;font-size:32px;color:var(--color-display-on-ink-muted);font-variant-numeric:tabular-nums}
+.display-progress{margin-top:28px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:24px;font-size:40px;color:var(--color-display-on-ink-muted);font-variant-numeric:tabular-nums}
 .display-track{height:16px;background:var(--color-display-on-ink-track);border-radius:8px;overflow:hidden}
 .display-track i{display:block;height:100%;background:var(--color-display-lime);border-radius:8px}
-.display-schedule h3{margin:0 0 16px;font-size:32px;font-weight:800}
+.display-schedule h3{margin:0 0 16px;font-size:40px;font-weight:800}
 .display-schedule ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.display-schedule li{border:1px solid var(--color-border-strong);border-radius:14px;padding:16px 20px;font-size:32px;color:var(--color-text-muted);min-width:0}
-.display-schedule li b{display:block;font-size:36px;color:var(--color-ink);font-variant-numeric:tabular-nums}
+.display-schedule li{border:1px solid var(--color-border-strong);border-radius:14px;padding:16px 20px;font-size:40px;color:var(--color-text-muted);min-width:0}
+.display-schedule li b{display:block;font-size:40px;color:var(--color-ink);font-variant-numeric:tabular-nums}
 .display-schedule li span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.display-schedule li em{display:block;font-style:normal;font-size:24px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.display-schedule li em{display:block;font-style:normal;font-size:40px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .display-schedule li.past{opacity:.7}
 .display-schedule li.now{border-color:var(--color-accent);background:var(--color-good-bg)}
 .display-schedule li.now b{color:var(--color-good-fg)}
-.display-schedule li.now small{display:inline-block;margin-left:10px;font-size:22px;color:var(--color-good-fg);background:var(--color-good-border);border-radius:999px;padding:0 12px;vertical-align:middle}
-.display-empty,.display-message{margin:16px 0 0;font-size:32px}
+.display-schedule li.now small{display:inline-block;margin-left:10px;font-size:40px;line-height:1.2;color:var(--color-good-fg);background:var(--color-good-border);border-radius:999px;padding:0 12px;vertical-align:middle}
+.display-empty,.display-message{margin:16px 0 0;font-size:40px}
 .display-empty{margin-top:0;color:var(--color-text-muted)}
 
 /* 장면 ②: 팜플렛을 화면 전체에 (위 72 px는 HUD, 오른쪽 아래는 작은 QR이 가린다) */
@@ -591,16 +591,27 @@ button.danger:hover:not(:disabled){background:var(--color-bad-bg)}
 .display-slide img{position:absolute;inset:0;width:100%;height:100%}
 .display-slide-bg{object-fit:cover;filter:blur(40px) brightness(.9);transform:scale(1.1)}
 .display-slide-fg{object-fit:contain}
+/* 작은 QR(장면 ②⑤ 같은 자리). 300 px, 상자는 약 340 × 400 px라 팜플렛은 오른쪽 아래 400 × 460 px를 비워 둔다 */
 .display-mini-qr{position:absolute;right:40px;bottom:56px;padding:20px 20px 14px;text-align:center;border-radius:16px}
-.display-mini-qr .display-qr{display:block;width:220px;height:220px}
-.display-mini-qr p{margin:8px 0 0;font-size:24px;font-weight:700}
+.display-mini-qr .display-qr{display:block;width:300px;height:300px}
+.display-mini-qr p{margin:8px 0 0;font-size:40px;font-weight:700;line-height:1.35}
+
+/* 장면 ⑤ 환경 피드백: 왼쪽 나무 그림(정사각형, 화면 높이에 맞춤), 오른쪽 문구, 오른쪽 아래 작은 QR (②와 같은 화면 자리) */
+.display-eco{position:relative;height:100%;display:grid;grid-template-columns:904px minmax(0,1fr);gap:56px;padding:32px 48px;box-sizing:border-box}
+.display-eco-tree{width:904px;height:904px;object-fit:cover;border-radius:20px;border:1px solid var(--color-border-strong);display:block}
+.display-eco-text{align-self:start;padding-top:24px;min-width:0}
+.display-eco-kicker{font-size:40px;font-weight:700;color:var(--color-accent)}
+.display-eco-text h1{margin:16px 0 0;font-size:72px;font-weight:900;line-height:1.15;letter-spacing:-.02em;color:var(--color-ink)}
+.display-eco-detail{margin:28px 0 0;font-size:40px;line-height:1.35;color:var(--color-text-muted);font-variant-numeric:tabular-nums}
+.display-eco-hint{margin:20px 0 0;font-size:40px;line-height:1.35;color:var(--color-ink)}
+.display-eco .display-mini-qr{bottom:16px}   /* 장면 몸통이 진행 점(40 px) 위에서 끝나므로, 화면에서는 ②와 같은 자리 */
 
 .display-dots{position:relative;z-index:2;display:flex;justify-content:center;align-items:center;gap:10px}
 .display-dots i{width:40px;height:8px;border-radius:4px;background:var(--color-border-strong)}
 .display-dots i.on{background:var(--color-accent)}
 .display-closed{margin:32px 48px;height:calc(100% - 64px);box-sizing:border-box;display:grid;place-content:center;text-align:center;gap:16px}
 .display-closed h1{font-size:64px;margin:0}
-.display-closed p{font-size:36px;margin:0;color:var(--color-text-muted)}
+.display-closed p{font-size:40px;margin:0;color:var(--color-text-muted)}
 .display-demo{position:absolute;z-index:3;left:48px;bottom:6px;background:var(--color-warn-bg);color:var(--color-warn-fg);
   border:1px solid var(--color-warn-border);border-radius:999px;padding:4px 18px;font-size:22px;font-weight:700}
 

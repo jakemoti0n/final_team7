@@ -79,7 +79,8 @@ def test_content_and_slides(tmp_path):
         response = client.get("/api/v1/display/content")
         assert response.status_code == 200 and response.headers["cache-control"] == "no-cache"
         body = response.json()
-        assert set(body) == {"revision", "message", "schedule", "slides", "sound", "timing"} and body["sound"] is None
+        assert set(body) == {"revision", "message", "schedule", "slides", "sound", "eco", "timing"} and body["sound"] is None
+        assert body["eco"] == {"enabled": True}
         assert [(s["file"], s["width"], s["height"], s["type"]) for s in body["slides"]] == [
             ("b.png", 1920, 1080, "image/png"), ("a.jpg", 1080, 1920, "image/jpeg")]
         assert client.get("/api/v1/visitor/state").json()["display"] == body["revision"]

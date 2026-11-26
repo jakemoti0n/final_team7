@@ -8,5 +8,6 @@
   ],
   "slides": [],
   "sound": "passing.mp3",
-  "timing": {"location_s": 40, "slides_s": 30, "count_s": 10, "trash_alert_s": 10, "passing_s": 8, "passing_cooldown_s": 60}
+  "eco": {"enabled": true},
+  "timing": {"location_s": 40, "slides_s": 30, "eco_s": 15, "count_s": 10, "trash_alert_s": 10, "passing_s": 8, "passing_cooldown_s": 60}
 }

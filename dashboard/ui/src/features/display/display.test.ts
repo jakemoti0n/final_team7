@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_TIMING, NO_PASSING, advance, demoDisplayContent, locationText, locksRotation, parseDisplayContent, passingStep, passingText,
+  DEFAULT_TIMING, NO_PASSING, advance, demoDisplayContent, demoEco, ecoText, locationText, locksRotation, parseDisplayContent, passingStep, passingText,
   pickEvents, pickRobot, rotationPlan, titleSize, topic, type DisplayEvent, type Passing, type Rotation,
 } from './display'
 import { qrModules, qrPath } from './qr'
@@ -128,7 +128,7 @@ describe('server shapes', () => {
     slides: [{ file: 'a.png', width: 1920, height: 1080, type: 'image/png', url: '/api/v1/display/slides/a.png?v=1' }], timing: DEFAULT_TIMING }
 
   it('accepts the display content and rejects odd shapes', () => {
-    expect(parseDisplayContent(content)).toBe(content)
+    expect(parseDisplayContent(content)).toEqual(content)
     expect(parseDisplayContent({ ...content, slides: [{ ...content.slides[0], url: 'https://elsewhere.example/a.png' }] })).toBeNull()
     expect(parseDisplayContent({ ...content, schedule: [{ ...content.schedule[0], start: '9:00' }] })).toBeNull()
     expect(parseDisplayContent({ ...content, timing: { ...DEFAULT_TIMING, location_s: 0 } })).toBeNull()
@@ -222,5 +222,51 @@ describe('scene ④ passing', () => {
     expect(passingText(robot({ area: null })).detail).toBe('201 강의실 쪽으로 가요 · 길을 조금 비켜 주세요')
     expect(passingText(robot({ next_area: '복도' })).detail).toBe('길을 조금 비켜 주세요')
     expect(passingText(null).detail).toBe('길을 조금 비켜 주세요')
+  })
+})
+
+describe('scene ⑤ eco tree (PRD v0.3.6)', () => {
+  it('puts the tree after the second location and before the count', () => {
+    const scenes = (slides: number, count: boolean, eco: boolean) => rotationPlan(DEFAULT_TIMING, slides, count, eco).map(x => `${x.scene}:${x.seconds}`)
+    expect(scenes(2, false, true)).toEqual(['location:40', 'slides:30', 'location:40', 'eco:15'])
+    expect(scenes(0, false, true)).toEqual(['location:40', 'eco:15'])
+    expect(scenes(1, true, true)).toEqual(['location:40', 'slides:30', 'location:40', 'eco:15', 'count:10'])
+    expect(scenes(2, false, false)).toEqual(['location:40', 'slides:30', 'location:40'])   // display.json에서 끔
+  })
+
+  it('shows numbers only when judged, says who checked, and speaks softly when negative', () => {
+    const initial = ecoText({ state: 'initial' })
+    expect(initial).toEqual({ tree: 'initial', title: '분리수거 결과를 모으는 중이에요', detail: null, hint: null })
+    expect(ecoText(null)).toEqual(initial)        // 서버와 끊김·예전 서버
+    expect(ecoText(undefined)).toEqual(initial)
+    const good = ecoText({ state: 'positive', rate_percent: 90, correct: 18, total: 20, method: 'ai_bin_inspection' })
+    expect(good.tree).toBe('positive')
+    expect(good.detail).toBe('수거함을 비운 뒤 · AI 확인 20건 중 18건 바르게')
+    expect(good.hint).toBeNull()
+    const bad = ecoText({ state: 'negative', rate_percent: 65, correct: 13, total: 20, method: 'human_audit' })
+    expect(bad.tree).toBe('negative')
+    expect(bad.detail).toBe('수거함을 비운 뒤 · 직접 확인 20건 중 13건 바르게')
+    expect(bad.hint).toBe('재활용할 수 있는 것은 재활용 칸, 나머지는 일반 칸에 넣어 주세요')
+    for (const word of ['잘못', '실패', '오염', '위험']) expect(bad.title + bad.hint).not.toContain(word)
+    expect(ecoText({ state: 'positive', rate_percent: 90, correct: 18, total: 20, method: 'new_method' }).detail).toContain('· 확인 20건')
+  })
+
+  it('demo cycles initial → positive → negative', () => {
+    expect([0, 1, 2, 3].map(r => demoEco(r).state)).toEqual(['initial', 'positive', 'negative', 'initial'])
+    expect(demoDisplayContent().eco).toEqual({ enabled: true })
+  })
+
+  it('accepts older servers and drops a broken eco without losing the robots', () => {
+    const content = { ...demoDisplayContent(), revision: 'r', slides: [], eco: undefined, timing: { ...DEFAULT_TIMING, eco_s: undefined } }
+    expect(parseDisplayContent(content)?.timing.eco_s).toBe(15)
+    expect(parseDisplayContent({ ...content, eco: { enabled: 'yes' } })).toBeNull()
+    const state: VisitorState = { server_utc: 'now', operating: 1, map: null, robots: [robot()] }
+    expect(parseVisitorState({ ...state, eco: { state: 'positive', rate_percent: 90, correct: 18, total: 20, method: 'ai_bin_inspection' } })?.eco?.state).toBe('positive')
+    expect(parseVisitorState({ ...state, eco: { state: 'initial' } })?.eco).toEqual({ state: 'initial' })
+    for (const eco of [{ state: 'great' }, { state: 'positive' }, { state: 'negative', rate_percent: 50, correct: 21, total: 20, method: 'x' }]) {
+      const parsed = parseVisitorState({ ...state, eco: eco as never })
+      expect(parsed?.robots).toHaveLength(1)
+      expect(parsed?.eco).toBeNull()
+    }
   })
 })

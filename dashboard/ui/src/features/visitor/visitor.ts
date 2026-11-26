@@ -16,7 +16,14 @@ export interface VisitorRobot {
 export interface VisitorMap { resolution: number; origin: number[]; width: number; height: number; image: string | null; sketch?: string | null }
 /** guide: 안내 약도의 판(revision). 바뀌면 GET /api/v1/visitor/guide로 다시 받는다. 없으면 null (자동 약도가 메인) */
 /** display: 하단 디스플레이 내용(일정·팜플렛)의 판. 바뀌면 GET /api/v1/display/content로 다시 받는다 */
-export interface VisitorState { server_utc: string; robots: VisitorRobot[]; operating: number; map: VisitorMap | null; guide?: string | null; display?: string | null }
+/** eco: 분리수거 성공률 판정 (하단 디스플레이 장면 ⑤ 나무). initial이면 숫자 없음. 예전 서버면 없다 */
+export interface VisitorState {
+  server_utc: string; robots: VisitorRobot[]; operating: number; map: VisitorMap | null; guide?: string | null; display?: string | null
+  eco?: EcoView | null
+}
+export type EcoTree = 'initial' | 'positive' | 'negative'
+/** 서버가 판정한 나무 상태. 숫자(성공률·건수·확인 방법)는 positive·negative일 때만 */
+export interface EcoView { state: EcoTree; rate_percent?: number; correct?: number; total?: number; method?: string }
 /** 방문자용 안내 약도 (관제 화면 '약도 편집'에서 그림). 기준점·지도 이름·순찰 지점은 없다 */
 export interface VisitorGuide {
   revision: string; bounds: Bounds; categories: Category[]; areas: Area[]; markers: Marker[]
@@ -51,7 +58,18 @@ export function parseVisitorState(value: unknown): VisitorState | null {
   }
   const m = v.map
   if (m !== null && (!m || !(m.resolution > 0) || !Array.isArray(m.origin) || m.origin.length < 2 || !(m.width > 0) || !(m.height > 0))) return null
+  // 성공률이 이상하면 그것만 버린다 (위치 안내는 계속). 판정이 있는데 숫자가 빠졌거나 맞지 않아도 버림
+  if (v.eco != null && !validEco(v.eco)) v.eco = null
   return v
+}
+
+function validEco(e: EcoView) {
+  if (!e || typeof e !== 'object') return false
+  if (e.state === 'initial') return true
+  if (e.state !== 'positive' && e.state !== 'negative') return false
+  const { rate_percent: rate, correct, total, method } = e
+  return Number.isInteger(correct) && Number.isInteger(total) && correct! >= 0 && total! > 0 && correct! <= total!
+    && finite(rate) && rate! >= 0 && rate! <= 100 && typeof method === 'string'
 }
 
 const color = (v: unknown) => typeof v === 'string' && /^#[0-9A-Fa-f]{6}$/.test(v)

@@ -11,6 +11,7 @@
   ],                                                  # date·end·place는 null 가능 (date가 null이면 매일)
   "slides": ["pamphlet-1.png"],                       # (선택) 장면 ② 팜플렛. 이 폴더의 그림 파일 이름, 보여 줄 순서
   "sound": "passing.mp3",                             # (선택) 장면 ④ 「LIMBO가 지나갑니다」 때 한 번 틀 소리 (TTS로 만든 파일)
+  "eco": {"enabled": true},                           # (선택) 장면 ⑤ 환경 피드백(나무 3상태)을 순환에 넣을지. 기본 true
   "timing": {"location_s": 40, ...}                   # (선택) 장면 길이(초). 빠진 것은 기본값 (TIMING_DEFAULTS)
 }
 """
@@ -38,8 +39,8 @@ MAX_SOUND_BYTES = 2 * 1024 * 1024    # 한 문장이면 수십 KB
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 TIME = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
 
-# 회전 규칙 R (PRD v0.3): ① 40 s → ② 30 s → ① 40 s → ③ 오늘 횟수 10 s, 신호 장면 ③ 10 s · ④ 8 s(같은 신호 60 s 쿨다운)
-TIMING_DEFAULTS = dict(location_s=40, slides_s=30, count_s=10, trash_alert_s=10, passing_s=8, passing_cooldown_s=60)
+# 회전 규칙 R (PRD v0.3.6): ① 40 s → ② 30 s → ① 40 s → ⑤ 나무 15 s → ③ 오늘 횟수 10 s, 신호 장면 ③ 10 s · ④ 8 s(같은 신호 60 s 쿨다운)
+TIMING_DEFAULTS = dict(location_s=40, slides_s=30, eco_s=15, count_s=10, trash_alert_s=10, passing_s=8, passing_cooldown_s=60)
 TIMING_MAX_S = 600
 
 
@@ -76,9 +77,9 @@ def validate(config):
     """display.json을 검사해 정리된 사본(빠진 선택 항목 채움, 일정은 날짜·시작 순)을 돌려준다"""
     if not isinstance(config, dict):
         raise _bad("display.json must be an object")
-    unknown = set(config) - {"version", "message", "schedule", "slides", "sound", "timing"}
+    unknown = set(config) - {"version", "message", "schedule", "slides", "sound", "eco", "timing"}
     if unknown or not {"version", "schedule"} <= set(config):
-        raise _bad("display.json needs version and schedule; optional: message, slides, sound, timing")
+        raise _bad("display.json needs version and schedule; optional: message, slides, sound, eco, timing")
     if config["version"] != VERSION:
         raise _bad(f"version must be {VERSION}")
     message = _text(config.get("message"), "message", MAX_MESSAGE, optional=True)
@@ -112,6 +113,10 @@ def validate(config):
     if sound is not None and (not isinstance(sound, str) or not SOUND_NAME.fullmatch(sound)):
         raise _bad("The sound name uses letters, digits, '.', '_', '-' and ends in .mp3, .wav or .ogg")
 
+    eco = config.get("eco", {})
+    if not isinstance(eco, dict) or set(eco) - {"enabled"} or not isinstance(eco.get("enabled", True), bool):
+        raise _bad('eco must look like {"enabled": true}')
+
     timing = config.get("timing", {})
     if not isinstance(timing, dict) or set(timing) - set(TIMING_DEFAULTS):
         raise _bad(f"timing may have: {', '.join(TIMING_DEFAULTS)}")
@@ -120,7 +125,8 @@ def validate(config):
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 1 <= value <= TIMING_MAX_S:
             raise _bad(f"timing.{key} must be 1–{TIMING_MAX_S} seconds")
         merged[key] = value
-    return dict(message=message, schedule=schedule, slides=list(slides), sound=sound, timing=merged)
+    return dict(message=message, schedule=schedule, slides=list(slides), sound=sound,
+                eco=dict(enabled=eco.get("enabled", True)), timing=merged)
 
 
 def sound_kind(data):
@@ -208,7 +214,7 @@ class DisplayFolder:
             files[name] = data
             sound = dict(file=name, type=SOUND_TYPES[kind], url=f"/api/v1/display/sound/{name}?v={version}")
         view = dict(revision=digest.hexdigest(), message=config["message"], schedule=config["schedule"],
-                    slides=slides, sound=sound, timing=config["timing"])
+                    slides=slides, sound=sound, eco=config["eco"], timing=config["timing"])
         return view, files
 
     def view(self):

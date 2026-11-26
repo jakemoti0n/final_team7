@@ -18,6 +18,7 @@ from pydantic import ValidationError
 
 from . import mapdata
 from .display import DisplayFolder, DisplayError
+from .eco import EcoError, EcoState
 from .waypoints import WaypointFile, WaypointError
 from .guide import GuideFile, GuideError, MAX_BYTES as GUIDE_MAX_BYTES, MAX_IMAGE_BYTES, IMAGE_TYPES, area_at
 from .models import CommandClaim, CommandRequest, CommandResult, Settings, Telemetry, uuid_string
@@ -90,6 +91,32 @@ def load_robot_token(settings, environ=os.environ):
     return None
 
 
+def load_eco_token(settings, environ=os.environ):
+    """분리수거 성공률(POST /api/v1/eco)의 토큰. 환경 변수 ECO_TOKEN → eco_token_file 순서.
+    (켤지, 토큰) — 없으면 allow_no_robot_token일 때만 토큰 없이 받고, 아니면 받지 않는다(선택 기능이라 서버는 뜬다)."""
+    token = environ.get("ECO_TOKEN", "").strip()
+    if not token and settings.eco_token_file:
+        path = Path(settings.eco_token_file).expanduser()
+        path = path if path.is_absolute() else ROOT.parent / path
+        try:
+            token = path.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise RuntimeError(f"eco_token_file cannot be read: {path} ({exc})") from exc
+        if not token:
+            raise RuntimeError(f"eco_token_file is empty: {path}")
+    if token:
+        if len(token) < MIN_TOKEN_LENGTH or any(c.isspace() for c in token):
+            raise RuntimeError(f"eco token must be at least {MIN_TOKEN_LENGTH} characters without spaces")
+        if token == environ.get("ROBOT_TOKEN", "").strip():
+            raise RuntimeError("ECO_TOKEN must differ from ROBOT_TOKEN")
+        return True, token
+    if settings.allow_no_robot_token:
+        logging.warning("eco endpoint accepts requests without a token (allow_no_robot_token)")
+        return True, None
+    logging.info("eco endpoint is off: set ECO_TOKEN or eco_token_file to receive recycling results")
+    return False, None
+
+
 def load_users(settings, environ=os.environ):
     """화면 로그인용 사용자 DB. 계정이 하나도 없으면 ADMIN_USERNAME/ADMIN_PASSWORD로 첫 관리자를 만든다.
 
@@ -107,26 +134,29 @@ def load_users(settings, environ=os.environ):
     return users
 
 
-def create_app(settings=None, store=None, robot_token=None, users=None):
-    """settings를 주지 않으면 설정 파일을 읽고 로봇 토큰·사용자 DB도 설정대로 연다(운영 경로).
-    settings를 직접 주면(시험·내장) robot_token·users 인자를 그대로 쓴다. None이면 그 검사를 하지 않는다."""
+def create_app(settings=None, store=None, robot_token=None, users=None, eco_token=None):
+    """settings를 주지 않으면 설정 파일을 읽고 로봇 토큰·성공률 토큰·사용자 DB도 설정대로 연다(운영 경로).
+    settings를 직접 주면(시험·내장) robot_token·eco_token·users 인자를 그대로 쓴다. None이면 그 검사를 하지 않는다."""
     if settings is None:
         settings = Settings.model_validate_json(Path(os.environ.get("DASHBOARD_CONFIG", ROOT / "config.json")).read_text())
         robot_token = load_robot_token(settings)
+        eco_enabled, eco_token = load_eco_token(settings)
         users = load_users(settings)
         owns_users = users is not None   # 직접 연 DB만 끌 때 닫는다 (시험이 넘긴 DB는 시험이 닫음)
     else:
-        owns_users = False
+        owns_users, eco_enabled = False, True
     expected = robot_token.encode() if robot_token else None
+    eco_expected = eco_token.encode() if eco_token else None
 
-    def unauthorized(request):
-        """로봇용 경로 인증. 맞으면 None, 아니면 401 응답 (본문을 읽기 전에 검사)"""
-        if expected is None:
+    def unauthorized(request, token=None, what="robot"):
+        """로봇용 경로 인증(token을 주면 그 토큰으로). 맞으면 None, 아니면 401 응답 (본문을 읽기 전에 검사)"""
+        token = expected if what == "robot" else token
+        if token is None:
             return None
         scheme, _, given = request.headers.get("authorization", "").partition(" ")
-        if scheme.lower() == "bearer" and hmac.compare_digest(given.strip().encode(), expected):
+        if scheme.lower() == "bearer" and hmac.compare_digest(given.strip().encode(), token):
             return None
-        response = error(401, "unauthorized", "Missing or invalid robot token")
+        response = error(401, "unauthorized", f"Missing or invalid {what} token")
         response.headers["WWW-Authenticate"] = "Bearer"
         return response
 
@@ -176,6 +206,8 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
 
     login_failures = {}   # (IP, 아이디) → 최근 실패 시각들(monotonic)
     base_store = store or Store(settings)
+    # 분리수거 성공률 (장면 ⑤ 나무). 오래됨은 서버가 받은 시각으로 재므로 Store와 같은 시계를 쓴다
+    eco = EcoState(settings, base_store.monotonic, base_store.utc)
     robots = {}           # robot_id → Robot. 넣은 순서 = 화면 목록 순서 (기본 로봇, 설정, 자동 등록 순)
     maps = {}             # (map_yaml, waypoints_yaml) → (메타, PNG, 자동 약도 SVG) 또는 None. 같은 파일은 한 번만 읽는다
     waypoint_files = {}   # (waypoint 실제 경로, map_yaml) → (WaypointFile, Lock). 같은 파일을 쓰는 로봇끼리 공유
@@ -915,7 +947,9 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
                     # 안내 약도는 바뀔 때만 따로 받게 판만 알려 준다 (없으면 null → 자동 약도가 메인)
                     guide=public_guide["revision"] if public_guide else None,
                     # 하단 디스플레이 내용(일정·팜플렛)도 같은 방식. 폴더가 없거나 읽을 수 없으면 null
-                    display=display_revision())
+                    display=display_revision(),
+                    # 분리수거 성공률 판정 (장면 ⑤). initial이면 숫자 없음. 보낸 곳·시각은 내보내지 않는다
+                    eco=eco.view())
         return JSONResponse(body, headers={"Cache-Control": "no-store"})
 
     @app.get("/api/v1/visitor/map.png")
@@ -1002,6 +1036,24 @@ def create_app(settings=None, store=None, robot_token=None, users=None):
         return Response(data, media_type=media, headers={
             "Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff",
             "Content-Security-Policy": "default-src 'none'"})
+
+    # ---- 분리수거 성공률 (Raspberry Pi → 서버). 로봇 토큰과 다른 성공률 전용 토큰 ----
+
+    @app.post("/api/v1/eco")
+    async def receive_eco(request: Request):
+        """Pi가 1분쯤마다(값이 그대로여도) 보낸다. 형식이 틀리면 422이고 마지막 정상 값은 그대로"""
+        if not eco_enabled:
+            return error(404, "eco_not_configured", "Set ECO_TOKEN or eco_token_file in the server config")
+        if denied := unauthorized(request, eco_expected, "eco"):
+            return denied
+        raw, problem = await read_json(request, limit=4096)
+        if problem:
+            return problem
+        try:
+            view = eco.accept(raw)
+        except EcoError as exc:
+            return error(422, "invalid_payload", str(exc))
+        return {"accepted": True, "eco": view}
 
     dist = ROOT / "ui" / "dist"
     if (dist / "assets").is_dir():

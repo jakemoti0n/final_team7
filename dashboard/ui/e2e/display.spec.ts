@@ -17,6 +17,21 @@ function telemetry(patrol: boolean) {
 }
 
 const screen = (page: Page) => page.getByTestId('display-screen')
+
+/** 화면에 보이는 글자 중 가장 작은 글자 크기(px, 1920×1080 기준). DEMO 표시·소리 안내(운영자용)는 뺀다 */
+const smallestText = (page: Page) => page.evaluate(() => {
+  const root = document.querySelector('[data-testid=display-screen]')!
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let smallest = Infinity
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const el = node.parentElement!
+    if (!node.textContent!.trim() || el.closest('.display-demo, .display-sound-hint, .display-mark')) continue
+    const box = el.getBoundingClientRect()
+    if (box.width === 0 || box.height === 0) continue
+    smallest = Math.min(smallest, parseFloat(getComputedStyle(el).fontSize))
+  }
+  return smallest
+})
 const SLIDE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect width="1920" height="1080" fill="#fde68a"/></svg>'
 
 /** 짧은 장면 길이와 팜플렛 1장으로 내용 응답을 바꿔 준다 (저장소 파일은 그대로) */
@@ -24,6 +39,7 @@ async function shortContent(page: Page) {
   await page.route('**/api/v1/display/content', route => route.fulfill({ json: {
     revision: 'e2e', message: '시험 문구', schedule: [],
     slides: [{ file: 'e2e.svg', width: 1920, height: 1080, type: 'image/svg+xml', url: '/api/v1/display/slides/e2e.svg?v=1' }],
+    eco: { enabled: false },   // 이 시험은 ① ↔ ②만 (나무는 따로)
     timing: { location_s: 2, slides_s: 2, count_s: 10, trash_alert_s: 10, passing_s: 8, passing_cooldown_s: 60 } } }))
   await page.route('**/api/v1/display/slides/**', route => route.fulfill({ contentType: 'image/svg+xml', body: SLIDE_SVG }))
 }
@@ -47,7 +63,9 @@ test('display demo: robot place, schedule, QR, then the pamphlet with a small QR
   await expect(page.getByTestId('display-event')).toHaveCount(3)
   await expect(page.locator('[data-testid=display-event][data-state=now]')).toContainText('LIMBO 데모')
   await expect(page.getByTestId('display-message')).toHaveText('쓰레기는 LIMBO에게 주세요.')
-  await expect(page.getByTestId('display-dots').locator('i')).toHaveCount(3)
+  await expect(page.getByTestId('display-dots').locator('i')).toHaveCount(4)       // ① ② ① ⑤
+  // 13.3인치 하단 화면에서 읽히게 본문은 40 px 이상 (PRD v0.3.6). DEMO 표시는 운영 화면에 없으므로 뺀다
+  expect(await smallestText(page)).toBeGreaterThanOrEqual(40)
   // 조작 없는 화면: 단추·링크·사이드바가 없다
   await expect(page.getByRole('button')).toHaveCount(0)
   await expect(page.getByRole('link')).toHaveCount(0)
@@ -66,6 +84,10 @@ test('display demo: robot place, schedule, QR, then the pamphlet with a small QR
   const box = (await mini.boundingBox())!
   expect(box.x + box.width).toBeGreaterThan(1800)
   expect(box.y + box.height).toBeGreaterThan(950)
+  // 작은 QR 300 px, 상자는 팜플렛이 비워 두는 오른쪽 아래 400 × 460 px 안에 (PRD v0.3.6)
+  expect((await mini.getByTestId('display-qr').boundingBox())!.width).toBeGreaterThanOrEqual(295)
+  expect(box.x).toBeGreaterThanOrEqual(1920 - 400)
+  expect(box.y).toBeGreaterThanOrEqual(1080 - 460)
   await expect(page.getByTestId('display-hud')).toBeVisible()                        // HUD는 팜플렛 위에도
   await page.waitForTimeout(800)                                                     // 0.6 s 페이드가 끝난 뒤 찍는다
   await page.screenshot({ path: '../artifacts/display-demo-slides.png' })
@@ -218,4 +240,79 @@ test('passing in the demo: the demo robot stops at corners and sets off again', 
   await expect(page.getByTestId('display-passing')).toBeVisible({ timeout: 8000 })
   await expect(page.getByTestId('display-passing-detail')).toContainText('길을 조금 비켜 주세요')
   await expect(page.getByTestId('display-passing')).toHaveCount(0, { timeout: 8000 })
+})
+
+const ECO = { schema_version: 1, observed_at: '', window_start: '', window_end: '', source: 'e2e', evaluation_method: 'ai_bin_inspection',
+  verified_correct_count: 18, verified_total_count: 20, quality: 'ok' }
+function ecoBody(correct: number, total = 20) {
+  const now = new Date(), start = new Date(now.getTime() - 3600_000)
+  return { ...ECO, observed_at: now.toISOString(), window_start: start.toISOString(), window_end: now.toISOString(),
+    verified_correct_count: correct, verified_total_count: total }
+}
+
+test('eco tree in the demo: initial first, with the small QR in the same corner', async ({ page }) => {
+  test.setTimeout(60000)
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await page.goto('/display?demo')
+  // 데모: ① 12 s(+ 지나갑니다 5 s) → ② 8 s → ① 12 s → ⑤ 나무. 첫 바퀴는 초기 나무
+  await expect(screen(page)).toHaveAttribute('data-scene', 'eco', { timeout: 45000 })
+  const eco = page.getByTestId('display-eco')
+  await expect(eco).toHaveAttribute('data-tree', 'initial')
+  await expect(page.getByTestId('display-eco-title')).toHaveText('분리수거 결과를 모으는 중이에요')
+  await expect(page.getByTestId('display-eco-detail')).toHaveCount(0)               // 판정 전에는 숫자 없음
+  await expect(eco.locator('img.display-eco-tree')).toHaveJSProperty('complete', true)
+  expect(await eco.locator('img.display-eco-tree').evaluate(img => (img as HTMLImageElement).naturalWidth)).toBe(900)
+  const box = (await page.getByTestId('display-mini-qr').boundingBox())!
+  expect(box.x + box.width).toBeGreaterThan(1800)
+  expect(box.y + box.height).toBeGreaterThan(950)
+  expect(await smallestText(page)).toBeGreaterThanOrEqual(40)
+  await page.waitForTimeout(800)
+  await page.screenshot({ path: '../artifacts/display-demo-eco-initial.png' })
+})
+
+test('eco tree from the server: positive, negative, and initial again when the server is lost', async ({ page, request }) => {
+  await page.route('**/api/v1/display/content', route => route.fulfill({ json: {
+    revision: 'e2e-eco', message: null, schedule: [], slides: [], eco: { enabled: true },
+    timing: { location_s: 1, slides_s: 2, eco_s: 60, count_s: 10, trash_alert_s: 10, passing_s: 8, passing_cooldown_s: 60 } } }))
+  const send = async () => expect((await request.post('/api/v1/telemetry', { data: telemetry(true) })).ok()).toBe(true)
+  await send()
+  const bridge = setInterval(() => { void send().catch(() => {}) }, 1000)
+  try {
+    // 시험 서버(allow_no_robot_token)는 토큰 없이 받는다. 형식이 틀리면 422, 정상은 판정을 돌려준다
+    expect((await request.post('/api/v1/eco', { data: { ...ecoBody(18), extra: 1 } })).status()).toBe(422)
+    const accepted = await request.post('/api/v1/eco', { data: ecoBody(18) })
+    expect(accepted.ok()).toBe(true)
+    expect((await accepted.json()).eco).toEqual({ state: 'positive', rate_percent: 90, correct: 18, total: 20, method: 'ai_bin_inspection' })
+    await page.setViewportSize({ width: 1920, height: 1080 })
+    await page.goto('/display')
+    await expect(screen(page)).toHaveAttribute('data-scene', 'eco', { timeout: 6000 })
+    await expect(page.getByTestId('display-eco')).toHaveAttribute('data-tree', 'positive')
+    await expect(page.getByTestId('display-eco-title')).toHaveText('분리수거를 잘하고 있어요!')
+    await expect(page.getByTestId('display-eco-detail')).toHaveText('수거함을 비운 뒤 · AI 확인 20건 중 18건 바르게')
+    await expect(page.getByTestId('display-eco-hint')).toHaveCount(0)
+    await page.waitForTimeout(800)
+    await page.screenshot({ path: '../artifacts/display-eco-positive.png' })
+    // 성공률이 떨어지면 (장면은 그대로, 다음 상태를 받을 때) 부정 나무와 부드러운 문구
+    expect((await request.post('/api/v1/eco', { data: ecoBody(13) })).ok()).toBe(true)
+    await expect(page.getByTestId('display-eco')).toHaveAttribute('data-tree', 'negative', { timeout: 6000 })
+    await expect(page.getByTestId('display-eco-title')).toHaveText('분리수거가 잘 안 되고 있어요')
+    await expect(page.getByTestId('display-eco-detail')).toHaveText('수거함을 비운 뒤 · AI 확인 20건 중 13건 바르게')
+    await expect(page.getByTestId('display-eco-hint')).toHaveText('재활용할 수 있는 것은 재활용 칸, 나머지는 일반 칸에 넣어 주세요')
+    expect(await smallestText(page)).toBeGreaterThanOrEqual(40)
+    // 두 줄이 되는 긴 문구도 1920 폭 안에 (넘치면 HUD 시계·작은 QR이 잘린다)
+    for (const id of ['display-eco-title', 'display-eco-hint', 'display-mini-qr', 'display-clock']) {
+      const box = (await page.getByTestId(id).boundingBox())!
+      expect(box.x + box.width, id).toBeLessThanOrEqual(1920)
+    }
+    await page.waitForTimeout(800)
+    await page.screenshot({ path: '../artifacts/display-eco-negative.png' })
+    // 서버에서 받지 못하면 판정이 오래됐으므로 숫자 없이 초기 나무
+    await page.route('**/api/v1/visitor/state', route => route.abort())
+    await expect(page.getByTestId('display-eco')).toHaveAttribute('data-tree', 'initial', { timeout: 8000 })
+    await expect(page.getByTestId('display-eco-detail')).toHaveCount(0)
+  } finally {
+    clearInterval(bridge)
+    // 다른 시험이 이 판정을 보지 않게 표본 부족(초기 나무)으로 되돌린다
+    await request.post('/api/v1/eco', { data: ecoBody(0, 0) })
+  }
 })

@@ -1,21 +1,23 @@
 // 로봇 하단 디스플레이(/display)의 데이터와 규칙. 화면 없이 시험할 수 있게 순수 함수로 둔다.
-// 근거: signage/docs/PRD_로봇_하단_디스플레이_v0.3.md (장면 ①-Q1·②-A, 회전 규칙 R)
-import { visitorStatus, type VisitorRobot, type VisitorState } from '../visitor/visitor'
+// 근거: signage/docs/PRD_로봇_하단_디스플레이_v0.3.md (장면 ①-Q1·②-A·④-A·⑤ 나무, 회전 규칙 R)
+import { visitorStatus, type EcoTree, type EcoView, type VisitorRobot, type VisitorState } from '../visitor/visitor'
 
 // ---- 서버 GET /api/v1/display/content (dashboard/server/display.py) ----
 export interface DisplayEvent { date: string | null; start: string; end: string | null; title: string; place: string | null }
 export interface DisplaySlide { file: string; width: number; height: number; type: string; url: string }
 export interface DisplayTiming {
-  location_s: number; slides_s: number; count_s: number; trash_alert_s: number; passing_s: number; passing_cooldown_s: number
+  location_s: number; slides_s: number; eco_s: number; count_s: number; trash_alert_s: number; passing_s: number; passing_cooldown_s: number
 }
 /** 「LIMBO가 지나갑니다」 때 한 번 트는 소리 (운영자가 TTS로 만들어 넣은 파일). 없으면 null */
 export interface DisplaySound { file: string; type: string; url: string }
+/** eco.enabled: 장면 ⑤ 나무를 순환에 넣을지 (예전 서버면 없음 → 넣음) */
 export interface DisplayContent {
-  revision: string; message: string | null; schedule: DisplayEvent[]; slides: DisplaySlide[]; sound?: DisplaySound | null; timing: DisplayTiming
+  revision: string; message: string | null; schedule: DisplayEvent[]; slides: DisplaySlide[]; sound?: DisplaySound | null
+  eco?: { enabled: boolean }; timing: DisplayTiming
 }
 
 /** 서버가 내용을 정하지 않았을 때(폴더 없음·처음부터 잘못됨)의 장면 길이. 서버 TIMING_DEFAULTS와 같다 */
-export const DEFAULT_TIMING: DisplayTiming = { location_s: 40, slides_s: 30, count_s: 10, trash_alert_s: 10, passing_s: 8, passing_cooldown_s: 60 }
+export const DEFAULT_TIMING: DisplayTiming = { location_s: 40, slides_s: 30, eco_s: 15, count_s: 10, trash_alert_s: 10, passing_s: 8, passing_cooldown_s: 60 }
 
 const text = (v: unknown) => typeof v === 'string'
 const nullableText = (v: unknown) => v === null || typeof v === 'string'
@@ -30,8 +32,11 @@ export function parseDisplayContent(value: unknown): DisplayContent | null {
   if (!c.slides.every(s => s && text(s.file) && text(s.url) && s.url.startsWith('/api/v1/display/slides/') && s.width > 0 && s.height > 0)) return null
   const sound = c.sound
   if (sound != null && (!text(sound.url) || !sound.url.startsWith('/api/v1/display/sound/') || !text(sound.type))) return null
-  if (!(Object.keys(DEFAULT_TIMING) as (keyof DisplayTiming)[]).every(k => typeof c.timing[k] === 'number' && c.timing[k] > 0)) return null
-  return c
+  if (c.eco != null && typeof c.eco.enabled !== 'boolean') return null
+  // eco_s는 예전 서버에 없으므로 기본값으로 채운다
+  const timing = { ...c.timing, eco_s: c.timing.eco_s ?? DEFAULT_TIMING.eco_s }
+  if (!(Object.keys(DEFAULT_TIMING) as (keyof DisplayTiming)[]).every(k => typeof timing[k] === 'number' && timing[k] > 0)) return null
+  return { ...c, timing }
 }
 
 // ---- 어느 로봇을 보여 줄지 ----
@@ -132,18 +137,19 @@ export function pickEvents(schedule: DisplayEvent[], now: Date, count = 3): Show
 }
 
 // ---- 회전 규칙 R ----
-export type SceneKey = 'location' | 'slides' | 'count'
+export type SceneKey = 'location' | 'slides' | 'eco' | 'count'
 export interface Slot { scene: SceneKey; seconds: number }
 
 /**
- * 시간 순환 칸: ① → ② → ① → ③(오늘 받은 횟수). 보여 줄 것이 없는 칸은 뺀다
- * (팜플렛이 없으면 ②, 쓰레기 받음 신호가 아직 없으면 ③). ①만 남으면 한 칸.
+ * 시간 순환 칸: ① → ② → ① → ⑤(나무) → ③(오늘 받은 횟수). 보여 줄 것이 없는 칸은 뺀다
+ * (팜플렛이 없으면 ②, display.json에서 나무를 껐으면 ⑤, 쓰레기 받음 신호가 아직 없으면 ③). ①만 남으면 한 칸.
  */
-export function rotationPlan(timing: DisplayTiming, slideCount: number, hasCount: boolean): Slot[] {
+export function rotationPlan(timing: DisplayTiming, slideCount: number, hasCount: boolean, hasEco = false): Slot[] {
   const location: Slot = { scene: 'location', seconds: timing.location_s }
   const slots: Slot[] = [location]
   if (slideCount > 0) slots.push({ scene: 'slides', seconds: timing.slides_s })
   if (slideCount > 0 || hasCount) slots.push(location)
+  if (hasEco) slots.push({ scene: 'eco', seconds: timing.eco_s })
   if (hasCount) slots.push({ scene: 'count', seconds: timing.count_s })
   return slots
 }
@@ -212,6 +218,44 @@ export function passingText(robot: VisitorRobot | null) {
 /** 소리 파일이 없을 때 브라우저 음성으로 읽을 문장 (LIMBO를 영어 철자로 읽지 않게 한글로) */
 export const PASSING_SPEECH = '림보가 지나갑니다. 길을 조금 비켜 주세요.'
 
+// ---- 장면 ⑤ 환경 피드백: 나무 3상태 ----
+/** 확인 방법별로 화면에 밝히는 말. 사람이 검수한 것처럼 쓰지 않는다 (PRD v0.3.2: AI 확인은 「AI 확인」) */
+const METHOD_LABEL: Record<string, string> = {
+  ai_bin_inspection: 'AI 확인', human_audit: '직접 확인', sensor_verified: '센서 확인', verified_route_log: '기록 확인',
+}
+
+export interface EcoText {
+  tree: EcoTree
+  title: string            // 크게
+  detail: string | null    // 작게: "수거함을 비운 뒤 · AI 확인 20건 중 18건 바르게" (판정이 됐을 때만)
+  hint: string | null      // 부정일 때 다음에 무엇을 하면 되는지
+}
+
+/**
+ * 나무 그림과 문구. 판정은 서버가 하고 화면은 state만 본다(성공률을 다시 계산하지 않음).
+ * 판정이 없거나(서버와 끊김·예전 서버·이상한 값) initial이면 숫자 없이 초기 나무.
+ * 부정 문구는 부드럽게: 탓하거나 겁주지 않고 다음에 할 일을 알려 준다 (PRD v0.3.2). 수거함은 일반/재활용 두 칸
+ */
+export function ecoText(eco: EcoView | null | undefined): EcoText {
+  if (!eco || eco.state === 'initial' || eco.total == null || eco.correct == null) {
+    return { tree: 'initial', title: '분리수거 결과를 모으는 중이에요', detail: null, hint: null }
+  }
+  const how = METHOD_LABEL[eco.method ?? ''] ?? '확인'
+  const detail = `수거함을 비운 뒤 · ${how} ${eco.total}건 중 ${eco.correct}건 바르게`
+  if (eco.state === 'positive') return { tree: 'positive', title: '분리수거를 잘하고 있어요!', detail, hint: null }
+  return { tree: 'negative', title: '분리수거가 잘 안 되고 있어요', detail,
+    hint: '재활용할 수 있는 것은 재활용 칸, 나머지는 일반 칸에 넣어 주세요' }
+}
+
+/** 데모 나무: 바퀴마다 초기 → 긍정 → 부정 */
+export function demoEco(round: number): EcoView {
+  const tree = (['initial', 'positive', 'negative'] as const)[round % 3]
+  if (tree === 'initial') return { state: 'initial' }
+  return tree === 'positive'
+    ? { state: 'positive', rate_percent: 90, correct: 18, total: 20, method: 'ai_bin_inspection' }
+    : { state: 'negative', rate_percent: 65, correct: 13, total: 20, method: 'ai_bin_inspection' }
+}
+
 // ---- 데모 (/display?demo): 서버 없이 ----
 const minutes = (d: Date, delta: number) => localTime(new Date(d.getTime() + delta * 60000))
 
@@ -236,6 +280,7 @@ export function demoDisplayContent(now = new Date()): DisplayContent {
     ],
     slides: [slide(1, '#dcfce7'), slide(2, '#fef3c7')],
     sound: null,                                                   // 데모는 소리 파일 없음 (브라우저에 한국어 음성이 있으면 그것으로)
-    timing: { ...DEFAULT_TIMING, location_s: 12, slides_s: 8, passing_s: 5, passing_cooldown_s: 20 },   // 데모는 짧게 돌아 금방 볼 수 있게
+    eco: { enabled: true },                                        // 나무는 바퀴마다 초기 → 긍정 → 부정 (demoEco)
+    timing: { ...DEFAULT_TIMING, location_s: 12, slides_s: 8, eco_s: 8, passing_s: 5, passing_cooldown_s: 20 },   // 데모는 짧게 돌아 금방 볼 수 있게
   }
 }

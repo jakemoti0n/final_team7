@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { visitorStatus, type VisitorRobot } from '../features/visitor/visitor'
+import { visitorStatus, type EcoTree, type EcoView, type VisitorRobot } from '../features/visitor/visitor'
 import { useDisplayData } from '../features/display/useDisplayData'
 import { QrCode } from '../features/display/QrCode'
 import { useDisplaySound } from '../features/display/useDisplaySound'
 import {
-  DEFAULT_TIMING, NO_PASSING, advance, localTime, locationText, locksRotation, passingStep, passingText, pickEvents, pickRobot,
+  DEFAULT_TIMING, NO_PASSING, advance, demoEco, ecoText, localTime, locationText, locksRotation, passingStep, passingText, pickEvents, pickRobot,
   rotationPlan, titleSize, topic, type DisplayContent, type DisplaySlide, type Passing, type Rotation,
 } from '../features/display/display'
 
 const WIDTH = 1920, HEIGHT = 1080
+// 장면 ⑤ 나무 그림. 원본은 signage/assets/images/tree_*.png (1024 px, 장마다 2 MB), 키오스크용으로 900 px WebP로 줄인 것
+const TREES: Record<EcoTree, string> = {
+  initial: new URL('../assets/display/tree-initial.webp', import.meta.url).href,
+  positive: new URL('../assets/display/tree-positive.webp', import.meta.url).href,
+  negative: new URL('../assets/display/tree-negative.webp', import.meta.url).href,
+}
 
 /** 1920×1080 화면을 창 크기에 맞춰 비율을 지키며 줄이고 늘린다 (남는 곳은 검게) */
 function useFit() {
@@ -24,7 +30,7 @@ function useFit() {
 
 /**
  * 로봇 하단 디스플레이 (/display): 로그인 없이 읽기만, 조작 없음. 근거 signage/docs/PRD_로봇_하단_디스플레이_v0.3.md
- * 장면 ① 로봇 위치 + 행사 안내 + 큰 QR, ② 팜플렛 + 작은 QR. 회전 규칙 R(①→②→①)은 display.ts의 advance.
+ * 장면 ① 로봇 위치 + 행사 안내 + 큰 QR, ② 팜플렛 + 작은 QR, ⑤ 분리수거 나무 + 작은 QR. 회전 규칙 R(①→②→①→⑤)은 display.ts의 advance.
  * ④ 「LIMBO가 지나갑니다」는 출발할 때 지금 장면 위에 띄우고 소리 한 번(passingStep). ③ 쓰레기 받음은 로봇 신호가 생긴 뒤.
  */
 export function DisplayPage({ demo, robotId }: { demo: boolean; robotId: string | null }) {
@@ -39,7 +45,8 @@ export function DisplayPage({ demo, robotId }: { demo: boolean; robotId: string 
   const robot = pickRobot(state, robotId)
   const slides = content?.slides ?? []
   const timing = content?.timing ?? DEFAULT_TIMING
-  const plan = useMemo(() => rotationPlan(timing, slides.length, false), [timing, slides.length])
+  const ecoOn = content?.eco?.enabled ?? true
+  const plan = useMemo(() => rotationPlan(timing, slides.length, false, ecoOn), [timing, slides.length, ecoOn])
 
   // ④ 지나갑니다: 상태를 받거나 1초가 지날 때마다 판단. 새로 띄우면 소리 한 번
   const [passing, setPassing] = useState<Passing>(NO_PASSING)
@@ -68,6 +75,8 @@ export function DisplayPage({ demo, robotId }: { demo: boolean; robotId: string 
   const scene = closed ? 'closed' : plan[rotation.slot]?.scene ?? 'location'
   const slide = slides.length ? slides[rotation.round % slides.length] : null
   const visitorUrl = `${location.origin}/visitor`
+  // 서버와 끊기면 판정이 오래됐으므로 숫자 없이 초기 나무. 데모는 바퀴마다 세 상태를 차례로
+  const eco: EcoView | null = demo ? demoEco(rotation.round) : problem ? null : state?.eco ?? null
   // 같은 장면끼리(①→①)는 다시 그리지 않아 깜빡이지 않게, 다른 장면·다른 팜플렛으로 바뀔 때만 0.6 s 페이드
   const sceneKey = scene === 'slides' && slide ? `slides-${slide.url}` : scene
 
@@ -80,6 +89,7 @@ export function DisplayPage({ demo, robotId }: { demo: boolean; robotId: string 
             <h1>지금은 안내를 하지 않습니다</h1><p>행사 기간에만 LIMBO 위치를 안내합니다.</p></section>}
           {scene === 'location' && <LocationScene robot={robot} problem={problem} content={content} now={now} visitorUrl={visitorUrl} />}
           {scene === 'slides' && slide && <SlideScene slide={slide} index={slides.indexOf(slide)} total={slides.length} visitorUrl={visitorUrl} />}
+          {scene === 'eco' && <EcoScene eco={eco} visitorUrl={visitorUrl} />}
         </div>
       </main>
       {passingShown && !closed && <PassingOverlay robot={robot} />}
@@ -151,10 +161,30 @@ function SlideScene({ slide, index, total, visitorUrl }: { slide: DisplaySlide; 
   return <div className="display-slide" data-testid="display-slide" data-file={slide.file}>
     <img className="display-slide-bg" src={slide.url} alt="" aria-hidden="true" />
     <img className="display-slide-fg" src={slide.url} alt={`행사장 팜플렛 ${index + 1}/${total}`} />
-    <aside className="display-card display-mini-qr" aria-label="폰으로 지도 보기">
-      <QrCode value={visitorUrl} className="display-qr" label="방문자 안내 화면 주소 QR 코드" />
-      <p>폰으로 지도 보기</p>
-    </aside>
+    <MiniQr visitorUrl={visitorUrl} />
+  </div>
+}
+
+/** 장면 ②⑤의 오른쪽 아래 작은 QR (300 px). 팜플렛은 이 모서리(약 400 × 460 px)를 비워 둔다 */
+function MiniQr({ visitorUrl }: { visitorUrl: string }) {
+  return <aside className="display-card display-mini-qr" aria-label="폰으로 지도 보기" data-testid="display-mini-qr">
+    <QrCode value={visitorUrl} className="display-qr" label="방문자 안내 화면 주소 QR 코드" />
+    <p>폰으로 지도 보기</p>
+  </aside>
+}
+
+/** 장면 ⑤ 환경 피드백: 왼쪽 나무 그림, 오른쪽 문구, 오른쪽 아래 작은 QR. 그림 위에 글자를 얹지 않는다 */
+function EcoScene({ eco, visitorUrl }: { eco: EcoView | null; visitorUrl: string }) {
+  const text = ecoText(eco)
+  return <div className="display-eco" data-testid="display-eco" data-tree={text.tree}>
+    <img className="display-eco-tree" src={TREES[text.tree]} alt="" aria-hidden="true" />
+    <section className="display-eco-text">
+      <div className="display-eco-kicker">우리가 함께 키우는 나무</div>
+      <h1 data-testid="display-eco-title">{text.title}</h1>
+      {text.detail && <p className="display-eco-detail" data-testid="display-eco-detail">{text.detail}</p>}
+      {text.hint && <p className="display-eco-hint" data-testid="display-eco-hint">{text.hint}</p>}
+    </section>
+    <MiniQr visitorUrl={visitorUrl} />
   </div>
 }
 

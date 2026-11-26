@@ -277,6 +277,14 @@ class Settings(StrictModel):
     # 방문자 안내 화면(/visitor)과 그 API. 로그인 없이 누구나 읽으므로 기본은 꺼짐.
     # 켜면 로봇 이름·쉬운 상태·대략 위치(0.5 m 단위)만 내보내고 명령은 받지 않는다
     visitor_enabled: bool = False
+    # 분리수거 성공률(POST /api/v1/eco, 하단 디스플레이 장면 ⑤ 나무). 보내는 쪽은 Raspberry Pi(로봇 ROS 네트워크 밖)라서
+    # 로봇 토큰과 다른 토큰을 쓴다: 환경 변수 ECO_TOKEN이 우선, 없으면 이 파일. 둘 다 없으면 성공률을 받지 않는다
+    # (allow_no_robot_token이면 토큰 없이 받음, 로컬 개발용)
+    eco_token_file: str | None = None
+    eco_positive_percent: Annotated[float, Field(gt=0, le=100)] = 80   # 이 % 이상이면 긍정 나무
+    eco_min_samples: Annotated[int, Field(gt=0)] = 20                  # 확인한 건수가 이보다 적으면 초기 나무
+    eco_max_age_s: Annotated[float, Field(gt=0)] = 600                 # 서버가 마지막으로 받은 뒤 이만큼 지나면 초기 나무
+    eco_clock_skew_warn_s: Annotated[float, Field(gt=0)] = 600         # Pi 시계가 이만큼 어긋나면 로그 경고 (판정은 그대로)
 
     @model_validator(mode="after")
     def ordered(self):
