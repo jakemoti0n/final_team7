@@ -3,7 +3,7 @@
 시뮬레이션과 코드 점검 중에 발견했지만 아직 고치지 않은 문제를 모은다.
 고치면 이 표에서 지우고 커밋 메시지에 남긴다.
 
-마지막 갱신: 2026-11-26 (ToF 센서 2개 불량으로 사용 불가 확정)
+마지막 갱신: 2026-11-26 (ToF 사용 불가 확정, 시계 대기 적용, DDS 발견 포트 슬롯 범위 100으로 고침, 패드 자동 연결 실패)
 
 ## 지금 주행을 막는 것 (PROJECT.md "다음"에 올라가 있음)
 
@@ -121,7 +121,10 @@
 - **임시와 대가**: 확신도 0.5(변경 기록 77). 0.3은 1.5 m 안 사람 검출을 위해 낮춘 값이라 코앞 손님 검출이 줄 수 있음 — 다음 실물 주행에서 확인
 - **대책 후보**: 이 장면(봉투 씌운 쓰레기통·상자)을 하반신 모델 학습 데이터의 부정 사례로 넣는 것
 
-## NX 부팅 유닛이 시각 동기 전에 떠서 라이다·위치 검증이 깨질 수 있음 — 근본 대책 미적용 (2026-11-25)
+## NX 부팅 유닛이 시각 동기 전에 떠서 라이다·위치 검증이 깨질 수 있음 — 대기 적용, 전원 차단 실측 남음 (2026-11-25 → 2026-11-26)
+- **현재(11-26)**: 대책 ②를 적용함. 모든 `limbo-nx-*` 유닛이 `ExecStartPre=wait_clock`(NTPSynchronized=yes까지 2 s 간격 대기, `TimeoutStartSec=infinity`)으로 시작한다. 파일 `tools/nx_boot/boot/wait_clock`, `tools/nx_boot/systemd/limbo-nx-.service.d/wait-clock.conf`(젯슨에는 `~/.config/` 아래 복사본). 소프트웨어 재부팅(15:58)에서 다섯 유닛이 35 s 기다린 뒤 떴다. 해결 기록은 `TROUBLESHOOTING.md` 2026-11-26
+- **남은 것**: ① 전원을 끊었다 켜는(시계가 1970년에서 출발하는) 상황은 아직 실측 안 함. 소프트웨어 재부팅에서는 커널 RTC(`nvvrs-pseq-rtc`)가 시각을 2026-11-26으로 유지해 1970년 출발이 재현되지 않았다 ② 인터넷(NTP)이 없으면 유닛이 끝없이 기다린다(`record_laps`는 "시계 동기를 기다리는 중"이라고 알린다) ③ RTC 전지 미장착
+- **아래는 11-25 기록**
 - **근거**: 11-25 부팅 1회. RTC 없이 시계가 1970년에서 출발 → 수십 초 뒤 NTP 점프. 그 전에 뜬 Livox 드라이버가 1초 약 1,500 메시지(96점씩)를 내고 `/scan` 560 Hz·유효 점 8개, `corridor-pose.json`의 `time` 60.3으로 `ready.py`가 영원히 대기. 증상·확인 명령·수동 해결은 `TROUBLESHOOTING.md` 2026-11-25
 - **영향**: 재부팅마다 생길 수 있고, 생기면 Nav2가 안 뜬다. 사람이 `systemctl --user restart limbo-nx-sensors`를 해야 풀림
 - **임시**: 위 재시작(시각 동기 확인 뒤)
@@ -132,3 +135,15 @@
 - **근거**: 11-24·25 NX. 배선(젯슨 40핀): VIN 1·GND 6·SDA 3/27·SCL 5/28·SPI/I2C 선택 핀 → GND·LP 29/31(GPIO, `gpioset`으로 HIGH를 유지해야 함). 센서 A(3·5, bus 7) 무응답. 센서 B(27·28, bus 1)는 3분 감시에서 176번 중 21번 응답, 장치 ID 2번 읽힘 → 선·커넥터 접촉 불량으로 판단. 젯슨 핀 설정은 정상(`jetson-io -l enabled`에 i2c2·i2c8 켜짐). "핀먹스가 GPIO로 잡혀 있다"는 가설은 틀렸음
 - **영향**: ToF(근거리 장애물·코앞 사람) 없이 주행. PM이 배선을 뽑아 둠
 - **새 센서로 다시 붙일 때 순서**: ① 센서 하나씩 붙인다 ② 납땜하거나 커넥터를 고정한다 ③ LP는 3.3 V에 직접 묶거나 GPIO HIGH 유지 ④ `i2cdetect`로 0x29가 몇 분 동안 끊김 없이 보이는지 확인한 뒤에 드라이버를 띄운다
+
+## 젯슨 DDS 발견 포트 슬롯 32 이상끼리 서로 못 찾던 문제 — 원인 확정, 발견 범위 100으로 고침. 남은 한계는 프로세스 약 100개 (2026-11-26)
+- **원인(확정)**: `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`에서 rmw_fastrtps가 발견 범위(`maxInitialPeersRange`) 32인 UDP 전송을 붙여, 프로세스가 127.0.0.1의 포트 슬롯 0~31에만 발견 알림을 보냈다. 슬롯이 둘 다 32 이상인 프로세스끼리는 서로 못 찾는다. 증상·근거·시험 숫자는 `TROUBLESHOOTING.md` 2026-11-26
+- **고침**: `limbo_bringup/config/fastdds_camera.xml`의 UDP 전송에 `maxInitialPeersRange` 100. `record_laps`가 기록 런치 직전에 "점유된 최고 슬롯 + 런치가 띄울 프로세스 수"가 범위 안인지 보고, 넘으면 시작하지 않는다
+- **남은 한계**: 한 보드의 ROS 프로세스가 약 100개를 넘으면 같은 문제가 다시 생긴다(프로세스가 빈 슬롯을 찾는 시도 상한 `mutation_tries`도 100). 11-26 부팅 유닛 + 데몬이 슬롯 30개, 기록 런치가 5개를 더 쓴다
+- **이미 버린 기록**: 11-25 첫 바퀴 bag(`20261125_194533_01_manual`)에는 `/drive_mode`·`/cmd_vel_arbiter`가 없어 학습 정답을 못 만든다(`dataset.py`의 `no_drive_mode`)
+
+## 패드 전원만 켜면 자동으로 붙지 않음 — 본딩 실패 (2026-11-26)
+- **근거**: 11-26 NX, `uhid` 로드·`Trusted: yes` 상태. 16:21:31 bluetoothd `connected_callback() … A0:5A:5F:60:C7:FF connected` → 16:21:36 `dev_disconnected() … reason 2`, `bonding_attempt_complete() … status 0xe`, `device_bonding_failed() status 14`. 그 뒤 재시도 없음. 16:22:18 젯슨에서 `bluetoothctl connect A0:5A:5F:60:C7:FF` 한 번 → `Connection successful`, `/dev/input/js0` 16:22:19 생성
+- **영향**: 팀원이 패드를 켜는 것만으로는 패드가 안 붙는다
+- **임시**: `record_laps`가 `js0`이 없는 동안 `bluetoothctl connect`를 2 s 간격으로 되풀이한다. 런치가 뜬 뒤 끊기면 순서표대로 다른 창에서 `bluetoothctl connect`
+- **대책 후보**: 원인(패드 쪽 재연결 시 본딩 실패) 조사는 아직 안 함

@@ -1,0 +1,19 @@
+#!/bin/bash
+# 시스템 시계가 맞춰질 때까지 기다린다. 모든 limbo-nx-* 유닛의 ExecStartPre
+# (~/.config/systemd/user/limbo-nx-.service.d/wait-clock.conf).
+#
+# 왜: 이 보드는 RTC 전지가 없어 부팅 때 커널(nvvrs-pseq-rtc, rtc0)이 시계를 1970년으로
+#     덮어쓴다. 그 시계로 ROS 노드를 띄우면 뒤이은 NTP 점프에 노드가 깨진다.
+# 통과 신호: timedatectl NTPSynchronized=yes. 커널이 "NTP로 맞춘 시계"라고 표시한 상태이고,
+#     RTC가 시계를 덮어쓰면 커널이 이 표시를 지우므로 덮어쓰기 전후를 헷갈리지 않는다.
+# 쓰지 않는 신호: /var/lib/systemd/timesync/clock 의 mtime. systemd-timesyncd(255)는 동기 전에도
+#     60초마다 이 파일을 "현재 시각"으로 덮으므로, NTP가 늦으면 mtime이 1970년이 되어 버린다.
+# 인터넷(NTP)이 없으면 계속 기다린다.
+read -r start_up _ </proc/uptime
+synced() { [[ "$(timeout 5 timedatectl show -p NTPSynchronized --value 2>/dev/null)" == yes ]]; }
+if ! synced; then
+    echo "waiting for system clock: NTPSynchronized=no, now=$(date -Is)"
+    until synced; do sleep 2; done
+fi
+read -r end_up _ </proc/uptime
+echo "system clock ok: NTPSynchronized=yes, now=$(date -Is), waited $(( ${end_up%.*} - ${start_up%.*} ))s"

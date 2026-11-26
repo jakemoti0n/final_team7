@@ -36,6 +36,7 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 | `limbo_monitor` | 바퀴 헛돎 감시 (취소 기능은 임시로 꺼 둠) | |
 | `limbo_evaluation` | Goal마다 주행 지표 CSV (`record:=true`) | `nav_recorder`, `~/limbo_results/` |
 | `limbo_imitation` | 사람의 조이스틱 운전을 모방 학습한 정책으로 속도 명령을 냄(2-10). 운전 중재기(teleop·정책·MPPI 중 하나를 `/cmd_vel_arbiter`로), 바퀴 기록·지표, 데이터셋·학습 | `drive_arbiter.py`(+`arbiter_logic.py`), `policy_node.py`, `run_recorder.py`(+`metrics.py`), `features.py`/`frame_builder.py`(입력 279칸, 학습·실행 공용), `dataset.py`(`build_dataset`), `train.py`(`train_policy`), `config/imitation.yaml` |
+| `tools/nx_boot/` | NX 보드 부팅 자동 기동(사용자 systemd 유닛 5개)과 수동 운전 기록 도구. 젯슨에는 저장소 밖 `~/.config/limbo/`에 링크·복사로 둔다 | `install.sh`, `boot/start`, `boot/wait_clock`(유닛 시작 전 NTP 시계 동기 대기, drop-in `systemd/limbo-nx-.service.d/wait-clock.conf`), `bin/record_laps`(+`record_laps_checks.py`, 점검 → 패드 배선 → 기록 런치 → Ctrl+C 뒤 지표 표·배선 원복) |
 | `dashboard/`, `relay_prog/` | 관제 화면(서버·UI)과 로봇↔서버 Bridge | 설계 `docs/CONTROL_SCREEN.md`, `docs/CONTROL_API_DRAFT.md` |
 
 ---
@@ -163,7 +164,8 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 - 불합격 바퀴도 통째로 버리지 않고 **문제 구간만** 뺀다(충돌 앞뒤·개인 공간 침범·갇힘·`collision_monitor`가 깎은 구간).
 - 교정 반복(DAgger): 정책이 운전하고 사람이 데드맨으로 끼어든다 → 끼어든 구간이 새 정답(가중 2, `intervention_weight`) → 재학습. 끼어들기 0이 연속 2바퀴면 끝.
 - 가중치·문턱 같은 값은 손으로 만지지 않고 데이터로 채운다. 불일치 문턱은 검증 바퀴 불일치의 95 % 분위수(`threshold_quantile`)다.
-- 데이터 수집: 바퀴 기록 시작·끝은 패드 버튼(Start, `record_button`)으로 한다(11-26, 패드 켜기와 기록이 한 런치에 묶여 있어 바퀴마다 런치를 껐다 켜야 했고 바퀴 사이 이동까지 기록되던 문제). 런치는 하루 한 번 띄워 둔다. 버튼으로 시작한 바퀴의 완주는 수동 시작 바퀴처럼 운전자에게 맡긴다(`completed: manual`).
+- 수동 운전 기록은 **조건 없이** 한다(11-26 PM 결정). 운전자에게 "빈 복도·벽 붙기·보행자" 같은 조건을 미리 정해 주거나 연출시키지 않고, 조건 라벨은 주행 뒤 기록(경로·사람 수·거리·정지 구간)을 읽어 붙인다. 부족한 장면은 데이터를 본 뒤 요청하거나 `policy_assist`(교정 반복) 단계에서 보충한다. 연출한 장면은 실제 운용과 분포가 달라지고, 사람에게 미리 입력시키면 틀린 라벨이 섞이기 때문이다. 그래서 기록 도구(`record_laps`)는 조건을 받지 않고 분류 기준값도 두지 않는다.
+- 데이터 수집: 바퀴 기록 시작·끝은 패드 버튼(≡ = Start, `record_button`)으로 한다(11-26, 패드 켜기와 기록이 한 런치에 묶여 있어 바퀴마다 런치를 껐다 켜야 했고 바퀴 사이 이동까지 기록되던 문제). 런치는 하루 한 번 띄워 둔다. 버튼으로 시작한 바퀴의 완주는 수동 시작 바퀴처럼 운전자에게 맡긴다(`completed: manual`).
 
 **구조**
 - `teleop_twist_joy` → `/cmd_vel_teleop`, `policy_node` → `/cmd_vel_policy`, MPPI(velocity_smoother) → `/cmd_vel_smoothed` → `drive_arbiter`가 하나를 골라 `/cmd_vel_arbiter` → `collision_monitor` → `/cmd_vel`. 비상 정지는 어느 운전자든 바퀴 앞에 늘 남는다.
@@ -328,6 +330,7 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 | 2026-10-14 | 사람이면 기다리기 BT 켬 | ToF 코앞 막힘 + 카메라 기억 래치, 진로 폭 띠(앞 1.5 m·좌우 0.55 m). 비켜 주는 사람 복도 3/3, 손님 4/4, 회전·후진 0 |
 | 2026-10-15 | 라이다 0.70 m·카메라 0.60 m (하드웨어 최종 치수) | 몸체 윗면 0.609 m. 시뮬레이션 몸체 메시도 높이에 맞춰 z 배율. 복도 3/3·상자 4/4, 출발 자리에서 자기 몸체 안 봄 |
 | 2026-10-15 | 경로 계획기 NavFn A* 유지 | 계획 계산 A* 1.0~2.4 ms vs 다익스트라 1.8~5.8 ms. 다익스트라 경로가 0.3~1.3 m 짧으나 MPPI 후보 충돌 경고 10(A* 0) |
+| 2026-11-26 | 수동 운전 기록은 조건 없이, 조건 라벨은 주행 뒤 기록으로 사후 판독(2-10) | 미리 정한 조건을 연출시키면 실제 운용과 장면 분포가 달라지고 사람이 넣는 라벨이 틀릴 수 있음. 부족한 장면은 데이터를 본 뒤 요청하거나 policy_assist에서 보충 |
 | 2026-11-10 | 위 결정 재검토 중 — 실물에서 A* 모드가 로봇 앞 2 cm 되꺾임 수백 개의 떨림 경로를 내 MPPI `enforce_path_inversion`과 맞물려 코너에서 1~3분 정지(변경 기록 67) | 10-15 비교는 계산 시간·충돌 경고만 봤고 경로 되꺾임은 안 쟀음. 품질 판단 기준을 되꺾임 수로 바꾸고, NavFn 안에서 A*↔다익스트라를 오가지 않고 안 되면 Smac으로 간다 |
 
 ---
@@ -367,8 +370,9 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 - 1·2일 차 구현 끝(변경 기록 75·76): 중재기·바퀴 기록기·지표·조이스틱 런치, 데이터셋·MLP 앙상블·학습·정책 노드. 합성 bag으로 기록 → 학습 → 정책 주행 흐름 확인. 설계는 2-10.
 - 다음 순서:
   1. 3일 차: 예비 기록. 2026-11-25 첫 수동 바퀴 1개(패드 Acegamer T50 Xbox 모드 블루투스, 272 s·44.8 m, 변경 기록 78). 남은 것: `uhid` 영구 로드(sudo)·부팅 유닛 시각 동기 대기(설계 승인, `KNOWN_ISSUES.md` 2026-11-25).
-  2. 4일 차: 수동 운전 20~30바퀴. 조건표(빈 복도 / 벽 붙기 / 보행자 1명·2명 / 운전자 교대), 카메라 켠 채로.
-     2026-11-26: 젯슨 `~/limbo`를 변경 기록 78로 갱신·빌드, 첫 수동 20바퀴 준비(조건 코드 `cond_empty 6 / cond_wall 4 / cond_ped1 2 / cond_guest 2 / cond_ped2 3 / cond_swap 3`, 순서표는 팀에 전달). 기록 시작·끝을 패드 버튼으로 바꿈(변경 기록 79).
+  2. 4일 차: 수동 운전 20~30바퀴, 카메라 켠 채로. **조건 없이 운전**하고, 조건 라벨은 주행 뒤 기록(경로·사람 수·거리·정지 구간)으로 사후 판독한다. 부족한 장면은 데이터를 본 뒤 요청하거나 `policy_assist` 단계에서 보충(2-10, 11-26 PM 결정).
+     2026-11-26: 젯슨 `~/limbo`를 변경 기록 78로 갱신·빌드. 기록 시작·끝을 패드 버튼으로 바꿈(변경 기록 79). 팀원 절차를 `record_laps` 한 줄로 줄임(전원 → 패드 → `record_laps` → ≡ 반복). 유닛 시계 동기 대기(`wait_clock`)·`uhid` 부팅 로드 적용.
+     DDS 발견 범위(11-26 PM 결정): 포트 슬롯 32 이상끼리 서로 못 찾아 11-25 첫 바퀴 bag에 `/drive_mode`·`/cmd_vel_arbiter`가 빠졌다(학습 정답 못 만듦). `fastdds_camera.xml`의 UDP 발견 범위를 100으로 넓히고, `record_laps`가 런치 전에 슬롯이 범위 안인지 본다(`TROUBLESHOOTING.md` 2026-11-26). 바퀴마다 bag 토픽 목록(`bag/metadata.yaml`)에 `/drive_mode`가 있는지 본다.
   3. 5~7일 차: 학습, 교정 반복(DAgger).
   4. 8일 차: MPPI 대 정책 비교(2-10 채택 기준).
   5. 9일 차: 충장로 시뮬레이션으로 확장성 확인.

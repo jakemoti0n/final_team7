@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Fast DDS 2.14.x: transport-only profile for the OAK ROS camera processes.
      RGB payload is 640 * 400 * 3 = 768000 bytes, above the default 512 KiB
-     SHM segment. Keep UDP discovery/network transport and increase only SHM.
+     SHM segment. Keep UDP discovery/network transport and increase only SHM
+     (and the UDP discovery peer range, see limbo_camera_udp below).
      No publisher/subscriber QoS, history, or publication-mode overrides.
      Load through FASTRTPS_DEFAULT_PROFILES_FILE before participant creation. -->
 <dds xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
@@ -15,6 +16,11 @@
       <transport_descriptor>
         <transport_id>limbo_camera_udp</transport_id>
         <type>UDPv4</type>
+        <!-- Discovery announcements go to port slots 0..99 on 127.0.0.1. Under
+             ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST rmw_fastrtps appends its own
+             UDP transport with 32, so slot 32+ processes could not find each other.
+             100 = how far a process searches for a free slot (mutation_tries 100). -->
+        <maxInitialPeersRange>100</maxInitialPeersRange>
       </transport_descriptor>
     </transport_descriptors>
     <participant profile_name="limbo_camera_participant" is_default_profile="true">

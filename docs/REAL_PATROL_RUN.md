@@ -18,10 +18,36 @@
 
 사람이 패드로 운전한 바퀴를 기록한다. 패드 명령은 중재기(`drive_arbiter`) → collision_monitor → `/cmd_vel` → 바퀴로 가므로 안전 정지는 그대로 남는다. 패드는 **LB(왼쪽 어깨)를 누르는 동안만** 바퀴로 간다.
 
+**한 줄로 — `record_laps`** (2026-11-26부터. 로봇 전원과 패드(Xbox 모드)를 켜고):
+```bash
+ssh automaton@192.168.20.18
+record_laps kim          # 운전자 이름은 생략 가능. 하루 한 번
+```
+→ 점검이 끝나면 `준비 완료. LB+스틱으로 움직이고, ≡를 누르면 기록 시작(다시 누르면 끝). 다 끝나면 Ctrl+C 한 번`이 찍힌다. 바퀴마다 HOME에서 ≡ → 한 바퀴 → ≡. 다 끝나면 Ctrl+C 한 번 → 바퀴 지표 표(`~/limbo_bags/imitation/all.csv`)가 찍히고 Nav2가 자동 주행 배선으로 돌아간다. 조건 라벨(빈 복도·사람 등)은 받지 않는다. 주행 뒤 기록을 읽어 붙인다(`docs/PROJECT.md` 2-10). 팀원용 순서표는 4단계(전원 → 패드 → `record_laps` → ≡ 반복).
+
+스크립트가 기다리는 것(고정 시간 대기 없음, 2 s 간격으로 상태를 본다):
+
+| 단계 | 기다리는 신호 | 못 넘으면 |
+|---|---|---|
+| 부팅 유닛 | `limbo-nx-*` 5개 `active`. `activating`(start-pre)은 `wait_clock`이 시계 동기를 기다리는 중 | `failed`·`inactive`면 한 줄 알리고 끝 |
+| 패드 | `/dev/input/js0`. 없는 동안 `bluetoothctl connect <PAD_MAC>`을 되풀이(신뢰 등록만으로는 패드가 스스로 못 붙음, `KNOWN_ISSUES.md` 11-26) | `uhid` 모듈이 없으면 끝 |
+| 센서 | `/odom`·`/scan`·`/rgbd_camera/image`에 발행자가 이어지고 메시지가 실제로 옴 | 이어졌는데 한 간격(2 s) 내내 메시지 0이면, 또는 그 유닛이 꺼졌으면 끝. 기록 런치 노드가 이미 떠 있어도 끝 |
+| 배선 | 떠 있는 Nav2 프로세스 명령줄이 `cmd_vel_in:=/cmd_vel_arbiter`가 아니면 아래 2번을 하고, collision_monitor가 `/cmd_vel_arbiter`를 구독 + `/lifecycle_manager_navigation/is_active`가 true | Nav2 유닛이 꺼지면 끝 |
+| 발견 범위 | 런치 직전, 점유된 최고 포트 슬롯 + 런치가 띄울 프로세스 수(런치 파일에서 셈 + bag 1)가 Fast DDS XML의 발견 범위(지금 100) 안 | 넘으면 시작하지 않고 끝(`TROUBLESHOOTING.md` 2026-11-26) |
+| 준비 완료 | 노드 로그(`~/.ros/log/<실행 파일>_<PID>_*.log`)에 joy_node `Opened joystick`, drive_arbiter `drive_arbiter mode=manual`, run_recorder 프로세스 살아 있음 | 런치가 끝나면 안내 없이 끝 |
+| 끝(Ctrl+C, 점검 실패 포함) | 런치가 끝난 뒤 `collect_metrics` → `all.csv` 출력, 환경 변수가 있거나 Nav2가 중재기 배선이면 7번 원복. 이 정리 중에는 Ctrl+C를 무시한다 | |
+
+- 설치(젯슨, 저장소 밖 복사본): `tools/nx_boot/bin/record_laps`·`record_laps_checks.py` → `~/.config/limbo/bin/`, 링크 `~/.local/bin/record_laps`(로그인 셸의 `~/.profile`이 `~/.local/bin`을 PATH에 넣는다). 젯슨 `~/limbo`를 pull하지 않는 동안은 고친 뒤 이 두 파일을 다시 복사한다.
+- ROS 환경은 스크립트가 직접 불러온다(부팅 유닛 `start`와 같게 `ROS_DOMAIN_ID=97`, `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`, `tools/oak/ros_input_env.sh`).
+- 다른 패드를 쓰면 `record_laps` 위쪽의 `PAD_MAC` 한 줄을 고친다.
+- Ctrl+C는 터미널의 프로세스 그룹 전체(런치·노드)에 간다. 런치 PID 하나에만 SIGINT를 보내면 `ros2 launch`가 노드에 SIGINT를 넘기지 않고 5 s 뒤 SIGTERM으로 끈다(`launch/actions/execute_local.py`의 `due_to_sigint`). 손으로 끌 때는 `kill -INT -<프로세스 그룹>`.
+
+아래 1~7은 **스크립트가 하는 일을 손으로 하는 순서**다. 처음 설치, 문제 해결, 스크립트 밖 시험(정책 주행 등)에 쓴다.
+
 1. 빌드(처음 한 번, pull 뒤마다): `cd ~/limbo/limbo && colcon build --symlink-install --packages-select limbo_imitation limbo_bringup`. `ros-jazzy-joy`·`ros-jazzy-teleop-twist-joy`가 없으면 설치가 필요하다(sudo, PM 승인).
    - **조이스틱 연결(Acegamer T50, 블루투스)** — 처음 한 번, 그리고 패드를 껐다 켜서 안 붙을 때마다(전원을 끄면 페어링이 풀리는 경우가 있다):
      1. 패드를 **Xbox 모드** 페어링 상태(불빛 빠른 깜빡임)로 둔다. Switch 모드("Pro Controller")는 이 커널에 `hid-nintendo`가 없어 입력 장치가 안 생긴다.
-     2. 젯슨에서(재부팅 뒤 한 번, 영구 적용 전까지):
+     2. 젯슨에서(2026-11-26부터 `/etc/modules-load.d/uhid.conf`로 부팅 때 올라오게 해 둠. 재부팅 뒤 `lsmod | grep uhid`로 확인, 없을 때만):
         ```bash
         sudo modprobe uhid                   # 없으면 연결은 Success인데 /dev/input/js0이 안 생긴다
         groups | grep -w input               # 없으면 sudo usermod -aG input automaton 뒤 다시 로그인(joy_node가 event 장치를 열려면 필요)
@@ -40,9 +66,9 @@
    systemctl --user restart limbo-nx-navigation
    ```
    수동으로 띄울 때는 `bash tools/drive/run_nav2_real.sh cmd_vel_out:=/cmd_vel cmd_vel_in:=/cmd_vel_arbiter`.
-3. 기록 런치 — **하루 한 번만** 띄워 두고 바퀴마다 패드 **Start(메뉴) 버튼**으로 기록을 시작·끝낸다:
+3. 기록 런치 — **하루 한 번만** 띄워 두고 바퀴마다 패드 **≡ 버튼**(Xbox 배열 Start·메뉴, 로고 오른쪽 아래)으로 기록을 시작·끝낸다:
    ```bash
-   ros2 launch limbo_imitation imitation_real.launch.py mode:=manual driver:=<이름> note:=<메모>
+   ros2 launch limbo_imitation imitation_real.launch.py mode:=manual driver:=<이름>
    ```
    → 런치가 뜨면 패드로 운전은 되지만 **기록은 안 된다.** HOME에서 Start를 누르면 새 바퀴 폴더로 기록 시작(`run N started (button)`), 다시 누르면 끝(`run N ended (button): passed=… […]`). 누르지 않은 동안(바퀴 사이 이동·연습)은 기록하지 않는다. 바퀴 번호는 같은 런치 안에서 01, 02, …로 올라간다. 버튼을 누르고 있어도 한 번만 바뀌니 떼었다 다시 눌러야 다음 토글이다.
    - 버튼 번호는 기본 7(Xbox 배열 Start). 패드가 다르면 `ros2 topic echo /joy`에서 누를 때 1이 되는 `buttons` 자리(0부터)를 보고 런치에 `record_button:=<번호>`.

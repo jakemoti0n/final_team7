@@ -8,6 +8,30 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-26 (80) 부팅 유닛 시계 동기 대기, 수동 운전 기록을 `record_laps` 한 줄로(조건 코드 폐지·사후 판독), uhid 부팅 로드, DDS 발견 범위 100(포트 슬롯 32 이상끼리 못 찾던 문제)
+
+**할 일**
+- 젯슨: `~/limbo`를 이 커밋으로 갱신(XML은 심볼릭 설치라 빌드 불필요) → `ros2 daemon stop` → `systemctl --user restart limbo-nx-{drive,sensors,navigation,pose,dashboard}`. `tools/nx_boot/bin/record_laps`·`record_laps_checks.py`를 `~/.config/limbo/bin/`에 다시 복사(`docs/REAL_PATROL_RUN.md` 설치)
+- 다른 PC: 심볼릭 설치가 아니면 `build_limbo`(`limbo_bringup`, `fastdds_camera.xml`)
+- 바퀴마다 bag 토픽 목록(`bag/metadata.yaml`)에 `/drive_mode`가 있는지 본다
+
+**변경**
+- `limbo_bringup/config/fastdds_camera.xml`: UDP 전송(`limbo_camera_udp`)에 `maxInitialPeersRange` 100. `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`에서 rmw_fastrtps가 범위 32인 UDP 전송을 덧붙여, 발견 알림이 포트 슬롯 0~31에만 갔다. 100은 프로세스가 빈 슬롯을 찾는 시도 상한(`mutation_tries`)과 같은 값
+- `tools/nx_boot/boot/wait_clock`(새) + `systemd/limbo-nx-.service.d/wait-clock.conf`(새, 모든 `limbo-nx-*` 유닛에 걸리는 접두어 drop-in): `timedatectl` `NTPSynchronized=yes`가 될 때까지 2 s 간격으로 기다린 뒤 유닛 시작(`ExecStartPre`, `TimeoutStartSec=infinity`). RTC 전지가 없어 부팅 때 시계가 1970년이라, 그 시계로 뜬 노드가 NTP 점프에 깨지던 것(구동 유닛 `/odom` 없음 → collision_monitor가 `/cmd_vel`을 안 냄)
+- `tools/nx_boot/bin/record_laps`(새) + `record_laps_checks.py`(새): 젯슨에서 `record_laps [운전자]` 한 줄로 유닛 5개 active(시계 대기 중이면 그렇다고 알림) → 패드 `js0`(없는 동안 `bluetoothctl connect` 되풀이) → `/odom`·`/scan`·카메라 메시지 도착 → Nav2를 패드 운전 배선으로 다시 띄우고 collision_monitor·lifecycle active 확인 → 발견 포트 슬롯 점검 → 기록 런치. Ctrl+C 뒤 바퀴 지표 표(`all.csv`)와 자동 주행 배선 원복. 고정 대기 없이 상태 신호로 기다리고, 못 넘으면 `… PM에게 알린다`로 끝남. 런치 준비는 ROS 그래프 대신 노드 로그로 확인
+- 슬롯 점검(`record_laps_checks.py slots`): 점유된 최고 슬롯(`ss -Huln`) + 기록 런치가 띄울 프로세스 수가 발견 범위 안인지. 범위는 지금 쓰는 XML 값과 rmw 값 32(이름 있는 상수, 출처 주석) 중 큰 쪽, 프로세스 수는 런치 파일을 launch API로 읽어 조건까지 평가한 노드 수(manual 4개) + `run_recorder`의 bag 자식 1개
+- `docs/TROUBLESHOOTING.md` 실물 절: 시계 1970년으로 구동 유닛 `/odom` 없음, DDS 포트 슬롯 — 2개. `docs/KNOWN_ISSUES.md`: 시계 대기 적용(전원 차단 실측 남음), DDS 항목을 원인 확정·고침(남은 한계 프로세스 약 100개), 패드 자동 연결 실패(본딩 실패) 새로. `docs/REAL_PATROL_RUN.md`: `record_laps` 한 줄 절차와 기다리는 신호 표, uhid 부팅 로드, 기록 런치에서 `note:=` 뺌. `docs/PROJECT.md`: 패키지 표에 `tools/nx_boot/`, 2-10 "수동 운전 기록은 조건 없이", 결정 표 한 줄, 8절 4일 차 상태
+
+**결정**
+- 수동 운전 기록은 조건 없이(PM 2026-11-26). 변경 기록 79의 조건 코드(`cond_empty …`)는 쓰지 않는다. 조건 라벨은 주행 뒤 기록(경로·사람 수·거리·정지 구간)으로 붙이고, 부족한 장면은 데이터를 본 뒤 요청하거나 `policy_assist`에서 보충. 연출한 장면은 실제 운용과 분포가 다르고 사람이 미리 넣는 라벨은 틀릴 수 있어서
+- DDS 발견 범위를 XML로 100(A안, PM 2026-11-26)
+- uhid는 `/etc/modules-load.d/uhid.conf`로 부팅 때 올림(변경 기록 78에서 승인 대기였던 것)
+
+**확인**(2026-11-26 Orin NX, 노트북)
+- 시계 대기: 소프트웨어 재부팅 15:58에서 다섯 유닛이 35 s 기다린 뒤 시작, 구동 `/odom`·Nav2 `Managed nodes are active`까지 이어짐. 이 재부팅에서는 커널 RTC가 시각을 유지해 1970년 출발은 재현 안 됨(전원 차단 실측 남음)
+- DDS: 부팅 유닛 + 데몬이 슬롯 0~28·30. 빈 슬롯을 더미로 채우고 listener 32·talker 33 — 기존 XML 15.0 s 동안 0개 수신, 100 XML 사본 4.4 s에 10개 수신, listener만 100이어도 4.0 s에 10개 수신. 그때 CPU(부팅 16분 뒤, 60 s) 44.2 %
+- 슬롯 점검: 젯슨 기존 XML 상태에서 `최고 30 + 5 → 35, 발견 범위 0~31`로 시작 거부(종료 코드 1). 노트북에서 새 XML이면 범위 0~99, `mode:=policy`면 프로세스 6개로 셈
+
 ## 2026-11-26 (79) 바퀴 기록 시작/끝을 패드 Start 버튼으로(런치는 하루 한 번), 버튼 바퀴 완주는 운전자 판정, ToF 사용 불가 확정, 수동 20바퀴 조건 코드
 
 **할 일**
