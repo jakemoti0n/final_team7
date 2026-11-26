@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { demoVisitorState, parseVisitorState, type VisitorState } from '../visitor/visitor'
 import { VISITOR_POLL_MS } from '../visitor/useVisitorData'
-import { demoDisplayContent, parseDisplayContent, type DisplayContent } from './display'
+import { demoDisplayContent, parseDisplayContent, type DisplayContent, type DisplaySound } from './display'
 
 const TIMEOUT_MS = 5000
 
@@ -14,7 +14,8 @@ export interface DisplayData {
 
 /**
  * 하단 디스플레이 데이터. 방문자 상태(/api/v1/visitor/state)를 3초마다 받고,
- * 그 안의 display 판이 바뀔 때만 내용(/api/v1/display/content)을 다시 받는다. demo면 서버를 부르지 않는다.
+ * 그 안의 display 판이 바뀔 때만 내용(/api/v1/display/content)을 다시 받는다. demo면 상태·내용은 지어내고,
+ * 소리 파일만 서버에 있으면 빌려 쓴다(없으면 브라우저 한국어 음성).
  */
 export function useDisplayData(demo: boolean): DisplayData {
   const [data, setData] = useState<Omit<DisplayData, 'content'>>({ state: null, problem: false, closed: false })
@@ -64,5 +65,17 @@ export function useDisplayData(demo: boolean): DisplayData {
     return () => controller.abort()
     // 상태를 받을 때마다 다시 본다: 받기에 실패했으면 다음 상태 때 다시 시도 (같은 판을 이미 가졌으면 바로 끝)
   }, [demo, wanted, content?.revision, data.state])   // eslint-disable-line react-hooks/exhaustive-deps
-  return { ...data, content }
+
+  // 데모도 서버에 소리 파일(display.json의 sound)이 있으면 그것을 튼다. 브라우저 음성(Linux는 espeak-ng)은 한국어가 뭉개져 들린다
+  const [demoSound, setDemoSound] = useState<DisplaySound | null>(null)
+  useEffect(() => {
+    if (!demo) return
+    const controller = new AbortController()
+    fetch('/api/v1/display/content', { signal: controller.signal, cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null).then(body => setDemoSound(parseDisplayContent(body)?.sound ?? null))
+      .catch(() => {})
+    return () => controller.abort()
+  }, [demo])
+  const shown = useMemo(() => demo && content ? { ...content, sound: demoSound } : content, [demo, content, demoSound])
+  return { ...data, content: shown }
 }

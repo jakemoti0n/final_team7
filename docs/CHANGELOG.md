@@ -8,6 +8,15 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-26 (90) 하단 디스플레이 `?demo`에서도 「LIMBO가 지나갑니다」 소리를 서버의 passing.mp3로. 서버·Bridge 수정 없음
+
+**할 일**
+- 서버: `git pull` → `dashboard/`에서 `docker compose up -d --build`
+
+**변경**
+- 데모는 소리 파일이 없어 브라우저 한국어 음성으로 읽었는데, Linux Chrome은 espeak-ng로 읽어 소리가 뭉개져 들렸다. 이제 데모도 `GET /api/v1/display/content`를 한 번 불러 `sound`(display.json의 passing.mp3)만 빌려 쓴다. 위치·일정·팜플렛은 그대로 데모 값. 서버에 내용이 없으면(404·끊김) 예전처럼 브라우저 음성
+- 시험: e2e 데모에서 passing.mp3 재생 확인 추가·서버 내용이 없을 때 파일 재생 없음 1 추가. 단위 86·e2e 52 통과(Chrome)
+
 ## 2026-11-26 (89) 로봇 하단 디스플레이(PRD v0.3.7) 장면 ⑤ 분리수거 나무 3상태와 성공률 받기(`POST /api/v1/eco`), 하단 화면 13.3인치에 맞춘 글자 40 px·작은 QR 300 px. Bridge 수정 없음
 
 **할 일**

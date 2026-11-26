@@ -235,11 +235,25 @@ test('passing: overlay and one sound when the robot sets off, then a cooldown', 
 })
 
 test('passing in the demo: the demo robot stops at corners and sets off again', async ({ page }) => {
+  await recordPlays(page)
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto('/display?demo')
+  await page.mouse.click(10, 10)                                                         // 소리 막힘 풀기
   await expect(page.getByTestId('display-passing')).toBeVisible({ timeout: 8000 })
   await expect(page.getByTestId('display-passing-detail')).toContainText('길을 조금 비켜 주세요')
+  // 데모도 서버의 소리 파일(display.json의 passing.mp3)을 튼다 (브라우저 음성 아님)
+  await expect.poll(() => plays(page)).toEqual(['/api/v1/display/sound/passing.mp3'])
   await expect(page.getByTestId('display-passing')).toHaveCount(0, { timeout: 8000 })
+})
+
+test('passing in the demo without a sound file on the server: falls back to no file', async ({ page }) => {
+  await recordPlays(page)
+  await page.route('**/api/v1/display/content', route => route.fulfill({ status: 404, json: { detail: 'display_not_configured' } }))
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto('/display?demo')
+  await page.mouse.click(10, 10)
+  await expect(page.getByTestId('display-passing')).toBeVisible({ timeout: 8000 })
+  expect(await plays(page)).toEqual([])                                                  // 파일 없음 → 브라우저 음성(있으면) 또는 소리 없이
 })
 
 const ECO = { schema_version: 1, observed_at: '', window_start: '', window_end: '', source: 'e2e', evaluation_method: 'ai_bin_inspection',

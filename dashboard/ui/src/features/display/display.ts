@@ -279,7 +279,7 @@ export function demoDisplayContent(now = new Date()): DisplayContent {
       { date: null, start: minutes(start, 20), end: minutes(start, 40), title: 'Q&A', place: null },
     ],
     slides: [slide(1, '#dcfce7'), slide(2, '#fef3c7')],
-    sound: null,                                                   // 데모는 소리 파일 없음 (브라우저에 한국어 음성이 있으면 그것으로)
+    sound: null,                                                   // 서버에 소리 파일이 있으면 useDisplayData가 채운다 (없으면 브라우저 한국어 음성)
     eco: { enabled: true },                                        // 나무는 바퀴마다 초기 → 긍정 → 부정 (demoEco)
     timing: { ...DEFAULT_TIMING, location_s: 12, slides_s: 8, eco_s: 8, passing_s: 5, passing_cooldown_s: 20 },   // 데모는 짧게 돌아 금방 볼 수 있게
   }
