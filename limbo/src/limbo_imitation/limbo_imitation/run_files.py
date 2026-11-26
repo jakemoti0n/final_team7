@@ -115,3 +115,53 @@ def finish_run(folder, meta, log, settings, bag, bag_timeout):
     write_metrics_csv(os.path.join(folder, METRICS_FILE), row, metrics.ROW_COLUMNS)
     write_json(os.path.join(folder, META_FILE), meta)
     return row, wait_bag(bag, bag_timeout)
+
+
+# ---------------------------------------------------------------- 운전자에게 보이는 콘솔 문구
+#
+# 운전자가 터미널에서 보는 줄이라 한국어로 쓰고, 합격 여부(passed)는 내지 않는다.
+# 운전자는 그 바퀴를 다시 돌지 판단할 필요가 없고(판정은 주행 뒤 기록으로 한다), passed=False를 보면
+# 다시 돌아야 하나 헷갈린다. 지표는 metrics.csv에 그대로 남는다.
+
+LINE_PREFIX = '[기록]'
+# 버튼이 아닌 시작·끝 사유를 사람 말로. 없는 사유는 원래 문자열을 그대로 보인다
+REASON_WORDS = {
+    metrics.START_MANUAL: '런치와 함께 시작',
+    'patrolling': '순찰 시작',
+    'completed': '순찰 완주',
+    'failed': '순찰 실패',
+    'node shutdown': '런치 종료',
+}
+IDLE_LINE = f'{LINE_PREFIX} 지금은 기록 중이 아닙니다. 다음 바퀴는 ≡를 누르세요'
+
+
+def start_line(number, reason, start):
+    """바퀴 시작 줄. start는 datetime.
+
+    버튼·manual_start는 사람이 운전하는 바퀴라 '이제 출발하세요'를 붙인다. 순찰 시작은 로봇이 스스로 간다.
+    """
+    clock = start.strftime('%H:%M:%S')
+    when = clock
+    if reason != metrics.START_BUTTON:
+        when += f', {REASON_WORDS.get(reason, reason)}'
+    line = f'{LINE_PREFIX} {number}번째 바퀴 기록 시작 ({when})'
+    if reason in metrics.DRIVER_ENDED_STARTS:
+        line += ' — 이제 출발하세요'
+    return line
+
+
+def end_line(number, end_reason, duration, distance, saved):
+    """바퀴 끝 줄. duration(s)·distance(m)는 지표 값이고 None이면 빼고 쓴다(모르는 값은 지어내지 않는다).
+
+    saved = bag까지 닫혔는지. metrics.csv·meta.json은 이 줄 전에 이미 써져 있다.
+    """
+    head = f'{LINE_PREFIX} {number}번째 바퀴 기록 끝'
+    if end_reason != metrics.START_BUTTON:
+        head += f'({REASON_WORDS.get(end_reason, end_reason)})'
+    parts = []
+    if duration is not None:
+        parts.append(f'{duration:.0f}초')
+    if distance is not None:
+        parts.append(f'{distance:.1f} m')
+    parts.append('저장 완료' if saved else 'bag이 아직 안 닫힘(아래 경고 참고)')
+    return f"{head} — {', '.join(parts)}"

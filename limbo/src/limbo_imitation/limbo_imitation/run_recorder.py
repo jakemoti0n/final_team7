@@ -183,7 +183,8 @@ class RunRecorder(Node):
         run_files.write_json(os.path.join(self.folder, run_files.META_FILE), self.meta)
         self.bag = self.start_bag(os.path.join(self.folder, run_files.BAG_DIR))
         self.log = metrics.RunLog(start_time=self.now(), start_reason=reason)
-        self.get_logger().info(f'run {self.run_number} started ({reason}): {self.folder}')
+        self.get_logger().info(run_files.start_line(self.run_number, reason, start))
+        self.get_logger().info(f'{run_files.LINE_PREFIX} 폴더 {os.path.basename(self.folder)}')
 
     def start_bag(self, bag_path):
         """같은 세션(start_new_session=False)에서 띄운다.
@@ -199,8 +200,10 @@ class RunRecorder(Node):
         self.meta['end_reason'] = end_reason
         row, bag_closed = run_files.finish_run(self.folder, self.meta, self.log, self.settings,
                                                self.bag, self.bag_stop_timeout)
-        self.get_logger().info(f'run {self.run_number} ended ({end_reason}): '
-                               f"passed={row['passed']} {row['fail_reasons']}")
+        # 거리는 /odom이 두 개 이상 왔을 때만 안다(없으면 0 m가 아니라 모르는 값)
+        distance = row['distance'] if len(self.log.odom) >= 2 else None
+        self.get_logger().info(run_files.end_line(self.run_number, end_reason, row['duration'],
+                                                  distance, bag_closed))
         if not bag_closed:
             # 다음 바퀴 시작 때 다시 거둔다(좀비로 남지 않게). 사람이 판단하도록 PID를 남긴다
             self.unclosed_bags.append(self.bag)
@@ -209,6 +212,9 @@ class RunRecorder(Node):
                 f'{self.bag_stop_timeout} s after SIGINT; left running, bag may be unclosed')
         self.log = None
         self.bag = None
+        if end_reason == metrics.START_BUTTON:
+            # 버튼으로 끝낸 경우만. 런치 종료·순찰 끝에는 ≡ 안내가 맞지 않는다
+            self.get_logger().info(run_files.IDLE_LINE)
 
 
 def raise_keyboard_interrupt(signum, frame):

@@ -70,7 +70,7 @@ record_laps kim          # 운전자 이름은 생략 가능. 하루 한 번
    ```bash
    ros2 launch limbo_imitation imitation_real.launch.py mode:=manual driver:=<이름>
    ```
-   → 런치가 뜨면 패드로 운전은 되지만 **기록은 안 된다.** HOME에서 Start를 누르면 새 바퀴 폴더로 기록 시작(`run N started (button)`), 다시 누르면 끝(`run N ended (button): passed=… […]`). 누르지 않은 동안(바퀴 사이 이동·연습)은 기록하지 않는다. 바퀴 번호는 같은 런치 안에서 01, 02, …로 올라간다. 버튼을 누르고 있어도 한 번만 바뀌니 떼었다 다시 눌러야 다음 토글이다.
+   → 런치가 뜨면 패드로 운전은 되지만 **기록은 안 된다.** HOME에서 Start를 누르면 새 바퀴 폴더로 기록 시작(`[기록] N번째 바퀴 기록 시작 (시:분:초) — 이제 출발하세요`, 다음 줄에 폴더 이름), 다시 누르면 끝(`[기록] N번째 바퀴 기록 끝 — …초, … m, 저장 완료` → `[기록] 지금은 기록 중이 아닙니다. 다음 바퀴는 ≡를 누르세요`). 끝 줄에 합격 여부는 내지 않는다(운전자가 다시 돌지 헷갈리지 않게, 지표는 `metrics.csv`에). 누르지 않은 동안(바퀴 사이 이동·연습)은 기록하지 않는다. 바퀴 번호는 같은 런치 안에서 01, 02, …로 올라간다. 버튼을 누르고 있어도 한 번만 바뀌니 떼었다 다시 눌러야 다음 토글이다.
    - 버튼 번호는 기본 7(Xbox 배열 Start). 패드가 다르면 `ros2 topic echo /joy`에서 누를 때 1이 되는 `buttons` 자리(0부터)를 보고 런치에 `record_button:=<번호>`.
    - 순찰 노드와 같이 달리면 `/patrol/state`가 patrolling이 될 때도 시작하고 completed·failed에서 끝낸다. `manual_start:=true`는 "런치가 뜨자마자 기록" 옵션으로 남아 있다(그 바퀴도 Start나 Ctrl+C로 끝).
    - 기록 중에 Ctrl+C로 런치를 끄면 그 바퀴는 `node shutdown`으로 닫힌다.
