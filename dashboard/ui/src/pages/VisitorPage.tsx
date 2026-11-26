@@ -30,7 +30,7 @@ export function VisitorPage({ demo }: { demo: boolean }) {
       <p className="visitor-count" role="status" data-testid="visitor-count">{operatingText(state, problem)}</p>
       {state && (guide || state.map) && <section className="card visitor-card" aria-label="지금 LIMBO 위치">
         <h2 className="card-heading">지금 LIMBO 위치</h2>
-        {/* 안내 약도가 있으면 그것이 메인(왼쪽 아래에 실제 지도), 없으면 자동 약도 */}
+        {/* 안내 약도가 있으면 그것이 메인(실제 LiDAR 지도는 탭으로 바꿔 봄), 없으면 자동 약도 */}
         {guide ? <GuideVisitorMap guide={guide} map={state.map} robots={state.robots} stale={problem} /> : <VisitorMap map={state.map!} robots={state.robots} stale={problem} />}
         <p className="visitor-legend" data-testid="visitor-legend"><span><i className="key now" />지금 위치</span><span>{/* CSS dashed 테두리는 iOS Safari에서 둥근 모서리가 반쪽만 그려지므로 SVG로 그린다 */}<svg className="key-old" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" strokeDasharray={dashedCircle(6.5, 8)} /></svg>마지막으로 확인한 위치</span></p>
       </section>}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
 import { GuideDrawing } from '../guide/GuideDrawing'
 import { contentBox, inside, svgY, viewBoxAround, viewBoxOf } from '../guide/guide'
 import { VisitorMap } from './VisitorMap'
@@ -6,10 +6,26 @@ import { asGuide, dashedCircle, visitorStatus, type VisitorGuide, type VisitorMa
 
 /**
  * 방문자 화면의 메인 지도: 관제 화면에서 그린 안내 약도(구역·이름 또는 그림) 위에 LIMBO 위치.
- * 약도는 지도와 같은 m 좌표라 위치를 그대로 그린다. 왼쪽 아래 작은 창은 실제 지도(자동 약도) — 누르면 크게.
+ * 약도는 지도와 같은 m 좌표라 위치를 그대로 그린다. 실제 지도(LiDAR 자동 약도)가 있으면 위쪽 탭으로 둘을 바꿔 본다.
+ * 두 판 모두 그려 두고 보이지 않는 쪽만 숨긴다(탭을 바꿀 때 그림을 다시 받지 않게).
  */
+type Tab = 'guide' | 'lidar'
+const tabs: { key: Tab; label: string }[] = [{ key: 'guide', label: '안내 지도' }, { key: 'lidar', label: 'LiDAR 지도' }]
+
 export function GuideVisitorMap({ guide, map, robots, stale }: { guide: VisitorGuide; map: MapData | null; robots: VisitorRobot[]; stale: boolean }) {
-  const [expanded, setExpanded] = useState(false)
+  const [tab, setTab] = useState<Tab>('guide')
+  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ guide: null, lidar: null })
+  const current: Tab = map ? tab : 'guide'
+  // WAI-ARIA 탭: 왼쪽·오른쪽 화살표, Home·End로 옮기며 바로 연다
+  function onKey(e: KeyboardEvent) {
+    const i = tabs.findIndex(t => t.key === current)
+    const next = { ArrowLeft: i - 1, ArrowRight: i + 1, Home: 0, End: tabs.length - 1 }[e.key]
+    if (next === undefined) return
+    e.preventDefault()
+    const key = tabs[(next + tabs.length) % tabs.length].key
+    setTab(key)
+    tabRefs.current[key]?.focus()
+  }
   const drawing = asGuide(guide)
   const content = contentBox(drawing)
   const box = content ? viewBoxAround(content, 1.5) : viewBoxOf(guide.bounds)
@@ -23,7 +39,12 @@ export function GuideVisitorMap({ guide, map, robots, stale }: { guide: VisitorG
   const image = guide.image ? { href: guide.image.url, width: guide.image.width, height: guide.image.height, transform: guide.image.transform } : null
   const width = `min(100%, calc(70vh * ${box[2] / box[3]}))`
   return <div className="visitor-guide">
-    <div className={`visitor-guide-frame ${expanded ? 'inset-open' : ''}`}>
+    {map && <div className="visitor-tabs" role="tablist" aria-label="지도 종류" onKeyDown={onKey} data-testid="visitor-tabs">
+      {tabs.map(t => <button key={t.key} type="button" role="tab" id={`visitor-tab-${t.key}`} aria-controls={`visitor-panel-${t.key}`}
+        aria-selected={current === t.key} tabIndex={current === t.key ? 0 : -1} ref={el => { tabRefs.current[t.key] = el }}
+        onClick={() => setTab(t.key)}>{t.label}</button>)}
+    </div>}
+    <div className="visitor-guide-frame" id="visitor-panel-guide" role={map ? 'tabpanel' : undefined} aria-labelledby={map ? 'visitor-tab-guide' : undefined} hidden={current !== 'guide'}>
       <svg viewBox={box.join(' ')} style={{ width }} role="img" aria-label={label} data-testid="visitor-guide-map">
         <rect x={box[0]} y={box[1]} width={box[2]} height={box[3]} className="guide-paper" />
         <GuideDrawing guide={drawing} image={image} showAreas={!guide.image || guide.image.show_areas} />
@@ -37,11 +58,10 @@ export function GuideVisitorMap({ guide, map, robots, stale }: { guide: VisitorG
           </g>
         })}
       </svg>
-      {map && <div className="visitor-inset" data-testid="visitor-inset">
-        <button type="button" className="visitor-inset-toggle" aria-pressed={expanded} onClick={() => setExpanded(e => !e)}>{expanded ? '실제 지도 닫기' : '실제 지도'}</button>
-        <VisitorMap map={map} robots={robots} stale={stale} fit={false} />
-      </div>}
     </div>
-    {outside.length > 0 && <p className="visitor-outside" role="status" data-testid="visitor-outside">{outside.map(r => r.robot_id).join(', ')}: 안내 약도 밖에 있습니다. {map ? '실제 지도에서 확인하세요.' : ''}</p>}
+    {map && <div className="visitor-lidar" id="visitor-panel-lidar" role="tabpanel" aria-labelledby="visitor-tab-lidar" hidden={current !== 'lidar'} data-testid="visitor-lidar">
+      <VisitorMap map={map} robots={robots} stale={stale} />
+    </div>}
+    {current === 'guide' && outside.length > 0 && <p className="visitor-outside" role="status" data-testid="visitor-outside">{outside.map(r => r.robot_id).join(', ')}: 안내 지도 밖에 있습니다. {map ? '「LiDAR 지도」 탭에서 확인하세요.' : ''}</p>}
   </div>
 }

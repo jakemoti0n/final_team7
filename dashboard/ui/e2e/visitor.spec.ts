@@ -30,19 +30,34 @@ test('visitor demo on a phone and a tablet', async ({ page }) => {
     await expect(robots.nth(1)).toContainText('대기 중')
     await expect(robots.nth(2)).toContainText('연결 끊김')
     await expect(robots.nth(2)).toContainText('마지막 위치')
-    // 데모에는 안내 약도가 있다: 가운데 약도에 위치, 왼쪽 아래 작은 창(실제 지도)에도 같은 위치
-    const main = page.getByTestId('visitor-guide-map'), inset = page.getByTestId('visitor-inset')
+    // 데모에는 안내 약도가 있다: 처음엔 「안내 지도」 탭, 「LiDAR 지도」 탭에도 같은 위치
+    const main = page.getByTestId('visitor-guide-map'), lidar = page.getByTestId('visitor-lidar')
+    const guideTab = page.getByRole('tab', { name: '안내 지도' }), lidarTab = page.getByRole('tab', { name: 'LiDAR 지도' })
+    await expect(guideTab).toHaveAttribute('aria-selected', 'true')
+    await expect(main).toBeVisible()
+    await expect(lidar).toBeHidden()
     await expect(main.getByTestId('guide-area')).toHaveCount(4)
     await expect(main).toHaveAttribute('aria-label', /행사장 안내 약도 \(행사장, 201 강의실, 화장실, 복도\)/)
     await expect(main.getByTestId('visitor-marker')).toHaveCount(3)
     await expect(main.locator('.visitor-marker.stale')).toHaveCount(1)
-    await expect(inset.getByTestId('visitor-marker')).toHaveCount(3)
-    // 운영자 화면의 사이드바·제어는 없다 (단추는 작은 창 크게 보기 하나)
+    await expect(lidar.getByTestId('visitor-marker')).toHaveCount(3)
+    // 운영자 화면의 사이드바·제어는 없다 (누르는 것은 지도 탭 둘뿐)
     await expect(page.locator('.sidebar')).toHaveCount(0)
-    await expect(page.getByRole('button')).toHaveCount(1)
-    await page.getByRole('button', { name: '실제 지도' }).click()
-    await expect(page.getByRole('button', { name: '실제 지도 닫기' })).toHaveAttribute('aria-pressed', 'true')
-    await page.getByRole('button', { name: '실제 지도 닫기' }).click()
+    await expect(page.getByRole('button')).toHaveCount(0)
+    await expect(page.getByRole('tab')).toHaveCount(2)
+    await lidarTab.click()
+    await expect(lidarTab).toHaveAttribute('aria-selected', 'true')
+    await expect(lidar).toBeVisible()
+    await expect(main).toBeHidden()
+    await expect(lidar.locator('svg')).toBeVisible()
+    await expect(lidar.locator('[data-robot="LIMBO-01"]')).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: `../artifacts/visitor-demo-lidar-${width}.png`, fullPage: true })
+    // 키보드: 왼쪽 화살표로 안내 지도로 돌아간다
+    await lidarTab.press('ArrowLeft')
+    await expect(guideTab).toBeFocused()
+    await expect(guideTab).toHaveAttribute('aria-selected', 'true')
+    await expect(main).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.screenshot({ path: `../artifacts/visitor-demo-${width}.png`, fullPage: true })
   }
@@ -89,7 +104,7 @@ test('visitor page is off unless enabled', async ({ request }) => {
   expect((await request.get('http://127.0.0.1:8018/visitor?demo')).status()).toBe(200)
 })
 
-test('visitor page shows the guide drawn on the control screen, with the real map in the corner', async ({ page, request }) => {
+test('visitor page shows the guide drawn on the control screen, with the real map in a tab', async ({ page, request }) => {
   // 시험 서버의 약도 파일은 만들지 않는다: 약도 API를 가로채 그린 약도를 준다
   const guide = {
     revision: 'g1', bounds: { x_min: -10, y_min: -10, x_max: 10, y_max: 10 },
@@ -114,7 +129,7 @@ test('visitor page shows the guide drawn on the control screen, with the real ma
     await expect(main.locator('[data-testid=visitor-marker][data-robot="LIMBO-01"]')).toHaveCount(1)
     // 위치는 약도의 m 좌표 그대로: (1, -1) → SVG (1, 1)
     await expect(main.locator('[data-testid=visitor-marker][data-robot="LIMBO-01"]')).toHaveAttribute('transform', 'translate(1 1)')
-    await expect(page.getByTestId('visitor-inset').locator('[data-robot="LIMBO-01"]')).toHaveCount(1)
+    await expect(page.getByTestId('visitor-lidar').locator('[data-robot="LIMBO-01"]')).toHaveCount(1)
     await page.waitForTimeout(3500)                                     // 다음 상태를 받아도 판이 같으면 다시 받지 않는다
     expect(guideRequests).toBe(1)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
