@@ -8,6 +8,33 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-26 (84) 바퀴 기록 첫머리 공백 없앰: 다음 바퀴용 bag을 일시 정지로 미리 띄워 두고 ≡에 재개만(새 bag 프로세스의 토픽 발견에 1.3~6.4 s가 걸려 바퀴 첫머리가 비던 문제)
+
+**할 일**
+- 젯슨(수집이 끝난 뒤): `~/limbo` 갱신 → `colcon build --symlink-install --packages-select limbo_imitation`(package.xml 의존 추가) → `tools/nx_boot/bin/record_laps_checks.py`를 `~/.config/limbo/bin/`에 다시 복사 → 기록 런치 다시 띄우기(`record_laps`)
+- 실물 확인: 바퀴 bag마다 ≡부터 토픽별 첫 메시지까지 시간, 바퀴 폴더에 `tf_static.json`, 런치를 끝낸 뒤 `~/limbo_bags/imitation/.standby_*`가 안 남는지
+
+**변경**
+- `limbo_imitation/run_recorder.py`
+  - 런치가 뜰 때와 바퀴가 끝날 때(이전 bag을 거둔 뒤) `ros2 bag record --start-paused --node-name run_recorder_bag_<PID>_<순번>`을 임시 폴더 `.standby_<PID>_<순번>/bag`에 띄워 둠. ≡(또는 manual_start·순찰 시작)에 `~/resume` 서비스로 재개만 함
+  - 폴더 이름·`meta.json` start_time은 지금처럼 ≡를 누른 시각. meta.json은 누를 때 임시 폴더에 쓰고, 바퀴가 끝나 bag을 거둔 뒤 임시 폴더를 `YYYYMMDD_HHMMSS_NN_mode`로 옮김. rosbag2가 닫을 때 처음 받은 경로에 `metadata.yaml`을 쓰므로 녹화 중에는 옮기지 않는다. 바퀴 폴더 구조(`bag/`·`meta.json`·`metrics.csv`)는 같음. 늦게 닫힌 bag은 닫힌 뒤(다음 시작·노드 종료 때) 옮김
+  - 준비 판단(상태 신호): 재개 서비스가 있고, 기록 대상 중 발행자가 있는 토픽을 모두 그 rosbag2 노드가 구독함(`run_files.unsubscribed_topics`). 준비 전에 누르면 운전자를 세우지 않고 바로 시작, 콘솔에 `[기록] 기록 준비가 덜 된 채 시작: …`. 서비스가 아직 없으면 생길 때까지 `SPIN_PERIOD`마다 재개를 다시 시도
+  - 노드 종료: 기록 중이면 종전대로 `finish_run`(bag SIGINT → 결과 쓰기 → 거두기) 뒤 옮김, 대기 bag은 SIGINT로 닫고 임시 폴더 삭제. 시작할 때 강제 종료로 남은 대기 폴더 중 빈 것은 지우고, meta.json이 있는 것은 경고만
+  - `/tf_static`을 직접 구독(tf2 정적 수신과 같은 깊이 100)해 바퀴 폴더에 `tf_static.json`으로 남김. 일시 정지 bag은 구독할 때 한 번 오는 latched 메시지를 버려 bag에 `/tf_static`이 없다
+- `limbo_imitation/dataset.py`: bag에 `/tf_static`이 없으면 `tf_static.json`을 읽음. `run_files.py`: 대기 폴더·노드 이름, 빈 대기 폴더 찾기, 덜 붙은 토픽 계산. `package.xml`: `rosbag2_interfaces`·`tf2_msgs`
+- `tools/nx_boot/bin/record_laps_checks.py`: `RECORDER_CHILD_PROCESSES = 1`은 그대로(대기 bag은 이전 bag을 거둔 뒤 띄워 동시에 하나), 근거 주석만
+- 테스트: 노드 테스트가 미리 띄운 일시 정지 bag을 쓰고 바퀴 폴더 4파일·대기 폴더 정리 확인, 대기 이름·남은 대기 폴더·덜 붙은 토픽, `tf_static.json` 읽기
+- 문서: `KNOWN_ISSUES.md` bag 구독 지연(저장소에서 고침, 젯슨 미반영), `REAL_PATROL_RUN.md` 기록 런치 3번
+
+**결정**
+- 승인 설계(PM 2026-11-26): 미리 띄운 일시 정지 bag. `/tf_static`은 bag 대신 `tf_static.json`(실물 bag의 `/tf_static`은 센서 장착 TF뿐이고, 지우고 돌려도 dataset 자세 0개 차이·지표 같음을 11-26 bag 2개로 확인)
+
+**확인**(2026-11-26 노트북, 도메인 95, 가짜 발행자, rosbag2 0.26.11 = 젯슨과 같은 판)
+- rosbag2 실험: 일시 정지 중에도 0.40 s에 구독이 붙음(`Subscribed to topic`, `is_paused=True`). 정지 중 받은 메시지는 안 들어감(재개 때 카운터 29, bag 첫 번호 30). latched `/tf_static`은 0개
+- ≡부터 첫 메시지까지 5바퀴: 수정 전 20 Hz 토픽 0.43~0.87 s·1 Hz 토픽 0.62~1.37 s → 수정 후 0.05~0.14 s·0.10~0.96 s
+- 5바퀴 뒤 SIGINT: 바퀴 폴더 5개만(각 `bag`·`meta.json`·`metrics.csv`·`tf_static.json`), 대기 폴더·bag 프로세스 0. 준비 전 누름 3바퀴: 첫 바퀴 경고 줄·0.53~0.58 s, 다음 바퀴부터 0.06~0.14 s. 기록 중 SIGINT: 폴더 옮김·`metadata.yaml` 있음·`end_reason: node shutdown`. manual_start: 경고 뒤 정상 기록
+- `limbo_imitation` pytest 91 passed 9 skipped, torch 파이썬 99 passed 1 skipped(flake8 포함)
+
 ## 2026-11-26 (83) 수동 바퀴에서 데드맨을 뗀 구간을 정답 "정지"(0, 0)로, 카메라 점군 제거 젯슨 확인, 버튼 수동 바퀴가 데이터셋에서 전부 빠지는 문제 발견
 
 **할 일**

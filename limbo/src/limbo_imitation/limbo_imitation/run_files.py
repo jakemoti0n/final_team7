@@ -21,12 +21,52 @@ from limbo_imitation import metrics
 META_FILE = 'meta.json'
 METRICS_FILE = 'metrics.csv'
 BAG_DIR = 'bag'
+# 기록 노드가 받은 /tf_static(센서 장착 TF). 미리 띄운 일시 정지 bag은 구독할 때 한 번 오는 latched 메시지를
+# 정지 중이라 버려서(rosbag2 0.26.11 실험, 2026-11-26) bag에 /tf_static이 안 남는다. 대신 바퀴 폴더에 둔다
+TF_STATIC_FILE = 'tf_static.json'
+# 다음 바퀴용으로 미리 띄운 bag의 임시 폴더 이름 머리. '.'으로 시작해 바퀴 폴더 glob([0-9]*_*, *)에 안 걸린다
+STANDBY_PREFIX = '.standby_'
 HASH_CHUNK_BYTES = 1 << 20
 
 
 def run_folder_name(start, number, mode):
     """start는 datetime. 같은 초에 두 바퀴가 시작돼도 번호로 갈린다."""
     return f"{start.strftime('%Y%m%d_%H%M%S')}_{number:02d}_{mode}"
+
+
+def standby_name(pid, seq):
+    """대기 bag의 (임시 폴더 이름, rosbag2 노드 이름). 노드 PID와 순번으로 프로세스마다 구분한다."""
+    return f'{STANDBY_PREFIX}{pid}_{seq}', f'run_recorder_bag_{pid}_{seq}'
+
+
+def standby_owner(name):
+    """임시 폴더 이름 → 만든 노드의 PID. 대기 폴더가 아니면 None."""
+    if not name.startswith(STANDBY_PREFIX):
+        return None
+    pid = name[len(STANDBY_PREFIX):].split('_')[0]
+    return int(pid) if pid.isdigit() else None
+
+
+def stale_standby_folders(root, is_alive):
+    """[(경로, meta.json이 있는지)]. 만든 노드가 이미 없는 대기 폴더(강제 종료 등으로 남은 것).
+
+    meta.json이 없으면 바퀴가 시작되지 않은 빈 대기 bag이고, 있으면 기록이 든 바퀴다(지우면 안 됨).
+    """
+    found = []
+    for name in sorted(os.listdir(root)) if os.path.isdir(root) else []:
+        pid = standby_owner(name)
+        if pid is not None and not is_alive(pid):
+            path = os.path.join(root, name)
+            found.append((path, os.path.isfile(os.path.join(path, META_FILE))))
+    return found
+
+
+def unsubscribed_topics(topics, publisher_count, recorder_subscribes):
+    """발행자가 있는데 기록기가 아직 구독하지 않은 토픽(순서 유지). 비면 대기 bag 준비 끝.
+
+    발행자가 없는 토픽(수동 운전의 /patrol/state·/cmd_vel_policy 등)은 붙을 상대가 없으니 기다리지 않는다.
+    """
+    return [t for t in topics if publisher_count(t) > 0 and not recorder_subscribes(t)]
 
 
 def file_sha256(path):

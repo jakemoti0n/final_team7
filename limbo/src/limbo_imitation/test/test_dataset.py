@@ -195,3 +195,17 @@ def test_waypoints_hash_mismatch_stops(tmp_path):
     with pytest.raises(ValueError):
         dataset.resolve_waypoints(meta, str(other))
     assert dataset.resolve_waypoints(meta, None) == str(waypoints)
+
+
+def test_tf_static_file_fills_in_when_bag_has_none(tmp_path):
+    # 미리 띄운 일시 정지 bag에는 /tf_static이 안 남아 바퀴 폴더의 tf_static.json에서 읽는다
+    s = dataset.BagStreams()
+    run_files.write_json(tmp_path / run_files.TF_STATIC_FILE, [
+        {'parent': 'base_footprint', 'child': 'mid360_link', 'x': 0.1, 'y': 0.0, 'z': 0.857,
+         'qx': 0.0, 'qy': 0.0, 'qz': math.sin(0.25), 'qw': math.cos(0.25)}])
+    dataset.load_tf_static_file(str(tmp_path), s)
+    x, y, yaw = s.tf_static[('base_footprint', 'mid360_link')]
+    assert (x, y) == (0.1, 0.0) and yaw == pytest.approx(0.5)
+    empty = dataset.BagStreams()
+    dataset.load_tf_static_file(str(tmp_path / 'none'), empty)  # 파일이 없으면 그대로
+    assert empty.tf_static == {}

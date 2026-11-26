@@ -109,3 +109,34 @@ def test_other_end_reasons_and_unknown_values():
     # 거리를 모르면(odom 없음) 빼고, bag이 안 닫혔으면 저장 완료라고 하지 않는다
     assert (run_files.end_line(1, 'completed', 30.0, None, False)
             == '[기록] 1번째 바퀴 기록 끝(순찰 완주) — 30초, bag이 아직 안 닫힘(아래 경고 참고)')
+
+
+# ---------------------------------------------------------------- 대기 bag 도우미
+
+
+def test_standby_names_are_hidden_and_distinct():
+    folder, node = run_files.standby_name(4321, 2)
+    assert folder.startswith('.') and run_files.standby_owner(folder) == 4321
+    assert node == 'run_recorder_bag_4321_2'
+    assert run_files.standby_name(4321, 3) != (folder, node)
+    assert run_files.standby_owner('20261126_200755_04_manual') is None
+
+
+def test_stale_standby_folders_keep_recorded_laps(tmp_path):
+    empty = tmp_path / run_files.standby_name(111, 1)[0]
+    recorded = tmp_path / run_files.standby_name(111, 2)[0]
+    alive = tmp_path / run_files.standby_name(222, 1)[0]
+    lap = tmp_path / '20261126_200755_04_manual'
+    for path in (empty, recorded, alive, lap):
+        path.mkdir()
+    (recorded / run_files.META_FILE).write_text('{}')
+    found = run_files.stale_standby_folders(str(tmp_path), lambda pid: pid == 222)
+    assert found == [(str(empty), False), (str(recorded), True)]
+
+
+def test_unsubscribed_topics_waits_only_for_published_topics():
+    publishers = {'/scan': 1, '/odom': 1, '/patrol/state': 0}
+    subscribed = {'/scan'}
+    missing = run_files.unsubscribed_topics(['/scan', '/odom', '/patrol/state'],
+                                            publishers.get, subscribed.__contains__)
+    assert missing == ['/odom']

@@ -313,6 +313,21 @@ def add_tf_static(streams, t, msg):
         streams.tf_static[key] = transform_pose(stamped.transform)
 
 
+def load_tf_static_file(folder, streams):
+    """바퀴 폴더의 tf_static.json(기록 노드가 받은 /tf_static)을 streams.tf_static에 넣는다.
+
+    미리 띄운 일시 정지 bag에는 /tf_static이 안 남는다(run_files.TF_STATIC_FILE 참고). 파일이 없으면 그대로.
+    """
+    path = os.path.join(folder, run_files.TF_STATIC_FILE)
+    if not os.path.isfile(path):
+        return
+    with open(path, encoding='utf-8') as f:
+        for t in json.load(f):
+            key = (clean_frame(t['parent']), clean_frame(t['child']))
+            yaw = frame_builder.yaw_from_quaternion(t['qx'], t['qy'], t['qz'], t['qw'])
+            streams.tf_static[key] = (t['x'], t['y'], yaw)
+
+
 def add_drive_mode(streams, t, msg):
     try:
         data = json.loads(msg.data)
@@ -378,6 +393,8 @@ def build_laps(folders, cfg, metric_settings, waypoints_override=None, reader=re
         meta = read_meta(folder)
         waypoints = frame_builder.load_waypoints(resolve_waypoints(meta, waypoints_override))
         streams = reader(os.path.join(folder, run_files.BAG_DIR))
+        if not streams.tf_static:
+            load_tf_static_file(folder, streams)
         xs, ys, weights, stamps, dropped, n_bad = lap_samples(streams, waypoints, cfg,
                                                               metric_settings)
         laps.append({'id': lap_id, 'folder': os.path.abspath(folder), 'x': xs, 'y': ys,

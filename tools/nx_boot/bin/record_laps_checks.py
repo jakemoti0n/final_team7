@@ -167,7 +167,8 @@ RMW_LOCALHOST_PEERS_RANGE = 32
 # RTPS 2.2 9.6.1.1 기본 포트 식(Fast DDS PortParameters 기본값):
 # 발견(메타 트래픽) 유니캐스트 포트 = PB + DG×도메인 + d1 + PG×슬롯
 PORT_BASE, DOMAIN_GAIN, OFFSET_D1, PARTICIPANT_GAIN = 7400, 250, 10, 2
-# run_recorder.start_bag: 바퀴 기록을 시작할 때(버튼) `ros2 bag record`를 자식 프로세스로 하나 띄운다.
+# run_recorder.prepare_standby: 다음 바퀴용 `ros2 bag record`(일시 정지)를 자식 프로세스로 하나 띄워 둔다.
+# 런치가 뜰 때 바로 하나, 바퀴가 끝나면 그 bag을 거둔 뒤에 다음 하나라 동시에 하나다.
 # 런치 파일에는 안 보이는 프로세스라 런치에서 세지 못해 여기 둔다
 RECORDER_CHILD_PROCESSES = 1
 
