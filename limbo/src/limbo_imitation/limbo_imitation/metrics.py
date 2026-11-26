@@ -26,6 +26,10 @@ PATROL_COMPLETED = 'completed'
 START_MANUAL = 'manual_start'
 # 그런 바퀴의 completed 값. 끝을 아는 것은 운전자뿐이라 True/False 대신 이 글자를 남긴다
 COMPLETED_MANUAL = 'manual'
+# 패드 기록 버튼으로 시작한 바퀴(run_recorder의 start_reason이자 버튼으로 끝낸 end_reason).
+# 사람이 HOME에서 시작해 HOME에서 끊으므로 manual_start와 같이 완주를 운전자에게 맡긴다
+START_BUTTON = 'button'
+DRIVER_ENDED_STARTS = (START_MANUAL, START_BUTTON)
 SOURCE_TELEOP = 'teleop'
 SOURCE_NAV = 'nav'
 MODE_POLICY = 'policy'
@@ -57,7 +61,7 @@ class RunLog:
 
     start_time: float = 0.0
     end_time: float = 0.0
-    start_reason: str = ''                              # START_MANUAL이면 완주 판정을 운전자에게 맡김
+    start_reason: str = ''                              # DRIVER_ENDED_STARTS면 완주 판정을 운전자에게 맡김
     patrol_states: list = field(default_factory=list)   # (t, state 문자열)
     monitor_states: list = field(default_factory=list)  # (t, action_type)
     scan_min: list = field(default_factory=list)        # (t, 라이다 최근접 거리 m)
@@ -184,13 +188,13 @@ def mode_switch_intervals(drive_modes, source, modes, end_time):
 
 
 def run_completed(log):
-    """완주 여부. 수동 시작 바퀴는 COMPLETED_MANUAL.
+    """완주 여부. 수동 시작·버튼 시작 바퀴는 COMPLETED_MANUAL.
 
-    수동 시작 바퀴에는 /patrol/state가 없어 완주를 기계가 알 수 없다. 운전자가 기록을 끝낸 것을
+    수동 시작·버튼 시작 바퀴에는 /patrol/state가 없어 완주를 기계가 알 수 없다. 운전자가 기록을 끝낸 것을
     완주로 본다. False로 두면 멀쩡한 수동 바퀴가 전부 불합격이 되고, True로 두면 CSV만 보고
     순찰 노드가 완주를 확인한 바퀴와 구별할 수 없다.
     """
-    if log.start_reason == START_MANUAL:
+    if log.start_reason in DRIVER_ENDED_STARTS:
         return COMPLETED_MANUAL
     return any(state == PATROL_COMPLETED for _, state in log.patrol_states)
 

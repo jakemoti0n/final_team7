@@ -163,6 +163,7 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 - 불합격 바퀴도 통째로 버리지 않고 **문제 구간만** 뺀다(충돌 앞뒤·개인 공간 침범·갇힘·`collision_monitor`가 깎은 구간).
 - 교정 반복(DAgger): 정책이 운전하고 사람이 데드맨으로 끼어든다 → 끼어든 구간이 새 정답(가중 2, `intervention_weight`) → 재학습. 끼어들기 0이 연속 2바퀴면 끝.
 - 가중치·문턱 같은 값은 손으로 만지지 않고 데이터로 채운다. 불일치 문턱은 검증 바퀴 불일치의 95 % 분위수(`threshold_quantile`)다.
+- 데이터 수집: 바퀴 기록 시작·끝은 패드 버튼(Start, `record_button`)으로 한다(11-26, 패드 켜기와 기록이 한 런치에 묶여 있어 바퀴마다 런치를 껐다 켜야 했고 바퀴 사이 이동까지 기록되던 문제). 런치는 하루 한 번 띄워 둔다. 버튼으로 시작한 바퀴의 완주는 수동 시작 바퀴처럼 운전자에게 맡긴다(`completed: manual`).
 
 **구조**
 - `teleop_twist_joy` → `/cmd_vel_teleop`, `policy_node` → `/cmd_vel_policy`, MPPI(velocity_smoother) → `/cmd_vel_smoothed` → `drive_arbiter`가 하나를 골라 `/cmd_vel_arbiter` → `collision_monitor` → `/cmd_vel`. 비상 정지는 어느 운전자든 바퀴 앞에 늘 남는다.
@@ -367,6 +368,7 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 - 다음 순서:
   1. 3일 차: 예비 기록. 2026-11-25 첫 수동 바퀴 1개(패드 Acegamer T50 Xbox 모드 블루투스, 272 s·44.8 m, 변경 기록 78). 남은 것: `uhid` 영구 로드(sudo)·부팅 유닛 시각 동기 대기(설계 승인, `KNOWN_ISSUES.md` 2026-11-25).
   2. 4일 차: 수동 운전 20~30바퀴. 조건표(빈 복도 / 벽 붙기 / 보행자 1명·2명 / 운전자 교대), 카메라 켠 채로.
+     2026-11-26: 젯슨 `~/limbo`를 변경 기록 78로 갱신·빌드, 첫 수동 20바퀴 준비(조건 코드 `cond_empty 6 / cond_wall 4 / cond_ped1 2 / cond_guest 2 / cond_ped2 3 / cond_swap 3`, 순서표는 팀에 전달). 기록 시작·끝을 패드 버튼으로 바꿈(변경 기록 79).
   3. 5~7일 차: 학습, 교정 반복(DAgger).
   4. 8일 차: MPPI 대 정책 비교(2-10 채택 기준).
   5. 9일 차: 충장로 시뮬레이션으로 확장성 확인.

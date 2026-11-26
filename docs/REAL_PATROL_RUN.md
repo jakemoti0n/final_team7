@@ -40,11 +40,14 @@
    systemctl --user restart limbo-nx-navigation
    ```
    수동으로 띄울 때는 `bash tools/drive/run_nav2_real.sh cmd_vel_out:=/cmd_vel cmd_vel_in:=/cmd_vel_arbiter`.
-3. 기록 런치:
+3. 기록 런치 — **하루 한 번만** 띄워 두고 바퀴마다 패드 **Start(메뉴) 버튼**으로 기록을 시작·끝낸다:
    ```bash
    ros2 launch limbo_imitation imitation_real.launch.py mode:=manual driver:=<이름> note:=<메모>
    ```
-   → `/patrol/state`가 patrolling이 되면 기록을 시작하고 completed·failed에서 끝낸다. 순찰 노드 없이 달릴 때는 `manual_start:=true`(런치를 띄우자마자 시작, Ctrl+C로 끝).
+   → 런치가 뜨면 패드로 운전은 되지만 **기록은 안 된다.** HOME에서 Start를 누르면 새 바퀴 폴더로 기록 시작(`run N started (button)`), 다시 누르면 끝(`run N ended (button): passed=… […]`). 누르지 않은 동안(바퀴 사이 이동·연습)은 기록하지 않는다. 바퀴 번호는 같은 런치 안에서 01, 02, …로 올라간다. 버튼을 누르고 있어도 한 번만 바뀌니 떼었다 다시 눌러야 다음 토글이다.
+   - 버튼 번호는 기본 7(Xbox 배열 Start). 패드가 다르면 `ros2 topic echo /joy`에서 누를 때 1이 되는 `buttons` 자리(0부터)를 보고 런치에 `record_button:=<번호>`.
+   - 순찰 노드와 같이 달리면 `/patrol/state`가 patrolling이 될 때도 시작하고 completed·failed에서 끝낸다. `manual_start:=true`는 "런치가 뜨자마자 기록" 옵션으로 남아 있다(그 바퀴도 Start나 Ctrl+C로 끝).
+   - 기록 중에 Ctrl+C로 런치를 끄면 그 바퀴는 `node shutdown`으로 닫힌다.
    - 패드가 없으면 키보드: 런치에 `require_deadman:=false`를 붙이고 다른 터미널에서 `bash tools/drive/teleop_keyboard.sh /cmd_vel_teleop`. 키를 떼면 0.5 s 안에 멈춘다.
 4. 기록 위치: `~/limbo_bags/imitation/<날짜_시각>_<번호>_<모드>/`(`bag/`, `meta.json`, `metrics.csv`). 바퀴 지표 표 한 장:
    ```bash

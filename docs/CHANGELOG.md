@@ -8,6 +8,30 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-26 (79) 바퀴 기록 시작/끝을 패드 Start 버튼으로(런치는 하루 한 번), 버튼 바퀴 완주는 운전자 판정, ToF 사용 불가 확정, 수동 20바퀴 조건 코드
+
+**할 일**
+- `build_limbo`(`limbo_imitation`, 새 모듈 `record_button.py`가 생겨 심볼릭 설치라도 한 번 빌드). 기록 런치는 하루 한 번 띄워 두고 바퀴마다 Start(`docs/REAL_PATROL_RUN.md` "모방 학습 런치" 3번)
+- 실물 패드에서 Start가 버튼 7인지 `ros2 topic echo /joy`로 확인. 다르면 런치에 `record_button:=<번호>`
+- 다음: 수동 20바퀴(아래 조건 코드, `docs/PROJECT.md` 8절 4일 차)
+
+**변경**
+- `limbo_imitation/record_button.py`(새, rclpy 없음): 패드 버튼 상승 에지(0 → 1)만 세는 `RecordButton`과 `toggle_action`. joy_node는 누르고 있는 동안 1을 계속 보내므로 값이 아니라 눌린 순간만 센다(누른 채로는 한 번, 떼었다 눌러야 다음 토글)
+- `limbo_imitation/run_recorder.py`: `/joy` 구독(깊이 10, `drive_arbiter`와 같게), 파라미터 `record_button`(기본 7 = Xbox Start)·`record_button_topic`(기본 `/joy`). 기록 중이 아니면 새 바퀴 시작, 기록 중이면 끝(시작·끝 사유 `button`). 같은 노드 안에서 바퀴 번호가 01, 02, …로 올라감. `manual_start`·`/patrol/state` 시작·끝과 종료 신호 정리는 그대로
+- `limbo_imitation/metrics.py`: `start_reason == button` 바퀴도 `manual_start`처럼 `completed: manual`, 합격 판정에서 완주 조건 뺌(사람이 HOME에서 시작해 HOME에서 끊음)
+- `config/imitation.yaml`: `record_button: 7`(왜 7인지, 바꾸는 법 주석)·`record_button_topic`. `launch/imitation_real.launch.py`: 런치 인자 `record_button`
+- 테스트: `test/test_record_button.py`(누른 채 유지 중 재토글 없음, 떼었다 누르면 토글, 다른 버튼·짧은 배열 무시, 노드에서 시작 → 끝 → 시작으로 바퀴 01·02 폴더와 `button` 사유·`completed: manual`), `test/test_metrics.py`(버튼 바퀴 완주 취급)
+- `docs/REAL_PATROL_RUN.md` "모방 학습 런치" 3번: 런치 한 번, Start로 바퀴 시작·끝, 누르지 않은 동안 기록 안 됨, 번호 증가, 시작·끝 로그 줄, 버튼 번호 확인법, `manual_start:=true`는 "뜨자마자 기록" 옵션. `docs/PROJECT.md` 2-10 데이터 수집 한 줄, 8절 4일 차 11-26 상태. `docs/KNOWN_ISSUES.md` ToF 항목을 사용 불가 확정으로
+
+**결정**
+- 기록 시작·끝은 패드 버튼(B안, PM 2026-11-26). 패드 노드(joy·teleop·중재기)와 기록기가 한 런치라 "패드만 켜고 기록은 나중에"가 안 됐고, 바퀴마다 런치를 껐다 켜야 했으며 바퀴 사이 이동·연습까지 기록됐다. 11-26 실물 점검에서 패드가 반응하지 않은 것은 런치를 띄우지 않았기 때문(런치 미기동 = 패드 무반응)이었고, 패드를 쓰려면 기록 런치를 켜야 하는 이 묶임을 풀려고 B안으로 감
+- ToF 사용 불가 확정(PM 2026-11-26): 센서 2개 모두 불량(A 무응답, B 접촉 불량). 실물 스택은 이미 `tof_enabled: False`, 모방 학습 입력에도 ToF가 없어 영향 없음
+- 수동 20바퀴 조건 코드(`note`에 적음): `cond_empty 6 / cond_wall 4 / cond_ped1 2 / cond_guest 2 / cond_ped2 3 / cond_swap 3`. 운전 원칙은 빈 복도는 가운데, 사람을 만나면 오른쪽으로 비키기, 손님 앞에서는 멈추기. 순서표는 팀에 전달
+
+**확인**(2026-11-26 Orin NX, 노트북)
+- 젯슨 `~/limbo`를 변경 기록 78로 갱신·빌드(14시경). 바뀐 것이 `limbo_imitation`뿐이라 부팅 유닛 재시작은 필요 없음
+- 노트북: 패키지 폴더 `python3 -m pytest -q test` 80 passed 9 skipped(torch·copyright), torch 있는 파이썬(`~/limbo_venvs/imitation/bin/python -m pytest -q test`) 88 passed 1 skipped(copyright), flake8 포함
+
 ## 2026-11-25 (78) 패드(Xbox 모드 BT) → 중재기 → 비상 정지 → 바퀴 첫 수동 운전 바퀴, 부팅 시계 점프로 라이다·위치 검증 깨짐 해결, 기록기 종료·수동 완주 판정 수정, ToF 보류
 
 **할 일**

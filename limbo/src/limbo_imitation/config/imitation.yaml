@@ -27,6 +27,10 @@ run_recorder:
     map_yaml: ''
     model_file: ''             # 정책 모델 파일. manual·nav는 비워 둔다(meta에 null)
     manual_start: false        # true면 /patrol/state 없이 노드 시작 즉시 기록(patrol_node 없이 달릴 때)
+    record_button: 7           # 바퀴 기록 시작/끝 토글 버튼. 7 = Xbox 패드 Start(메뉴), joy_node 리눅스 Xbox 배열 기준.
+                               #   데드맨(4, LB)·teleop 버튼과 겹치지 않는 버튼. 패드가 다르면 `ros2 topic echo /joy`로
+                               #   누를 때 1이 되는 buttons 자리(0부터)를 보고 바꾼다(런치 인자 record_button)
+    record_button_topic: /joy
     output_root: ~/limbo_bags/imitation
     bag_stop_timeout: 10.0     # s. SIGINT 뒤 bag이 닫히기를 기다리는 상한. 넘으면 경고만(SIGTERM 안 씀)
     topics: ['/scan', '/odom', '/tf', '/tf_static', '/patrol/state', '/person_detector/predictions',

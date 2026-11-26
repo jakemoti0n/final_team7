@@ -5,6 +5,7 @@
   tools/drive/run_nav2_real.sh cmd_vel_out:=/cmd_vel cmd_vel_in:=/cmd_vel_arbiter
 인자: mode(manual|policy_assist|policy|nav, 기본 manual), driver(운전자 이름), note(메모),
       joy_dev(조이스틱 장치 번호), manual_start(/patrol/state 없이 바로 기록),
+      record_button(바퀴 기록 시작/끝 패드 버튼 번호, 기본 7 = Xbox Start. 런치는 한 번 띄워 두고 바퀴마다 누른다),
       require_deadman(false = 키보드 운전: tools/drive/teleop_keyboard.sh /cmd_vel_teleop),
       model_path(정책 .pt, mode가 policy·policy_assist일 때만 policy_node를 띄움),
       waypoints(경유점 yaml 전체 경로. patrol_node와 같은 파일을 넘긴다. 기록기 meta.json에도 남음).
@@ -38,6 +39,8 @@ def generate_launch_description():
         DeclareLaunchArgument('joy_dev', default_value='0',
                               description='joy_node device_id (/dev/input/js<번호>)'),
         DeclareLaunchArgument('manual_start', default_value='false'),
+        DeclareLaunchArgument('record_button', default_value='7',
+                              description='바퀴 기록 시작/끝 토글 버튼(sensor_msgs/Joy.buttons 번호)'),
         DeclareLaunchArgument('require_deadman', default_value='true'),
         DeclareLaunchArgument('model_path', default_value=''),
         DeclareLaunchArgument('waypoints', default_value=default_waypoints),
@@ -62,6 +65,8 @@ def generate_launch_description():
                  'note': ParameterValue(LaunchConfiguration('note'), value_type=str),
                  'manual_start': ParameterValue(LaunchConfiguration('manual_start'),
                                                 value_type=bool),
+                 'record_button': ParameterValue(LaunchConfiguration('record_button'),
+                                                 value_type=int),
                  'waypoints_file': waypoints,
                  'model_file': model_path}]),
         Node(package='limbo_imitation', executable='policy_node', name='policy_node',

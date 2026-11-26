@@ -138,6 +138,15 @@ def test_manual_start_run_is_completed_by_driver():
     assert metrics.passed(m, {'personal_space': 0.5}) == (True, [])
 
 
+def test_button_run_is_completed_by_driver():
+    log = straight_run()
+    log.patrol_states = []
+    log.start_reason = metrics.START_BUTTON  # 패드 버튼으로 시작·끝낸 바퀴
+    m = metrics.compute_metrics(log)
+    assert m['completed'] == metrics.COMPLETED_MANUAL
+    assert metrics.passed(m, {'personal_space': 0.5}) == (True, [])
+
+
 def test_patrol_run_without_completed_state_fails():
     log = straight_run()
     log.patrol_states = [(0.0, 'patrolling')]

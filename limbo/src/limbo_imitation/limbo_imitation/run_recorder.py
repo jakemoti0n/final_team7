@@ -1,8 +1,10 @@
 """
 한 바퀴 기록기 노드: 순찰 한 바퀴마다 bag·meta.json·metrics.csv를 한 폴더에 남긴다.
 
-- 시작: /patrol/state가 patrolling이 되면(manual_start면 노드 시작 즉시)
-- 끝: completed·failed가 되면(또는 노드 종료)
+- 시작: 패드 기록 버튼(record_button)을 누르면, 또는 /patrol/state가 patrolling이 되면
+  (manual_start면 노드 시작 즉시)
+- 끝: 기록 버튼을 다시 누르면, 또는 completed·failed가 되면(또는 노드 종료)
+  런치를 한 번 띄워 두고 버튼으로 여러 바퀴를 기록한다. 바퀴 번호는 노드가 사는 동안 올라간다.
 - bag은 ros2 bag record를 자식 프로세스로 띄우고 SIGINT로 닫는다. 닫는 단계는 run_files.finish_run.
 - 지표는 bag을 다시 읽지 않고 기록 중 구독한 값으로 메모리에서 계산한다(metrics.py).
   바퀴가 끝나자마자 CSV가 나와 다음 바퀴 전에 결과를 볼 수 있게 하려는 것이다.
@@ -17,7 +19,7 @@ import signal
 import subprocess
 
 from geometry_msgs.msg import Twist
-from limbo_imitation import metrics, run_files
+from limbo_imitation import metrics, record_button, run_files
 from limbo_interfaces.msg import PatrolState, PersonPredictionArray
 from nav2_msgs.msg import CollisionMonitorState
 from nav_msgs.msg import Odometry
@@ -26,7 +28,7 @@ from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, qos_profile_sensor_data, QoSProfile, ReliabilityPolicy
 from rclpy.signals import SignalHandlerOptions
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import Joy, LaserScan
 from std_msgs.msg import String
 
 END_STATES = (PatrolState.COMPLETED, PatrolState.FAILED)
@@ -60,6 +62,7 @@ class RunRecorder(Node):
         self.run_number = 0
         self.unclosed_bags = []
         self.robot_xy = None
+        self.button = record_button.RecordButton(self.record_button)
         self._subscribe()
         if self.manual_start:
             self.start_run(metrics.START_MANUAL)
@@ -73,6 +76,7 @@ class RunRecorder(Node):
         self.map_yaml = p('map_yaml', '').value
         self.model_file = p('model_file', '').value
         self.manual_start = p('manual_start', False).value
+        self.record_button = p('record_button', 7).value
         self.output_root = os.path.expanduser(p('output_root', '~/limbo_bags/imitation').value)
         self.topics = list(p('topics', DEFAULT_TOPICS).value)
         self.bag_stop_timeout = p('bag_stop_timeout', 10.0).value
@@ -100,6 +104,8 @@ class RunRecorder(Node):
         monitor_topic = p('collision_monitor_state_topic', '/collision_monitor_state').value
         self.create_subscription(CollisionMonitorState, monitor_topic,
                                  self.on_monitor_state, sensor)
+        # 깊이 10: drive_arbiter가 /joy를 구독하는 것과 같게
+        self.create_subscription(Joy, p('record_button_topic', '/joy').value, self.on_joy, 10)
 
     def now(self):
         return self.get_clock().now().nanoseconds * 1e-9
@@ -111,6 +117,14 @@ class RunRecorder(Node):
             self.start_run('patrolling')
         elif msg.state in END_STATES and self.log is not None:
             self.stop_run(msg.state)
+
+    def on_joy(self, msg):
+        if not self.button.pressed_now(msg.buttons):
+            return
+        if record_button.toggle_action(self.log is not None) == record_button.START:
+            self.start_run(metrics.START_BUTTON)
+        else:
+            self.stop_run(metrics.START_BUTTON)
 
     def on_scan(self, msg):
         if self.log is not None:
