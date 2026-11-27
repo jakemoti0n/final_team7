@@ -4,7 +4,8 @@
 - 입력 조립은 frame_builder(데이터셋과 같은 함수), 추론은 model.Ensemble, 가속 제한은 model.limit_acceleration.
 - 입력 조립 설정(FrameSettings)과 속도 상한은 모델 파일의 값을 쓴다. 학습한 그대로여야 해서다.
 - /policy/status: {"ok", "reason", "disagreement", "threshold"}. ok=false면 중재기가 nav로 넘긴다.
-  입력이 모자라면(no_scan·no_tf·no_odom·no_people·no_waypoint) 명령을 내지 않는다.
+  입력이 모자라면(no_scan·no_scan_tf·no_tf·no_odom·no_people·no_waypoint) 명령을 내지 않는다.
+  no_scan_tf = base에서 스캔 프레임으로 가는 TF가 없어 스캔을 base 기준으로 못 옮김(데이터셋과 같은 입력을 못 만듦).
   모델이 없으면(no_model) 경고 한 번, 명령 없이 status만.
 """
 
@@ -64,6 +65,7 @@ class PolicyNode(Node):
         self.ensemble, self.model_info = self.load_model(p('model_path', '').value,
                                                          p('backend', 'torch').value)
         self.latest = {'odom': None, 'people': None, 'patrol': None, 'scan_time': None}
+        self.mounts = {}
         self.history, self.previous, self.timings = [], None, []
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -161,10 +163,14 @@ class PolicyNode(Node):
         if isinstance(inputs, str):
             self.publish_status(inputs)
             return
+        mount = self.scan_mount(msg.header.frame_id)
+        if mount is None:
+            self.publish_status('no_scan_tf')
+            return
         frame = frame_builder.assemble_frame(
             (msg.ranges, msg.angle_min, msg.angle_increment), inputs['pose_map'],
             inputs['pose_odom'], inputs['goal'], inputs['velocity'], inputs['people'],
-            self.model_info['frame_settings'])
+            self.model_info['frame_settings'], mount)
         x = frame_builder.push_and_stack(self.history, frame)
         v, w, disagreement = self.ensemble.predict(x)
         self.timings.append((time.perf_counter() - started) * MS_PER_SEC)
@@ -172,6 +178,19 @@ class PolicyNode(Node):
         self.publish_command(now, (float(v), float(w)), scan_dt)
         ok = disagreement <= self.model_info['threshold']
         self.publish_status('ok' if ok else 'disagreement', float(disagreement))
+
+    def scan_mount(self, scan_frame):
+        """base에서 본 스캔 프레임 (x, y, yaw). 장착은 정적이라 한 번 얻으면 둔다. 아직 없으면 None."""
+        if self.mounts.get(scan_frame) is None:
+            try:
+                tr = self.tf_buffer.lookup_transform(self.frames['base'], scan_frame, Time(),
+                                                     TF_LOOKUP_TIMEOUT).transform
+            except TransformException:
+                return None
+            q = tr.rotation
+            self.mounts[scan_frame] = (tr.translation.x, tr.translation.y,
+                                       frame_builder.yaw_from_quaternion(q.x, q.y, q.z, q.w))
+        return self.mounts[scan_frame]
 
     def publish_command(self, now, target, scan_dt):
         """가속을 제한해 명령을 낸다.

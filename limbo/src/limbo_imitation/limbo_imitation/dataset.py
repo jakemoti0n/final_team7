@@ -12,6 +12,10 @@
   policy·policy_assist에서 데드맨 뗌은 "정책에 맡김"이라 넣지 않는다(PM 2026-11-26).
 - 거르기: metrics.bad_intervals(충돌 앞뒤·개인 공간 침범·갇힘·collision_monitor가 깎은 구간) 안의
   표본은 뺀다. 불합격 바퀴도 통째로 버리지 않고 그 구간만 뺀다(PM 결정).
+  사람이 정한 제외(바퀴 통째·구간)는 데이터 옆 제외 목록 파일(exclusions.yaml, load_exclusions)에서 읽는다.
+- 경유점: /patrol/state가 있는 바퀴(순찰·정책 주행)는 그것을, 없는 바퀴(패드 버튼 수동 바퀴)는
+  waypoint_progress로 map 위치에서 순찰 노드와 같은 규칙으로 번호를 계산한다(반경은 실물 Nav2 설정에서 읽음).
+- 스캔: 스캔 프레임의 장착 자세(bag /tf_static 또는 tf_static.json)로 base 기준으로 옮긴다. 못 찾으면 no_scan_tf.
 - 사람 예측이 input_timeout 넘게 끊긴 표본도 뺀다. person_detector는 처리한 프레임마다 빈 목록이라도
   예측을 내므로 끊김은 "사람 없음"이 아니라 "카메라·인식이 죽음"이다(정책 노드는 그때 MPPI로 넘긴다).
   그래서 기록은 카메라를 켠 채로 해야 표본이 남는다.
@@ -28,13 +32,17 @@ import math
 import os
 import sys
 
-from limbo_imitation import arbiter_logic, config_file, features, frame_builder, metrics, run_files
+from limbo_imitation import (arbiter_logic, config_file, features, frame_builder, metrics,
+                             robot_geometry, run_files, waypoint_progress)
 import numpy as np
+import yaml
 
 SOURCE_TELEOP = metrics.SOURCE_TELEOP
 SOURCE_NAV = metrics.SOURCE_NAV
 NS_PER_SEC = 1e9
 SECTION = 'build_dataset'
+# 데이터 폴더 옆 제외 목록(바퀴 통째·구간, 사람이 정함). load_exclusions 참고
+EXCLUSIONS_FILE = 'exclusions.yaml'
 DEFAULTS = {
     'label_window': 0.2,
     'intervention_weight': 2.0,
@@ -44,6 +52,10 @@ DEFAULTS = {
     'map_frame': 'map',
     'odom_frame': 'odom',
     'base_frame': 'base_footprint',
+    'nav2_params_file': '',   # 비면 limbo_navigation의 nav2_real.yaml(발판·도착 허용 오차)
+    'patrol_bt_file': '',     # 비면 limbo_navigation의 실물 순찰 BT(경유점 통과 반경)
+    'pass_radius': None,      # 비면 patrol_bt_file의 RemovePassedGoals radius
+    'stop_tolerance': None,   # 비면 nav2_params_file의 xy_goal_tolerance
     **frame_builder.settings_to_dict(frame_builder.FrameSettings()),
 }
 
@@ -81,11 +93,14 @@ class BagStreams:
 
     start_time: float = 0.0
     end_time: float = 0.0
-    scans: Series = field(default_factory=Series)  # (ranges, angle_min, angle_inc, r_min, r_max)
+    # (ranges, angle_min, angle_inc, r_min, r_max, 스캔 프레임)
+    scans: Series = field(default_factory=Series)
     odom: Series = field(default_factory=Series)        # (x, y, v, w) odom 좌표
     tf: dict = field(default_factory=dict)              # (부모, 자식) → Series of (x, y, yaw)
     tf_static: dict = field(default_factory=dict)       # (부모, 자식) → (x, y, yaw)
     patrol: Series = field(default_factory=Series)      # (state, waypoint_index)
+    # waypoint_index. /patrol/state 없는 바퀴용(derive_waypoints)
+    derived_waypoint: Series = field(default_factory=Series)
     predictions: Series = field(default_factory=Series)  # [(x, y, vx, vy)] odom 좌표
     drive_modes: Series = field(default_factory=Series)  # (source, mode, reason)
     teleop: Series = field(default_factory=Series)      # (v, w)
@@ -127,8 +142,13 @@ def age_of(series, t):
 def inputs_at(streams, t, waypoints, cfg):
     """시각 t의 입력 원재료 dict 또는 모자란 이유(문자열, frame_builder.input_problem과 같은 말)."""
     poses = robot_poses(streams, t, cfg)
-    patrol = streams.patrol.latest(t)
-    goal = frame_builder.waypoint_goal(waypoints, patrol[1][1]) if patrol else None
+    if streams.patrol.times:
+        patrol = streams.patrol.latest(t)
+        index = patrol[1][1] if patrol else None
+    else:
+        derived = streams.derived_waypoint.latest(t)
+        index = derived[1] if derived else None
+    goal = frame_builder.waypoint_goal(waypoints, index)
     ages = {'tf': poses[2] if poses else None, 'odom': age_of(streams.odom, t),
             'people': age_of(streams.predictions, t)}
     problem = frame_builder.input_problem(ages, goal, cfg['input_timeout'])
@@ -192,43 +212,76 @@ def person_distances(streams):
     return result
 
 
-def run_log_from_streams(streams):
+def scan_mount_of(streams, base_frame):
+    """Bag 스캔 프레임의 장착 자세(base 기준 x, y, yaw). 스캔이 없거나 못 이으면 None."""
+    if not streams.scans.values:
+        return None
+    return frame_builder.scan_mount(streams.tf_static, base_frame, streams.scans.values[0][5])
+
+
+def run_log_from_streams(streams, settings, mount):
     """기록(bag) 값 → metrics.RunLog. 학습에서 뺄 구간을 기록기와 같은 함수(metrics)로 다시 계산한다.
 
-    metrics.csv에는 지표 한 줄만 있고 구간은 없어서다.
+    metrics.csv에는 지표 한 줄만 있고 구간은 없어서다. mount가 None이면 라이다 충돌은 셀 수 없다(빈 목록).
     """
-    scan_min = [(t, metrics.scan_min_range(s[0], s[3], s[4]))
-                for t, s in zip(streams.scans.times, streams.scans.values)]
+    scan_edge = [] if mount is None else [
+        (t, metrics.scan_edge_distance(s, mount, settings))
+        for t, s in zip(streams.scans.times, streams.scans.values)]
     return metrics.RunLog(
         start_time=streams.start_time, end_time=streams.end_time,
         patrol_states=[(t, s[0]) for t, s in zip(streams.patrol.times, streams.patrol.values)],
-        monitor_states=streams.monitor_states.tuples(), scan_min=scan_min,
+        monitor_states=streams.monitor_states.tuples(), scan_edge=scan_edge,
         person_dist=person_distances(streams), odom=streams.odom.tuples(),
         cmd=streams.cmd.tuples(), cmd_out=streams.cmd_out.tuples(),
         drive_modes=streams.drive_modes.tuples())
 
 
-def lap_samples(streams, waypoints, cfg, metric_settings):
-    """한 바퀴 → (X 목록, y 목록, weight 목록, stamp 목록, 뺀 이유 Counter, 제외 구간 수)."""
+def derive_waypoints(streams, route, cfg):
+    """/patrol/state 없는 바퀴: 스캔 시각마다 map 위치로 경유점 번호를 계산해 derived_waypoint에 넣는다."""
+    poses = []
+    for t in streams.scans.times:
+        found = robot_poses(streams, t, cfg)
+        poses.append(found[0] if found else None)
+    indices = waypoint_progress.progress(poses, route, cfg['pass_radius'], cfg['stop_tolerance'])
+    streams.derived_waypoint = Series([(t, i) for t, i in zip(streams.scans.times, indices)
+                                       if i is not None])
+
+
+def lap_samples(streams, waypoints, cfg, metric_settings, route=None, excluded=()):
+    """한 바퀴 → (X 목록, y 목록, weight 목록, stamp 목록, 뺀 이유 Counter, 제외 구간 수).
+
+    route(load_route)를 주면 /patrol/state가 없는 바퀴에 경유점 번호를 계산해 넣는다.
+    excluded = 사람이 정한 제외 구간 [(시작, 끝)] bag 시각(초).
+    """
     settings = frame_builder.settings_from_dict(
         {key: cfg[key] for key in frame_builder.FrameSettings.__annotations__})
-    bad = metrics.bad_intervals(run_log_from_streams(streams), metric_settings)
+    if route is not None and not streams.patrol.times:
+        derive_waypoints(streams, route, cfg)
+    mount = scan_mount_of(streams, cfg['base_frame'])
+    bad = metrics.bad_intervals(run_log_from_streams(streams, metric_settings, mount),
+                                metric_settings)
     assist = metrics.mode_switch_intervals(streams.drive_modes.tuples(), SOURCE_TELEOP,
                                            (metrics.MODE_POLICY_ASSIST,), streams.end_time)
     span = teleop_span(streams.drive_modes)
     history, xs, ys, weights, stamps, dropped = [], [], [], [], [], Counter()
     for t, scan in zip(streams.scans.times, streams.scans.values):
+        if mount is None:
+            dropped['no_scan_tf'] += 1
+            continue
         inputs = inputs_at(streams, t, waypoints, cfg)
         if isinstance(inputs, str):
             dropped[inputs] += 1
             continue
         frame = frame_builder.assemble_frame(scan[:3], inputs['pose_map'], inputs['pose_odom'],
                                              inputs['goal'], inputs['velocity'],
-                                             inputs['people'], settings)
+                                             inputs['people'], settings, mount)
         x = frame_builder.push_and_stack(history, frame)
         label, reason = label_at(streams, t, cfg['label_window'], span)
         if label is None or in_intervals(t, bad):
             dropped[reason or 'bad_interval'] += 1
+            continue
+        if in_intervals(t, excluded):
+            dropped['excluded_by_list'] += 1
             continue
         xs.append(x)
         ys.append(label)
@@ -288,7 +341,8 @@ def clean_frame(name):
 
 def add_scan(streams, t, msg):
     streams.scans.add(t, (np.asarray(msg.ranges, dtype=float), msg.angle_min,
-                          msg.angle_increment, msg.range_min, msg.range_max))
+                          msg.angle_increment, msg.range_min, msg.range_max,
+                          clean_frame(msg.header.frame_id)))
 
 
 def add_odom(streams, t, msg):
@@ -386,17 +440,62 @@ def read_meta(folder):
         return json.load(f)
 
 
-def build_laps(folders, cfg, metric_settings, waypoints_override=None, reader=read_bag):
-    """폴더마다 표본을 모은다. 결과: 바퀴별 dict 목록(id 순)."""
+def load_exclusions(path):
+    """제외 목록 파일(yaml 목록) → {바퀴 폴더 이름: 'whole' 또는 [(시작 s, 끝 s, 이유)]}. 파일이 없으면 빈 dict.
+
+    항목: {lap: <폴더 이름>, whole_lap: true, reason: …} 또는 {lap, start_s, end_s, reason}.
+    start_s·end_s는 그 바퀴 bag의 첫 메시지부터 초. 사람(PM)이 기록을 보고 정한 것이라 코드에 두지 않는다.
+    """
+    if not path or not os.path.isfile(path):
+        return {}
+    with open(path, encoding='utf-8') as f:
+        entries = yaml.safe_load(f) or []
+    result = {}
+    for entry in entries:
+        if not entry.get('reason'):
+            raise ValueError(f'exclusion without reason: {entry}')
+        if entry.get('whole_lap'):
+            result[entry['lap']] = 'whole'
+        elif result.get(entry['lap']) != 'whole':
+            result.setdefault(entry['lap'], []).append(
+                (float(entry['start_s']), float(entry['end_s']), entry['reason']))
+    return result
+
+
+def resolve_geometry(cfg, metric_settings):
+    """비어 있는 발판·경유점 반경을 실물 Nav2 설정에서 채운다(값을 코드에 두지 않는다)."""
+    cfg, metric_settings = dict(cfg), dict(metric_settings)
+    if not metric_settings.get('footprint'):
+        metric_settings['footprint'] = robot_geometry.footprint_text(cfg['nav2_params_file'])
+    if cfg.get('pass_radius') is None or cfg.get('stop_tolerance') is None:
+        cfg['pass_radius'], cfg['stop_tolerance'] = robot_geometry.patrol_radii(
+            cfg['nav2_params_file'], cfg['patrol_bt_file'])
+    return cfg, metric_settings
+
+
+def build_laps(folders, cfg, metric_settings, waypoints_override=None, reader=read_bag,
+               exclusions=None):
+    """폴더마다 표본을 모은다. 결과: 바퀴별 dict 목록(id 순). 제외 목록의 통째 제외 바퀴는 건너뛴다."""
+    cfg, metric_settings = resolve_geometry(cfg, metric_settings)
+    exclusions = exclusions or {}
     laps = []
-    for lap_id, folder in enumerate(folders):
+    for folder in folders:
+        name = os.path.basename(os.path.normpath(folder))
+        if exclusions.get(name) == 'whole':
+            print(f'skip {name}: excluded by list', file=sys.stderr)
+            continue
+        lap_id = len(laps)
         meta = read_meta(folder)
-        waypoints = frame_builder.load_waypoints(resolve_waypoints(meta, waypoints_override))
+        waypoints_file = resolve_waypoints(meta, waypoints_override)
+        waypoints = frame_builder.load_waypoints(waypoints_file)
+        route = frame_builder.load_route(waypoints_file)
         streams = reader(os.path.join(folder, run_files.BAG_DIR))
         if not streams.tf_static:
             load_tf_static_file(folder, streams)
+        excluded = [(streams.start_time + a, streams.start_time + b)
+                    for a, b, _ in exclusions.get(name, [])]
         xs, ys, weights, stamps, dropped, n_bad = lap_samples(streams, waypoints, cfg,
-                                                              metric_settings)
+                                                              metric_settings, route, excluded)
         laps.append({'id': lap_id, 'folder': os.path.abspath(folder), 'x': xs, 'y': ys,
                      'weight': weights, 'stamp': stamps, 'dropped': dropped, 'n_bad': n_bad,
                      'passed': [row.get('passed') for row in run_files.read_metrics_csv(folder)],
@@ -435,9 +534,10 @@ def dataset_info(laps, cfg, metric_settings):
 
 
 def build_dataset(folders, out_path, cfg, metric_settings, waypoints_override=None,
-                  reader=read_bag):
+                  reader=read_bag, exclusions=None):
     """폴더들 → out_path(.npz). 바퀴별 요약 목록을 낸다(표 출력용)."""
-    laps = build_laps(folders, cfg, metric_settings, waypoints_override, reader)
+    cfg, metric_settings = resolve_geometry(cfg, metric_settings)
+    laps = build_laps(folders, cfg, metric_settings, waypoints_override, reader, exclusions)
     val_ids = split_laps([lap['id'] for lap in laps if lap['x']], cfg['val_fraction'],
                          cfg['seed'])
     arrays = stack_laps(laps, val_ids)
@@ -473,6 +573,7 @@ def parse_args(argv):
     parser.add_argument('--config', default=config_file.default_config_path(),
                         help='imitation.yaml(build_dataset 절과 run_recorder 지표 기준)')
     parser.add_argument('--waypoints', help='meta.json의 경유점 경로가 이 PC에 없을 때')
+    parser.add_argument('--exclusions', help='제외 목록 yaml. 없으면 첫 폴더 옆의 exclusions.yaml(있을 때)')
     parser.add_argument('--label-window', type=float, dest='label_window')
     parser.add_argument('--intervention-weight', type=float, dest='intervention_weight')
     parser.add_argument('--val-fraction', type=float, dest='val_fraction')
@@ -489,7 +590,13 @@ def main(argv=None):
                                          'run_recorder', {})
     if len(args.folders) < 2:
         print('warning: one lap only, no validation lap', file=sys.stderr)
-    laps = build_dataset(args.folders, args.output, cfg, metric_settings, args.waypoints)
+    exclusions_file = args.exclusions or os.path.join(
+        os.path.dirname(os.path.abspath(os.path.normpath(args.folders[0]))), EXCLUSIONS_FILE)
+    exclusions = load_exclusions(exclusions_file)
+    if exclusions:
+        print(f'exclusions: {exclusions_file} ({len(exclusions)} laps)', file=sys.stderr)
+    laps = build_dataset(args.folders, args.output, cfg, metric_settings, args.waypoints,
+                         exclusions=exclusions)
     print_summary(laps, args.output)
     return 0
 

@@ -9,6 +9,10 @@
 limbo_evaluation의 사람 탓/로봇 탓 구분(최소 거리 순간의 로봇 속도)과 같은 기준이다.
 min_person_dist는 참고용 전체 최소 거리, 합격 판정은 min_person_dist_moving으로 한다.
 
+라이다 충돌도 같은 원칙으로 로봇이 움직이는 중에만 센다(PM 2026-11-27). 거리는 라이다 원점이 아니라
+발판(footprint 직사각형) 가장자리에서 잰다. 발판 안쪽 점은 몸과 겹친 것(자기 몸·장착물에 맞은 점,
+정지 중 손님이 쓰레기를 넣는 손)이라 장애물이 아니다(11-26·27 기록: 움직일 때 근접 점은 거의 다 0.10 m의 자기 몸 점).
+
 한 시계열의 각 샘플마다 다른 시계열의 "그때 값"을 찾을 때는 시각 목록을 한 번만 만들고
 이분 탐색한다. 찾을 때마다 목록을 새로 만들면 바퀴 길이의 제곱으로 느려져, 4~5분 바퀴에서
 종료 때 지표 계산이 수 초~수십 초 걸렸다(2026-11-25, 기록기 종료가 늦어진 원인 중 하나).
@@ -17,6 +21,8 @@ min_person_dist는 참고용 전체 최소 거리, 합격 판정은 min_person_d
 import bisect
 from dataclasses import dataclass, field
 import math
+
+from limbo_imitation import robot_geometry
 
 # nav2_msgs/CollisionMonitorState.STOP. 메시지를 import하면 rclpy 없이 시험할 수 없어 값을 옮겨 둔다
 COLLISION_MONITOR_STOP = 1
@@ -37,14 +43,17 @@ MODE_POLICY = 'policy'
 MODE_POLICY_ASSIST = 'policy_assist'
 
 DEFAULT_SETTINGS = {
-    'collision_distance': 0.25,
+    'collision_edge_distance': 0.03,
+    'footprint': '',
     'personal_space': 0.5,
     'stop_speed': 0.05,
     'jerk_w': 0.5,
     'collision_margin': 5.0,
     'stuck_min_duration': 1.0,
-    'clip_tolerance': 0.01,
 }
+# nav2_msgs/CollisionMonitorState.DO_NOTHING. 이 밖의 상태(STOP·SLOWDOWN·APPROACH·LIMIT)는
+# collision_monitor가 명령을 바꾼 것
+COLLISION_MONITOR_DO_NOTHING = 0
 
 METRIC_COLUMNS = [
     'collisions', 'collision_monitor_stops', 'scan_collisions',
@@ -65,7 +74,7 @@ class RunLog:
     start_reason: str = ''                              # DRIVER_ENDED_STARTS면 완주 판정을 운전자에게 맡김
     patrol_states: list = field(default_factory=list)   # (t, state 문자열)
     monitor_states: list = field(default_factory=list)  # (t, action_type)
-    scan_min: list = field(default_factory=list)        # (t, 라이다 최근접 거리 m)
+    scan_edge: list = field(default_factory=list)       # (t, 발판 밖 라이다 점의 가장자리 거리 m, 없으면 inf)
     person_dist: list = field(default_factory=list)     # (t, 가장 가까운 사람 거리 m, 없으면 inf)
     odom: list = field(default_factory=list)            # (t, x, y, v, w)
     cmd: list = field(default_factory=list)             # (t, v, w) 중재기 출력 = collision_monitor 입력
@@ -73,10 +82,19 @@ class RunLog:
     drive_modes: list = field(default_factory=list)     # (t, source, mode)
 
 
-def scan_min_range(ranges, range_min, range_max):
-    """라이다 한 장에서 유효한 점 중 가장 가까운 거리. 유효한 점이 없으면 inf."""
-    valid = [r for r in ranges if math.isfinite(r) and range_min <= r <= range_max]
-    return min(valid) if valid else math.inf
+def footprint_polygon(settings):
+    """settings['footprint'](Nav2 형식 문자열) → 다각형. 비어 있으면 부르는 쪽이 robot_geometry로 채운다."""
+    if not settings.get('footprint'):
+        raise ValueError("settings['footprint'] is empty; "
+                         'fill it with robot_geometry.footprint_text()')
+    return robot_geometry.parse_footprint(settings['footprint'])
+
+
+def scan_edge_distance(scan, mount, settings):
+    """라이다 한 장 → 발판 밖 점 중 가장자리까지 가장 가까운 거리(m). scan = (ranges, angle_min, inc, r_min, r_max)."""
+    ranges, angle_min, angle_increment, range_min, range_max = scan[:5]
+    return robot_geometry.nearest_outside_edge(ranges, angle_min, angle_increment, range_min,
+                                               range_max, mount, footprint_polygon(settings))
 
 
 def runs(samples, is_on, end_time):
@@ -112,8 +130,8 @@ def latest_before(samples, times, t):
     return samples[index] if index >= 0 else None
 
 
-def person_dist_while_moving(log, settings):
-    """사람 거리 샘플 중 로봇이 서 있던 때는 inf로 바꾼다(그 순간은 로봇 탓 침범이 아님).
+def while_moving(samples, log, settings):
+    """(t, 거리) 샘플 중 로봇이 서 있던 때는 inf로 바꾼다(그 순간은 로봇 탓이 아님).
 
     샘플을 지우지 않고 inf로 두는 이유: runs가 다음 샘플까지 값을 유지하므로,
     지우면 앞의 '가까움'이 로봇이 멈춘 뒤까지 이어진 것으로 계산된다.
@@ -121,11 +139,16 @@ def person_dist_while_moving(log, settings):
     stop_speed = settings['stop_speed']
     odom_times = sample_times(log.odom)
     result = []
-    for t, dist in log.person_dist:
+    for t, dist in samples:
         odom = latest_before(log.odom, odom_times, t)
         moving = odom is not None and abs(odom[3]) > stop_speed
         result.append((t, dist if moving else math.inf))
     return result
+
+
+def person_dist_while_moving(log, settings):
+    """사람 거리 샘플 중 로봇이 서 있던 때는 inf(멈춘 로봇에 사람이 다가온 것은 손님 응대)."""
+    return while_moving(log.person_dist, log, settings)
 
 
 def personal_space_intervals(log, settings):
@@ -135,9 +158,13 @@ def personal_space_intervals(log, settings):
 
 
 def collision_intervals(log, settings):
-    """collision_monitor 정지 구간과 라이다 최근접점이 collision_distance 안인 구간."""
+    """collision_monitor 정지 구간과 라이다 근접 구간.
+
+    라이다 근접 = 로봇이 움직이는 중 발판 밖 점이 가장자리에서 collision_edge_distance 안에 든 때.
+    """
     stops = runs(log.monitor_states, lambda s: s[1] == COLLISION_MONITOR_STOP, log.end_time)
-    close = runs(log.scan_min, lambda s: s[1] < settings['collision_distance'], log.end_time)
+    close = runs(while_moving(log.scan_edge, log, settings),
+                 lambda s: s[1] < settings['collision_edge_distance'], log.end_time)
     return stops, close
 
 
@@ -159,16 +186,14 @@ def stuck_intervals(log, settings):
 
 
 def clipped_intervals(log, settings):
-    """collision_monitor가 명령을 깎은 구간: 출력 명령이 바로 앞 입력 명령과 다른 때."""
-    tolerance = settings['clip_tolerance']
-    cmd_times = sample_times(log.cmd)
-    flags = []
-    for t, v_out, w_out in log.cmd_out:
-        command = latest_before(log.cmd, cmd_times, t)
-        differs = command is not None and (abs(command[1] - v_out) > tolerance
-                                           or abs(command[2] - w_out) > tolerance)
-        flags.append((t, differs))
-    return runs(flags, lambda s: s[1], log.end_time)
+    """collision_monitor가 명령을 깎은 구간: collision_monitor가 낸 상태가 DO_NOTHING이 아닌 때.
+
+    예전에는 /cmd_vel(출력)을 그 시각 직전의 중재기 명령(입력)과 비교했는데, collision_monitor 출력은
+    한 칸 앞 입력에서 나오므로 운전자가 스틱을 움직일 때마다 "깎임"으로 잘못 셌다(11-26·27 36바퀴:
+    다름 4,308건 중 4,302건이 한 칸 앞 입력과는 같음, 실제 상태 변화는 approach 1번). 상태는 collision_monitor가
+    직접 내는 값이라 시점 문제가 없다.
+    """
+    return runs(log.monitor_states, lambda s: s[1] != COLLISION_MONITOR_DO_NOTHING, log.end_time)
 
 
 def odom_distance(odom):

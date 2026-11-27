@@ -29,6 +29,7 @@ class FrameSettings:
     people_max_dist: float = 5.0  # m. personal_space 0.5 m의 열 배, 카메라 인식 거리 안
     v_max: float = 0.5            # m/s. nav2_real.yaml vx_max·조이스틱 최고 속도와 같음
     w_max: float = 0.8            # rad/s. nav2_real.yaml wz_max·조이스틱 최고 각속도와 같음
+    rear_mask_half_width_deg: float = 0.0  # 정후방 가림 반폭. 0 = 안 가림. 값과 근거는 imitation.yaml
 
 
 def settings_from_dict(data):
@@ -40,12 +41,50 @@ def settings_to_dict(settings):
     return asdict(settings)
 
 
-def load_waypoints(path):
-    """경유점 yaml(limbo_patrol 형식) → [(x, y, 정지 여부)]. patrol_node의 waypoint_index와 같은 순서."""
+def read_waypoint_entries(path):
     with open(path, encoding='utf-8') as f:
-        data = yaml.safe_load(f)
+        return yaml.safe_load(f)['waypoints']
+
+
+def load_waypoints(path):
+    """경유점 yaml(limbo_patrol 형식) → 정책 입력용 [(x, y, 정지 여부)]. patrol_node의 waypoint_index와 같은 순서.
+
+    "정지"는 로봇이 실제로 서는 곳만이다: 머무는 stop(wait_sec > 0) 또는 경로의 마지막 경유점.
+    wait_sec 0인 중간 stop(실물 MID)은 Nav2 구간을 나누려고 둔 것이라(real_loop_waypoints.yaml 주석:
+    출발점과 끝점이 같은 구간은 출발 즉시 '도착') 정책에게는 지나가는 점이다. 사람 운전자도 MID에서 서지 않았다
+    (11-26·27 36바퀴 중 34바퀴). 경유점 파일과 MPPI 순찰은 그대로 둔다(PM 2026-11-27).
+    """
+    entries = read_waypoint_entries(path)
+    last = len(entries) - 1
+
+    def stops_here(i, w):
+        waits = float(w.get('wait_sec', 0)) > 0
+        return w.get('type') == WAYPOINT_STOP_TYPE and (waits or i == last)
+    return [(float(w['x']), float(w['y']), stops_here(i, w)) for i, w in enumerate(entries)]
+
+
+def load_route(path):
+    """경유점 yaml → 순찰 노드가 번호를 넘기는 규칙용 [(x, y, 구간 끝 여부)]. 구간 끝 = 파일의 type stop."""
     return [(float(w['x']), float(w['y']), w.get('type') == WAYPOINT_STOP_TYPE)
-            for w in data['waypoints']]
+            for w in read_waypoint_entries(path)]
+
+
+def scan_mount(static_transforms, base_frame, scan_frame):
+    """base에서 본 스캔 프레임 (x, y, yaw). static_transforms = {(부모, 자식): (x, y, yaw)}.
+
+    스캔 프레임에서 부모를 따라 base까지 올라가며 합성한다. 스캔 프레임이 base면 (0, 0, 0), 못 이으면 None.
+    """
+    chain, frame = [], scan_frame
+    parents = {child: (parent, pose) for (parent, child), pose in static_transforms.items()}
+    while frame != base_frame:
+        if frame not in parents or len(chain) > len(parents):
+            return None
+        frame, pose = parents[frame][0], parents[frame][1]
+        chain.append(pose)
+    mount = (0.0, 0.0, 0.0)
+    for pose in reversed(chain):
+        mount = compose_poses(mount, pose)
+    return mount
 
 
 def waypoint_goal(waypoints, index):
@@ -103,17 +142,19 @@ def input_problem(ages, goal, timeout):
 
 
 def assemble_frame(scan, robot_pose_map, robot_pose_odom, goal, velocity, people_odom,
-                   settings):
+                   settings, scan_mount_pose):
     """원재료 → 한 프레임(features.FRAME_SIZE칸).
 
-    scan = (ranges, angle_min, angle_increment), robot_pose_* = (x, y, yaw),
+    scan = (ranges, angle_min, angle_increment), scan_mount_pose = base에서 본 스캔 프레임 (x, y, yaw)
+    (scan_mount로 구함), robot_pose_* = (x, y, yaw),
     goal = (x, y, 정지 여부) 지도 좌표, velocity = (v, w) odom 측정값,
     people_odom = [(x, y, vx, vy)] odom 좌표.
     """
     ranges, angle_min, angle_increment = scan
-    scan_bins = features.bin_scan(ranges, angle_min, angle_increment,
-                                  range_min=settings.scan_range_min,
-                                  range_max=settings.scan_range_max)
+    scan_bins = features.bin_scan(
+        ranges, angle_min, angle_increment, range_min=settings.scan_range_min,
+        range_max=settings.scan_range_max, mount=scan_mount_pose,
+        rear_mask_half_width=math.radians(settings.rear_mask_half_width_deg))
     goal_base = features.map_to_base((goal[0], goal[1]), robot_pose_map)
     return features.frame_features(
         scan_bins,

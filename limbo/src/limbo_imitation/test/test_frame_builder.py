@@ -62,7 +62,8 @@ def test_assemble_frame_goal_and_velocity_slots():
     scan = ([2.0] * 360, 0.0, 2 * math.pi / 360)
     # 로봇 (0, 0, 0), 목표 (0, 2.5) = 왼쪽 2.5 m, 정지 경유점
     frame = frame_builder.assemble_frame(scan, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0),
-                                         (0.0, 2.5, True), (0.25, -0.4), [], settings)
+                                         (0.0, 2.5, True), (0.25, -0.4), [], settings,
+                                         (0.0, 0.0, 0.0))
     goal = frame[features.SCAN_BINS:features.SCAN_BINS + features.GOAL_SIZE]
     np.testing.assert_allclose(goal, [0.5, 1.0, 0.0, 1.0], atol=1e-12)
     np.testing.assert_allclose(frame[76:78], [0.5, -0.5])
@@ -107,8 +108,8 @@ def test_same_inputs_give_same_vector_from_dataset_path_and_direct_call():
     settings = frame_builder.FrameSettings()
     via_dataset = frame_builder.assemble_frame(scan, inputs['pose_map'], inputs['pose_odom'],
                                                inputs['goal'], inputs['velocity'],
-                                               inputs['people'], settings)
+                                               inputs['people'], settings, (0.0, 0.0, 0.0))
     direct = frame_builder.assemble_frame(scan, (1.5, 0.5, 0.3), (0.5, 0.5, 0.3),
                                           (4.0, 2.0, False), (0.2, 0.1),
-                                          [(2.0, 1.0, 0.1, 0.0)], settings)
+                                          [(2.0, 1.0, 0.1, 0.0)], settings, (0.0, 0.0, 0.0))
     np.testing.assert_array_equal(via_dataset, direct)

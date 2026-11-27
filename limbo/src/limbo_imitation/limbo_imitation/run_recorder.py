@@ -26,7 +26,7 @@ import signal
 import subprocess
 
 from geometry_msgs.msg import Twist
-from limbo_imitation import metrics, record_button, run_files
+from limbo_imitation import frame_builder, metrics, record_button, robot_geometry, run_files
 from limbo_interfaces.msg import PatrolState, PersonPredictionArray
 from nav2_msgs.msg import CollisionMonitorState
 from nav_msgs.msg import Odometry
@@ -121,6 +121,13 @@ class RunRecorder(Node):
         self.bag_stop_timeout = p('bag_stop_timeout', 10.0).value
         self.settings = {name: p(name, value).value
                          for name, value in metrics.DEFAULT_SETTINGS.items()}
+        self.base_frame = p('base_frame', 'base_footprint').value
+        if not self.settings['footprint']:
+            # 발판은 실물 Nav2 설정(nav2_real.yaml)의 값을 쓴다. 지표와 데이터셋이 같은 몸 크기로 재게
+            self.settings['footprint'] = robot_geometry.footprint_text(
+                p('nav2_params_file', '').value)
+        self.scan_mount = None
+        self.scan_mount_warned = False
 
     def _subscribe(self):
         p = self.declare_parameter
@@ -169,9 +176,28 @@ class RunRecorder(Node):
             self.stop_run(metrics.START_BUTTON)
 
     def on_scan(self, msg):
-        if self.log is not None:
-            nearest = metrics.scan_min_range(msg.ranges, msg.range_min, msg.range_max)
-            self.log.scan_min.append((self.now(), nearest))
+        if self.log is None:
+            return
+        if self.scan_mount is None:
+            self.scan_mount = self.find_scan_mount(msg.header.frame_id)
+        if self.scan_mount is None:
+            if not self.scan_mount_warned:
+                self.get_logger().warning(
+                    f'no static TF {self.base_frame} -> {msg.header.frame_id} yet; '
+                    'lidar collisions are not counted until it arrives')
+                self.scan_mount_warned = True
+            return
+        scan = (msg.ranges, msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max)
+        self.log.scan_edge.append(
+            (self.now(), metrics.scan_edge_distance(scan, self.scan_mount, self.settings)))
+
+    def find_scan_mount(self, scan_frame):
+        """받은 /tf_static으로 base에서 본 스캔 프레임 자세(데이터셋과 같은 frame_builder.scan_mount)."""
+        def yaw(t):
+            return frame_builder.yaw_from_quaternion(t['qx'], t['qy'], t['qz'], t['qw'])
+        pairs = {(t['parent'].lstrip('/'), t['child'].lstrip('/')): (t['x'], t['y'], yaw(t))
+                 for t in self.tf_static.values()}
+        return frame_builder.scan_mount(pairs, self.base_frame, scan_frame.lstrip('/'))
 
     def on_odom(self, msg):
         position = msg.pose.pose.position

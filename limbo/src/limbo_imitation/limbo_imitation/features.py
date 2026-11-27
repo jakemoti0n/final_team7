@@ -5,7 +5,8 @@
 한쪽만 고치면 신경망이 본 적 없는 입력을 받게 되므로, 여기를 바꾸면 모델을 다시 학습한다.
 
 한 프레임(FRAME_SIZE = 93칸)의 순서:
-- [0, 72)   스캔: 정면(각도 0)부터 반시계로 5°씩 72구간의 최소 거리 / range_max (0~1, 1 = 멀거나 모름)
+- [0, 72)   스캔: 로봇 정면(base +x)부터 반시계로 5°씩 72구간의 최소 거리 / range_max (0~1, 1 = 멀거나 모름).
+            스캔 프레임의 장착 yaw로 base 기준으로 옮긴 뒤 나눈다. 정후방 rear_mask 구간은 1(모름)로 가림
 - [72, 76)  목표: 거리 / max_dist, sin(방향), cos(방향), 정지 경유점이면 1
 - [76, 78)  속도: v / v_max, w / w_max (현재 odom 속도)
 - [78, 93)  사람: 가까운 순 3명 × [x / max_dist, y / max_dist, vx, vy, 있음 1]
@@ -30,22 +31,38 @@ FULL_TURN = 2.0 * math.pi
 
 
 def bin_scan(ranges, angle_min, angle_increment, n_bins=SCAN_BINS,
-             range_min=0.1, range_max=6.0):
-    """360°를 n_bins 구간으로 나눠 구간마다 가장 가까운 거리를 0~1로 낸다.
+             range_min=0.1, range_max=6.0, mount=(0.0, 0.0, 0.0), rear_mask_half_width=0.0):
+    """360°를 n_bins 구간으로 나눠 구간마다 가장 가까운 거리를 0~1로 낸다(로봇 base 기준).
 
-    구간 0은 정면(각도 0)에서 시작해 반시계로 간다. inf·nan·[range_min, range_max] 밖의 값은
-    "모름"이라 가장 먼 값 1.0으로 둔다. range_min보다 가까운 값은 자기 몸·센서 잡음이라 버린다.
-    점이 하나도 없는 구간도 1.0이다.
+    mount = base에서 본 스캔 프레임 (x, y, yaw). 실물 라이다 프레임(mid360_link)은 base에 대해 yaw +90°라
+    이것으로 점을 base 좌표로 옮긴 뒤 나눈다. 그래서 구간 0은 로봇 정면(base +x)에서 시작해 반시계로 간다.
+    inf·nan·[range_min, range_max] 밖의 값(센서가 잰 거리 기준)은 "모름"이라 가장 먼 값 1.0으로 둔다.
+    range_min보다 가까운 값은 자기 몸·센서 잡음이라 버린다. 점이 하나도 없는 구간도 1.0이다.
+    rear_mask_half_width(rad): 구간 중심이 정후방에서 이 안인 구간은 "모름"(1.0)으로 가린다
+    (수동 운전 때 뒤따르는 운전자. 자율 주행 때는 없는 물체라 입력에서 지운다).
     """
     ranges = np.asarray(ranges, dtype=float)
     angles = angle_min + angle_increment * np.arange(len(ranges))
-    bins = (np.mod(angles, FULL_TURN) / (FULL_TURN / n_bins)).astype(int)
-    bins = np.minimum(bins, n_bins - 1)  # 부동소수점으로 2π에 딱 걸친 각도
     valid = np.isfinite(ranges) & (ranges >= range_min) & (ranges <= range_max)
-    values = np.where(valid, ranges, range_max)
+    r, a = ranges[valid], angles[valid]
+    mx, my, myaw = mount
+    sx, sy = r * np.cos(a), r * np.sin(a)
+    c, s = math.cos(myaw), math.sin(myaw)
+    bx, by = mx + c * sx - s * sy, my + s * sx + c * sy
+    bins = (np.mod(np.arctan2(by, bx), FULL_TURN) / (FULL_TURN / n_bins)).astype(int)
+    bins = np.minimum(bins, n_bins - 1)  # 부동소수점으로 2π에 딱 걸친 각도
+    values = np.minimum(np.hypot(bx, by), range_max)
     result = np.full(n_bins, range_max)
     np.minimum.at(result, bins, values)
+    if rear_mask_half_width > 0.0:
+        result[rear_masked_bins(n_bins, rear_mask_half_width)] = range_max
     return result / range_max
+
+
+def rear_masked_bins(n_bins, half_width):
+    """구간 중심 방위가 정후방(π)에서 half_width(rad) 안인 구간 번호들."""
+    centers = (np.arange(n_bins) + 0.5) * (FULL_TURN / n_bins)
+    return np.flatnonzero(np.abs(centers - math.pi) <= half_width + 1e-9)
 
 
 def goal_features(goal_xy_in_base, is_stop_waypoint, max_dist=5.0):

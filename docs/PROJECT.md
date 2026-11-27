@@ -35,7 +35,7 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 | `limbo_patrol` | waypoint 순찰, 일시정지·재개 서비스, 상태 토픽 | `patrol_node.py`, `config/*_waypoints.yaml` |
 | `limbo_monitor` | 바퀴 헛돎 감시 (취소 기능은 임시로 꺼 둠) | |
 | `limbo_evaluation` | Goal마다 주행 지표 CSV (`record:=true`) | `nav_recorder`, `~/limbo_results/` |
-| `limbo_imitation` | 사람의 조이스틱 운전을 모방 학습한 정책으로 속도 명령을 냄(2-10). 운전 중재기(teleop·정책·MPPI 중 하나를 `/cmd_vel_arbiter`로), 바퀴 기록·지표, 데이터셋·학습 | `drive_arbiter.py`(+`arbiter_logic.py`), `policy_node.py`, `run_recorder.py`(+`metrics.py`), `features.py`/`frame_builder.py`(입력 279칸, 학습·실행 공용), `dataset.py`(`build_dataset`), `train.py`(`train_policy`), `config/imitation.yaml` |
+| `limbo_imitation` | 사람의 조이스틱 운전을 모방 학습한 정책으로 속도 명령을 냄(2-10). 운전 중재기(teleop·정책·MPPI 중 하나를 `/cmd_vel_arbiter`로), 바퀴 기록·지표, 데이터셋·학습 | `drive_arbiter.py`(+`arbiter_logic.py`), `policy_node.py`, `run_recorder.py`(+`metrics.py`), `features.py`/`frame_builder.py`(입력 279칸, 학습·실행 공용), `robot_geometry.py`(발판·Nav2 설정 값), `waypoint_progress.py`(수동 바퀴 경유점 사후 계산), `dataset.py`(`build_dataset`, 제외 목록 `exclusions.yaml`), `train.py`(`train_policy`), `config/imitation.yaml` |
 | `tools/nx_boot/` | NX 보드 부팅 자동 기동(사용자 systemd 유닛 5개)과 수동 운전 기록 도구. 젯슨에는 저장소 밖 `~/.config/limbo/`에 링크·복사로 둔다 | `install.sh`, `boot/start`, `boot/wait_clock`(유닛 시작 전 NTP 시계 동기 대기, drop-in `systemd/limbo-nx-.service.d/wait-clock.conf`), `bin/record_laps`(+`record_laps_checks.py`, 점검 → 패드 배선 → 기록 런치 → Ctrl+C 뒤 지표 표·배선 원복) |
 | `dashboard/`, `relay_prog/` | 관제 화면(서버·UI)과 로봇↔서버 Bridge | 설계 `docs/CONTROL_SCREEN.md`, `docs/CONTROL_API_DRAFT.md` |
 
@@ -165,12 +165,16 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 - 좋은 바퀴는 사람 느낌이 아니라 **결과 지표로 자동 판정**한다: 충돌 0, 사람 0.5 m 침범 0(로봇이 움직일 때만 셈), 완주, 갇힘 0(`metrics.py`, 기준값은 `imitation.yaml`의 `run_recorder` 절).
 - MPPI는 스승이 아니라 운전자 중 하나다. **MPPI가 운전한 구간은 학습에서 뺀다.** 정책 자신이 운전한 구간도 뺀다.
 - 불합격 바퀴도 통째로 버리지 않고 **문제 구간만** 뺀다(충돌 앞뒤·개인 공간 침범·갇힘·`collision_monitor`가 깎은 구간).
+- **충돌**(11-27 PM): 로봇이 움직이는 중(odom > `stop_speed`)에 발판(`nav2_real.yaml` footprint, 실제 몸 0.50 × 0.59 m) **밖** 라이다 점이 발판 가장자리에서 `collision_edge_distance` 3 cm 안에 들 때, 또는 collision_monitor STOP. 3 cm = 라이다 근거리 측정 오차(Livox "Specs - Mid-360 LiDAR Sensor" Range Precision 1σ ≤ 3 cm @ 0.2 m). 발판 안쪽 점은 몸과 겹친 것(자기 몸에 맞은 0.10 m 점, 정지 중 손님이 쓰레기를 넣는 손)이라 장애물이 아니다. 개인 공간과 같은 "움직일 때만" 원칙. 지표(`metrics`)와 데이터셋 제외가 같은 함수를 쓴다.
+- **깎임**(collision_monitor가 명령을 바꾼 구간)은 `/collision_monitor_state`가 DO_NOTHING이 아닌 구간이다. 출력과 입력을 비교하던 방식은 collision_monitor 출력이 한 칸 앞 입력에서 나와 스틱을 움직일 때마다 잘못 셌다.
+- 사람이 기록을 보고 정한 제외(바퀴 통째·구간)는 코드에 두지 않고 데이터 옆 `~/limbo_bags/imitation/exclusions.yaml`(바퀴, 구간, 이유)에 적는다. `build_dataset`이 읽는다.
 - **수동 바퀴에서 데드맨(LB)을 뗀 구간은 정답 "정지"(v=0, w=0)다**(11-26 PM 승인). 수동 모드에서 데드맨을 떼면 중재기가 실제로 (0, 0)을 내 로봇이 선다(`arbiter_logic.choose_manual` → 출처 none·reason `manual without deadman` → `source_command`가 0). 운전자는 손님 앞에서 멈춰 기다릴 때 LB를 뗀다(11-26 4번 바퀴 정지 28.6 s 동안 LB 누름 비율 0.13, 5번 26.3 s 동안 0.06). 이것을 빼면 "손님 앞에서 멈춰 기다리기"(2-1)가 학습에서 통째로 빠진다. 그 바퀴의 첫 누름 ~ 마지막 뗌 사이만 넣고, 출발 전·도착 후 대기는 운전 결정이 아니라서 뺀다. policy·policy_assist에서 데드맨 뗌은 "정책에 맡김"이라 넣지 않는다. LB를 누른 채 teleop 명령이 끊긴 것(`teleop command lost`)은 고장이라 넣지 않는다
 - 교정 반복(DAgger): 정책이 운전하고 사람이 데드맨으로 끼어든다 → 끼어든 구간이 새 정답(가중 2, `intervention_weight`) → 재학습. 끼어들기 0이 연속 2바퀴면 끝.
 - 가중치·문턱 같은 값은 손으로 만지지 않고 데이터로 채운다. 불일치 문턱은 검증 바퀴 불일치의 95 % 분위수(`threshold_quantile`)다.
 - 수동 운전 기록은 **조건 없이** 한다(11-26 PM 결정). 운전자에게 "빈 복도·벽 붙기·보행자" 같은 조건을 미리 정해 주거나 연출시키지 않고, 조건 라벨은 주행 뒤 기록(경로·사람 수·거리·정지 구간)을 읽어 붙인다. 부족한 장면은 데이터를 본 뒤 요청하거나 `policy_assist`(교정 반복) 단계에서 보충한다. 연출한 장면은 실제 운용과 분포가 달라지고, 사람에게 미리 입력시키면 틀린 라벨이 섞이기 때문이다. 그래서 기록 도구(`record_laps`)는 조건을 받지 않고 분류 기준값도 두지 않는다.
 - 사람 장면은 **대본 없는 행인 투입**으로 보충한다(11-26 PM): 운전자에게 미리 알리지 않고, 운전자가 아닌 사람이 지나가기·손님 두 종류로 들어간다. 라벨은 주행 뒤 기록으로 판독한다.
 - 수집 도중에는 사람 감지 모델·문턱을 바꾸지 않는다(11-26). bag에 카메라 영상이 없어 나중에 다른 모델로 사람 예측을 다시 계산할 수 없다.
+- 첫 수동 수집(11-26·27): 39바퀴 69.8분 1,733 m, 운전자는 한 사람(itkwon). 학습 정답 37,612프레임(변경 기록 85).
 - 데이터 수집: 바퀴 기록 시작·끝은 패드 버튼(≡ = Start, `record_button`)으로 한다(11-26, 패드 켜기와 기록이 한 런치에 묶여 있어 바퀴마다 런치를 껐다 켜야 했고 바퀴 사이 이동까지 기록되던 문제). 런치는 하루 한 번 띄워 둔다. 버튼으로 시작한 바퀴의 완주는 수동 시작 바퀴처럼 운전자에게 맡긴다(`completed: manual`).
 
 **구조**
@@ -179,7 +183,10 @@ ROS 2 Jazzy + Gazebo Harmonic + Nav2로 시뮬레이션에서 개발하고, 실�
 - 정책 → nav 전환: 불일치 초과·입력 끊김(`/policy/status` ok=false), 정책 명령 끊김, 갇힘. 사람 예측 끊김은 "사람 없음"이 아니라 "인식이 죽음"이라 nav로 넘긴다(그래서 기록도 카메라를 켠 채로 한다).
 
 **입력·모델 요지**(수치는 `limbo_imitation/config/imitation.yaml`·`features.py`가 기준이다. 여기와 다르면 코드가 맞고 이 절을 고친다)
-- 입력 279칸 = 한 프레임 93칸 × 최근 3프레임. 한 프레임은 스캔 72칸(5°마다 최솟값 / 6 m) + 경유점 4칸(거리 / 5 m, sin·cos(방향), 정지 경유점 여부) + 속도 2칸 + 사람 가까운 3명 × [x, y, vx, vy, 있음].
+- 입력 279칸 = 한 프레임 93칸 × 최근 3프레임. 한 프레임은 스캔 72칸(로봇 정면부터 반시계 5°마다 최솟값 / 6 m. 라이다 프레임 mid360_link는 base에 대해 yaw +90°라 장착 TF로 base 기준으로 옮긴 뒤 나눈다. TF를 못 얻으면 `no_scan_tf`로 명령을 내지 않는다) + 경유점 4칸(거리 / 5 m, sin·cos(방향), 정지 경유점 여부) + 속도 2칸 + 사람 가까운 3명 × [x, y, vx, vy, 있음].
+- **정후방 가림**(11-27 PM): 스캔의 정후방 ±45°(18구간)를 "모름"(1.0)으로 가린다(`rear_mask_half_width_deg`). 수동 운전 때 운전자가 로봇 바로 뒤 약 1 m를 따라와(움직이는 스캔의 99 %) 입력에 늘 잡히는데, 자율 주행 때는 없는 물체다. 39바퀴에서 운전자 점(발판 밖·뒤쪽 반·지도 벽에서 0.3 m 넘게 떨어진 점)의 95.0 %, 회전 중 93.1 %가 ±45°에 든다. 꼬리(움직이는 스캔의 약 17 %에서 ±45° 밖에 점이 남음)를 다 지우지 않는 이유: 그 측정에는 지나간 행인·지도에 없는 물건이 섞이고, 코너에서 운전자가 옆으로 오기도 해 넓힐수록 진짜 옆 정보를 잃는다. 첫 학습 뒤 재검토할 수 있다.
+- **경유점**: 순찰·정책 주행은 순찰 노드의 `/patrol/state` 번호를 쓴다. 순찰 노드 없이 기록한 수동 바퀴는 `waypoint_progress`가 map 위치로 같은 규칙(pass = 실물 BT `RemovePassedGoals` 반경, 구간 끝 = `xy_goal_tolerance`, 값은 설정에서 읽음)에 "모서리 이등분선을 지나면 다음"을 더해 계산한다(사람은 코너를 반경 밖으로 질러 감, 36바퀴 중 2바퀴).
+- **정지 경유점 표시**: 머무는 stop(`wait_sec` > 0) 또는 경로의 마지막 경유점만 "정지"다(`frame_builder.load_waypoints`, 학습·실행 공용). 실물 MID(stop, wait 0)는 Nav2 구간을 나누려고 둔 점이라 정책에게는 통과 지점이다. 운전자도 MID에서 서지 않았다(36바퀴 중 34). 경유점 파일과 MPPI 순찰은 그대로.
 - `/plan`과 지도 좌표는 넣지 않는다. 경로 떨림을 끊고, 자리를 외우지 않게 하려는 것이다. 모두 로봇 기준 상대 좌표라 다른 복도에도 일반화된다.
 - 모델: 자체 MLP 279 → 256 → 128 → 2, seed만 바꾼 3개 앙상블(딥 앙상블). 평균이 명령, 정규화 출력(v/v_max, w/w_max)의 모델 간 표준편차가 확신도(불일치). v = sigmoid × v_max(0~0.5 m/s), w = tanh × w_max(±0.8 rad/s).
 - 허깅페이스 등의 사전학습 모델은 쓰지 않는다: 입력이 우리 것이고, 데이터가 적고, 설명 가능해야 하고, 외부 의존이 없어야 한다. 입력 조립 + 추론이 메인 PC CPU에서 중앙값 1.5~1.75 ms(변경 기록 76, Jetson 측정은 아직). 나중에 카메라 영상을 입력에 넣으면 ViNT/NoMaD 백본이 선택지다.

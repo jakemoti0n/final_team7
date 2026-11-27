@@ -18,7 +18,7 @@ def straight_run(seconds=10.0, speed=0.5):
         log.odom.append((t, speed * t, 0.0, speed, 0.0))
         log.cmd.append((t, speed, 0.0))
         log.cmd_out.append((t, speed, 0.0))
-        log.scan_min.append((t, 1.0))
+        log.scan_edge.append((t, 1.0))
         log.person_dist.append((t, 3.0))
     log.patrol_states = [(0.0, 'patrolling'), (seconds, 'completed')]
     log.drive_modes = [(0.0, 'policy', 'policy_assist')]
@@ -37,8 +37,8 @@ def test_clean_run_passes():
 def test_collision_monitor_stop_and_close_scan_each_count_once():
     log = straight_run()
     log.monitor_states = [(2.0, 0), (3.0, metrics.COLLISION_MONITOR_STOP), (3.5, 0)]
-    log.scan_min[50] = (5.0, 0.2)
-    log.scan_min[51] = (5.1, 0.1)
+    log.scan_edge[50] = (5.0, 0.02)  # 발판 가장자리에서 2 cm(collision_edge_distance 3 cm 안)
+    log.scan_edge[51] = (5.1, 0.01)
     m = metrics.compute_metrics(log)
     assert (m['collision_monitor_stops'], m['scan_collisions'], m['collisions']) == (1, 1, 2)
     ok, reasons = metrics.passed(m, {'personal_space': 0.5})
@@ -111,9 +111,7 @@ def test_bad_intervals_merge_collision_margin_personal_space_and_clipping():
     log.monitor_states = [(10.0, metrics.COLLISION_MONITOR_STOP), (11.0, 0)]
     for i in range(130, 140):  # 13.0~14.0 s 사람 0.3 m: 충돌 여유(16 s까지)와 겹쳐 합쳐진다
         log.person_dist[i] = (i * DT, 0.3)
-    for i in range(250, 255):  # 25.0~25.5 s collision_monitor가 속도를 깎음
-        t, v, w = log.cmd_out[i]
-        log.cmd_out[i] = (t, 0.2, w)
+    log.monitor_states += [(25.0, 3), (25.5, 0)]  # 25.0~25.5 s collision_monitor approach(속도를 깎음)
     result = metrics.bad_intervals(log, {'collision_margin': 5.0})
     assert result == [(5.0, 16.0), (pytest.approx(25.0), pytest.approx(25.5))]
 
@@ -124,9 +122,36 @@ def test_metrics_row_has_all_columns():
     assert row['passed'] is True and row['fail_reasons'] == ''
 
 
-def test_scan_min_range_ignores_invalid():
-    assert metrics.scan_min_range([math.inf, 0.01, 2.0, math.nan, 1.5], 0.1, 10.0) == 1.5
-    assert math.isinf(metrics.scan_min_range([math.inf], 0.1, 10.0))
+FOOTPRINT = '[[0.25, 0.295], [0.25, -0.295], [-0.25, -0.295], [-0.25, 0.295]]'
+
+
+def test_scan_edge_distance_from_footprint_edge_ignores_points_inside():
+    settings = {**metrics.DEFAULT_SETTINGS, 'footprint': FOOTPRINT}
+    # 스캔 프레임 = base. 정면 0.27 m(가장자리에서 2 cm), 왼쪽 0.10 m(발판 안쪽, 자기 몸 점), 무효 값
+    ranges = [0.27, 0.10, math.inf, math.nan]
+    scan = (ranges, 0.0, math.pi / 2, 0.1, 20.0)
+    assert metrics.scan_edge_distance(scan, (0.0, 0.0, 0.0), settings) == pytest.approx(0.02)
+    # 라이다가 base에 대해 +90° 돌아 있으면 스캔 0°는 base 왼쪽: 0.27 m 점은 옆면(0.295) 안쪽이라 무시
+    assert math.isinf(metrics.scan_edge_distance(scan, (0.0, 0.0, math.pi / 2), settings))
+
+
+def test_scan_collision_counts_only_while_moving():
+    log = straight_run()
+    for i in range(20, 40):  # 2.0~4.0 s: 로봇이 서 있는데 가장자리 1 cm 점(손님이 쓰레기를 넣음)
+        t, x, y, _, w = log.odom[i]
+        log.odom[i] = (t, x, y, 0.0, w)
+        log.scan_edge[i] = (t, 0.01)
+    assert metrics.compute_metrics(log)['scan_collisions'] == 0
+    log.scan_edge[60] = (6.0, 0.01)  # 움직이는 중이면 센다
+    assert metrics.compute_metrics(log)['scan_collisions'] == 1
+
+
+def test_clipping_comes_from_collision_monitor_state_not_command_timing():
+    log = straight_run()
+    for i in range(1, len(log.cmd_out)):  # 출력이 한 칸 앞 입력에서 나오는 것은 깎임이 아니다
+        log.cmd[i] = (log.cmd[i][0], 0.5 + 0.01 * i, 0.0)
+        log.cmd_out[i] = (log.cmd_out[i][0], log.cmd[i - 1][1], 0.0)
+    assert metrics.clipped_intervals(log, metrics.DEFAULT_SETTINGS) == []
 
 
 def test_manual_start_run_is_completed_by_driver():

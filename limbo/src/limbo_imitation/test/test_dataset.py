@@ -25,7 +25,7 @@ def make_streams(seconds=3.0, modes=(('teleop', 'manual'),), mode_times=(0.0,), 
         s.cmd_out.add(t, (teleop_v, 0.1))
     for i in range(int(round(seconds / SCAN_DT))):
         t = i * SCAN_DT + 0.01
-        s.scans.add(t, (np.full(36, 3.0), 0.0, 2 * math.pi / 36, 0.1, 10.0))
+        s.scans.add(t, (np.full(36, 3.0), 0.0, 2 * math.pi / 36, 0.1, 10.0, 'base_footprint'))
         s.predictions.add(t, [])
     s.patrol.add(0.0, ('patrolling', 0))
     for t, mode in zip(mode_times, modes):
@@ -34,7 +34,9 @@ def make_streams(seconds=3.0, modes=(('teleop', 'manual'),), mode_times=(0.0,), 
 
 
 WAYPOINTS = [(10.0, 0.0, False)]
-CFG = dict(dataset.DEFAULTS)
+CFG = {**dataset.DEFAULTS, 'pass_radius': 0.7, 'stop_tolerance': 0.25}
+FOOTPRINT = '[[0.25, 0.295], [0.25, -0.295], [-0.25, -0.295], [-0.25, 0.295]]'
+METRIC = {**metrics.DEFAULT_SETTINGS, 'footprint': FOOTPRINT}
 
 
 def test_series_latest_includes_same_time():
@@ -84,7 +86,7 @@ def test_manual_release_between_presses_is_a_stop_label():
     s = make_streams(seconds=5.0, modes=(RELEASED, PRESSED, RELEASED, PRESSED, RELEASED),
                      mode_times=(0.0, 1.0, 2.0, 3.0, 4.0))
     xs, ys, weights, stamps, dropped, _ = dataset.lap_samples(s, WAYPOINTS, CFG,
-                                                              metrics.DEFAULT_SETTINGS)
+                                                              METRIC)
     stops = [t for t, y in zip(stamps, ys) if y == (0.0, 0.0)]
     assert len(stops) == 10 and all(2.0 < t < 3.0 for t in stops)
     assert all(y == (0.4, 0.1) for t, y in zip(stamps, ys) if 1.0 < t < 2.0 or 3.0 < t < 4.0)
@@ -122,7 +124,7 @@ def test_lap_samples_keeps_teleop_drops_nav_and_weights_intervention():
     s = make_streams(modes=(('policy', 'policy_assist'), ('teleop', 'policy_assist'),
                             ('nav', 'policy_assist')), mode_times=(0.0, 1.0, 2.0))
     xs, ys, weights, stamps, dropped, _ = dataset.lap_samples(s, WAYPOINTS, CFG,
-                                                              metrics.DEFAULT_SETTINGS)
+                                                              METRIC)
     assert all(1.0 < t < 2.0 for t in stamps)
     assert len(stamps) == 10
     assert set(weights) == {CFG['intervention_weight']}
@@ -134,7 +136,7 @@ def test_lap_samples_keeps_teleop_drops_nav_and_weights_intervention():
 def test_lap_samples_drops_bad_intervals():
     s = make_streams(seconds=20.0)
     s.monitor_states = dataset.Series([(10.0, metrics.COLLISION_MONITOR_STOP), (10.5, 0)])
-    settings = {**metrics.DEFAULT_SETTINGS, 'collision_margin': 2.0}
+    settings = {**METRIC, 'collision_margin': 2.0}
     _, _, weights, stamps, dropped, n_bad = dataset.lap_samples(s, WAYPOINTS, CFG, settings)
     assert n_bad == 1
     assert not any(8.0 <= t <= 12.5 for t in stamps)
@@ -145,7 +147,7 @@ def test_lap_samples_drops_bad_intervals():
 def test_lap_samples_drops_stale_people_input():
     s = make_streams()
     s.predictions = dataset.Series([(0.0, [])])
-    _, _, _, stamps, dropped, _ = dataset.lap_samples(s, WAYPOINTS, CFG, metrics.DEFAULT_SETTINGS)
+    _, _, _, stamps, dropped, _ = dataset.lap_samples(s, WAYPOINTS, CFG, METRIC)
     assert max(stamps) <= CFG['input_timeout']
     assert dropped['no_people'] > 0
 
@@ -172,7 +174,7 @@ def test_build_dataset_writes_lap_split_npz(tmp_path):
     folders = [str(write_lap_folder(tmp_path, f'lap{i}', waypoints)) for i in range(3)]
     out = tmp_path / 'out' / 'data.npz'
     cfg = {**CFG, 'val_fraction': 0.34}
-    laps = dataset.build_dataset(folders, str(out), cfg, metrics.DEFAULT_SETTINGS,
+    laps = dataset.build_dataset(folders, str(out), cfg, METRIC,
                                  reader=lambda path: make_streams())
     with np.load(out) as data:
         assert data['X'].shape == (90, features.FEATURE_SIZE) and data['X'].dtype == np.float32

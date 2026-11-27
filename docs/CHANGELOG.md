@@ -8,6 +8,39 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-27 (85) 첫 수동 수집 39바퀴를 학습 데이터로: 경유점 사후 계산, 충돌 = 움직일 때 발판 가장자리 3 cm 안, 깎임은 collision_monitor 상태로, 스캔을 base 기준으로, 정후방 ±45° 가림, MID는 정책에게 통과 지점, 제외 목록 파일 → 37,612프레임
+
+**할 일**
+- `build_limbo`(`limbo_imitation`, 새 모듈 `robot_geometry.py`·`waypoint_progress.py`). 정책 노드는 스캔 장착 TF(`base_footprint → mid360_link`)가 있어야 명령을 낸다
+- 데이터셋: `ros2 run limbo_imitation build_dataset ~/limbo_bags/imitation/2026112*_manual -o … --waypoints <real_loop_waypoints.yaml>`. 제외 목록은 데이터 옆 `exclusions.yaml`을 자동으로 읽는다
+- 학습(`train_policy`)은 아직 안 함(PM 지시 뒤)
+
+**수집 결과(11-26 19:56 ~ 11-27 11:50)**
+- 39바퀴, 69.8분, 1,733 m, 운전자 한 사람(itkwon). 깨진 시험 기록 2개(`20261126_151158`·`154033`)는 학습 제외
+- 사후 판독(`~/limbo_bags/imitation/labels_20261127.csv`, 장면·정지 `labels_20261127_events.csv`): 손님 5(바퀴 5, 정지 2.1~28.6 s), 마주 옴 17·가로지름 13·같은 방향 9·서 있는 사람 15(0.5 s 이상). 2 s 이상 정지는 HOME 도착·정렬 51, 손님 대기 5, 출발 전 2, 이유 불명 1(094424 W1 코너 16.7 s, 카메라 사람 0 → 제외 목록). 세션 사이 운전 습관 차이는 작다(이동 평균 0.45~0.47 m/s)
+
+**변경**
+- `limbo_imitation/waypoint_progress.py`(새): `/patrol/state`가 없는 바퀴의 경유점 번호를 map 위치로 계산. 순찰 노드 규칙(pass = 실물 BT `RemovePassedGoals` 0.7 m, 구간 끝 = `xy_goal_tolerance` 0.25 m, 둘 다 설정에서 읽음) + 모서리 이등분선을 지나면 다음(사람은 코너를 반경 밖으로 질러 감). `/patrol/state`가 있는 바퀴는 종전대로
+- `limbo_imitation/robot_geometry.py`(새): 발판(`nav2_real.yaml` local_costmap footprint)·경유점 반경 읽기, 스캔 점을 base로 옮기기, 다각형 안·가장자리 거리
+- `metrics.py`: 라이다 충돌 = 로봇이 움직이는 중(odom > `stop_speed`) 발판 **밖** 점이 가장자리에서 `collision_edge_distance` 0.03 m 안. 0.03 = Livox "Specs - Mid-360 LiDAR Sensor" Range Precision(1σ) ≤ 3 cm @ 0.2 m. 발판 안쪽 점(자기 몸 0.10 m 점·정지 중 손님 손)은 장애물이 아님. 예전 `collision_distance`(라이다 원점에서 0.25 m)는 발판 내접 반지름과 같아 몸과 겹친 점만 세던 것. 깎임 = `/collision_monitor_state`가 DO_NOTHING이 아닌 구간(입출력 비교는 collision_monitor 출력이 한 칸 앞 입력에서 나와 스틱을 움직일 때마다 잘못 셈). `clip_tolerance` 삭제
+- `features.bin_scan`·`frame_builder.assemble_frame`: 스캔 프레임의 장착 자세(TF)로 점을 base로 옮긴 뒤 구간을 나눔(실물 mid360_link는 base에 대해 yaw +90°라 0번 구간이 로봇 왼쪽이었다). 정후방 가림 `rear_mask_half_width_deg` 45(72구간 중 18구간을 "모름" 1.0으로)
+- `frame_builder.load_waypoints`: 정책 입력의 "정지 경유점"은 머무는 stop(`wait_sec` > 0) 또는 경로의 마지막 경유점만. 실물 MID(stop, wait 0)는 통과 지점(Nav2 구간 분할용, 운전자도 36바퀴 중 34바퀴에서 서지 않음). `load_route`는 순찰 규칙용으로 파일 type 그대로. 경유점 파일·MPPI 순찰은 그대로
+- `dataset.py`: 스캔 프레임 id 보관, 장착 TF(bag `/tf_static` 또는 `tf_static.json`)를 못 찾으면 `no_scan_tf`, 경유점 사후 계산, 제외 목록 파일(`exclusions.yaml`: 바퀴 통째·구간, 이유 필수)을 읽어 `excluded_by_list`
+- `policy_node.py`: 스캔 장착 TF를 tf2로 얻어 같은 입력을 만들고, 못 얻으면 `no_scan_tf`로 명령 없음. `run_recorder.py`: 받은 `/tf_static`으로 장착을 구해 발판 기준 충돌 지표
+- `imitation.yaml`: `collision_edge_distance`·`footprint`(비면 nav2_real.yaml)·`rear_mask_half_width_deg`(측정 근거 주석)·`nav2_params_file`·`patrol_bt_file`
+- 테스트: `test_geometry_inputs.py`(새, 발판·장착·가림·경유점 진행·정지 표시·제외 목록·`no_scan_tf`), `test_metrics.py`(가장자리 거리·움직일 때만·깎임), dataset·frame_builder 테스트 갱신
+- 문서: `PROJECT.md` 2-10(충돌·깎임·제외 목록·입력 정의·정후방 가림과 꼬리를 다 못 지우는 이유·경유점·MID·수집 요약), `KNOWN_ISSUES.md`(버튼 수동 바퀴 항목을 해결로 정리, 남은 한계)
+- 저장소 밖: `~/limbo_bags/imitation/exclusions.yaml`(깨진 기록 2개 통째, 094424 26.99~43.69 s)
+
+**결정**(PM 2026-11-27)
+- 충돌 = 발판 밖 가장자리 거리 + 움직일 때만, 거리 값은 라이다 근거리 측정 오차. 정후방 가림 ±45°(첫 학습 뒤 재검토 가능). MID = 머무는 stop 또는 마지막만 정지. 첫머리 공백 정확 복구(213프레임, 0.5 %)는 하지 않음
+
+**확인**(2026-11-27 노트북)
+- 39바퀴(스캔 41,169) → 정답 37,612프레임(91.4 %), 학습 31바퀴·검증 8바퀴(`split_laps`, val 0.2, seed 0). 뺀 이유: no_waypoint 1,348(HOME 도착 뒤), bad_interval 1,024, no_tf 632, no_drive_mode 176, excluded_by_list 167, no_people 121, no_command 60, released_after/before 23/5, no_odom 1
+- 정답 (0,0) 5.7 %(손님 5바퀴 17.2 %, 나머지 3.8 %), v 중앙 0.5, |w| 90 % 0.38. 사람이 입력에 잡힌 프레임 2,150. 손님 정지 5구간 959스캔 중 713(그중 (0,0) 706, 094424 167스캔은 제외 목록)
+- 새 지표로 다시 계산: 39바퀴 중 31 합격(전에는 전부 불합격), 불합격 8은 모두 라이다 근접(12건, 대부분 W3→W4 복도 같은 자리 로봇 왼쪽)
+- `limbo_imitation` pytest 104 passed 9 skipped, torch 파이썬 112 passed 1 skipped(flake8 포함)
+
 ## 2026-11-26 (84) 바퀴 기록 첫머리 공백 없앰: 다음 바퀴용 bag을 일시 정지로 미리 띄워 두고 ≡에 재개만(새 bag 프로세스의 토픽 발견에 1.3~6.4 s가 걸려 바퀴 첫머리가 비던 문제)
 
 **할 일**
