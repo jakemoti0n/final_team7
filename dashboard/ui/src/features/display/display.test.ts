@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_TIMING, NO_PASSING, advance, demoDisplayContent, demoEco, ecoText, locationText, locksRotation, parseDisplayContent, passingStep, passingText,
+  DEFAULT_TIMING, NO_PASSING, advance, demoDisplayContent, demoEco, ECO_TEXT, ecoText, locationText, locksRotation, parseDisplayContent, passingStep, passingText,
   pickEvents, pickRobot, rotationPlan, titleSize, topic, type DisplayEvent, type Passing, type Rotation,
 } from './display'
 import { qrModules, qrPath } from './qr'
@@ -236,7 +236,7 @@ describe('scene ⑤ eco tree (PRD v0.3.6)', () => {
 
   it('shows numbers only when judged, says who checked, and speaks softly when negative', () => {
     const initial = ecoText({ state: 'initial' })
-    expect(initial).toEqual({ tree: 'initial', title: '분리수거 결과를 모으는 중이에요', detail: null, hint: null })
+    expect(initial).toEqual({ tree: 'initial', kicker: '우리가 함께 키우는 나무', title: '분리수거 결과를 모으는 중이에요', detail: null, hint: null })
     expect(ecoText(null)).toEqual(initial)        // 서버와 끊김·예전 서버
     expect(ecoText(undefined)).toEqual(initial)
     const good = ecoText({ state: 'positive', rate_percent: 90, correct: 18, total: 20, method: 'ai_bin_inspection' })
@@ -249,6 +249,27 @@ describe('scene ⑤ eco tree (PRD v0.3.6)', () => {
     expect(bad.hint).toBe('재활용할 수 있는 것은 재활용 칸, 나머지는 일반 칸에 넣어 주세요')
     for (const word of ['잘못', '실패', '오염', '위험']) expect(bad.title + bad.hint).not.toContain(word)
     expect(ecoText({ state: 'positive', rate_percent: 90, correct: 18, total: 20, method: 'new_method' }).detail).toContain('· 확인 20건')
+  })
+
+  it('uses the words from display.json and falls back to the defaults for the missing ones', () => {
+    const good = { state: 'positive', rate_percent: 90, correct: 18, total: 20, method: 'ai_bin_inspection' } as const
+    const bad = { ...good, state: 'negative', rate_percent: 65, correct: 13 } as const
+    const words = { kicker: '함께 키워요', initial: '모으는 중', positive: '최고예요', negative: '조금 더 힘내요', negative_hint: '칸을 확인해 주세요' }
+    expect(ecoText({ state: 'initial' }, words)).toEqual({ tree: 'initial', kicker: '함께 키워요', title: '모으는 중', detail: null, hint: null })
+    expect(ecoText(good, words)).toMatchObject({ tree: 'positive', kicker: '함께 키워요', title: '최고예요', hint: null })
+    expect(ecoText(bad, words)).toMatchObject({ title: '조금 더 힘내요', hint: '칸을 확인해 주세요', detail: '수거함을 비운 뒤 · AI 확인 20건 중 13건 바르게' })
+    // 일부만 주면 나머지는 기본, 안내 줄은 null로 없앤다
+    expect(ecoText(bad, { negative: '조금 더 힘내요' })).toMatchObject({ kicker: ECO_TEXT.kicker, title: '조금 더 힘내요', hint: ECO_TEXT.negative_hint })
+    expect(ecoText(bad, { negative_hint: null }).hint).toBeNull()
+    expect(ecoText(good, {}).title).toBe(ECO_TEXT.positive)
+  })
+
+  it('checks the eco words from the server', () => {
+    const content = { ...demoDisplayContent(), revision: 'r', slides: [] }
+    const withText = (text: unknown) => parseDisplayContent({ ...content, eco: { enabled: true, text } })
+    expect(withText({})?.eco?.text).toEqual({})
+    expect(withText({ positive: '최고예요', negative_hint: null })?.eco?.text).toEqual({ positive: '최고예요', negative_hint: null })
+    for (const bad of ['최고예요', { detail: '20건' }, { positive: 1 }, { positive: null }]) expect(withText(bad)).toBeNull()
   })
 
   it('demo cycles initial → positive → negative', () => {

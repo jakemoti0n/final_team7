@@ -5,7 +5,7 @@ import { QrCode } from '../features/display/QrCode'
 import { useDisplaySound } from '../features/display/useDisplaySound'
 import {
   DEFAULT_TIMING, NO_PASSING, advance, demoEco, ecoText, localTime, locationText, locksRotation, passingStep, passingText, pickEvents, pickRobot,
-  rotationPlan, titleSize, topic, type DisplayContent, type DisplaySlide, type Passing, type Rotation,
+  rotationPlan, titleSize, topic, type DisplayContent, type DisplaySlide, type EcoWords, type Passing, type Rotation,
 } from '../features/display/display'
 
 const WIDTH = 1920, HEIGHT = 1080
@@ -89,7 +89,7 @@ export function DisplayPage({ demo, robotId }: { demo: boolean; robotId: string 
             <h1>지금은 안내를 하지 않습니다</h1><p>행사 기간에만 LIMBO 위치를 안내합니다.</p></section>}
           {scene === 'location' && <LocationScene robot={robot} problem={problem} content={content} now={now} visitorUrl={visitorUrl} />}
           {scene === 'slides' && slide && <SlideScene slide={slide} index={slides.indexOf(slide)} total={slides.length} visitorUrl={visitorUrl} />}
-          {scene === 'eco' && <EcoScene eco={eco} visitorUrl={visitorUrl} />}
+          {scene === 'eco' && <EcoScene eco={eco} words={content?.eco?.text} visitorUrl={visitorUrl} />}
         </div>
       </main>
       {passingShown && !closed && <PassingOverlay robot={robot} />}
@@ -174,12 +174,12 @@ function MiniQr({ visitorUrl }: { visitorUrl: string }) {
 }
 
 /** 장면 ⑤ 환경 피드백: 왼쪽 나무 그림, 오른쪽 문구, 오른쪽 아래 작은 QR. 그림 위에 글자를 얹지 않는다 */
-function EcoScene({ eco, visitorUrl }: { eco: EcoView | null; visitorUrl: string }) {
-  const text = ecoText(eco)
+function EcoScene({ eco, words, visitorUrl }: { eco: EcoView | null; words?: Partial<EcoWords>; visitorUrl: string }) {
+  const text = ecoText(eco, words)
   return <div className="display-eco" data-testid="display-eco" data-tree={text.tree}>
     <img className="display-eco-tree" src={TREES[text.tree]} alt="" aria-hidden="true" />
     <section className="display-eco-text">
-      <div className="display-eco-kicker">우리가 함께 키우는 나무</div>
+      <div className="display-eco-kicker" data-testid="display-eco-kicker">{text.kicker}</div>
       <h1 data-testid="display-eco-title">{text.title}</h1>
       {text.detail && <p className="display-eco-detail" data-testid="display-eco-detail">{text.detail}</p>}
       {text.hint && <p className="display-eco-hint" data-testid="display-eco-hint">{text.hint}</p>}

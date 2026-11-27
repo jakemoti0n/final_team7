@@ -48,6 +48,16 @@ def test_validate_fills_defaults_and_sorts():
     assert [e["title"] for e in view["schedule"]] == ["Q&A", "개회"]
     assert view["schedule"][0] == dict(date=None, start="15:10", end=None, title="Q&A", place=None)
     assert validate({**GOOD, "timing": {"passing_s": 5}})["timing"]["passing_s"] == 5
+    assert view["eco"] == {"enabled": True, "text": {}}
+
+
+def test_validate_eco_text():
+    """장면 ⑤ 문구: 준 것만 (앞뒤 공백은 지움), 빠진 것은 화면 기본 문구. 안내 줄만 null로 없앨 수 있다"""
+    text = {"kicker": " 함께 키워요 ", "positive": "잘하고 있어요", "negative_hint": None}
+    assert validate({**GOOD, "eco": {"text": text}})["eco"] == {
+        "enabled": True, "text": {"kicker": "함께 키워요", "positive": "잘하고 있어요", "negative_hint": None}}
+    assert validate({**GOOD, "eco": {"enabled": False, "text": {"initial": "가" * 24, "negative_hint": "나" * 60}}})["eco"]["text"] == {
+        "initial": "가" * 24, "negative_hint": "나" * 60}
 
 
 @pytest.mark.parametrize("change, message", [
@@ -66,6 +76,14 @@ def test_validate_fills_defaults_and_sorts():
     ({"timing": {"location_s": 0}}, "location_s"),
     ({"timing": {"location_s": True}}, "location_s"),
     ({"timing": {"fade_s": 1}}, "timing may have"),
+    ({"eco": {"enabled": True, "color": "green"}}, "eco must look like"),
+    ({"eco": {"text": "잘했어요"}}, "eco.text may have"),
+    ({"eco": {"text": {"detail": "20건 중"}}}, "eco.text may have"),
+    ({"eco": {"text": {"positive": "가" * 25}}}, "eco.text.positive must be"),
+    ({"eco": {"text": {"negative_hint": "가" * 61}}}, "eco.text.negative_hint must be"),
+    ({"eco": {"text": {"initial": None}}}, "eco.text.initial must be text"),
+    ({"eco": {"text": {"kicker": "  "}}}, "eco.text.kicker must be"),
+    ({"eco": {"text": {"negative": "줄\n바꿈"}}}, "control characters"),
 ])
 def test_validate_rejects(change, message):
     with pytest.raises(DisplayError, match=message):
@@ -80,7 +98,7 @@ def test_content_and_slides(tmp_path):
         assert response.status_code == 200 and response.headers["cache-control"] == "no-cache"
         body = response.json()
         assert set(body) == {"revision", "message", "schedule", "slides", "sound", "eco", "timing"} and body["sound"] is None
-        assert body["eco"] == {"enabled": True}
+        assert body["eco"] == {"enabled": True, "text": {}}
         assert [(s["file"], s["width"], s["height"], s["type"]) for s in body["slides"]] == [
             ("b.png", 1920, 1080, "image/png"), ("a.jpg", 1080, 1920, "image/jpeg")]
         assert client.get("/api/v1/visitor/state").json()["display"] == body["revision"]

@@ -8,6 +8,19 @@
 
 # 리팩터링 이후 (2026-10-02 ~, ktj 작업)
 
+## 2026-11-27 (92) 하단 디스플레이 장면 ⑤ 나무 문구를 `display.json`에서 바꾸기. Bridge 수정 없음
+
+**할 일**
+- 서버: `git pull` → `dashboard/`에서 `docker compose up -d --build`
+- 문구를 바꾸려면 `display_dir`의 `display.json`에 `"eco": {"enabled": true, "text": {...}}`를 넣는다(`dashboard/guides/README.md`). 안 넣으면 예전 문구 그대로
+- 저장소의 `dashboard/guides/display/display.json`에는 기본 문구 다섯 줄을 그대로 넣어 두었다(보이는 글은 예전과 같음). 여기서 고치면 다음 요청부터 반영
+
+**변경**
+- `display.json`의 `eco.text`에 `kicker`(제목 위 작은 줄)·`initial`·`positive`·`negative`(나무 상태별 큰 제목)·`negative_hint`(부정일 때 안내 줄)를 선택으로 넣는다. 빠진 것은 기본 문구, `negative_hint`만 `null`로 줄을 없앤다. 숫자 줄(「수거함을 비운 뒤 · AI 확인 20건 중 18건 바르게」)은 판정값으로 만드는 것이라 그대로
+- 서버가 검사: 모르는 키·글이 아닌 값·제어 문자는 거부(잘못 고치면 마지막 정상본), 길이는 제목·위 줄 24자, 안내 60자(약 860 px 글 칸에서 두세 줄). `GET /api/v1/display/content`의 `eco`는 `{enabled, text}`(준 것만)
+- 화면: 빈칸 없는 긴 문구도 글 칸 안에서 줄을 바꾼다(`overflow-wrap:anywhere`). `?demo`는 서버의 문구도 빌려 써 고친 문구를 세 상태 모두 미리 본다(서버에서 나무를 꺼 두어도 데모는 보임)
+- 시험: 서버 `test_display` 검사 9 추가·`test_eco` 기대값 갱신(서버 274 통과), 단위 2 추가(88 통과), e2e 2 추가(최대 길이 문구가 폭 안·작은 QR 위, 일부만 주면 기본 문구, 안내 줄 없애기, 데모 빌려 쓰기), 디스플레이 e2e 12 통과(Chrome)
+
 ## 2026-11-26 (91) 방문자 안내(`/visitor`) 지도를 「안내 지도」·「LiDAR 지도」 탭으로 전환. 서버·Bridge 수정 없음
 
 **할 일**

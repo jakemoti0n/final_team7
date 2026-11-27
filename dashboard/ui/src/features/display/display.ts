@@ -10,10 +10,15 @@ export interface DisplayTiming {
 }
 /** 「LIMBO가 지나갑니다」 때 한 번 트는 소리 (운영자가 TTS로 만들어 넣은 파일). 없으면 null */
 export interface DisplaySound { file: string; type: string; url: string }
-/** eco.enabled: 장면 ⑤ 나무를 순환에 넣을지 (예전 서버면 없음 → 넣음) */
+/**
+ * 장면 ⑤ 문구 (display.json의 eco.text). 운영자가 준 것만 오고, 빠진 것은 ECO_TEXT.
+ * negative_hint만 null로 줄을 없앨 수 있다
+ */
+export interface EcoWords { kicker: string; initial: string; positive: string; negative: string; negative_hint: string | null }
+/** eco.enabled: 장면 ⑤ 나무를 순환에 넣을지 (예전 서버면 없음 → 넣음). eco.text: 장면 ⑤ 문구 (예전 서버면 없음) */
 export interface DisplayContent {
   revision: string; message: string | null; schedule: DisplayEvent[]; slides: DisplaySlide[]; sound?: DisplaySound | null
-  eco?: { enabled: boolean }; timing: DisplayTiming
+  eco?: { enabled: boolean; text?: Partial<EcoWords> }; timing: DisplayTiming
 }
 
 /** 서버가 내용을 정하지 않았을 때(폴더 없음·처음부터 잘못됨)의 장면 길이. 서버 TIMING_DEFAULTS와 같다 */
@@ -33,6 +38,9 @@ export function parseDisplayContent(value: unknown): DisplayContent | null {
   const sound = c.sound
   if (sound != null && (!text(sound.url) || !sound.url.startsWith('/api/v1/display/sound/') || !text(sound.type))) return null
   if (c.eco != null && typeof c.eco.enabled !== 'boolean') return null
+  const words = c.eco?.text
+  if (words != null && (typeof words !== 'object' || !Object.entries(words).every(([k, v]) =>
+    k in ECO_TEXT && (text(v) || (k === 'negative_hint' && v === null))))) return null
   // eco_s는 예전 서버에 없으므로 기본값으로 채운다
   const timing = { ...c.timing, eco_s: c.timing.eco_s ?? DEFAULT_TIMING.eco_s }
   if (!(Object.keys(DEFAULT_TIMING) as (keyof DisplayTiming)[]).every(k => typeof timing[k] === 'number' && timing[k] > 0)) return null
@@ -224,8 +232,18 @@ const METHOD_LABEL: Record<string, string> = {
   ai_bin_inspection: 'AI 확인', human_audit: '직접 확인', sensor_verified: '센서 확인', verified_route_log: '기록 확인',
 }
 
+/** 장면 ⑤ 기본 문구. 부정은 부드럽게: 탓하거나 겁주지 않고 다음에 할 일을 알려 준다 (PRD v0.3.2). 수거함은 일반/재활용 두 칸 */
+export const ECO_TEXT: EcoWords = {
+  kicker: '우리가 함께 키우는 나무',
+  initial: '분리수거 결과를 모으는 중이에요',
+  positive: '분리수거를 잘하고 있어요!',
+  negative: '분리수거가 잘 안 되고 있어요',
+  negative_hint: '재활용할 수 있는 것은 재활용 칸, 나머지는 일반 칸에 넣어 주세요',
+}
+
 export interface EcoText {
   tree: EcoTree
+  kicker: string           // 제목 위 작은 줄
   title: string            // 크게
   detail: string | null    // 작게: "수거함을 비운 뒤 · AI 확인 20건 중 18건 바르게" (판정이 됐을 때만)
   hint: string | null      // 부정일 때 다음에 무엇을 하면 되는지
@@ -234,17 +252,17 @@ export interface EcoText {
 /**
  * 나무 그림과 문구. 판정은 서버가 하고 화면은 state만 본다(성공률을 다시 계산하지 않음).
  * 판정이 없거나(서버와 끊김·예전 서버·이상한 값) initial이면 숫자 없이 초기 나무.
- * 부정 문구는 부드럽게: 탓하거나 겁주지 않고 다음에 할 일을 알려 준다 (PRD v0.3.2). 수거함은 일반/재활용 두 칸
+ * 문구는 display.json의 eco.text(words), 빠진 것은 ECO_TEXT. 숫자 줄(detail)은 판정값으로 만든다
  */
-export function ecoText(eco: EcoView | null | undefined): EcoText {
+export function ecoText(eco: EcoView | null | undefined, words?: Partial<EcoWords>): EcoText {
+  const w = { ...ECO_TEXT, ...words }
   if (!eco || eco.state === 'initial' || eco.total == null || eco.correct == null) {
-    return { tree: 'initial', title: '분리수거 결과를 모으는 중이에요', detail: null, hint: null }
+    return { tree: 'initial', kicker: w.kicker, title: w.initial, detail: null, hint: null }
   }
   const how = METHOD_LABEL[eco.method ?? ''] ?? '확인'
   const detail = `수거함을 비운 뒤 · ${how} ${eco.total}건 중 ${eco.correct}건 바르게`
-  if (eco.state === 'positive') return { tree: 'positive', title: '분리수거를 잘하고 있어요!', detail, hint: null }
-  return { tree: 'negative', title: '분리수거가 잘 안 되고 있어요', detail,
-    hint: '재활용할 수 있는 것은 재활용 칸, 나머지는 일반 칸에 넣어 주세요' }
+  if (eco.state === 'positive') return { tree: 'positive', kicker: w.kicker, title: w.positive, detail, hint: null }
+  return { tree: 'negative', kicker: w.kicker, title: w.negative, detail, hint: w.negative_hint }
 }
 
 /** 데모 나무: 바퀴마다 초기 → 긍정 → 부정 */

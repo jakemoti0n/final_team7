@@ -11,7 +11,11 @@
   ],                                                  # date·end·place는 null 가능 (date가 null이면 매일)
   "slides": ["pamphlet-1.png"],                       # (선택) 장면 ② 팜플렛. 이 폴더의 그림 파일 이름, 보여 줄 순서
   "sound": "passing.mp3",                             # (선택) 장면 ④ 「LIMBO가 지나갑니다」 때 한 번 틀 소리 (TTS로 만든 파일)
-  "eco": {"enabled": true},                           # (선택) 장면 ⑤ 환경 피드백(나무 3상태)을 순환에 넣을지. 기본 true
+  "eco": {"enabled": true,                            # (선택) 장면 ⑤ 환경 피드백(나무 3상태)을 순환에 넣을지. 기본 true
+          "text": {"kicker": "우리가 함께 키우는 나무",   # (선택) 장면 ⑤ 문구. 빠진 것은 화면의 기본 문구 (ui/src/features/display/display.ts ECO_TEXT)
+                   "initial": "분리수거 결과를 모으는 중이에요", "positive": "분리수거를 잘하고 있어요!",
+                   "negative": "분리수거가 잘 안 되고 있어요",
+                   "negative_hint": "재활용할 수 있는 것은 재활용 칸, 나머지는 일반 칸에 넣어 주세요"}},   # hint만 null이면 줄 없음
   "timing": {"location_s": 40, ...}                   # (선택) 장면 길이(초). 빠진 것은 기본값 (TIMING_DEFAULTS)
 }
 """
@@ -32,6 +36,8 @@ MAX_SLIDES = 20
 MAX_TOTAL_SLIDE_BYTES = 50 * 1024 * 1024   # 정상본 그림을 메모리에 들고 있으므로 합계를 묶는다
 MAX_TITLE = 40
 MAX_MESSAGE = 80
+# 장면 ⑤ 문구 길이: 글 칸이 약 860 px라 제목(72 px)·위 줄(40 px)은 두 줄 안, 안내(40 px)는 세 줄 안
+ECO_TEXT_LIMITS = dict(kicker=24, initial=24, positive=24, negative=24, negative_hint=60)
 SLIDE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.(png|jpg|jpeg|webp)")
 SOUND_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.(mp3|wav|ogg)")
 SOUND_TYPES = {"mp3": "audio/mpeg", "wav": "audio/wav", "ogg": "audio/ogg"}
@@ -114,8 +120,14 @@ def validate(config):
         raise _bad("The sound name uses letters, digits, '.', '_', '-' and ends in .mp3, .wav or .ogg")
 
     eco = config.get("eco", {})
-    if not isinstance(eco, dict) or set(eco) - {"enabled"} or not isinstance(eco.get("enabled", True), bool):
-        raise _bad('eco must look like {"enabled": true}')
+    if not isinstance(eco, dict) or set(eco) - {"enabled", "text"} or not isinstance(eco.get("enabled", True), bool):
+        raise _bad('eco must look like {"enabled": true, "text": {...}}')
+    eco_text = eco.get("text", {})
+    if not isinstance(eco_text, dict) or set(eco_text) - set(ECO_TEXT_LIMITS):
+        raise _bad(f"eco.text may have: {', '.join(ECO_TEXT_LIMITS)}")
+    # 준 것만 넘긴다(화면이 나머지를 기본 문구로). negative_hint만 null로 줄을 없앨 수 있다
+    eco_text = {key: _text(value, f"eco.text.{key}", ECO_TEXT_LIMITS[key], optional=key == "negative_hint")
+                for key, value in eco_text.items()}
 
     timing = config.get("timing", {})
     if not isinstance(timing, dict) or set(timing) - set(TIMING_DEFAULTS):
@@ -126,7 +138,7 @@ def validate(config):
             raise _bad(f"timing.{key} must be 1–{TIMING_MAX_S} seconds")
         merged[key] = value
     return dict(message=message, schedule=schedule, slides=list(slides), sound=sound,
-                eco=dict(enabled=eco.get("enabled", True)), timing=merged)
+                eco=dict(enabled=eco.get("enabled", True), text=eco_text), timing=merged)
 
 
 def sound_kind(data):

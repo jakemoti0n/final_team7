@@ -598,7 +598,7 @@ button.danger:hover:not(:disabled){background:var(--color-bad-bg)}
 /* 장면 ⑤ 환경 피드백: 왼쪽 나무 그림(정사각형, 화면 높이에 맞춤), 오른쪽 문구, 오른쪽 아래 작은 QR (②와 같은 화면 자리) */
 .display-eco{position:relative;height:100%;display:grid;grid-template-columns:904px minmax(0,1fr);gap:56px;padding:32px 48px;box-sizing:border-box}
 .display-eco-tree{width:904px;height:904px;object-fit:cover;border-radius:20px;border:1px solid var(--color-border-strong);display:block}
-.display-eco-text{align-self:start;padding-top:24px;min-width:0}
+.display-eco-text{align-self:start;padding-top:24px;min-width:0;overflow-wrap:anywhere}   /* display.json 문구에 빈칸이 없어도 칸 안에서 줄을 바꾼다 */
 .display-eco-kicker{font-size:40px;font-weight:700;color:var(--color-accent)}
 .display-eco-text h1{margin:16px 0 0;font-size:72px;font-weight:900;line-height:1.15;letter-spacing:-.02em;color:var(--color-ink)}
 .display-eco-detail{margin:28px 0 0;font-size:40px;line-height:1.35;color:var(--color-text-muted);font-variant-numeric:tabular-nums}

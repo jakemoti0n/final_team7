@@ -8,6 +8,12 @@
   ],
   "slides": [],
   "sound": "passing.mp3",
-  "eco": {"enabled": true},
+  "eco": {"enabled": true, "text": {
+    "kicker": "우리가 함께 키우는 나무",
+    "initial": "분리수거 결과를 모으는 중이에요",
+    "positive": "분리수거를 잘하고 있어요!",
+    "negative": "분리수거가 잘 안 되고 있어요",
+    "negative_hint": "재활용할 수 있는 것은 재활용 칸, 나머지는 일반 칸에 넣어 주세요"
+  }},
   "timing": {"location_s": 40, "slides_s": 30, "eco_s": 15, "count_s": 10, "trash_alert_s": 10, "passing_s": 8, "passing_cooldown_s": 60}
 }

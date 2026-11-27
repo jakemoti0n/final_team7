@@ -198,8 +198,8 @@ def test_eco_off_without_token(tmp_path, monkeypatch):
 
 def test_display_eco_switch():
     base = {"version": 1, "schedule": []}
-    assert validate_display(base)["eco"] == {"enabled": True}
-    assert validate_display({**base, "eco": {"enabled": False}})["eco"] == {"enabled": False}
+    assert validate_display(base)["eco"] == {"enabled": True, "text": {}}
+    assert validate_display({**base, "eco": {"enabled": False}})["eco"] == {"enabled": False, "text": {}}
     assert validate_display({**base, "timing": {"eco_s": 20}})["timing"]["eco_s"] == 20
     for bad in ({"enabled": "yes"}, {"on": True}, []):
         with pytest.raises(DisplayError, match="eco must"):

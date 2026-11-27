@@ -330,3 +330,62 @@ test('eco tree from the server: positive, negative, and initial again when the s
     await request.post('/api/v1/eco', { data: ecoBody(0, 0) })
   }
 })
+
+test('eco words from display.json: longest words fit, missing ones fall back, hint can be removed', async ({ page, request }) => {
+  // 서버가 허락하는 가장 긴 문구 (server/display.py ECO_TEXT_LIMITS: 제목·위 줄 24자, 안내 60자)
+  const words = { kicker: '가'.repeat(24), negative: '나'.repeat(24), negative_hint: '다'.repeat(60) }
+  let text: Record<string, string | null> = words
+  await page.route('**/api/v1/display/content', route => route.fulfill({ json: {
+    revision: 'e2e-eco-words', message: null, schedule: [], slides: [], eco: { enabled: true, text },
+    timing: { location_s: 1, slides_s: 2, eco_s: 60, count_s: 10, trash_alert_s: 10, passing_s: 8, passing_cooldown_s: 60 } } }))
+  const send = async () => expect((await request.post('/api/v1/telemetry', { data: telemetry(true) })).ok()).toBe(true)
+  await send()
+  const bridge = setInterval(() => { void send().catch(() => {}) }, 1000)
+  try {
+    expect((await request.post('/api/v1/eco', { data: ecoBody(13) })).ok()).toBe(true)
+    await page.setViewportSize({ width: 1920, height: 1080 })
+    await page.goto('/display')
+    await expect(screen(page)).toHaveAttribute('data-scene', 'eco', { timeout: 6000 })
+    await expect(page.getByTestId('display-eco')).toHaveAttribute('data-tree', 'negative')
+    await expect(page.getByTestId('display-eco-kicker')).toHaveText(words.kicker)
+    await expect(page.getByTestId('display-eco-title')).toHaveText(words.negative)
+    await expect(page.getByTestId('display-eco-detail')).toHaveText('수거함을 비운 뒤 · AI 확인 20건 중 13건 바르게')   // 숫자 줄은 그대로
+    await expect(page.getByTestId('display-eco-hint')).toHaveText(words.negative_hint)
+    // 가장 긴 문구도 1920 폭 안, 글 칸 아래 끝이 작은 QR 위에서 끝난다
+    const qr = (await page.getByTestId('display-mini-qr').boundingBox())!
+    for (const id of ['display-eco-kicker', 'display-eco-title', 'display-eco-hint']) {
+      const box = (await page.getByTestId(id).boundingBox())!
+      expect(box.x + box.width, id).toBeLessThanOrEqual(1920)
+      expect(box.y + box.height, id).toBeLessThan(qr.y)
+      // 빈칸 없는 문구도 상자 안에서 줄을 바꾼다 (넘치면 글자가 화면 밖으로 잘린다)
+      expect(await page.getByTestId(id).evaluate(el => el.scrollWidth <= el.clientWidth), id).toBe(true)
+    }
+    expect(await smallestText(page)).toBeGreaterThanOrEqual(40)
+    await page.waitForTimeout(800)
+    await page.screenshot({ path: '../artifacts/display-eco-words.png' })
+    // 안내 줄만 null로 없애고 나머지는 빼면 기본 문구 (새 판은 다음 상태를 받을 때 다시 받는다)
+    text = { negative_hint: null }
+    await page.reload()
+    await expect(screen(page)).toHaveAttribute('data-scene', 'eco', { timeout: 6000 })
+    await expect(page.getByTestId('display-eco-kicker')).toHaveText('우리가 함께 키우는 나무')
+    await expect(page.getByTestId('display-eco-title')).toHaveText('분리수거가 잘 안 되고 있어요')
+    await expect(page.getByTestId('display-eco-hint')).toHaveCount(0)
+  } finally {
+    clearInterval(bridge)
+    await request.post('/api/v1/eco', { data: ecoBody(0, 0) })
+  }
+})
+
+test('the demo borrows the eco words from the server so operators can preview them', async ({ page }) => {
+  test.setTimeout(60000)
+  await page.route('**/api/v1/display/content', route => route.fulfill({ json: {
+    revision: 'e2e-demo-words', message: null, schedule: [], slides: [], sound: null, eco: { enabled: false, text: { initial: '나무가 자라는 중이에요' } },
+    timing: { location_s: 40, slides_s: 30, eco_s: 15, count_s: 10, trash_alert_s: 10, passing_s: 8, passing_cooldown_s: 60 } } }))
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await page.goto('/display?demo')
+  // 서버에서 나무를 꺼 두어도 데모는 늘 나무를 보인다 (미리 보기용)
+  await expect(screen(page)).toHaveAttribute('data-scene', 'eco', { timeout: 45000 })
+  await expect(page.getByTestId('display-eco')).toHaveAttribute('data-tree', 'initial')
+  await expect(page.getByTestId('display-eco-title')).toHaveText('나무가 자라는 중이에요')
+  await expect(page.getByTestId('display-eco-kicker')).toHaveText('우리가 함께 키우는 나무')
+})
