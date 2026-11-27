@@ -88,9 +88,13 @@ def test_progress_corner_cut_outside_radius_still_advances():
 def test_exclusions_file_whole_lap_and_interval(tmp_path):
     path = tmp_path / dataset.EXCLUSIONS_FILE
     path.write_text('- {lap: a_manual, whole_lap: true, reason: broken test record}\n'
-                    '- {lap: b_manual, start_s: 1.0, end_s: 2.0, reason: unexplained stop}\n')
+                    '- {lap: b_manual, start_s: 1.0, end_s: 2.0, reason: unexplained stop}\n'
+                    '- {lap: b_manual, start_s: 3.0, end_s: 3.5, not_collision: true,'
+                    ' reason: locker checked by PM}\n')
     assert dataset.load_exclusions(str(path)) == {
-        'a_manual': 'whole', 'b_manual': [(1.0, 2.0, 'unexplained stop')]}
+        'a_manual': {'whole': True, 'excluded': [], 'not_collision': []},
+        'b_manual': {'whole': False, 'excluded': [(1.0, 2.0, 'unexplained stop')],
+                     'not_collision': [(3.0, 3.5, 'locker checked by PM')]}}
     assert dataset.load_exclusions(str(tmp_path / 'none.yaml')) == {}
     path.write_text('- {lap: c, start_s: 1, end_s: 2}\n')
     with pytest.raises(ValueError):
@@ -138,3 +142,22 @@ def test_missing_scan_mount_drops_frames():
     xs, _, _, _, dropped, _ = dataset.lap_samples(s, [(5.0, 0.0, True)], cfg, ms,
                                                   [(5.0, 0.0, True)])
     assert xs == [] and dropped == {'no_scan_tf': 40}
+
+
+def test_not_collision_interval_releases_collision_margin_only_in_dataset():
+    cfg = {**dataset.DEFAULTS, 'pass_radius': 0.7, 'stop_tolerance': 0.25, 'collision_margin': 0.5}
+    ms = {**metrics.DEFAULT_SETTINGS, 'footprint': FOOTPRINT, 'collision_margin': 0.5}
+    route = waypoints = [(10.0, 0.0, True)]
+    s = manual_lap_without_patrol()
+    # 2.01 s 스캔 하나: base 정면 0.27 m(가장자리 2 cm) 점. 라이다 프레임은 +90°라 라이다 −90° 광선
+    ranges = np.full(36, 3.0)
+    ranges[9] = 0.27
+    i = s.scans.times.index(2.01)
+    s.scans.values[i] = (ranges, -math.pi, 2 * math.pi / 36, 0.1, 10.0, 'mid360_link')
+    _, _, _, stamps, dropped, n_bad = dataset.lap_samples(s, waypoints, cfg, ms, route)
+    assert n_bad == 1 and dropped['bad_interval'] == 12  # 근접 2.01~2.11 s ± 0.5 s → 1.51~2.61 s 스캔
+    log = dataset.run_log_from_streams(s, ms, dataset.scan_mount_of(s, 'base_footprint'))
+    assert metrics.compute_metrics(log, ms)['scan_collisions'] == 1  # 지표는 그대로 센다
+    _, _, _, stamps, dropped, n_bad = dataset.lap_samples(s, waypoints, cfg, ms, route,
+                                                          not_collision=[(1.9, 2.1)])
+    assert n_bad == 0 and 'bad_interval' not in dropped and len(stamps) == 40

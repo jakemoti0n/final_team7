@@ -247,19 +247,23 @@ def derive_waypoints(streams, route, cfg):
                                        if i is not None])
 
 
-def lap_samples(streams, waypoints, cfg, metric_settings, route=None, excluded=()):
+def lap_samples(streams, waypoints, cfg, metric_settings, route=None, excluded=(),
+                not_collision=()):
     """한 바퀴 → (X 목록, y 목록, weight 목록, stamp 목록, 뺀 이유 Counter, 제외 구간 수).
 
     route(load_route)를 주면 /patrol/state가 없는 바퀴에 경유점 번호를 계산해 넣는다.
-    excluded = 사람이 정한 제외 구간 [(시작, 끝)] bag 시각(초).
+    excluded = 사람이 정한 제외 구간, not_collision = 사람이 충돌이 아니라고 확인한 구간. [(시작, 끝)] bag 시각(초).
     """
     settings = frame_builder.settings_from_dict(
         {key: cfg[key] for key in frame_builder.FrameSettings.__annotations__})
     if route is not None and not streams.patrol.times:
         derive_waypoints(streams, route, cfg)
     mount = scan_mount_of(streams, cfg['base_frame'])
-    bad = metrics.bad_intervals(run_log_from_streams(streams, metric_settings, mount),
-                                metric_settings)
+    log = run_log_from_streams(streams, metric_settings, mount)
+    # 사람이 충돌이 아니라고 확인한 구간의 라이다 근접 표본은 "없음"(inf)으로 바꿔 충돌 제외에 안 들어가게
+    log.scan_edge = [(t, math.inf if in_intervals(t, not_collision) else d)
+                     for t, d in log.scan_edge]
+    bad = metrics.bad_intervals(log, metric_settings)
     assist = metrics.mode_switch_intervals(streams.drive_modes.tuples(), SOURCE_TELEOP,
                                            (metrics.MODE_POLICY_ASSIST,), streams.end_time)
     span = teleop_span(streams.drive_modes)
@@ -441,10 +445,14 @@ def read_meta(folder):
 
 
 def load_exclusions(path):
-    """제외 목록 파일(yaml 목록) → {바퀴 폴더 이름: 'whole' 또는 [(시작 s, 끝 s, 이유)]}. 파일이 없으면 빈 dict.
+    """제외 목록 파일(yaml 목록) → {바퀴 폴더 이름: {'whole': bool, 'excluded': [...], 'not_collision': [...]}}.
 
-    항목: {lap: <폴더 이름>, whole_lap: true, reason: …} 또는 {lap, start_s, end_s, reason}.
-    start_s·end_s는 그 바퀴 bag의 첫 메시지부터 초. 사람(PM)이 기록을 보고 정한 것이라 코드에 두지 않는다.
+    항목(사람·PM이 기록을 보고 정한 것이라 코드에 두지 않는다. reason 필수):
+    - {lap, whole_lap: true, reason}: 바퀴 통째로 뺀다
+    - {lap, start_s, end_s, reason}: 그 구간 표본을 뺀다
+    - {lap, start_s, end_s, not_collision: true, reason}: 그 구간의 라이다 근접은 충돌이 아니다(사람이 확인).
+      데이터셋 충돌 제외(앞뒤 collision_margin 포함)에서만 빼고, 지표(metrics)의 collisions는 그대로 센다
+    start_s·end_s는 그 바퀴 bag의 첫 메시지부터 초. 파일이 없으면 빈 dict.
     """
     if not path or not os.path.isfile(path):
         return {}
@@ -454,11 +462,13 @@ def load_exclusions(path):
     for entry in entries:
         if not entry.get('reason'):
             raise ValueError(f'exclusion without reason: {entry}')
+        lap = result.setdefault(entry['lap'], {'whole': False, 'excluded': [],
+                                               'not_collision': []})
         if entry.get('whole_lap'):
-            result[entry['lap']] = 'whole'
-        elif result.get(entry['lap']) != 'whole':
-            result.setdefault(entry['lap'], []).append(
-                (float(entry['start_s']), float(entry['end_s']), entry['reason']))
+            lap['whole'] = True
+            continue
+        span = (float(entry['start_s']), float(entry['end_s']), entry['reason'])
+        lap['not_collision' if entry.get('not_collision') else 'excluded'].append(span)
     return result
 
 
@@ -481,7 +491,8 @@ def build_laps(folders, cfg, metric_settings, waypoints_override=None, reader=re
     laps = []
     for folder in folders:
         name = os.path.basename(os.path.normpath(folder))
-        if exclusions.get(name) == 'whole':
+        listed = exclusions.get(name, {'whole': False, 'excluded': [], 'not_collision': []})
+        if listed['whole']:
             print(f'skip {name}: excluded by list', file=sys.stderr)
             continue
         lap_id = len(laps)
@@ -492,10 +503,12 @@ def build_laps(folders, cfg, metric_settings, waypoints_override=None, reader=re
         streams = reader(os.path.join(folder, run_files.BAG_DIR))
         if not streams.tf_static:
             load_tf_static_file(folder, streams)
-        excluded = [(streams.start_time + a, streams.start_time + b)
-                    for a, b, _ in exclusions.get(name, [])]
-        xs, ys, weights, stamps, dropped, n_bad = lap_samples(streams, waypoints, cfg,
-                                                              metric_settings, route, excluded)
+
+        def absolute(spans):
+            return [(streams.start_time + a, streams.start_time + b) for a, b, _ in spans]
+        xs, ys, weights, stamps, dropped, n_bad = lap_samples(
+            streams, waypoints, cfg, metric_settings, route, absolute(listed['excluded']),
+            absolute(listed['not_collision']))
         laps.append({'id': lap_id, 'folder': os.path.abspath(folder), 'x': xs, 'y': ys,
                      'weight': weights, 'stamp': stamps, 'dropped': dropped, 'n_bad': n_bad,
                      'passed': [row.get('passed') for row in run_files.read_metrics_csv(folder)],

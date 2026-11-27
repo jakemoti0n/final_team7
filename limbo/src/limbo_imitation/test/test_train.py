@@ -44,6 +44,10 @@ def test_training_reduces_val_loss_and_saves_threshold(tmp_path):
     assert len(info['dataset_sha256']) == 64
     assert info['frame_settings']['w_max'] == 0.8
     assert result['seconds'] < 10.0
+    with open(train.curves_path(str(out)), encoding='utf-8') as f:
+        curves = json.load(f)
+    assert [len(m['train']) for m in curves['models']] == [len(m['val']) for m in curves['models']]
+    assert curves['models'][0]['train'][-1] < curves['models'][0]['train'][0]
 
 
 def test_normalization_ignores_constant_columns():

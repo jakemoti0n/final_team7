@@ -81,7 +81,8 @@ def evaluate(model, part, cfg, limits):
 def train_one(seed, train, val, norm, cfg, limits):
     """모델 하나. early stopping: 검증 손실이 patience epoch 동안 나아지지 않으면 멈추고 최선 가중치로.
 
-    반환: (모델, 검증 손실 기록[0 = 학습 전]).
+    반환: (모델, 검증 손실 기록[0 = 학습 전], 학습 손실 기록[0 = 학습 전]). 학습 곡선을 남기려고
+    epoch마다 학습 표본 전체의 손실도 잰다(학습에는 쓰지 않음).
     """
     torch.manual_seed(seed)
     model = policy_model.PolicyMLP(train['X'].shape[1], tuple(cfg['hidden']))
@@ -90,10 +91,12 @@ def train_one(seed, train, val, norm, cfg, limits):
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg['lr'])
     generator = torch.Generator().manual_seed(seed)
     history = [evaluate(model, val, cfg, limits)]
+    train_history = [evaluate(model, train, cfg, limits)]
     best, best_state, since_best = history[0], clone_state(model), 0
     for _ in range(cfg['max_epochs']):
         run_epoch(model, optimizer, train, cfg, limits, generator)
         history.append(evaluate(model, val, cfg, limits))
+        train_history.append(evaluate(model, train, cfg, limits))
         if history[-1] < best:
             best, best_state, since_best = history[-1], clone_state(model), 0
         else:
@@ -101,7 +104,7 @@ def train_one(seed, train, val, norm, cfg, limits):
         if since_best >= cfg['patience']:
             break
     model.load_state_dict(best_state)
-    return model.eval(), history
+    return model.eval(), history, train_history
 
 
 def clone_state(model):
@@ -144,11 +147,13 @@ def train_policy(npz_path, out_path, cfg, device=None):
     started = time.monotonic()
     models, rows = [], []
     for i in range(cfg['n_models']):
-        model, history = train_one(cfg['seed'] + i, train, val, norm, cfg, limits)
+        model, history, train_history = train_one(
+            cfg['seed'] + i, train, val, norm, cfg, limits)
         models.append(model)
         rows.append({'seed': cfg['seed'] + i, 'epochs': len(history) - 1,
                      'initial_val_loss': history[0], 'val_loss': min(history),
-                     'mae': mean_abs_error(model, val, limits)})
+                     'mae': mean_abs_error(model, val, limits),
+                     'val_curve': history, 'train_curve': train_history})
     ensemble = policy_model.Ensemble(models, *limits)
     threshold = disagreement_threshold(ensemble, arrays['X'][arrays['is_val']],
                                        cfg['threshold_quantile'])
@@ -158,8 +163,18 @@ def train_policy(npz_path, out_path, cfg, device=None):
         'feature_layout': info['feature_layout'], 'frame_settings': settings,
         'dataset_sha256': run_files.file_sha256(npz_path),
         'val_loss': [row['val_loss'] for row in rows]})
-    return {'rows': rows, 'threshold': threshold, 'seconds': time.monotonic() - started,
+    seconds = time.monotonic() - started
+    # 학습 곡선(epoch마다 학습·검증 손실, 0 = 학습 전)은 모델 옆 json으로. 모델 파일 형식은 그대로 둔다
+    with open(curves_path(out_path), 'w', encoding='utf-8') as f:
+        json.dump({'seconds': seconds, 'device': device, 'config': cfg,
+                   'models': [{'seed': r['seed'], 'train': r['train_curve'], 'val': r['val_curve']}
+                              for r in rows]}, f)
+    return {'rows': rows, 'threshold': threshold, 'seconds': seconds,
             'device': device, 'out_path': out_path}
+
+
+def curves_path(out_path):
+    return os.path.splitext(out_path)[0] + '.curves.json'
 
 
 def print_table(result, file=sys.stdout):
