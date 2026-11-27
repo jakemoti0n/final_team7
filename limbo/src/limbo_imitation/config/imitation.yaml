@@ -35,7 +35,12 @@ run_recorder:
     bag_stop_timeout: 10.0     # s. SIGINT 뒤 bag이 닫히기를 기다리는 상한. 넘으면 경고만(SIGTERM 안 씀)
     topics: ['/scan', '/odom', '/tf', '/tf_static', '/patrol/state', '/person_detector/predictions',
              '/cmd_vel_teleop', '/cmd_vel_policy', '/cmd_vel_smoothed', '/cmd_vel_arbiter', '/cmd_vel',
-             '/drive_mode', '/collision_monitor_state', '/joy', '/policy/status']
+             '/drive_mode', '/collision_monitor_state', '/joy', '/policy/status',
+             '/rgbd_camera/image/compressed', '/rgbd_camera/camera_info']
+    # 마지막 두 개(2026-11-27): 컬러 영상(JPEG)과 그 카메라 정보. 사후 판독(사람 장면·이유 모를 정지·물체)과
+    # 사람 감지 모델·문턱을 바꿨을 때 다시 돌려 보기용. person_detector 입력 /rgbd_camera/image(640×400 CROP·
+    # 보정, 10 Hz)를 image_transport가 압축한 토픽이라 같은 영상이다(JPEG 손실만 다름). 깊이는 아직 안 넣음(PM 결정).
+    # 행인이 찍히므로 bag은 팀 안에서만 다루고 외부·공개 저장소에 올리지 않는다
     # 지표 기준(metrics.py)
     collision_edge_distance: 0.03  # m. 로봇이 움직이는 중 발판(footprint) 밖 라이다 점이 발판 가장자리에서 이 안이면 충돌.
                                #    값 = 라이다 근거리 거리 측정 오차: Livox "Specs - Mid-360 LiDAR Sensor" 페이지

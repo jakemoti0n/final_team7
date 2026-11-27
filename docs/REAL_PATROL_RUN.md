@@ -37,6 +37,7 @@ record_laps kim          # 운전자 이름은 생략 가능. 하루 한 번
 | 준비 완료 | 노드 로그(`~/.ros/log/<실행 파일>_<PID>_*.log`)에 joy_node `Opened joystick`, drive_arbiter `drive_arbiter mode=manual`, run_recorder 프로세스 살아 있음 | 런치가 끝나면 안내 없이 끝 |
 | 끝(Ctrl+C, 점검 실패 포함) | 런치가 끝난 뒤 `collect_metrics` → `all.csv` 출력, 환경 변수가 있거나 Nav2가 중재기 배선이면 7번 원복. 이 정리 중에는 Ctrl+C를 무시한다 | |
 
+- 바퀴 bag에는 2026-11-27부터 컬러 영상(`/rgbd_camera/image/compressed`)이 들어간다(바퀴당 수십~100 MB 추정). **행인이 찍히므로 bag은 팀 안에서만 다루고, 외부 저장소·공개 저장소·메신저 공개방에 올리지 않는다.** 저장소 `.gitignore`가 `*.mcap`·`*.db3`을 막는다.
 - 설치(젯슨, 저장소 밖 복사본): `tools/nx_boot/bin/record_laps`·`record_laps_checks.py` → `~/.config/limbo/bin/`, 링크 `~/.local/bin/record_laps`(로그인 셸의 `~/.profile`이 `~/.local/bin`을 PATH에 넣는다). 젯슨 `~/limbo`를 pull하지 않는 동안은 고친 뒤 이 두 파일을 다시 복사한다.
 - ROS 환경은 스크립트가 직접 불러온다(부팅 유닛 `start`와 같게 `ROS_DOMAIN_ID=97`, `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`, `tools/oak/ros_input_env.sh`).
 - 다른 패드를 쓰면 `record_laps` 위쪽의 `PAD_MAC` 한 줄을 고친다.

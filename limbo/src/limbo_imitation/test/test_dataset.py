@@ -211,3 +211,41 @@ def test_tf_static_file_fills_in_when_bag_has_none(tmp_path):
     empty = dataset.BagStreams()
     dataset.load_tf_static_file(str(tmp_path / 'none'), empty)  # 파일이 없으면 그대로
     assert empty.tf_static == {}
+
+
+def test_camera_topics_in_bag_do_not_change_dataset(tmp_path):
+    """기록에 컬러 영상(압축)·카메라 정보가 더 들어가도 데이터셋이 읽는 값은 그대로다(모르는 토픽은 건너뜀)."""
+    rosbag2_py = pytest.importorskip('rosbag2_py')
+    import importlib.util
+    from rclpy.serialization import serialize_message
+    from sensor_msgs.msg import CameraInfo, CompressedImage
+    spec = importlib.util.spec_from_file_location(
+        'make_synthetic_bag', __file__.replace('test_dataset.py', 'make_synthetic_bag.py'))
+    synth = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(synth)
+    plain, with_camera = str(tmp_path / 'plain'), str(tmp_path / 'camera')
+    synth.write_bag(plain, 1)
+    writer = rosbag2_py.SequentialWriter()
+    writer.open(rosbag2_py.StorageOptions(uri=with_camera, storage_id='mcap'),
+                rosbag2_py.ConverterOptions('cdr', 'cdr'))
+    topics = {**synth.TOPICS, '/rgbd_camera/image/compressed': 'sensor_msgs/msg/CompressedImage',
+              '/rgbd_camera/camera_info': 'sensor_msgs/msg/CameraInfo'}
+    for i, (name, kind) in enumerate(topics.items()):
+        writer.create_topic(rosbag2_py.TopicMetadata(i, name, kind, 'cdr'))
+    for topic, msg, t in synth.messages(1):
+        writer.write(topic, serialize_message(msg), int(round(t * 1e9)))
+        if topic == '/scan':
+            image = CompressedImage(format='jpeg', data=bytes(range(256)) * 300)
+            writer.write('/rgbd_camera/image/compressed', serialize_message(image),
+                         int(round(t * 1e9)))
+            writer.write('/rgbd_camera/camera_info', serialize_message(CameraInfo(width=640)),
+                         int(round(t * 1e9)))
+    del writer
+    a, b = dataset.read_bag(plain), dataset.read_bag(with_camera)
+    assert a.scans.times == b.scans.times and a.odom.values == b.odom.values
+    assert a.drive_modes.values == b.drive_modes.values and a.start_time == b.start_time
+    waypoints = [(x, y, kind == 'stop') for x, y, kind in synth.WAYPOINTS]
+    ra = dataset.lap_samples(a, waypoints, CFG, METRIC)
+    rb = dataset.lap_samples(b, waypoints, CFG, METRIC)
+    assert len(ra[0]) == len(rb[0]) > 0 and ra[1] == rb[1] and ra[4] == rb[4]
+    assert all(np.array_equal(x, y) for x, y in zip(ra[0], rb[0]))

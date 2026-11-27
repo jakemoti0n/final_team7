@@ -33,3 +33,8 @@ relay_prog/state/
 
 # 배포 비밀값 (dashboard/.env.example을 복사해 채움)
 dashboard/.env
+
+# 바퀴 기록 bag(영상·행인이 담김). 팀 안에서만, 저장소·외부에 올리지 않는다(PROJECT.md 2-10)
+*.mcap
+*.db3
+limbo_bags/

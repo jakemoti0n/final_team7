@@ -45,6 +45,7 @@ DEFAULT_TOPICS = [
     '/scan', '/odom', '/tf', '/tf_static', '/patrol/state', '/person_detector/predictions',
     '/cmd_vel_teleop', '/cmd_vel_policy', '/cmd_vel_smoothed', '/cmd_vel_arbiter', '/cmd_vel',
     '/drive_mode', '/collision_monitor_state', '/joy', '/policy/status',
+    '/rgbd_camera/image/compressed', '/rgbd_camera/camera_info',
 ]
 # s. spin_once가 C에서 기다리는 동안은 파이썬 신호 처리기가 돌지 않아, 종료 신호를 이 주기 안에 알아챈다
 SPIN_PERIOD = 0.1
